@@ -6,6 +6,7 @@ import { supabase, supabaseInitError } from "./lib/supabase";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
+const ADMIN_EMAIL_CANDIDATES = ["mat_1@login.auditoria.local", "mat_0001@login.auditoria.local"];
 
 function normalizeMat(value: string): string {
   return value.replace(/\D/g, "");
@@ -43,6 +44,63 @@ function asErrorMessage(error: unknown): string {
   return raw;
 }
 
+function EyeIcon({ open }: { open: boolean }) {
+  if (open) {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 3l18 18" />
+      <path d="M10.6 6.2A11 11 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.4 4.3" />
+      <path d="M6.7 6.8A17.7 17.7 0 0 0 2 12s3.5 7 10 7a9.6 9.6 0 0 0 4-.8" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
+  );
+}
+
+interface PasswordFieldProps {
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: string;
+  visible: boolean;
+  onToggleVisible: () => void;
+}
+
+function PasswordField({
+  value,
+  onChange,
+  autoComplete,
+  visible,
+  onToggleVisible
+}: PasswordFieldProps) {
+  return (
+    <div className="password-wrap">
+      <input
+        type={visible ? "text" : "password"}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required
+      />
+      <button
+        type="button"
+        className={`password-toggle ${visible ? "active" : ""}`}
+        onClick={onToggleVisible}
+        aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+        title={visible ? "Ocultar senha" : "Mostrar senha"}
+      >
+        <EyeIcon open={visible} />
+      </button>
+    </div>
+  );
+}
+
 async function rpcLoginEmailFromMat(mat: string): Promise<string> {
   const { data, error } = await supabase!.rpc("rpc_login_email_from_mat", {
     p_mat: normalizeMat(mat)
@@ -52,6 +110,46 @@ async function rpcLoginEmailFromMat(mat: string): Promise<string> {
     throw new Error("Não foi possível resolver o login por matrícula.");
   }
   return data;
+}
+
+async function loginWithMatAndPassword(mat: string, password: string): Promise<Session> {
+  const normalizedMat = normalizeMat(mat);
+  const rpcEmail = await rpcLoginEmailFromMat(normalizedMat);
+
+  const candidates = new Set<string>([rpcEmail.toLowerCase()]);
+  if (normalizedMat === "1") {
+    for (const email of ADMIN_EMAIL_CANDIDATES) {
+      candidates.add(email.toLowerCase());
+    }
+  }
+
+  let gotInvalidCredentials = false;
+
+  for (const email of candidates) {
+    const { data, error } = await supabase!.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (!error && data.session) {
+      return data.session;
+    }
+
+    if (error?.message?.includes("Invalid login credentials")) {
+      gotInvalidCredentials = true;
+      continue;
+    }
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  if (gotInvalidCredentials) {
+    throw new Error("Invalid login credentials");
+  }
+
+  throw new Error("Falha inesperada no login.");
 }
 
 async function rpcStartIdentityChallenge(
@@ -139,18 +237,23 @@ export default function App() {
 
   const [loginMat, setLoginMat] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   const [registerMat, setRegisterMat] = useState("");
   const [registerDtNasc, setRegisterDtNasc] = useState("");
   const [registerDtAdm, setRegisterDtAdm] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState("");
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterPasswordConfirm, setShowRegisterPasswordConfirm] = useState(false);
 
   const [resetMat, setResetMat] = useState("");
   const [resetDtNasc, setResetDtNasc] = useState("");
   const [resetDtAdm, setResetDtAdm] = useState("");
   const [resetPassword, setResetPassword] = useState("");
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
 
   const clearAlerts = () => {
     setErrorMessage(null);
@@ -201,17 +304,23 @@ export default function App() {
     clearAlerts();
     setBusy(true);
     try {
-      const email = await rpcLoginEmailFromMat(loginMat);
-      const { data, error } = await supabase!.auth.signInWithPassword({
-        email,
-        password: loginPassword
-      });
-      if (error) throw error;
-      await refreshProfile(data.session);
+      const activeSession = await loginWithMatAndPassword(loginMat, loginPassword);
+      await refreshProfile(activeSession);
       setSuccessMessage("Login realizado com sucesso.");
       setLoginPassword("");
     } catch (error) {
-      setErrorMessage(asErrorMessage(error));
+      const friendly = asErrorMessage(error);
+      if (
+        friendly === "Matrícula ou senha inválida." &&
+        normalizeMat(loginMat) === "1" &&
+        loginPassword === "admin"
+      ) {
+        setErrorMessage(
+          "Admin inválido neste ambiente. Confirme se o frontend está apontando para o mesmo projeto Supabase do backend e execute bootstrap no backend para garantir o seed do admin."
+        );
+      } else {
+        setErrorMessage(friendly);
+      }
     } finally {
       setBusy(false);
     }
@@ -438,12 +547,12 @@ export default function App() {
             </label>
             <label>
               Senha
-              <input
-                type="password"
+              <PasswordField
                 autoComplete="current-password"
                 value={loginPassword}
-                onChange={(event) => setLoginPassword(event.target.value)}
-                required
+                onChange={setLoginPassword}
+                visible={showLoginPassword}
+                onToggleVisible={() => setShowLoginPassword((value) => !value)}
               />
             </label>
             <button className="btn btn-primary" type="submit" disabled={busy}>
@@ -484,22 +593,22 @@ export default function App() {
             </label>
             <label>
               Senha
-              <input
-                type="password"
+              <PasswordField
                 autoComplete="new-password"
                 value={registerPassword}
-                onChange={(event) => setRegisterPassword(event.target.value)}
-                required
+                onChange={setRegisterPassword}
+                visible={showRegisterPassword}
+                onToggleVisible={() => setShowRegisterPassword((value) => !value)}
               />
             </label>
             <label>
               Confirmar senha
-              <input
-                type="password"
+              <PasswordField
                 autoComplete="new-password"
                 value={registerPasswordConfirm}
-                onChange={(event) => setRegisterPasswordConfirm(event.target.value)}
-                required
+                onChange={setRegisterPasswordConfirm}
+                visible={showRegisterPasswordConfirm}
+                onToggleVisible={() => setShowRegisterPasswordConfirm((value) => !value)}
               />
             </label>
             <small>{PASSWORD_HINT}</small>
@@ -541,22 +650,22 @@ export default function App() {
             </label>
             <label>
               Nova senha
-              <input
-                type="password"
+              <PasswordField
                 autoComplete="new-password"
                 value={resetPassword}
-                onChange={(event) => setResetPassword(event.target.value)}
-                required
+                onChange={setResetPassword}
+                visible={showResetPassword}
+                onToggleVisible={() => setShowResetPassword((value) => !value)}
               />
             </label>
             <label>
               Confirmar nova senha
-              <input
-                type="password"
+              <PasswordField
                 autoComplete="new-password"
                 value={resetPasswordConfirm}
-                onChange={(event) => setResetPasswordConfirm(event.target.value)}
-                required
+                onChange={setResetPasswordConfirm}
+                visible={showResetPasswordConfirm}
+                onToggleVisible={() => setShowResetPasswordConfirm((value) => !value)}
               />
             </label>
             <small>{PASSWORD_HINT}</small>
