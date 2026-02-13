@@ -1,0 +1,133 @@
+app:
+  data_dir: "./data"
+  stop_on_error: false
+  default_sync_mode: "full_replace"
+  rejections_dir: "./logs/rejections"
+  refresh_timeout_seconds: 300
+  refresh_poll_seconds: 2
+  log_level: "INFO"
+
+supabase:
+  connect_timeout_seconds: 15
+  statement_timeout_seconds: 300
+
+tables:
+  db_entrada_notas:
+    file: "DB_ENTRADA_NOTAS.xlsx"
+    sheet: "DB_ENTRADA"
+    mode: "full_replace"
+    unique_keys: ["cd", "seq_entrada", "nf", "coddv"]
+    required_columns: ["cd", "seq_entrada", "nf", "coddv"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      transportadora: "text"
+      forn: "text"
+      seq_entrada: "bigint"
+      nf: "bigint"
+      coddv: "integer"
+      descricao: "text"
+      qtd_cx: "integer"
+      un_por_cx: "integer"
+      qtd_total: "integer"
+      vl_tt: "numeric"
+
+  db_avulso:
+    file: "BD_AVULSO.xlsx"
+    sheet: "DB_AVULSO"
+    mode: "full_replace"
+    unique_keys: []
+    required_columns: ["cd", "id_mov", "nr_volume", "coddv", "dt_mov"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      id_mov: "text"
+      nr_volume: "text"
+      dt_mov: "date"
+      coddv: "integer"
+      descricao: "text"
+      lote: "text"
+      val: "text"
+      qtd_mov: "integer"
+
+  db_usuario:
+    file: "DB_USUARIO.xlsx"
+    sheet: "DB_USUARIO"
+    mode: "full_replace"
+    unique_keys: ["cd", "mat"]
+    required_columns: ["cd", "mat", "nome"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      mat: "text"
+      nome: "text"
+      dt_nasc: "date"
+      dt_adm: "date"
+      cargo: "text"
+      cd_nome: "text"
+
+  db_barras:
+    file: "DB_BARRAS.xlsx"
+    sheet: "DB_BARRAS"
+    mode: "full_replace"
+    unique_keys: ["coddv", "barras"]
+    required_columns: ["coddv", "barras"]
+    refresh_before_load: false
+    types:
+      coddv: "integer"
+      descricao: "text"
+      barras: "text"
+
+  db_devolucao:
+    file: "DB_DEVOLUCAO.xlsx"
+    sheet: "DB_DEVOLUCAO"
+    mode: "full_replace"
+    unique_keys: []
+    required_columns: ["cd", "chave", "coddv", "dt_gera"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      motivo: "text"
+      nfd: "bigint"
+      coddv: "integer"
+      descricao: "text"
+      tipo: "text"
+      qtd_dev: "integer"
+      dt_gera: "date"
+      chave: "text"
+      geracao: "text"
+
+  db_pedido_direto:
+    file: "DB_PEDIDO_DIRETO.xlsx"
+    sheet: "DB_PEDIDODIRETO"
+    mode: "full_replace"
+    unique_keys: ["cd", "pedido", "sq", "coddv"]
+    required_columns: ["cd", "pedido", "sq", "coddv", "dt_pedido"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      pedido: "bigint"
+      sq: "bigint"
+      filial: "bigint"
+      dt_pedido: "date"
+      coddv: "integer"
+      descricao: "text"
+      qtd_fat: "integer"
+
+  db_termo:
+    file: "DB_TERMO.xlsx"
+    sheet: "DB_TERMO"
+    mode: "full_replace"
+    unique_keys: ["pedido", "cd", "filial", "coddv", "id_etiqueta"]
+    required_columns: ["pedido", "cd", "filial", "coddv", "id_etiqueta"]
+    refresh_before_load: false
+    types:
+      pedido: "bigint"
+      cd: "integer"
+      filial: "bigint"
+      coddv: "integer"
+      descricao: "text"
+      caixa: "text"
+      qtd_separada: "integer"
+      num_rota: "text"
+      id_etiqueta: "text"
