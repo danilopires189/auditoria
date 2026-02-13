@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import logoImage from "../assets/logo.png";
 import pmImage from "../assets/pm.png";
-import { supabase } from "./lib/supabase";
+import { supabase, supabaseInitError } from "./lib/supabase";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
@@ -44,7 +44,7 @@ function asErrorMessage(error: unknown): string {
 }
 
 async function rpcLoginEmailFromMat(mat: string): Promise<string> {
-  const { data, error } = await supabase.rpc("rpc_login_email_from_mat", {
+  const { data, error } = await supabase!.rpc("rpc_login_email_from_mat", {
     p_mat: normalizeMat(mat)
   });
   if (error) throw error;
@@ -60,7 +60,7 @@ async function rpcStartIdentityChallenge(
   dtAdm: string,
   purpose: "register" | "reset_password"
 ): Promise<ChallengeRow> {
-  const { data, error } = await supabase.rpc("rpc_start_identity_challenge", {
+  const { data, error } = await supabase!.rpc("rpc_start_identity_challenge", {
     p_mat: normalizeMat(mat),
     p_dt_nasc: dtNasc,
     p_dt_adm: dtAdm,
@@ -91,7 +91,7 @@ function fallbackProfileFromSession(session: Session): ProfileContext {
 }
 
 async function rpcCurrentProfileContext(session: Session): Promise<ProfileContext> {
-  const { data, error } = await supabase.rpc("rpc_current_profile_context");
+  const { data, error } = await supabase!.rpc("rpc_current_profile_context");
   if (error) {
     return fallbackProfileFromSession(session);
   }
@@ -105,6 +105,30 @@ async function rpcCurrentProfileContext(session: Session): Promise<ProfileContex
 }
 
 export default function App() {
+  if (!supabase || supabaseInitError) {
+    return (
+      <div className="page-shell">
+        <div className="auth-card">
+          <h1>Configuração pendente</h1>
+          <p className="subtitle">
+            O frontend não conseguiu inicializar o Supabase.
+          </p>
+          <div className="alert error">{supabaseInitError}</div>
+          <div className="form-grid">
+            <small>Defina no Vercel (Production e Preview):</small>
+            <small>
+              <strong>VITE_SUPABASE_URL</strong> = https://gpgqklqhomsaomdnccvu.supabase.co
+            </small>
+            <small>
+              <strong>VITE_SUPABASE_ANON_KEY</strong> = chave publishable/anon do projeto Supabase
+            </small>
+            <small>Depois faça redeploy.</small>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileContext | null>(null);
@@ -146,16 +170,22 @@ export default function App() {
     let mounted = true;
 
     const bootstrapSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setSession(data.session);
-      await refreshProfile(data.session);
-      setLoadingSession(false);
+      try {
+        const { data } = await supabase!.auth.getSession();
+        if (!mounted) return;
+        setSession(data.session);
+        await refreshProfile(data.session);
+      } catch (error) {
+        if (!mounted) return;
+        setErrorMessage(asErrorMessage(error));
+      } finally {
+        if (mounted) setLoadingSession(false);
+      }
     };
 
     void bootstrapSession();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase!.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       void refreshProfile(nextSession);
     });
@@ -172,7 +202,7 @@ export default function App() {
     setBusy(true);
     try {
       const email = await rpcLoginEmailFromMat(loginMat);
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase!.auth.signInWithPassword({
         email,
         password: loginPassword
       });
@@ -208,7 +238,7 @@ export default function App() {
 
       const email = await rpcLoginEmailFromMat(registerMat);
 
-      const signUpResult = await supabase.auth.signUp({
+      const signUpResult = await supabase!.auth.signUp({
         email,
         password: registerPassword,
         options: {
@@ -221,19 +251,19 @@ export default function App() {
       if (signUpResult.error) throw signUpResult.error;
 
       if (!signUpResult.data.session) {
-        const signInResult = await supabase.auth.signInWithPassword({
+        const signInResult = await supabase!.auth.signInWithPassword({
           email,
           password: registerPassword
         });
         if (signInResult.error) throw signInResult.error;
       }
 
-      const { error: completeError } = await supabase.rpc("rpc_complete_registration", {
+      const { error: completeError } = await supabase!.rpc("rpc_complete_registration", {
         p_challenge_id: challenge.challenge_id
       });
       if (completeError) throw completeError;
 
-      const { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData } = await supabase!.auth.getSession();
       await refreshProfile(sessionData.session);
       setSuccessMessage("Cadastro concluído com sucesso. Você já está logado.");
       setRegisterPassword("");
@@ -263,7 +293,7 @@ export default function App() {
         resetDtAdm,
         "reset_password"
       );
-      const { data, error } = await supabase.rpc("rpc_reset_password_with_challenge", {
+      const { data, error } = await supabase!.rpc("rpc_reset_password_with_challenge", {
         p_challenge_id: challenge.challenge_id,
         p_new_password: resetPassword
       });
@@ -286,7 +316,7 @@ export default function App() {
 
   const onLogout = async () => {
     clearAlerts();
-    await supabase.auth.signOut();
+    await supabase!.auth.signOut();
     setSuccessMessage("Sessão encerrada.");
   };
 
