@@ -7,8 +7,10 @@
   --text: #0f1725;
   --muted: #4b5671;
   --line: #d9dfeb;
-  --accent: #ff6b2d;
-  --accent-dark: #d94e17;
+  --accent: #163f87;
+  --accent-dark: #0f2f69;
+  --pm-red: #f23f5f;
+  --pm-blue: #123873;
   --success: #0e9f6e;
   --error: #c0342f;
   --shadow: 0 16px 50px rgba(4, 11, 24, 0.22);
@@ -125,7 +127,7 @@ h1 {
 
 .tab.active {
   border-color: transparent;
-  background: linear-gradient(130deg, var(--accent), #ff985f);
+  background: linear-gradient(130deg, var(--accent), #2f62be);
   color: #fff;
 }
 
@@ -172,8 +174,52 @@ input {
 }
 
 input:focus {
-  outline: 2px solid rgba(255, 107, 45, 0.25);
+  outline: 2px solid rgba(22, 63, 135, 0.25);
   border-color: var(--accent);
+}
+
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  width: 100%;
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--pm-blue);
+  background: rgba(18, 56, 115, 0.09);
+}
+
+.password-toggle:hover {
+  color: var(--pm-red);
+  background: rgba(242, 63, 95, 0.1);
+}
+
+.password-toggle.active {
+  color: var(--pm-red);
+}
+
+.password-toggle svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 small {
@@ -197,7 +243,7 @@ small {
 
 .btn-primary {
   color: #fff;
-  background: linear-gradient(130deg, var(--accent), #ff955b);
+  background: linear-gradient(130deg, var(--accent), #3b6ec6);
 }
 
 .btn-primary:hover:not(:disabled) {
