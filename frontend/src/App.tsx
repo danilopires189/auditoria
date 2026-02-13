@@ -3,7 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import logoImage from "../assets/logo.png";
 import pmImage from "../assets/pm.png";
 import { supabase, supabaseInitError } from "./lib/supabase";
-import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
+import type { ChallengeRow, ProfileContext } from "./types/auth";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const ADMIN_EMAIL_CANDIDATES = ["mat_1@login.auditoria.local", "mat_0001@login.auditoria.local"];
@@ -227,7 +227,7 @@ export default function App() {
     );
   }
 
-  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [auxMode, setAuxMode] = useState<"none" | "register" | "reset">("none");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileContext | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
@@ -375,6 +375,7 @@ export default function App() {
       const { data: sessionData } = await supabase!.auth.getSession();
       await refreshProfile(sessionData.session);
       setSuccessMessage("Cadastro concluído com sucesso. Você já está logado.");
+      setAuxMode("none");
       setRegisterPassword("");
       setRegisterPasswordConfirm("");
     } catch (error) {
@@ -412,7 +413,7 @@ export default function App() {
       }
 
       setSuccessMessage("Senha redefinida com sucesso. Faça login novamente.");
-      setAuthMode("login");
+      setAuxMode("none");
       setLoginMat(resetMat);
       setResetPassword("");
       setResetPasswordConfirm("");
@@ -426,6 +427,7 @@ export default function App() {
   const onLogout = async () => {
     clearAlerts();
     await supabase!.auth.signOut();
+    setAuxMode("none");
     setSuccessMessage("Sessão encerrada.");
   };
 
@@ -494,74 +496,64 @@ export default function App() {
         </div>
 
         <h1>Acesso Auditoria</h1>
-        <p className="subtitle">Entrar, cadastrar ou redefinir senha por matrícula.</p>
-
-        <div className="tabs">
-          <button
-            type="button"
-            className={`tab ${authMode === "login" ? "active" : ""}`}
-            onClick={() => {
-              clearAlerts();
-              setAuthMode("login");
-            }}
-          >
-            Login
-          </button>
-          <button
-            type="button"
-            className={`tab ${authMode === "register" ? "active" : ""}`}
-            onClick={() => {
-              clearAlerts();
-              setAuthMode("register");
-            }}
-          >
-            Cadastro
-          </button>
-          <button
-            type="button"
-            className={`tab ${authMode === "reset" ? "active" : ""}`}
-            onClick={() => {
-              clearAlerts();
-              setAuthMode("reset");
-            }}
-          >
-            Redefinir
-          </button>
-        </div>
+        <p className="subtitle">Entre com matrícula e senha.</p>
 
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {successMessage ? <div className="alert success">{successMessage}</div> : null}
 
-        {authMode === "login" && (
-          <form className="form-grid" onSubmit={onLogin}>
-            <label>
-              Matrícula
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="username"
-                value={loginMat}
-                onChange={(event) => setLoginMat(event.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Senha
-              <PasswordField
-                autoComplete="current-password"
-                value={loginPassword}
-                onChange={setLoginPassword}
-                visible={showLoginPassword}
-                onToggleVisible={() => setShowLoginPassword((value) => !value)}
-              />
-            </label>
-            <button className="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? "Entrando..." : "Entrar"}
+        <form className="form-grid" onSubmit={onLogin}>
+          <label>
+            Matrícula
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="username"
+              value={loginMat}
+              onChange={(event) => setLoginMat(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Senha
+            <PasswordField
+              autoComplete="current-password"
+              value={loginPassword}
+              onChange={setLoginPassword}
+              visible={showLoginPassword}
+              onToggleVisible={() => setShowLoginPassword((value) => !value)}
+            />
+          </label>
+          <button className="btn btn-primary" type="submit" disabled={busy}>
+            {busy ? "Entrando..." : "Entrar"}
+          </button>
+          <div className="auth-links">
+            <button
+              type="button"
+              className="text-link"
+              onClick={() => {
+                clearAlerts();
+                setAuxMode((value) => (value === "register" ? "none" : "register"));
+              }}
+            >
+              Quero me cadastrar
             </button>
-          </form>
-        )}
+            <button
+              type="button"
+              className="text-link"
+              onClick={() => {
+                clearAlerts();
+                setAuxMode((value) => (value === "reset" ? "none" : "reset"));
+              }}
+            >
+              Esqueci minha senha
+            </button>
+          </div>
+        </form>
 
-        {authMode === "register" && (
+        {auxMode === "register" && (
+          <section className="aux-panel">
+            <h2>Cadastro</h2>
+            <p className="subtitle">Cadastro por matrícula, nascimento e admissão.</p>
           <form className="form-grid" onSubmit={onRegister}>
             <label>
               Matrícula
@@ -616,9 +608,13 @@ export default function App() {
               {busy ? "Cadastrando..." : "Cadastrar"}
             </button>
           </form>
+          </section>
         )}
 
-        {authMode === "reset" && (
+        {auxMode === "reset" && (
+          <section className="aux-panel">
+            <h2>Esqueci minha senha</h2>
+            <p className="subtitle">Recupere a senha com matrícula, nascimento e admissão.</p>
           <form className="form-grid" onSubmit={onResetPassword}>
             <label>
               Matrícula
@@ -673,6 +669,7 @@ export default function App() {
               {busy ? "Atualizando..." : "Redefinir senha"}
             </button>
           </form>
+          </section>
         )}
       </div>
     </div>
