@@ -1,0 +1,23 @@
+# Raiz do monorepo
+.venv/
+backend/.env
+backend/env
+backend/logs/
+backend/build/
+backend/dist/
+backend/data/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/*.pyc
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
+frontend/.env
+frontend/.vercel/
+frontend/*.tsbuildinfo
+
+# Sistema
+Thumbs.db
+.DS_Store
