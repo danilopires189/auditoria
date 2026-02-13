@@ -496,7 +496,7 @@ export default function App() {
         </div>
 
         <section key={authMode} className="auth-panel panel-enter">
-          <h1>Acesso Auditoria</h1>
+          <h1>Auditoria Prevenção de Perdas</h1>
           <p className="subtitle">
             {authMode === "login"
               ? "Entre com matrícula e senha."
