@@ -106,29 +106,45 @@ h1 {
   font-size: 0.96rem;
 }
 
-.tabs {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 14px;
+.auth-links {
+  margin-top: 4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.tab {
-  border: 1px solid var(--line);
-  background: #ffffff;
-  color: var(--muted);
-  border-radius: 12px;
-  font-size: 0.9rem;
+.text-link {
+  border: 0;
+  background: transparent;
+  color: var(--pm-blue);
+  font: inherit;
+  font-size: 0.92rem;
   font-weight: 600;
-  padding: 10px 8px;
+  padding: 2px 0;
   cursor: pointer;
-  transition: 0.2s ease;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
-.tab.active {
-  border-color: transparent;
-  background: linear-gradient(130deg, var(--accent), #2f62be);
-  color: #fff;
+.text-link:hover {
+  color: var(--pm-red);
+}
+
+.aux-panel {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.aux-panel h2 {
+  font-size: 1.08rem;
+}
+
+.aux-panel .subtitle {
+  margin: 6px 0 14px;
+  font-size: 0.92rem;
 }
 
 .alert {
