@@ -371,6 +371,47 @@ function PasswordField({
   );
 }
 
+function formatDateForDisplay(value: string): string {
+  if (!value) return "";
+  const [yyyy, mm, dd] = value.split("-").map((part) => Number.parseInt(part, 10));
+  if (!yyyy || !mm || !dd) return value;
+  const parsed = new Date(Date.UTC(yyyy, mm - 1, dd));
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(parsed);
+}
+
+interface DateInputFieldProps {
+  value: string;
+  disabled?: boolean;
+  required?: boolean;
+  onChange: (value: string) => void;
+}
+
+function DateInputField({ value, disabled, required, onChange }: DateInputFieldProps) {
+  const displayValue = formatDateForDisplay(value);
+  return (
+    <div className="input-icon-wrap date-input-wrap">
+      <span className="field-icon" aria-hidden="true">
+        <CalendarIcon />
+      </span>
+      <input
+        className="date-native-input"
+        type="date"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        required={required}
+      />
+      <span className={`date-display-text${displayValue ? "" : " placeholder"}`} aria-hidden="true">
+        {displayValue || "DD/MM/AAAA"}
+      </span>
+      <span className="date-picker-hint" aria-hidden="true">
+        <CalendarIcon />
+      </span>
+    </div>
+  );
+}
+
 async function rpcLoginEmailFromMat(mat: string): Promise<string> {
   const { data, error } = await supabase!.rpc("rpc_login_email_from_mat", {
     p_mat: normalizeMat(mat)
@@ -1205,39 +1246,27 @@ export default function App() {
               </label>
               <label>
                 Data de nascimento
-                <div className="input-icon-wrap">
-                  <span className="field-icon" aria-hidden="true">
-                    <CalendarIcon />
-                  </span>
-                  <input
-                    type="date"
-                    value={registerDtNasc}
-                    disabled={Boolean(registerChallenge)}
-                    onChange={(event) => {
-                      setRegisterDtNasc(event.target.value);
-                      clearRegisterValidation();
-                    }}
-                    required
-                  />
-                </div>
+                <DateInputField
+                  value={registerDtNasc}
+                  disabled={Boolean(registerChallenge)}
+                  onChange={(value) => {
+                    setRegisterDtNasc(value);
+                    clearRegisterValidation();
+                  }}
+                  required
+                />
               </label>
               <label>
                 Data de admissão
-                <div className="input-icon-wrap">
-                  <span className="field-icon" aria-hidden="true">
-                    <CalendarIcon />
-                  </span>
-                  <input
-                    type="date"
-                    value={registerDtAdm}
-                    disabled={Boolean(registerChallenge)}
-                    onChange={(event) => {
-                      setRegisterDtAdm(event.target.value);
-                      clearRegisterValidation();
-                    }}
-                    required
-                  />
-                </div>
+                <DateInputField
+                  value={registerDtAdm}
+                  disabled={Boolean(registerChallenge)}
+                  onChange={(value) => {
+                    setRegisterDtAdm(value);
+                    clearRegisterValidation();
+                  }}
+                  required
+                />
               </label>
 
               {registerChallenge ? (
@@ -1318,39 +1347,27 @@ export default function App() {
               </label>
               <label>
                 Data de nascimento
-                <div className="input-icon-wrap">
-                  <span className="field-icon" aria-hidden="true">
-                    <CalendarIcon />
-                  </span>
-                  <input
-                    type="date"
-                    value={resetDtNasc}
-                    disabled={Boolean(resetChallenge)}
-                    onChange={(event) => {
-                      setResetDtNasc(event.target.value);
-                      clearResetValidation();
-                    }}
-                    required
-                  />
-                </div>
+                <DateInputField
+                  value={resetDtNasc}
+                  disabled={Boolean(resetChallenge)}
+                  onChange={(value) => {
+                    setResetDtNasc(value);
+                    clearResetValidation();
+                  }}
+                  required
+                />
               </label>
               <label>
                 Data de admissão
-                <div className="input-icon-wrap">
-                  <span className="field-icon" aria-hidden="true">
-                    <CalendarIcon />
-                  </span>
-                  <input
-                    type="date"
-                    value={resetDtAdm}
-                    disabled={Boolean(resetChallenge)}
-                    onChange={(event) => {
-                      setResetDtAdm(event.target.value);
-                      clearResetValidation();
-                    }}
-                    required
-                  />
-                </div>
+                <DateInputField
+                  value={resetDtAdm}
+                  disabled={Boolean(resetChallenge)}
+                  onChange={(value) => {
+                    setResetDtAdm(value);
+                    clearResetValidation();
+                  }}
+                  required
+                />
               </label>
 
               {resetChallenge ? (

@@ -313,38 +313,91 @@ input:focus {
   border-color: transparent;
 }
 
-.input-icon-wrap input[type="date"] {
-  inline-size: 100%;
-  max-inline-size: 100%;
-  min-inline-size: 0 !important;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0 !important;
-  text-align: left;
+.date-input-wrap .field-icon {
+  z-index: 3;
+}
+
+.date-native-input {
+  position: relative;
+  z-index: 2;
   font-variant-numeric: tabular-nums;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: transparent;
   padding-right: 40px;
   color-scheme: light;
 }
 
-.input-icon-wrap input[type="date"]::-webkit-datetime-edit {
-  padding: 0;
-  min-width: 0;
+.date-native-input::-webkit-datetime-edit,
+.date-native-input::-webkit-datetime-edit-year-field,
+.date-native-input::-webkit-datetime-edit-month-field,
+.date-native-input::-webkit-datetime-edit-day-field,
+.date-native-input::-webkit-datetime-edit-text {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
-.input-icon-wrap input[type="date"]::-webkit-datetime-edit-fields-wrapper {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.input-icon-wrap input[type="date"]::-webkit-date-and-time-value {
-  text-align: left;
-}
-
-.input-icon-wrap input[type="date"]::-webkit-calendar-picker-indicator {
+.date-native-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
-  opacity: 0.85;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.date-display-text {
+  position: absolute;
+  z-index: 1;
+  left: 42px;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 0;
+  pointer-events: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.date-display-text.placeholder {
+  color: #8b95aa;
+  font-weight: 500;
+}
+
+.date-picker-hint {
+  position: absolute;
+  z-index: 3;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: #1e2738;
+}
+
+.date-picker-hint svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.date-native-input:disabled + .date-display-text {
+  opacity: 0.72;
 }
 
 .password-wrap input {
