@@ -827,8 +827,6 @@ export default function App() {
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
   }, [profile, session]);
-  const isModuleRoute = useMemo(() => findModuleByPath(location.pathname) != null, [location.pathname]);
-
   if (loadingSession) {
     return (
       <div className="page-shell">
@@ -845,7 +843,7 @@ export default function App() {
 
   if (session && displayContext) {
     return (
-      <div className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}`}>
+      <div className="app-shell surface-enter">
         <Routes>
           <Route
             path="/inicio"
