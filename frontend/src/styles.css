@@ -228,6 +228,7 @@ label {
   font-size: 0.9rem;
   color: #22304d;
   font-weight: 600;
+  min-width: 0;
 }
 
 input {
@@ -251,6 +252,8 @@ input:focus {
 
 .input-icon-wrap {
   position: relative;
+  width: 100%;
+  min-width: 0;
 }
 
 .field-icon {
@@ -281,6 +284,20 @@ input:focus {
 .input-icon-wrap input {
   width: 100%;
   padding-left: 42px;
+  min-width: 0;
+}
+
+.input-icon-wrap input[type="date"] {
+  padding-right: 40px;
+}
+
+.input-icon-wrap input[type="date"]::-webkit-datetime-edit {
+  min-width: 0;
+}
+
+.input-icon-wrap input[type="date"]::-webkit-calendar-picker-indicator {
+  margin: 0;
+  opacity: 0.85;
 }
 
 .password-wrap input {
