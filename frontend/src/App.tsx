@@ -989,67 +989,68 @@ export default function App() {
   if (session && displayContext) {
     return (
       <div className="app-shell surface-enter">
-        <header className="app-topbar">
-          <div className="topbar-id">
-            <img src={pmImage} alt="PM" />
-            <div className="topbar-user">
-              <div className="topbar-user-row">
-                <strong>{displayContext.nome}</strong>
-              </div>
-              <span>Matrícula: {displayContext.mat || "-"}</span>
-              <span className="topbar-cargo">{displayContext.cargo}</span>
+        {activeModule ? (
+          <header className="module-topbar">
+            <button
+              type="button"
+              className="module-home-btn"
+              onClick={() => setActiveModuleKey(null)}
+              aria-label="Voltar para o Início"
+              title="Voltar para o Início"
+            >
+              <span className="module-back-icon" aria-hidden="true">
+                <BackIcon />
+              </span>
+              <span>Início</span>
+            </button>
+            <div className={`module-topbar-title tone-${activeModule.tone}`}>
+              <span className="module-icon" aria-hidden="true">
+                <ModuleIcon name={activeModule.icon} />
+              </span>
+              <strong>{activeModule.title}</strong>
             </div>
-          </div>
-          <div className="topbar-right">
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
               {isOnline ? "🟢 Online" : "🔴 Offline"}
             </span>
-            <button
-              className="btn btn-logout"
-              onClick={openLogoutConfirm}
-              type="button"
-              aria-label="Sair"
-              title="Sair"
-            >
-              <span className="logout-icon" aria-hidden="true">
-                <LogoutIcon />
+          </header>
+        ) : (
+          <header className="app-topbar">
+            <div className="topbar-id">
+              <img src={pmImage} alt="PM" />
+              <div className="topbar-user">
+                <div className="topbar-user-row">
+                  <strong>{displayContext.nome}</strong>
+                </div>
+                <span>Matrícula: {displayContext.mat || "-"}</span>
+                <span className="topbar-cargo">{displayContext.cargo}</span>
+              </div>
+            </div>
+            <div className="topbar-right">
+              <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
+                {isOnline ? "🟢 Online" : "🔴 Offline"}
               </span>
-            </button>
-          </div>
-          <div className="topbar-meta">
-            <span>{displayContext.cdLabel}</span>
-            <span>Perfil: {displayContext.roleLabel}</span>
-          </div>
-        </header>
+              <button
+                className="btn btn-logout"
+                onClick={openLogoutConfirm}
+                type="button"
+                aria-label="Sair"
+                title="Sair"
+              >
+                <span className="logout-icon" aria-hidden="true">
+                  <LogoutIcon />
+                </span>
+              </button>
+            </div>
+            <div className="topbar-meta">
+              <span>{displayContext.cdLabel}</span>
+              <span>Perfil: {displayContext.roleLabel}</span>
+            </div>
+          </header>
+        )}
 
         <section className="modules-shell">
           {activeModule ? (
             <article className="module-screen surface-enter">
-              <header className="module-screen-header">
-                <button
-                  type="button"
-                  className="module-back-btn"
-                  onClick={() => setActiveModuleKey(null)}
-                  aria-label="Voltar para o Início"
-                  title="Voltar para o Início"
-                >
-                  <span className="module-back-icon" aria-hidden="true">
-                    <BackIcon />
-                  </span>
-                  <span>Início</span>
-                </button>
-                <div className="module-screen-title-row">
-                  <div className={`module-screen-title tone-${activeModule.tone}`}>
-                    <span className="module-icon" aria-hidden="true">
-                      <ModuleIcon name={activeModule.icon} />
-                    </span>
-                    <h2>{activeModule.title}</h2>
-                  </div>
-                  <span className={`status-pill module-status ${isOnline ? "online" : "offline"}`}>
-                    {isOnline ? "🟢 Online" : "🔴 Offline"}
-                  </span>
-                </div>
-              </header>
               <div className="module-screen-body">
                 <p>Em construção. Volte depois.</p>
               </div>
