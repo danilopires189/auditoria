@@ -1059,6 +1059,7 @@ export default function App() {
           <img className="brand-logo" src={logoImage} alt="Logo Auditoria" />
           <img className="brand-stamp" src={pmImage} alt="Marca interna" />
         </div>
+        <p className="auth-brand-caption">Prevenção de Perdas CDs</p>
 
         <section key={authMode} className="auth-panel panel-enter">
           <h1>{authMode === "login" ? "Login" : authMode === "register" ? "Cadastro" : "Redefinir senha"}</h1>
