@@ -175,6 +175,12 @@ function normalizeCargoLabel(rawCargo: string | null | undefined): string {
   return titleCasePtBr(corrected);
 }
 
+function hasProfileCargoAndCd(context: ProfileContext): boolean {
+  const hasCargo = typeof context.cargo === "string" && context.cargo.trim() !== "";
+  const hasCd = context.cd_default != null || (typeof context.cd_nome === "string" && context.cd_nome.trim() !== "");
+  return hasCargo && hasCd;
+}
+
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
     return (
@@ -515,8 +521,29 @@ export default function App() {
     } catch {
       // Keep login flow resilient if reconcile RPC is unavailable.
     }
-    const context = await rpcCurrentProfileContext(activeSession);
-    setProfile(context);
+    const firstContext = await rpcCurrentProfileContext(activeSession);
+
+    if (hasProfileCargoAndCd(firstContext)) {
+      setProfile(firstContext);
+      return;
+    }
+
+    const matHint = normalizeMat(
+      firstContext.mat
+      || fallbackProfileFromSession(activeSession).mat
+      || extractMatFromLoginEmail(activeSession.user.email)
+    );
+
+    if (matHint) {
+      try {
+        await supabase!.rpc("rpc_reconcile_profile_by_mat", { p_mat: matHint });
+      } catch {
+        // Keep login resilient even when reconcile by mat is unavailable.
+      }
+    }
+
+    const secondContext = await rpcCurrentProfileContext(activeSession);
+    setProfile(hasProfileCargoAndCd(secondContext) ? secondContext : firstContext);
   }, []);
 
   useEffect(() => {
