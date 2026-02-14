@@ -13,6 +13,40 @@ const ADMIN_EMAIL_CANDIDATES = [
   "mat_0001@login.auditoria.local"
 ];
 
+type ModuleIconName =
+  | "audit"
+  | "extra"
+  | "collect"
+  | "term"
+  | "volume"
+  | "direct"
+  | "notes"
+  | "return"
+  | "ship"
+  | "productivity"
+  | "zero";
+
+type ModuleTone = "blue" | "red" | "teal" | "amber";
+
+const DASHBOARD_MODULES: Array<{
+  key: string;
+  title: string;
+  icon: ModuleIconName;
+  tone: ModuleTone;
+}> = [
+  { key: "pvps-alocacao", title: "Auditoria de Pvps e Alocação", icon: "audit", tone: "blue" },
+  { key: "atividade-extra", title: "Atividade extra", icon: "extra", tone: "amber" },
+  { key: "coleta-mercadoria", title: "Coleta de Mercadoria", icon: "collect", tone: "teal" },
+  { key: "conferencia-termo", title: "Conferencia Termo", icon: "term", tone: "blue" },
+  { key: "conferencia-volume-avulso", title: "Conferencia Volume Avulso", icon: "volume", tone: "teal" },
+  { key: "conferencia-pedido-direto", title: "Conferencia Pedido Direto", icon: "direct", tone: "blue" },
+  { key: "conferencia-entrada-notas", title: "Conferencia Entrada de Notas", icon: "notes", tone: "blue" },
+  { key: "devolucao-mercadoria", title: "Devolucao de Mercadoria", icon: "return", tone: "red" },
+  { key: "registro-embarque", title: "Registro de embarque", icon: "ship", tone: "teal" },
+  { key: "produtividade", title: "Produtividade", icon: "productivity", tone: "amber" },
+  { key: "zerados", title: "Zerados", icon: "zero", tone: "red" }
+];
+
 function normalizeMat(value: string): string {
   return value.replace(/\D/g, "");
 }
@@ -75,6 +109,115 @@ function asErrorMessage(error: unknown): string {
   if (raw.includes("CHALLENGE_INVALIDO")) return "Validação inválida. Refaça a validação dos dados.";
   if (raw.includes("CHALLENGE_JA_CONSUMIDO")) return "Validação já utilizada. Refaça a validação.";
   return raw;
+}
+
+function cdDescriptionOnly(value: string): string {
+  return value
+    .replace(/^cd\s*\d+\s*[-–]\s*/i, "")
+    .replace(/^cd\s*\d+\s*/i, "")
+    .trim();
+}
+
+function roleLabel(role: "admin" | "auditor" | "viewer" | null): string {
+  if (role === "admin") return "Admin";
+  if (role === "viewer") return "Viewer";
+  return "Auditor";
+}
+
+function ModuleIcon({ name }: { name: ModuleIconName }) {
+  switch (name) {
+    case "audit":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 4h16v12H4z" />
+          <path d="M8 20h8" />
+          <path d="M9 10l2 2 4-4" />
+        </svg>
+      );
+    case "extra":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+      );
+    case "collect":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 10h16v9H4z" />
+          <path d="M8 10V8a4 4 0 0 1 8 0v2" />
+        </svg>
+      );
+    case "term":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 3h9l3 3v15H6z" />
+          <path d="M15 3v3h3" />
+          <path d="M9 12h6" />
+          <path d="M9 16h6" />
+        </svg>
+      );
+    case "volume":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 8l9-5 9 5-9 5-9-5z" />
+          <path d="M3 8v8l9 5 9-5V8" />
+        </svg>
+      );
+    case "direct":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16v12H4z" />
+          <path d="M8 10h8" />
+          <path d="M8 14h5" />
+        </svg>
+      );
+    case "notes":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 4h14v16H5z" />
+          <path d="M8 9h8" />
+          <path d="M8 13h8" />
+          <path d="M8 17h5" />
+        </svg>
+      );
+    case "return":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 7H4v5" />
+          <path d="M4 12a8 8 0 1 0 2-5" />
+        </svg>
+      );
+    case "ship":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 7h12v8H3z" />
+          <path d="M15 10h4l2 2v3h-6z" />
+          <circle cx="7" cy="17" r="2" />
+          <circle cx="18" cy="17" r="2" />
+        </svg>
+      );
+    case "productivity":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v18" />
+          <path d="M4 12h16" />
+          <path d="M7 7l10 10" />
+          <path d="M17 7L7 17" />
+        </svg>
+      );
+    case "zero":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="8" />
+          <path d="M8.5 8.5l7 7" />
+          <path d="M15.5 8.5l-7 7" />
+        </svg>
+      );
+    default:
+      return null;
+  }
 }
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -617,14 +760,14 @@ export default function App() {
     const merged = profile ?? fallback;
     const role = merged.role || "auditor";
     const isGlobalAdmin = role === "admin" && merged.cd_default == null;
+    const rawCd =
+      merged.cd_nome
+      || (isGlobalAdmin ? "Todos CDs" : merged.cd_default != null ? `CD ${merged.cd_default}` : "CD não definido");
     return {
       nome: merged.nome || "Usuário",
-      cargo: merged.cargo || "Cargo não informado",
       mat: merged.mat || normalizeMat(extractMatFromLoginEmail(session.user.email)),
-      cdNome:
-        merged.cd_nome
-        || (isGlobalAdmin ? "Todos CDs" : merged.cd_default != null ? `CD ${merged.cd_default}` : "CD não definido"),
-      role: isGlobalAdmin ? "admin" : role === "admin" ? "admin (somente seu CD)" : role
+      cdNome: cdDescriptionOnly(rawCd) || rawCd,
+      roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
   }, [profile, session]);
 
@@ -642,33 +785,39 @@ export default function App() {
   if (session && displayContext) {
     return (
       <div className="app-shell surface-enter">
-        <header className="app-header">
-          <div className="header-brand">
-            <img src={logoImage} alt="Logo Auditoria" />
-            <span>Painel Auditoria</span>
+        <header className="app-topbar">
+          <div className="topbar-id">
+            <img src={pmImage} alt="PM" />
+            <div className="topbar-user">
+              <strong>{displayContext.nome}</strong>
+              <span>Matrícula: {displayContext.mat || "-"}</span>
+            </div>
+          </div>
+          <div className="topbar-meta">
+            <span>CD: {displayContext.cdNome}</span>
+            <span>Perfil: {displayContext.roleLabel}</span>
           </div>
           <button className="btn btn-ghost" onClick={onLogout} type="button">
             Sair
           </button>
         </header>
 
-        <section className="profile-banner">
-          <img src={pmImage} alt="Marca" />
-          <div className="profile-info">
-            <h1>{displayContext.nome}</h1>
-            <p>Matrícula: {displayContext.mat || "-"}</p>
-            <p>Cargo: {displayContext.cargo}</p>
-            <p>CD: {displayContext.cdNome}</p>
-            <p>Perfil: {displayContext.role}</p>
+        <section className="modules-shell">
+          <div className="modules-head">
+            <h2>Painel de Auditoria</h2>
+            <p>Selecione um módulo para iniciar.</p>
+          </div>
+          <div className="modules-grid">
+            {DASHBOARD_MODULES.map((module) => (
+              <button key={module.key} type="button" className={`module-card tone-${module.tone}`}>
+                <span className="module-icon" aria-hidden="true">
+                  <ModuleIcon name={module.icon} />
+                </span>
+                <span className="module-title">{module.title}</span>
+              </button>
+            ))}
           </div>
         </section>
-
-        <main className="app-main">
-          <article className="placeholder-card">
-            <h2>Login concluído</h2>
-            <p>Primeira etapa pronta. Próximo passo: telas de consulta e auditoria.</p>
-          </article>
-        </main>
       </div>
     );
   }
