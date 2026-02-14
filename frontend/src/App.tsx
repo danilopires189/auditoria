@@ -938,7 +938,12 @@ export default function App() {
           <div className="topbar-id">
             <img src={pmImage} alt="PM" />
             <div className="topbar-user">
-              <strong>{displayContext.nome}</strong>
+              <div className="topbar-user-row">
+                <strong>{displayContext.nome}</strong>
+                <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
+                  {isOnline ? "🟢 Online" : "🔴 Offline"}
+                </span>
+              </div>
               <span>Matrícula: {displayContext.mat || "-"}</span>
               <span className="topbar-cargo">{displayContext.cargo}</span>
             </div>
@@ -946,9 +951,6 @@ export default function App() {
           <div className="topbar-meta">
             <span>{displayContext.cdLabel}</span>
             <span>Perfil: {displayContext.roleLabel}</span>
-            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
-              {isOnline ? "🟢 Online" : "🔴 Offline"}
-            </span>
           </div>
           <button className="btn btn-ghost" onClick={onLogout} type="button">
             Sair

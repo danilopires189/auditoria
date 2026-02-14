@@ -390,6 +390,7 @@ small {
   font-family: "Sora", sans-serif;
   font-size: 0.9rem;
   line-height: 1.1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -404,6 +405,14 @@ small {
   color: #f0f6ff;
   font-size: 0.78rem;
   opacity: 0.92;
+}
+
+.topbar-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
 .topbar-meta {
@@ -423,18 +432,32 @@ small {
   font-weight: 600;
 }
 
+.status-pill {
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+  line-height: 1.1;
+}
+
+.topbar-user .status-pill {
+  flex: 0 0 auto;
+}
+
 .topbar-meta .status-pill {
   font-size: 0.74rem;
   letter-spacing: 0.01em;
 }
 
-.topbar-meta .status-pill.online {
+.status-pill.online {
   border-color: rgba(174, 241, 203, 0.72);
   background: rgba(21, 136, 86, 0.28);
   color: #eefcf4;
 }
 
-.topbar-meta .status-pill.offline {
+.status-pill.offline {
   border-color: rgba(255, 192, 192, 0.78);
   background: rgba(189, 64, 64, 0.3);
   color: #fff1f1;
