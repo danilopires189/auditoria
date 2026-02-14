@@ -58,7 +58,9 @@ function asErrorMessage(error: unknown): string {
   if (raw.includes("MATRICULA_INVALIDA")) return "Matrícula inválida.";
   if (raw.includes("MATRICULA_OU_DATAS_INVALIDAS")) return "Matrícula, data de nascimento ou data de admissão inválidas.";
   if (raw.includes("MATRICULA_JA_CADASTRADA")) return "Esta matrícula já está cadastrada.";
-  if (raw.includes("USUARIO_NAO_CADASTRADO")) return "Matrícula ainda não cadastrada.";
+  if (raw.includes("USUARIO_NAO_CADASTRADO")) {
+    return "Matrícula encontrada no BD_USUARIO, mas sem conta no app. Faça o cadastro primeiro.";
+  }
   if (raw.includes("MATRICULA_MULTIPLOS_CDS")) {
     return "Esta matrícula está associada a mais de um CD. Ajuste os dados de origem para manter 1 CD por usuário.";
   }
@@ -141,6 +143,14 @@ async function rpcLoginEmailFromMat(mat: string): Promise<string> {
     throw new Error("Não foi possível resolver o login por matrícula.");
   }
   return data;
+}
+
+async function rpcHasProfileByMat(mat: string): Promise<boolean> {
+  const { data, error } = await supabase!.rpc("rpc_has_profile_by_mat", {
+    p_mat: normalizeMat(mat)
+  });
+  if (error) throw error;
+  return data === true;
 }
 
 async function loginWithMatAndPassword(mat: string, password: string): Promise<Session> {
@@ -386,7 +396,21 @@ export default function App() {
       setSuccessMessage("Login realizado com sucesso.");
       setLoginPassword("");
     } catch (error) {
-      setErrorMessage(asErrorMessage(error));
+      const friendly = asErrorMessage(error);
+      if (friendly === "Matrícula ou senha inválida.") {
+        try {
+          const hasProfile = await rpcHasProfileByMat(loginMat);
+          if (!hasProfile) {
+            setErrorMessage("Matrícula sem cadastro. Use \"Quero me cadastrar\" para criar sua conta.");
+          } else {
+            setErrorMessage(friendly);
+          }
+        } catch {
+          setErrorMessage(friendly);
+        }
+      } else {
+        setErrorMessage(friendly);
+      }
     } finally {
       setBusy(false);
     }
@@ -483,7 +507,18 @@ export default function App() {
       setResetChallenge(challenge);
       setSuccessMessage("Dados validados. Agora defina a nova senha.");
     } catch (error) {
-      setErrorMessage(asErrorMessage(error));
+      const friendly = asErrorMessage(error);
+      if (friendly.includes("sem conta no app")) {
+        setRegisterMat(resetMat);
+        setRegisterDtNasc(resetDtNasc);
+        setRegisterDtAdm(resetDtAdm);
+        clearRegisterValidation();
+        clearResetValidation();
+        setAuthMode("register");
+        setSuccessMessage("Esta matrícula ainda não tem conta. Continue em Cadastro para criar a senha.");
+      } else {
+        setErrorMessage(friendly);
+      }
     } finally {
       setBusy(false);
     }
