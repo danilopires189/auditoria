@@ -1,8 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import logoImage from "../assets/logo.png";
 import pmImage from "../assets/pm.png";
 import { supabase, supabaseInitError } from "./lib/supabase";
+import { findModuleByPath } from "./modules/registry";
+import AtividadeExtraPage from "./modules/atividade-extra/page";
+import ColetaMercadoriaPage from "./modules/coleta-mercadoria/page";
+import ConferenciaEntradaNotasPage from "./modules/conferencia-entrada-notas/page";
+import ConferenciaPedidoDiretoPage from "./modules/conferencia-pedido-direto/page";
+import ConferenciaTermoPage from "./modules/conferencia-termo/page";
+import ConferenciaVolumeAvulsoPage from "./modules/conferencia-volume-avulso/page";
+import DevolucaoMercadoriaPage from "./modules/devolucao-mercadoria/page";
+import MetaMesPage from "./modules/meta-mes/page";
+import ProdutividadePage from "./modules/produtividade/page";
+import PvpsAlocacaoPage from "./modules/pvps-alocacao/page";
+import RegistroEmbarquePage from "./modules/registro-embarque/page";
+import ZeradosPage from "./modules/zerados/page";
+import HomePage from "./pages/HomePage";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
@@ -11,44 +27,6 @@ const ADMIN_EMAIL_CANDIDATES = [
   "0001@pmenos.com.br",
   "mat_1@login.auditoria.local",
   "mat_0001@login.auditoria.local"
-];
-
-type ModuleIconName =
-  | "audit"
-  | "extra"
-  | "collect"
-  | "term"
-  | "volume"
-  | "direct"
-  | "notes"
-  | "return"
-  | "ship"
-  | "goal"
-  | "productivity"
-  | "zero";
-
-type ModuleTone = "blue" | "red" | "teal" | "amber";
-
-type DashboardModule = {
-  key: string;
-  title: string;
-  icon: ModuleIconName;
-  tone: ModuleTone;
-};
-
-const DASHBOARD_MODULES: DashboardModule[] = [
-  { key: "pvps-alocacao", title: "Auditoria de PVPs e Alocação", icon: "audit", tone: "blue" },
-  { key: "atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
-  { key: "coleta-mercadoria", title: "Coleta de Mercadoria", icon: "collect", tone: "teal" },
-  { key: "conferencia-termo", title: "Conferência de Termo", icon: "term", tone: "blue" },
-  { key: "conferencia-volume-avulso", title: "Conferência de Volume Avulso", icon: "volume", tone: "teal" },
-  { key: "conferencia-pedido-direto", title: "Conferência de Pedido Direto", icon: "direct", tone: "blue" },
-  { key: "conferencia-entrada-notas", title: "Conferência de Entrada de Notas", icon: "notes", tone: "blue" },
-  { key: "devolucao-mercadoria", title: "Devolução de Mercadoria", icon: "return", tone: "red" },
-  { key: "registro-embarque", title: "Registro de Embarque", icon: "ship", tone: "teal" },
-  { key: "meta-mes", title: "Meta Mês", icon: "goal", tone: "amber" },
-  { key: "produtividade", title: "Produtividade", icon: "productivity", tone: "amber" },
-  { key: "zerados", title: "Zerados", icon: "zero", tone: "red" }
 ];
 
 function normalizeMat(value: string): string {
@@ -197,113 +175,6 @@ function normalizeCargoLabel(rawCargo: string | null | undefined): string {
   return titleCasePtBr(corrected);
 }
 
-function ModuleIcon({ name }: { name: ModuleIconName }) {
-  switch (name) {
-    case "audit":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 4h16v12H4z" />
-          <path d="M8 20h8" />
-          <path d="M9 10l2 2 4-4" />
-        </svg>
-      );
-    case "extra":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-          <circle cx="12" cy="12" r="9" />
-        </svg>
-      );
-    case "collect":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 10h16v9H4z" />
-          <path d="M8 10V8a4 4 0 0 1 8 0v2" />
-        </svg>
-      );
-    case "term":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 3h9l3 3v15H6z" />
-          <path d="M15 3v3h3" />
-          <path d="M9 12h6" />
-          <path d="M9 16h6" />
-        </svg>
-      );
-    case "volume":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M3 8l9-5 9 5-9 5-9-5z" />
-          <path d="M3 8v8l9 5 9-5V8" />
-        </svg>
-      );
-    case "direct":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 6h16v12H4z" />
-          <path d="M8 10h8" />
-          <path d="M8 14h5" />
-        </svg>
-      );
-    case "notes":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 4h14v16H5z" />
-          <path d="M8 9h8" />
-          <path d="M8 13h8" />
-          <path d="M8 17h5" />
-        </svg>
-      );
-    case "return":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M9 7H4v5" />
-          <path d="M4 12a8 8 0 1 0 2-5" />
-        </svg>
-      );
-    case "ship":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M3 7h12v8H3z" />
-          <path d="M15 10h4l2 2v3h-6z" />
-          <circle cx="7" cy="17" r="2" />
-          <circle cx="18" cy="17" r="2" />
-        </svg>
-      );
-    case "goal":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="8" />
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 3v2" />
-          <path d="M12 19v2" />
-          <path d="M3 12h2" />
-          <path d="M19 12h2" />
-        </svg>
-      );
-    case "productivity":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3v18" />
-          <path d="M4 12h16" />
-          <path d="M7 7l10 10" />
-          <path d="M17 7L7 17" />
-        </svg>
-      );
-    case "zero":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="8" />
-          <path d="M8.5 8.5l7 7" />
-          <path d="M15.5 8.5l-7 7" />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}
-
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
     return (
@@ -349,25 +220,6 @@ function CalendarIcon() {
       <path d="M8 3v4" />
       <path d="M16 3v4" />
       <path d="M4 10h16" />
-    </svg>
-  );
-}
-
-function LogoutIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
-      <path d="M10 12h10" />
-      <path d="M16 8l4 4-4 4" />
-    </svg>
-  );
-}
-
-function BackIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M15 6l-6 6 6 6" />
-      <path d="M9 12h10" />
     </svg>
   );
 }
@@ -572,6 +424,9 @@ async function rpcCurrentProfileContext(session: Session): Promise<ProfileContex
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   if (!supabase || supabaseInitError) {
     return (
       <div className="page-shell">
@@ -600,7 +455,6 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileContext | null>(null);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
-  const [activeModuleKey, setActiveModuleKey] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [busy, setBusy] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
@@ -696,8 +550,13 @@ export default function App() {
   }, [refreshProfile]);
 
   useEffect(() => {
-    document.title = session ? "Início" : "Login";
-  }, [session]);
+    if (!session) {
+      document.title = authMode === "register" ? "Cadastro" : authMode === "reset" ? "Redefinir senha" : "Login";
+      return;
+    }
+    const activeModule = findModuleByPath(location.pathname);
+    document.title = activeModule ? activeModule.title : "Início";
+  }, [authMode, location.pathname, session]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -725,7 +584,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showLogoutConfirm, logoutBusy]);
 
-  const onLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+  const onLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     clearAlerts();
     setBusy(true);
@@ -734,6 +593,7 @@ export default function App() {
       await refreshProfile(activeSession);
       setSuccessMessage("Login realizado com sucesso.");
       setLoginPassword("");
+      navigate("/inicio", { replace: true });
     } catch (error) {
       const friendly = asErrorMessage(error);
       if (friendly === "Matrícula ou senha inválida.") {
@@ -755,7 +615,7 @@ export default function App() {
     }
   };
 
-  const onValidateRegisterIdentity = async (event: React.FormEvent<HTMLFormElement>) => {
+  const onValidateRegisterIdentity = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     clearAlerts();
     setBusy(true);
@@ -775,7 +635,7 @@ export default function App() {
     }
   };
 
-  const onRegister = async (event: React.FormEvent<HTMLFormElement>) => {
+  const onRegister = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     clearAlerts();
     setBusy(true);
@@ -825,6 +685,7 @@ export default function App() {
       setRegisterDtNasc("");
       setRegisterDtAdm("");
       clearRegisterValidation();
+      navigate("/inicio", { replace: true });
     } catch (error) {
       setErrorMessage(asErrorMessage(error));
     } finally {
@@ -832,7 +693,7 @@ export default function App() {
     }
   };
 
-  const onValidateResetIdentity = async (event: React.FormEvent<HTMLFormElement>) => {
+  const onValidateResetIdentity = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     clearAlerts();
     setBusy(true);
@@ -885,7 +746,7 @@ export default function App() {
     }
   };
 
-  const onResetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
+  const onResetPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     clearAlerts();
     setBusy(true);
@@ -937,11 +798,11 @@ export default function App() {
     clearAlerts();
     try {
       await supabase!.auth.signOut();
-      setActiveModuleKey(null);
       setAuthMode("login");
       clearRegisterValidation();
       clearResetValidation();
       setSuccessMessage("Sessão encerrada.");
+      navigate("/", { replace: true });
     } finally {
       setLogoutBusy(false);
       setShowLogoutConfirm(false);
@@ -967,11 +828,6 @@ export default function App() {
     };
   }, [profile, session]);
 
-  const activeModule = useMemo(
-    () => DASHBOARD_MODULES.find((module) => module.key === activeModuleKey) ?? null,
-    [activeModuleKey]
-  );
-
   if (loadingSession) {
     return (
       <div className="page-shell">
@@ -989,96 +845,31 @@ export default function App() {
   if (session && displayContext) {
     return (
       <div className="app-shell surface-enter">
-        {activeModule ? (
-          <header className="module-topbar">
-            <button
-              type="button"
-              className="module-home-btn"
-              onClick={() => setActiveModuleKey(null)}
-              aria-label="Voltar para o Início"
-              title="Voltar para o Início"
-            >
-              <span className="module-back-icon" aria-hidden="true">
-                <BackIcon />
-              </span>
-              <span>Início</span>
-            </button>
-            <div className={`module-topbar-title tone-${activeModule.tone}`}>
-              <span className="module-icon" aria-hidden="true">
-                <ModuleIcon name={activeModule.icon} />
-              </span>
-              <strong>{activeModule.title}</strong>
-            </div>
-            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
-              {isOnline ? "🟢 Online" : "🔴 Offline"}
-            </span>
-          </header>
-        ) : (
-          <header className="app-topbar">
-            <div className="topbar-id">
-              <img src={pmImage} alt="PM" />
-              <div className="topbar-user">
-                <div className="topbar-user-row">
-                  <strong>{displayContext.nome}</strong>
-                </div>
-                <span>Matrícula: {displayContext.mat || "-"}</span>
-                <span className="topbar-cargo">{displayContext.cargo}</span>
-              </div>
-            </div>
-            <div className="topbar-right">
-              <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
-                {isOnline ? "🟢 Online" : "🔴 Offline"}
-              </span>
-              <button
-                className="btn btn-logout"
-                onClick={openLogoutConfirm}
-                type="button"
-                aria-label="Sair"
-                title="Sair"
-              >
-                <span className="logout-icon" aria-hidden="true">
-                  <LogoutIcon />
-                </span>
-              </button>
-            </div>
-            <div className="topbar-meta">
-              <span>{displayContext.cdLabel}</span>
-              <span>Perfil: {displayContext.roleLabel}</span>
-            </div>
-          </header>
-        )}
-
-        <section className="modules-shell">
-          {activeModule ? (
-            <article className="module-screen surface-enter">
-              <div className="module-screen-body">
-                <p>Em construção. Volte depois.</p>
-              </div>
-            </article>
-          ) : (
-            <>
-              <div className="modules-head">
-                <h2>Prevenção de Perdas CDs</h2>
-                <p>Selecione um módulo para iniciar.</p>
-              </div>
-              <div className="modules-grid">
-                {DASHBOARD_MODULES.map((module) => (
-                  <button
-                    key={module.key}
-                    type="button"
-                    className={`module-card tone-${module.tone}`}
-                    onClick={() => setActiveModuleKey(module.key)}
-                  >
-                    <span className="module-icon" aria-hidden="true">
-                      <ModuleIcon name={module.icon} />
-                    </span>
-                    <span className="module-title">{module.title}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
+        <Routes>
+          <Route
+            path="/inicio"
+            element={(
+              <HomePage
+                displayContext={displayContext}
+                isOnline={isOnline}
+                onRequestLogout={openLogoutConfirm}
+              />
+            )}
+          />
+          <Route path="/modulos/pvps-alocacao" element={<PvpsAlocacaoPage isOnline={isOnline} />} />
+          <Route path="/modulos/atividade-extra" element={<AtividadeExtraPage isOnline={isOnline} />} />
+          <Route path="/modulos/coleta-mercadoria" element={<ColetaMercadoriaPage isOnline={isOnline} />} />
+          <Route path="/modulos/conferencia-termo" element={<ConferenciaTermoPage isOnline={isOnline} />} />
+          <Route path="/modulos/conferencia-volume-avulso" element={<ConferenciaVolumeAvulsoPage isOnline={isOnline} />} />
+          <Route path="/modulos/conferencia-pedido-direto" element={<ConferenciaPedidoDiretoPage isOnline={isOnline} />} />
+          <Route path="/modulos/conferencia-entrada-notas" element={<ConferenciaEntradaNotasPage isOnline={isOnline} />} />
+          <Route path="/modulos/devolucao-mercadoria" element={<DevolucaoMercadoriaPage isOnline={isOnline} />} />
+          <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} />} />
+          <Route path="/modulos/meta-mes" element={<MetaMesPage isOnline={isOnline} />} />
+          <Route path="/modulos/produtividade" element={<ProdutividadePage isOnline={isOnline} />} />
+          <Route path="/modulos/zerados" element={<ZeradosPage isOnline={isOnline} />} />
+          <Route path="*" element={<Navigate to="/inicio" replace />} />
+        </Routes>
 
         {showLogoutConfirm ? (
           <div
