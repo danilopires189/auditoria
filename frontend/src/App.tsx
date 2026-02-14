@@ -154,6 +154,47 @@ function roleLabel(role: "admin" | "auditor" | "viewer" | null): string {
   return "Auditor";
 }
 
+const CARGO_EXACT_LABELS: Record<string, string> = {
+  "ASSISTENTE PREVENCAO DE PERDAS": "Assistente de Prevenção de Perdas",
+  "SUPERVISOR PREVENCAO DE PERDAS": "Supervisor de Prevenção de Perdas",
+  "ANALISTA PREVENCAO DE PERDAS": "Analista de Prevenção de Perdas",
+  "COORDENADOR PREVENCAO DE PERDAS": "Coordenador de Prevenção de Perdas",
+  "GERENTE PREVENCAO DE PERDAS": "Gerente de Prevenção de Perdas",
+  "LIDER PREVENCAO DE PERDAS": "Líder de Prevenção de Perdas"
+};
+
+function titleCasePtBr(value: string): string {
+  const skipWords = new Set(["de", "da", "do", "das", "dos", "e"]);
+  return value
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((token, index) => {
+      if (!token) return token;
+      if (index > 0 && skipWords.has(token)) return token;
+      return token.charAt(0).toLocaleUpperCase("pt-BR") + token.slice(1);
+    })
+    .join(" ");
+}
+
+function normalizeCargoLabel(rawCargo: string | null | undefined): string {
+  const compact = (rawCargo ?? "").normalize("NFKC").trim().replace(/\s+/g, " ");
+  if (!compact) return "Cargo não informado";
+
+  const exact = CARGO_EXACT_LABELS[compact.toUpperCase()];
+  if (exact) return exact;
+
+  const corrected = compact
+    .replace(/\bPREVENCAO\b/gi, "prevenção")
+    .replace(/\bLIDER\b/gi, "líder")
+    .replace(/\bLOGISTICA\b/gi, "logística")
+    .replace(/\bOPERACAO\b/gi, "operação")
+    .replace(/\bSUPERVISAO\b/gi, "supervisão")
+    .replace(/\bCONFERENCIA\b/gi, "conferência")
+    .replace(/\bADMINISTRACAO\b/gi, "administração");
+
+  return titleCasePtBr(corrected);
+}
+
 function ModuleIcon({ name }: { name: ModuleIconName }) {
   switch (name) {
     case "audit":
@@ -282,6 +323,7 @@ function EyeIcon({ open }: { open: boolean }) {
 }
 
 interface PasswordFieldProps {
+  name: string;
   value: string;
   onChange: (value: string) => void;
   autoComplete: string;
@@ -290,6 +332,7 @@ interface PasswordFieldProps {
 }
 
 function PasswordField({
+  name,
   value,
   onChange,
   autoComplete,
@@ -299,8 +342,15 @@ function PasswordField({
   return (
     <div className="password-wrap">
       <input
+        name={name}
         type={visible ? "text" : "password"}
         autoComplete={autoComplete}
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-form-type="other"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         required
@@ -812,7 +862,7 @@ export default function App() {
     return {
       nome: merged.nome || "Usuário",
       mat: merged.mat || normalizeMat(extractMatFromLoginEmail(session.user.email)),
-      cargo: merged.cargo?.trim() || "Cargo não informado",
+      cargo: normalizeCargoLabel(merged.cargo),
       cdLabel: formatCdLabel(rawCd, merged.cd_default, isGlobalAdmin),
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
@@ -842,7 +892,7 @@ export default function App() {
             </div>
           </div>
           <div className="topbar-meta">
-            <span>CD: {displayContext.cdLabel}</span>
+            <span>{displayContext.cdLabel}</span>
             <span>Perfil: {displayContext.roleLabel}</span>
           </div>
           <button className="btn btn-ghost" onClick={onLogout} type="button">
@@ -909,13 +959,20 @@ export default function App() {
           {successMessage ? <div className="alert success">{successMessage}</div> : null}
 
           {authMode === "login" && (
-            <form className="form-grid" onSubmit={onLogin}>
+            <form className="form-grid" autoComplete="off" onSubmit={onLogin}>
               <label>
                 Matrícula
                 <input
+                  name="login_mat_no_store"
                   type="text"
                   inputMode="numeric"
-                  autoComplete="username"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   value={loginMat}
                   onChange={(event) => setLoginMat(event.target.value)}
                   required
@@ -924,7 +981,8 @@ export default function App() {
               <label>
                 Senha
                 <PasswordField
-                  autoComplete="current-password"
+                  name="login_password_no_store"
+                  autoComplete="new-password"
                   value={loginPassword}
                   onChange={setLoginPassword}
                   visible={showLoginPassword}
@@ -964,6 +1022,7 @@ export default function App() {
           {authMode === "register" && (
             <form
               className="form-grid"
+              autoComplete="off"
               onSubmit={registerChallenge ? onRegister : onValidateRegisterIdentity}
             >
               <label>
@@ -1026,6 +1085,7 @@ export default function App() {
                   <label>
                     Senha
                     <PasswordField
+                      name="register_password_new"
                       autoComplete="new-password"
                       value={registerPassword}
                       onChange={setRegisterPassword}
@@ -1036,6 +1096,7 @@ export default function App() {
                   <label>
                     Confirmar senha
                     <PasswordField
+                      name="register_password_confirm_new"
                       autoComplete="new-password"
                       value={registerPasswordConfirm}
                       onChange={setRegisterPasswordConfirm}
@@ -1059,6 +1120,7 @@ export default function App() {
           {authMode === "reset" && (
             <form
               className="form-grid"
+              autoComplete="off"
               onSubmit={resetChallenge ? onResetPassword : onValidateResetIdentity}
             >
               <label>
@@ -1121,6 +1183,7 @@ export default function App() {
                   <label>
                     Nova senha
                     <PasswordField
+                      name="reset_password_new"
                       autoComplete="new-password"
                       value={resetPassword}
                       onChange={setResetPassword}
@@ -1131,6 +1194,7 @@ export default function App() {
                   <label>
                     Confirmar nova senha
                     <PasswordField
+                      name="reset_password_confirm_new"
                       autoComplete="new-password"
                       value={resetPasswordConfirm}
                       onChange={setResetPasswordConfirm}
