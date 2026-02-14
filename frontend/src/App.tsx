@@ -34,15 +34,15 @@ const DASHBOARD_MODULES: Array<{
   icon: ModuleIconName;
   tone: ModuleTone;
 }> = [
-  { key: "pvps-alocacao", title: "Auditoria de Pvps e Alocação", icon: "audit", tone: "blue" },
-  { key: "atividade-extra", title: "Atividade extra", icon: "extra", tone: "amber" },
+  { key: "pvps-alocacao", title: "Auditoria de PVPs e Alocação", icon: "audit", tone: "blue" },
+  { key: "atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
   { key: "coleta-mercadoria", title: "Coleta de Mercadoria", icon: "collect", tone: "teal" },
-  { key: "conferencia-termo", title: "Conferencia Termo", icon: "term", tone: "blue" },
-  { key: "conferencia-volume-avulso", title: "Conferencia Volume Avulso", icon: "volume", tone: "teal" },
-  { key: "conferencia-pedido-direto", title: "Conferencia Pedido Direto", icon: "direct", tone: "blue" },
-  { key: "conferencia-entrada-notas", title: "Conferencia Entrada de Notas", icon: "notes", tone: "blue" },
-  { key: "devolucao-mercadoria", title: "Devolucao de Mercadoria", icon: "return", tone: "red" },
-  { key: "registro-embarque", title: "Registro de embarque", icon: "ship", tone: "teal" },
+  { key: "conferencia-termo", title: "Conferência de Termo", icon: "term", tone: "blue" },
+  { key: "conferencia-volume-avulso", title: "Conferência de Volume Avulso", icon: "volume", tone: "teal" },
+  { key: "conferencia-pedido-direto", title: "Conferência de Pedido Direto", icon: "direct", tone: "blue" },
+  { key: "conferencia-entrada-notas", title: "Conferência de Entrada de Notas", icon: "notes", tone: "blue" },
+  { key: "devolucao-mercadoria", title: "Devolução de Mercadoria", icon: "return", tone: "red" },
+  { key: "registro-embarque", title: "Registro de Embarque", icon: "ship", tone: "teal" },
   { key: "produtividade", title: "Produtividade", icon: "productivity", tone: "amber" },
   { key: "zerados", title: "Zerados", icon: "zero", tone: "red" }
 ];
@@ -116,6 +116,34 @@ function cdDescriptionOnly(value: string): string {
     .replace(/^cd\s*\d+\s*[-–]\s*/i, "")
     .replace(/^cd\s*\d+\s*/i, "")
     .trim();
+}
+
+function parseCdNumber(rawCd: string, cdDefault: number | null): number | null {
+  if (typeof cdDefault === "number" && Number.isFinite(cdDefault)) {
+    return Math.trunc(cdDefault);
+  }
+  const matched = /cd\s*0*(\d+)/i.exec(rawCd);
+  if (!matched) return null;
+  const parsed = Number.parseInt(matched[1], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatCdLabel(rawCd: string, cdDefault: number | null, isGlobalAdmin: boolean): string {
+  if (isGlobalAdmin) return "Todos CDs";
+
+  const cdNumber = parseCdNumber(rawCd, cdDefault);
+  const cdDescription = cdDescriptionOnly(rawCd);
+
+  if (cdNumber != null && cdDescription) {
+    return `CD ${String(cdNumber).padStart(2, "0")} - ${cdDescription}`;
+  }
+  if (cdNumber != null) {
+    return `CD ${String(cdNumber).padStart(2, "0")}`;
+  }
+  if (cdDescription) {
+    return cdDescription;
+  }
+  return "CD não definido";
 }
 
 function roleLabel(role: "admin" | "auditor" | "viewer" | null): string {
@@ -763,10 +791,11 @@ export default function App() {
     const rawCd =
       merged.cd_nome
       || (isGlobalAdmin ? "Todos CDs" : merged.cd_default != null ? `CD ${merged.cd_default}` : "CD não definido");
+
     return {
       nome: merged.nome || "Usuário",
       mat: merged.mat || normalizeMat(extractMatFromLoginEmail(session.user.email)),
-      cdNome: cdDescriptionOnly(rawCd) || rawCd,
+      cdLabel: formatCdLabel(rawCd, merged.cd_default, isGlobalAdmin),
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
   }, [profile, session]);
@@ -794,7 +823,7 @@ export default function App() {
             </div>
           </div>
           <div className="topbar-meta">
-            <span>CD: {displayContext.cdNome}</span>
+            <span>CD: {displayContext.cdLabel}</span>
             <span>Perfil: {displayContext.roleLabel}</span>
           </div>
           <button className="btn btn-ghost" onClick={onLogout} type="button">
