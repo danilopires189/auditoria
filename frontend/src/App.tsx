@@ -363,6 +363,15 @@ function LogoutIcon() {
   );
 }
 
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M15 6l-6 6 6 6" />
+      <path d="M9 12h10" />
+    </svg>
+  );
+}
+
 interface PasswordFieldProps {
   name: string;
   value: string;
@@ -1017,8 +1026,17 @@ export default function App() {
           {activeModule ? (
             <article className="module-screen surface-enter">
               <header className="module-screen-header">
-                <button type="button" className="text-link module-back" onClick={() => setActiveModuleKey(null)}>
-                  ← Voltar para módulos
+                <button
+                  type="button"
+                  className="module-back-btn"
+                  onClick={() => setActiveModuleKey(null)}
+                  aria-label="Voltar para o Início"
+                  title="Voltar para o Início"
+                >
+                  <span className="module-back-icon" aria-hidden="true">
+                    <BackIcon />
+                  </span>
+                  <span>Início</span>
                 </button>
                 <div className="module-screen-title-row">
                   <div className={`module-screen-title tone-${activeModule.tone}`}>
