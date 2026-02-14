@@ -23,6 +23,7 @@ type ModuleIconName =
   | "notes"
   | "return"
   | "ship"
+  | "goal"
   | "productivity"
   | "zero";
 
@@ -43,6 +44,7 @@ const DASHBOARD_MODULES: Array<{
   { key: "conferencia-entrada-notas", title: "Conferência de Entrada de Notas", icon: "notes", tone: "blue" },
   { key: "devolucao-mercadoria", title: "Devolução de Mercadoria", icon: "return", tone: "red" },
   { key: "registro-embarque", title: "Registro de Embarque", icon: "ship", tone: "teal" },
+  { key: "meta-mes", title: "Meta Mês", icon: "goal", tone: "amber" },
   { key: "produtividade", title: "Produtividade", icon: "productivity", tone: "amber" },
   { key: "zerados", title: "Zerados", icon: "zero", tone: "red" }
 ];
@@ -224,6 +226,17 @@ function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M15 10h4l2 2v3h-6z" />
           <circle cx="7" cy="17" r="2" />
           <circle cx="18" cy="17" r="2" />
+        </svg>
+      );
+    case "goal":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="8" />
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 3v2" />
+          <path d="M12 19v2" />
+          <path d="M3 12h2" />
+          <path d="M19 12h2" />
         </svg>
       );
     case "productivity":
