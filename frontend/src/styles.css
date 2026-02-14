@@ -675,6 +675,57 @@ small {
   gap: 10px;
 }
 
+.module-topbar {
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: linear-gradient(145deg, rgba(52, 91, 144, 0.92), rgba(79, 116, 168, 0.9));
+  border: 1px solid rgba(225, 236, 255, 0.45);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.module-home-btn {
+  border: 1px solid rgba(236, 244, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #f8fbff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 7px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.module-home-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.module-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.module-topbar-title strong {
+  color: #f7fbff;
+  font-family: "Sora", sans-serif;
+  font-size: 0.96rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.module-topbar .status-pill {
+  justify-self: end;
+}
+
 .module-screen {
   display: grid;
   gap: 12px;
@@ -757,7 +808,7 @@ small {
   border-radius: 14px;
   border: 1px dashed #c7d6ea;
   background: linear-gradient(145deg, #ffffff, #f4f8ff 80%);
-  min-height: 180px;
+  min-height: 220px;
   display: grid;
   place-items: center;
   padding: 20px 14px;
