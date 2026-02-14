@@ -808,6 +808,7 @@ export default function App() {
     return {
       nome: merged.nome || "Usuário",
       mat: merged.mat || normalizeMat(extractMatFromLoginEmail(session.user.email)),
+      cargo: merged.cargo?.trim() || "Cargo não informado",
       cdLabel: formatCdLabel(rawCd, merged.cd_default, isGlobalAdmin),
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
@@ -833,6 +834,7 @@ export default function App() {
             <div className="topbar-user">
               <strong>{displayContext.nome}</strong>
               <span>Matrícula: {displayContext.mat || "-"}</span>
+              <span className="topbar-cargo">{displayContext.cargo}</span>
             </div>
           </div>
           <div className="topbar-meta">

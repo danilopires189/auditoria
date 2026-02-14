@@ -350,6 +350,12 @@ small {
   font-size: 0.8rem;
 }
 
+.topbar-user .topbar-cargo {
+  color: #f0f6ff;
+  font-size: 0.78rem;
+  opacity: 0.92;
+}
+
 .topbar-meta {
   display: flex;
   gap: 6px;
