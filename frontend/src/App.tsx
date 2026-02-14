@@ -976,8 +976,14 @@ export default function App() {
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
               {isOnline ? "🟢 Online" : "🔴 Offline"}
             </span>
-            <button className="btn btn-logout" onClick={openLogoutConfirm} type="button">
-              Sair
+            <button
+              className="btn btn-logout"
+              onClick={openLogoutConfirm}
+              type="button"
+              aria-label="Sair"
+              title="Sair"
+            >
+              🚪
             </button>
           </div>
           <div className="topbar-meta">
