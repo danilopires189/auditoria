@@ -366,14 +366,13 @@ small {
   width: 54px;
   height: 52px;
   padding: 0;
+  border-radius: 16px;
   border: 1px solid rgba(235, 244, 255, 0.42);
   background: linear-gradient(140deg, rgba(120, 153, 200, 0.62), rgba(89, 127, 183, 0.64));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 6px 14px rgba(17, 40, 77, 0.22);
   backdrop-filter: blur(1.5px);
   display: grid;
   place-items: center;
-  font-size: 1.45rem;
-  line-height: 1;
 }
 
 .btn-logout:hover:not(:disabled) {
@@ -384,6 +383,21 @@ small {
 
 .btn-logout:active:not(:disabled) {
   transform: translateY(0);
+}
+
+.logout-icon {
+  display: grid;
+  place-items: center;
+}
+
+.logout-icon svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .app-shell {

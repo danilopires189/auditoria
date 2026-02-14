@@ -351,6 +351,16 @@ function CalendarIcon() {
   );
 }
 
+function LogoutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
+      <path d="M10 12h10" />
+      <path d="M16 8l4 4-4 4" />
+    </svg>
+  );
+}
+
 interface PasswordFieldProps {
   name: string;
   value: string;
@@ -983,7 +993,9 @@ export default function App() {
               aria-label="Sair"
               title="Sair"
             >
-              🚪
+              <span className="logout-icon" aria-hidden="true">
+                <LogoutIcon />
+              </span>
             </button>
           </div>
           <div className="topbar-meta">
