@@ -78,19 +78,21 @@ body {
 }
 
 .brand-logo {
-  width: 70px;
-  height: 70px;
+  width: 72px;
+  height: 72px;
   object-fit: contain;
-  border-radius: 14px;
-  background: #fff;
-  padding: 6px;
-  border: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  border: 0;
+  filter: drop-shadow(0 8px 14px rgba(7, 20, 39, 0.18));
 }
 
 .brand-stamp {
   width: 112px;
   max-width: 48%;
   object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgba(7, 20, 39, 0.18));
 }
 
 h1,
@@ -217,8 +219,43 @@ input:focus {
   position: relative;
 }
 
+.input-icon-wrap {
+  position: relative;
+}
+
+.field-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: #365a97;
+  background: rgba(54, 90, 151, 0.12);
+}
+
+.field-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.input-icon-wrap input {
+  width: 100%;
+  padding-left: 42px;
+}
+
 .password-wrap input {
   width: 100%;
+  padding-left: 42px;
   padding-right: 48px;
 }
 

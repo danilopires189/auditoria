@@ -322,6 +322,24 @@ function EyeIcon({ open }: { open: boolean }) {
   );
 }
 
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20a8 8 0 0 1 16 0" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="10" width="14" height="10" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
 interface PasswordFieldProps {
   name: string;
   value: string;
@@ -341,6 +359,9 @@ function PasswordField({
 }: PasswordFieldProps) {
   return (
     <div className="password-wrap">
+      <span className="field-icon" aria-hidden="true">
+        <LockIcon />
+      </span>
       <input
         name={name}
         type={visible ? "text" : "password"}
@@ -962,21 +983,26 @@ export default function App() {
             <form className="form-grid" autoComplete="off" onSubmit={onLogin}>
               <label>
                 Matrícula
-                <input
-                  name="login_mat_no_store"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  data-form-type="other"
-                  value={loginMat}
-                  onChange={(event) => setLoginMat(event.target.value)}
-                  required
-                />
+                <div className="input-icon-wrap">
+                  <span className="field-icon" aria-hidden="true">
+                    <UserIcon />
+                  </span>
+                  <input
+                    name="login_mat_no_store"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
+                    value={loginMat}
+                    onChange={(event) => setLoginMat(event.target.value)}
+                    required
+                  />
+                </div>
               </label>
               <label>
                 Senha
@@ -1027,17 +1053,22 @@ export default function App() {
             >
               <label>
                 Matrícula
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={registerMat}
-                  disabled={Boolean(registerChallenge)}
-                  onChange={(event) => {
-                    setRegisterMat(event.target.value);
-                    clearRegisterValidation();
-                  }}
-                  required
-                />
+                <div className="input-icon-wrap">
+                  <span className="field-icon" aria-hidden="true">
+                    <UserIcon />
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={registerMat}
+                    disabled={Boolean(registerChallenge)}
+                    onChange={(event) => {
+                      setRegisterMat(event.target.value);
+                      clearRegisterValidation();
+                    }}
+                    required
+                  />
+                </div>
               </label>
               <label>
                 Data de nascimento
@@ -1125,17 +1156,22 @@ export default function App() {
             >
               <label>
                 Matrícula
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={resetMat}
-                  disabled={Boolean(resetChallenge)}
-                  onChange={(event) => {
-                    setResetMat(event.target.value);
-                    clearResetValidation();
-                  }}
-                  required
-                />
+                <div className="input-icon-wrap">
+                  <span className="field-icon" aria-hidden="true">
+                    <UserIcon />
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={resetMat}
+                    disabled={Boolean(resetChallenge)}
+                    onChange={(event) => {
+                      setResetMat(event.target.value);
+                      clearResetValidation();
+                    }}
+                    required
+                  />
+                </div>
               </label>
               <label>
                 Data de nascimento
