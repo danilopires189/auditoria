@@ -449,7 +449,7 @@ small {
 .topbar-user-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   min-width: 0;
 }
@@ -457,9 +457,11 @@ small {
 .topbar-right {
   margin-left: auto;
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  align-self: flex-start;
+  gap: 7px;
 }
 
 .topbar-meta {
@@ -491,11 +493,7 @@ small {
   line-height: 1.1;
 }
 
-.topbar-user .status-pill {
-  flex: 0 0 auto;
-}
-
-.topbar-meta .status-pill {
+.topbar-right .status-pill {
   font-size: 0.74rem;
   letter-spacing: 0.01em;
 }
