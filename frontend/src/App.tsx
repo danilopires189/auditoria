@@ -976,7 +976,7 @@ export default function App() {
             </div>
           </div>
           <div className="topbar-right">
-            <button className="btn btn-ghost" onClick={openLogoutConfirm} type="button">
+            <button className="btn btn-logout" onClick={openLogoutConfirm} type="button">
               Sair
             </button>
           </div>
