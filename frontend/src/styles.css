@@ -314,14 +314,19 @@ small {
 .topbar-id {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .topbar-id img {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(214, 228, 248, 0.95);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 14px rgba(11, 29, 60, 0.26);
 }
 
 .topbar-user {
