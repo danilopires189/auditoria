@@ -588,6 +588,10 @@ export default function App() {
     };
   }, [refreshProfile]);
 
+  useEffect(() => {
+    document.title = session ? "Início" : "Login";
+  }, [session]);
+
   const onLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     clearAlerts();
@@ -848,7 +852,7 @@ export default function App() {
 
         <section className="modules-shell">
           <div className="modules-head">
-            <h2>Painel de Auditoria</h2>
+            <h2>Início</h2>
             <p>Selecione um módulo para iniciar.</p>
           </div>
           <div className="modules-grid">
@@ -875,7 +879,7 @@ export default function App() {
         </div>
 
         <section key={authMode} className="auth-panel panel-enter">
-          <h1>Auditoria Prevenção de Perdas</h1>
+          <h1>{authMode === "login" ? "Login" : authMode === "register" ? "Cadastro" : "Redefinir senha"}</h1>
           <p className="subtitle">
             {authMode === "login"
               ? "Entre com matrícula e senha."
