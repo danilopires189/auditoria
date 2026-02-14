@@ -686,6 +686,13 @@ small {
   gap: 8px 10px;
 }
 
+.module-topbar-compact {
+  width: min(100%, 720px);
+  margin-inline: auto;
+  padding: 7px 10px;
+  gap: 7px 8px;
+}
+
 .module-home-btn {
   border: 1px solid rgba(236, 244, 255, 0.55);
   border-radius: 999px;
@@ -724,13 +731,29 @@ small {
   text-overflow: ellipsis;
 }
 
+.module-topbar-compact .module-topbar-title strong {
+  font-size: 0.92rem;
+}
+
 .module-topbar .status-pill {
   margin-left: auto;
+}
+
+.module-shell-compact {
+  width: min(100%, 720px);
+  margin-inline: auto;
+  padding: 10px 12px;
+  gap: 8px;
+  box-shadow: 0 10px 22px rgba(8, 21, 43, 0.14);
 }
 
 .module-screen {
   display: grid;
   gap: 8px;
+}
+
+.module-screen-compact {
+  gap: 0;
 }
 
 .module-screen-header {
@@ -821,6 +844,16 @@ small {
   text-align: center;
   color: #35517c;
   font-weight: 600;
+}
+
+.module-shell-compact .module-screen-body {
+  padding: 10px 12px;
+  border-color: #c9d6ea;
+  background: linear-gradient(145deg, #ffffff, #f7faff 88%);
+}
+
+.module-shell-compact .module-screen-body p {
+  font-size: 0.92rem;
 }
 
 .module-card {
