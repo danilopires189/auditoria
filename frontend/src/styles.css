@@ -677,13 +677,13 @@ small {
 
 .module-topbar {
   border-radius: 16px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: linear-gradient(145deg, rgba(52, 91, 144, 0.92), rgba(79, 116, 168, 0.9));
   border: 1px solid rgba(225, 236, 255, 0.45);
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
 }
 
 .module-home-btn {
@@ -709,6 +709,7 @@ small {
   display: flex;
   align-items: center;
   gap: 9px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -723,12 +724,12 @@ small {
 }
 
 .module-topbar .status-pill {
-  justify-self: end;
+  margin-left: auto;
 }
 
 .module-screen {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .module-screen-header {
@@ -808,10 +809,10 @@ small {
   border-radius: 14px;
   border: 1px dashed #c7d6ea;
   background: linear-gradient(145deg, #ffffff, #f4f8ff 80%);
-  min-height: 220px;
+  min-height: 0;
   display: grid;
   place-items: center;
-  padding: 20px 14px;
+  padding: 14px;
 }
 
 .module-screen-body p {
