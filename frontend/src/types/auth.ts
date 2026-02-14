@@ -15,6 +15,7 @@ export interface ProfileContext {
   nome: string | null;
   mat: string | null;
   role: "admin" | "auditor" | "viewer" | null;
+  cargo: string | null;
   cd_default: number | null;
   cd_nome: string | null;
 }

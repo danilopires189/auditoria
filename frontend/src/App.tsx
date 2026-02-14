@@ -246,29 +246,42 @@ async function rpcStartIdentityChallenge(
 function fallbackProfileFromSession(session: Session): ProfileContext {
   const matByMeta = typeof session.user.user_metadata?.mat === "string" ? session.user.user_metadata.mat : "";
   const nomeByMeta = typeof session.user.user_metadata?.nome === "string" ? session.user.user_metadata.nome : "";
+  const cargoByMeta = typeof session.user.user_metadata?.cargo === "string" ? session.user.user_metadata.cargo : "";
 
   return {
     user_id: session.user.id,
     nome: nomeByMeta || "Usuário",
     mat: normalizeMat(matByMeta || extractMatFromLoginEmail(session.user.email)),
     role: null,
+    cargo: cargoByMeta || null,
     cd_default: null,
     cd_nome: null
   };
 }
 
 async function rpcCurrentProfileContext(session: Session): Promise<ProfileContext> {
-  const { data, error } = await supabase!.rpc("rpc_current_profile_context");
-  if (error) {
+  const v2Result = await supabase!.rpc("rpc_current_profile_context_v2");
+  if (!v2Result.error) {
+    const row = Array.isArray(v2Result.data) ? v2Result.data[0] : null;
+    if (row && typeof row === "object") {
+      return row as ProfileContext;
+    }
+  }
+
+  const legacyResult = await supabase!.rpc("rpc_current_profile_context");
+  if (legacyResult.error) {
     return fallbackProfileFromSession(session);
   }
 
-  const row = Array.isArray(data) ? data[0] : null;
-  if (!row || typeof row !== "object") {
+  const legacyRow = Array.isArray(legacyResult.data) ? legacyResult.data[0] : null;
+  if (!legacyRow || typeof legacyRow !== "object") {
     return fallbackProfileFromSession(session);
   }
 
-  return row as ProfileContext;
+  return {
+    ...(legacyRow as Omit<ProfileContext, "cargo">),
+    cargo: null
+  };
 }
 
 export default function App() {
@@ -351,6 +364,11 @@ export default function App() {
     if (!activeSession) {
       setProfile(null);
       return;
+    }
+    try {
+      await supabase!.rpc("rpc_reconcile_current_profile");
+    } catch {
+      // Keep login flow resilient if reconcile RPC is unavailable.
     }
     const context = await rpcCurrentProfileContext(activeSession);
     setProfile(context);
@@ -509,6 +527,28 @@ export default function App() {
     } catch (error) {
       const friendly = asErrorMessage(error);
       if (friendly.includes("sem conta no app")) {
+        try {
+          const { data: reconciled, error: reconcileError } = await supabase!.rpc(
+            "rpc_reconcile_profile_by_mat",
+            { p_mat: normalizeMat(resetMat) }
+          );
+          if (reconcileError) throw reconcileError;
+
+          if (reconciled === true) {
+            const challenge = await rpcStartIdentityChallenge(
+              resetMat,
+              resetDtNasc,
+              resetDtAdm,
+              "reset_password"
+            );
+            setResetChallenge(challenge);
+            setSuccessMessage("Conta reconciliada com sucesso. Agora defina a nova senha.");
+            return;
+          }
+        } catch {
+          // Fall through to cadastro hint when reconcile cannot confirm account/profile.
+        }
+
         setRegisterMat(resetMat);
         setRegisterDtNasc(resetDtNasc);
         setRegisterDtAdm(resetDtAdm);
@@ -575,11 +615,16 @@ export default function App() {
     if (!session) return null;
     const fallback = fallbackProfileFromSession(session);
     const merged = profile ?? fallback;
+    const role = merged.role || "auditor";
+    const isGlobalAdmin = role === "admin" && merged.cd_default == null;
     return {
       nome: merged.nome || "Usuário",
+      cargo: merged.cargo || "Cargo não informado",
       mat: merged.mat || normalizeMat(extractMatFromLoginEmail(session.user.email)),
-      cdNome: merged.cd_nome || (merged.role === "admin" ? "Todos CDs" : "CD não definido"),
-      role: merged.role || "auditor"
+      cdNome:
+        merged.cd_nome
+        || (isGlobalAdmin ? "Todos CDs" : merged.cd_default != null ? `CD ${merged.cd_default}` : "CD não definido"),
+      role: isGlobalAdmin ? "admin" : role === "admin" ? "admin (somente seu CD)" : role
     };
   }, [profile, session]);
 
@@ -612,6 +657,7 @@ export default function App() {
           <div className="profile-info">
             <h1>{displayContext.nome}</h1>
             <p>Matrícula: {displayContext.mat || "-"}</p>
+            <p>Cargo: {displayContext.cargo}</p>
             <p>CD: {displayContext.cdNome}</p>
             <p>Perfil: {displayContext.role}</p>
           </div>
