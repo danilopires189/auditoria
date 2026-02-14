@@ -482,21 +482,25 @@ small {
 
 .app-topbar {
   border-radius: 16px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   background: linear-gradient(145deg, rgba(52, 91, 144, 0.92), rgba(79, 116, 168, 0.9));
   border: 1px solid rgba(225, 236, 255, 0.45);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "id right"
+    "meta meta";
+  align-items: start;
+  column-gap: 10px;
+  row-gap: 7px;
 }
 
 .topbar-id {
+  grid-area: id;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 9px;
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -548,20 +552,24 @@ small {
 }
 
 .topbar-right {
-  margin-left: auto;
+  grid-area: right;
+  margin-left: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: flex-start;
-  align-self: flex-start;
-  gap: 7px;
+  justify-content: start;
+  justify-self: end;
+  align-self: start;
+  gap: 6px;
+  min-width: max-content;
 }
 
 .topbar-meta {
+  grid-area: meta;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  width: 100%;
+  width: auto;
   padding-left: 54px;
   margin-left: 0;
 }
@@ -589,6 +597,41 @@ small {
 .topbar-right .status-pill {
   font-size: 0.74rem;
   letter-spacing: 0.01em;
+}
+
+@media (max-width: 520px) {
+  .app-topbar {
+    padding: 8px 10px;
+    column-gap: 8px;
+    row-gap: 6px;
+  }
+
+  .topbar-id img {
+    width: 42px;
+    height: 42px;
+  }
+
+  .topbar-user strong {
+    font-size: 0.85rem;
+  }
+
+  .topbar-user span {
+    font-size: 0.76rem;
+  }
+
+  .topbar-meta {
+    padding-left: 50px;
+  }
+
+  .topbar-meta span {
+    font-size: 0.74rem;
+    padding: 3px 7px;
+  }
+
+  .btn-logout {
+    width: 44px;
+    height: 42px;
+  }
 }
 
 .status-pill.online {
