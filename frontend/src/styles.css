@@ -689,6 +689,45 @@ small {
   justify-self: start;
 }
 
+.module-back-btn {
+  justify-self: start;
+  border: 1px solid #c7d6ea;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #1f4173;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 7px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.module-back-btn:hover {
+  background: #e3edfd;
+}
+
+.module-back-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(39, 84, 146, 0.13);
+}
+
+.module-back-icon svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .module-screen-title-row {
   display: flex;
   align-items: center;
