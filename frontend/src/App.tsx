@@ -6,7 +6,12 @@ import { supabase, supabaseInitError } from "./lib/supabase";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
-const ADMIN_EMAIL_CANDIDATES = ["mat_1@login.auditoria.local", "mat_0001@login.auditoria.local"];
+const ADMIN_EMAIL_CANDIDATES = [
+  "1@pmenos.com.br",
+  "0001@pmenos.com.br",
+  "mat_1@login.auditoria.local",
+  "mat_0001@login.auditoria.local"
+];
 
 function normalizeMat(value: string): string {
   return value.replace(/\D/g, "");
@@ -20,7 +25,7 @@ function canonicalMat(value: string): string {
 
 function extractMatFromLoginEmail(email: string | undefined): string {
   if (!email) return "";
-  const matched = /^mat_(\d+)@login\.auditoria\.local$/i.exec(email);
+  const matched = /^(?:mat_)?(\d+)@(login\.auditoria\.local|pmenos\.com\.br)$/i.exec(email);
   return matched ? matched[1] : "";
 }
 
@@ -143,14 +148,31 @@ async function loginWithMatAndPassword(mat: string, password: string): Promise<S
   const canonical = canonicalMat(normalizedMat);
 
   const candidates = new Set<string>();
-  const firstEmail = await rpcLoginEmailFromMat(normalizedMat);
-  candidates.add(firstEmail.toLowerCase());
+
+  const addPatternCandidates = (matToken: string) => {
+    if (!matToken) return;
+    candidates.add(`${matToken}@pmenos.com.br`.toLowerCase());
+    candidates.add(`mat_${matToken}@login.auditoria.local`.toLowerCase());
+  };
+
+  addPatternCandidates(normalizedMat);
+  if (canonical && canonical !== normalizedMat) {
+    addPatternCandidates(canonical);
+  }
+
+  try {
+    const firstEmail = await rpcLoginEmailFromMat(normalizedMat);
+    candidates.add(firstEmail.toLowerCase());
+  } catch {
+    // Keep local fallback candidates when RPC is unavailable in the current environment.
+  }
+
   if (canonical && canonical !== normalizedMat) {
     try {
       const canonicalEmail = await rpcLoginEmailFromMat(canonical);
       candidates.add(canonicalEmail.toLowerCase());
     } catch {
-      // Ignore canonical fallback failure and keep the original candidate.
+      // Keep local fallback candidates.
     }
   }
 
@@ -364,18 +386,7 @@ export default function App() {
       setSuccessMessage("Login realizado com sucesso.");
       setLoginPassword("");
     } catch (error) {
-      const friendly = asErrorMessage(error);
-      if (
-        friendly === "Matrícula ou senha inválida." &&
-        normalizeMat(loginMat) === "1" &&
-        loginPassword === "admin"
-      ) {
-        setErrorMessage(
-          "Admin inválido neste ambiente. Confirme se o frontend está apontando para o mesmo projeto Supabase do backend e execute bootstrap no backend para garantir o seed do admin."
-        );
-      } else {
-        setErrorMessage(friendly);
-      }
+      setErrorMessage(asErrorMessage(error));
     } finally {
       setBusy(false);
     }
