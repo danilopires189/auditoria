@@ -578,6 +578,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileContext | null>(null);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
   const [loadingSession, setLoadingSession] = useState(true);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -673,6 +674,19 @@ export default function App() {
   useEffect(() => {
     document.title = session ? "Início" : "Login";
   }, [session]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   const onLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -907,7 +921,10 @@ export default function App() {
     return (
       <div className="page-shell">
         <div className="loading-card surface-enter">
-          <img className="loading-logo" src={logoImage} alt="Logo" />
+          <div className="loading-brands">
+            <img className="loading-logo" src={logoImage} alt="Logo" />
+            <img className="loading-pm" src={pmImage} alt="PM" />
+          </div>
           <p>Carregando sessão...</p>
         </div>
       </div>
@@ -929,6 +946,9 @@ export default function App() {
           <div className="topbar-meta">
             <span>{displayContext.cdLabel}</span>
             <span>Perfil: {displayContext.roleLabel}</span>
+            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
+              {isOnline ? "🟢 Online" : "🔴 Offline"}
+            </span>
           </div>
           <button className="btn btn-ghost" onClick={onLogout} type="button">
             Sair
