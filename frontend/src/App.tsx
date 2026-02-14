@@ -181,6 +181,98 @@ function hasProfileCargoAndCd(context: ProfileContext): boolean {
   return hasCargo && hasCd;
 }
 
+function hasProfileRole(context: ProfileContext): boolean {
+  return context.role === "admin" || context.role === "auditor" || context.role === "viewer";
+}
+
+const PROFILE_CACHE_PREFIX = "auditoria.profile_context.v1:";
+
+function profileCacheKey(userId: string): string {
+  return `${PROFILE_CACHE_PREFIX}${userId}`;
+}
+
+function parseRole(value: unknown): ProfileContext["role"] {
+  return value === "admin" || value === "auditor" || value === "viewer" ? value : null;
+}
+
+function parseInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function readCachedProfileContext(userId: string): ProfileContext | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(profileCacheKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ProfileContext> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed.user_id !== "string" || parsed.user_id !== userId) return null;
+    return {
+      user_id: parsed.user_id,
+      nome: typeof parsed.nome === "string" ? parsed.nome : null,
+      mat: typeof parsed.mat === "string" ? normalizeMat(parsed.mat) : null,
+      role: parseRole(parsed.role),
+      cargo: typeof parsed.cargo === "string" ? parsed.cargo : null,
+      cd_default: parseInteger(parsed.cd_default),
+      cd_nome: typeof parsed.cd_nome === "string" ? parsed.cd_nome : null
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedProfileContext(context: ProfileContext): void {
+  if (typeof window === "undefined" || !context.user_id) return;
+  try {
+    window.localStorage.setItem(profileCacheKey(context.user_id), JSON.stringify(context));
+  } catch {
+    // Ignore storage failures (private mode/quota/etc).
+  }
+}
+
+function mergeProfileContext(primary: ProfileContext, fallback: ProfileContext | null): ProfileContext {
+  if (!fallback) return primary;
+  return {
+    user_id: primary.user_id || fallback.user_id,
+    nome: primary.nome || fallback.nome,
+    mat: primary.mat || fallback.mat,
+    role: primary.role || fallback.role,
+    cargo: primary.cargo || fallback.cargo,
+    cd_default: primary.cd_default ?? fallback.cd_default,
+    cd_nome: primary.cd_nome || fallback.cd_nome
+  };
+}
+
+async function probeInternetConnection(timeoutMs = 3500): Promise<boolean> {
+  if (typeof window === "undefined") return true;
+  if (!navigator.onLine) return false;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const probeUrl = new URL(`${import.meta.env.BASE_URL}sw.js`, window.location.origin);
+    probeUrl.searchParams.set("_", `${Date.now()}`);
+
+    const response = await fetch(probeUrl.toString(), {
+      method: "HEAD",
+      cache: "no-store",
+      signal: controller.signal
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
     return (
@@ -389,18 +481,22 @@ async function rpcStartIdentityChallenge(
 }
 
 function fallbackProfileFromSession(session: Session): ProfileContext {
-  const matByMeta = typeof session.user.user_metadata?.mat === "string" ? session.user.user_metadata.mat : "";
-  const nomeByMeta = typeof session.user.user_metadata?.nome === "string" ? session.user.user_metadata.nome : "";
-  const cargoByMeta = typeof session.user.user_metadata?.cargo === "string" ? session.user.user_metadata.cargo : "";
+  const meta = session.user.user_metadata ?? {};
+  const matByMeta = typeof meta.mat === "string" ? meta.mat : "";
+  const nomeByMeta = typeof meta.nome === "string" ? meta.nome : "";
+  const cargoByMeta = typeof meta.cargo === "string" ? meta.cargo : "";
+  const cdNomeByMeta = typeof meta.cd_nome === "string" ? meta.cd_nome : "";
+  const cdDefaultByMeta = parseInteger(meta.cd_default);
+  const roleByMeta = parseRole(meta.role);
 
   return {
     user_id: session.user.id,
     nome: nomeByMeta || "Usuário",
     mat: normalizeMat(matByMeta || extractMatFromLoginEmail(session.user.email)),
-    role: null,
+    role: roleByMeta,
     cargo: cargoByMeta || null,
-    cd_default: null,
-    cd_nome: null
+    cd_default: cdDefaultByMeta,
+    cd_nome: cdNomeByMeta || null
   };
 }
 
@@ -516,15 +612,18 @@ export default function App() {
       setProfile(null);
       return;
     }
+    const cachedContext = readCachedProfileContext(activeSession.user.id);
+
     try {
       await supabase!.rpc("rpc_reconcile_current_profile");
     } catch {
       // Keep login flow resilient if reconcile RPC is unavailable.
     }
-    const firstContext = await rpcCurrentProfileContext(activeSession);
+    const firstContext = mergeProfileContext(await rpcCurrentProfileContext(activeSession), cachedContext);
 
-    if (hasProfileCargoAndCd(firstContext)) {
+    if (hasProfileCargoAndCd(firstContext) && hasProfileRole(firstContext)) {
       setProfile(firstContext);
+      writeCachedProfileContext(firstContext);
       return;
     }
 
@@ -542,8 +641,16 @@ export default function App() {
       }
     }
 
-    const secondContext = await rpcCurrentProfileContext(activeSession);
-    setProfile(hasProfileCargoAndCd(secondContext) ? secondContext : firstContext);
+    const secondContext = mergeProfileContext(await rpcCurrentProfileContext(activeSession), firstContext);
+    const resolvedContext =
+      hasProfileCargoAndCd(secondContext) && hasProfileRole(secondContext)
+        ? secondContext
+        : firstContext;
+
+    setProfile(resolvedContext);
+    if (hasProfileCargoAndCd(resolvedContext) || hasProfileRole(resolvedContext)) {
+      writeCachedProfileContext(resolvedContext);
+    }
   }, []);
 
   useEffect(() => {
@@ -586,15 +693,52 @@ export default function App() {
   }, [authMode, location.pathname, session]);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    let mounted = true;
+    let inFlight = false;
+
+    const checkConnectivity = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      const connected = await probeInternetConnection();
+      if (mounted) {
+        setIsOnline(connected);
+      }
+      inFlight = false;
+    };
+
+    const handleOnline = () => {
+      void checkConnectivity();
+    };
+
+    const handleOffline = () => {
+      if (mounted) {
+        setIsOnline(false);
+      }
+    };
+
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") {
+        void checkConnectivity();
+      }
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisible);
+
+    void checkConnectivity();
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void checkConnectivity();
+      }
+    }, 15000);
 
     return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisible);
     };
   }, []);
 
