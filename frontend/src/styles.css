@@ -240,6 +240,7 @@ input {
   font-size: 1rem;
   background: #fff;
   color: var(--text);
+  height: 48px;
 }
 
 input:focus {
@@ -256,7 +257,14 @@ input:focus {
   width: 100%;
   min-width: 0;
   overflow: hidden;
+  border: 1px solid var(--line);
   border-radius: 12px;
+  background: #fff;
+}
+
+.input-icon-wrap:focus-within {
+  outline: 2px solid rgba(22, 63, 135, 0.25);
+  border-color: var(--accent);
 }
 
 .field-icon {
@@ -291,7 +299,18 @@ input:focus {
   max-inline-size: 100%;
   min-inline-size: 0;
   padding-left: 42px;
+  padding-top: 0;
+  padding-bottom: 0;
   min-width: 0;
+  height: 48px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.input-icon-wrap input:focus {
+  outline: none;
+  border-color: transparent;
 }
 
 .input-icon-wrap input[type="date"] {
