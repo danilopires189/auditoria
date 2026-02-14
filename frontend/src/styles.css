@@ -148,6 +148,24 @@ h1 {
   color: var(--pm-red);
 }
 
+.validation-card {
+  border: 1px solid #c9d9f4;
+  background: #edf3ff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 3px;
+  color: #15305f;
+}
+
+.validation-card strong {
+  font-size: 0.88rem;
+}
+
+.validation-card span {
+  font-size: 0.95rem;
+}
+
 .alert {
   border-radius: 12px;
   padding: 10px 12px;

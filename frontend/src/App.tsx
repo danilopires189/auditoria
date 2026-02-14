@@ -12,6 +12,12 @@ function normalizeMat(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+function canonicalMat(value: string): string {
+  const normalized = normalizeMat(value);
+  const stripped = normalized.replace(/^0+(?=\d)/, "");
+  return stripped || normalized;
+}
+
 function extractMatFromLoginEmail(email: string | undefined): string {
   if (!email) return "";
   const matched = /^mat_(\d+)@login\.auditoria\.local$/i.exec(email);
@@ -23,8 +29,22 @@ function passwordIsStrong(password: string): boolean {
 }
 
 function asErrorMessage(error: unknown): string {
-  const raw =
-    error instanceof Error ? error.message : typeof error === "string" ? error : "Erro inesperado.";
+  let raw = "Erro inesperado.";
+  if (error instanceof Error) {
+    raw = error.message;
+  } else if (typeof error === "string") {
+    raw = error;
+  } else if (error && typeof error === "object") {
+    const candidate = error as Record<string, unknown>;
+    const message =
+      typeof candidate.message === "string"
+        ? candidate.message
+        : typeof candidate.error_description === "string"
+          ? candidate.error_description
+          : null;
+    const details = typeof candidate.details === "string" ? candidate.details : null;
+    raw = [message, details].filter(Boolean).join(" - ") || "Erro inesperado.";
+  }
 
   if (raw.includes("Invalid login credentials")) return "Matrícula ou senha inválida.";
   if (raw.includes("Email not confirmed")) {
@@ -41,6 +61,12 @@ function asErrorMessage(error: unknown): string {
     return PASSWORD_HINT;
   }
   if (raw.includes("AUTH_REQUIRED")) return "Sessão não autenticada para concluir cadastro.";
+  if (raw.includes("JÃ¡ utilizada") || raw.includes("Já utilizada")) {
+    return "Validação já utilizada. Refaça a validação dos dados.";
+  }
+  if (raw.includes("CHALLENGE_EXPIRADO")) return "Validação expirada. Valide os dados novamente.";
+  if (raw.includes("CHALLENGE_INVALIDO")) return "Validação inválida. Refaça a validação dos dados.";
+  if (raw.includes("CHALLENGE_JA_CONSUMIDO")) return "Validação já utilizada. Refaça a validação.";
   return raw;
 }
 
@@ -114,10 +140,21 @@ async function rpcLoginEmailFromMat(mat: string): Promise<string> {
 
 async function loginWithMatAndPassword(mat: string, password: string): Promise<Session> {
   const normalizedMat = normalizeMat(mat);
-  const rpcEmail = await rpcLoginEmailFromMat(normalizedMat);
+  const canonical = canonicalMat(normalizedMat);
 
-  const candidates = new Set<string>([rpcEmail.toLowerCase()]);
-  if (normalizedMat === "1") {
+  const candidates = new Set<string>();
+  const firstEmail = await rpcLoginEmailFromMat(normalizedMat);
+  candidates.add(firstEmail.toLowerCase());
+  if (canonical && canonical !== normalizedMat) {
+    try {
+      const canonicalEmail = await rpcLoginEmailFromMat(canonical);
+      candidates.add(canonicalEmail.toLowerCase());
+    } catch {
+      // Ignore canonical fallback failure and keep the original candidate.
+    }
+  }
+
+  if (normalizedMat === "1" || canonical === "1") {
     for (const email of ADMIN_EMAIL_CANDIDATES) {
       candidates.add(email.toLowerCase());
     }
@@ -242,6 +279,7 @@ export default function App() {
   const [registerMat, setRegisterMat] = useState("");
   const [registerDtNasc, setRegisterDtNasc] = useState("");
   const [registerDtAdm, setRegisterDtAdm] = useState("");
+  const [registerChallenge, setRegisterChallenge] = useState<ChallengeRow | null>(null);
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState("");
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
@@ -250,6 +288,7 @@ export default function App() {
   const [resetMat, setResetMat] = useState("");
   const [resetDtNasc, setResetDtNasc] = useState("");
   const [resetDtAdm, setResetDtAdm] = useState("");
+  const [resetChallenge, setResetChallenge] = useState<ChallengeRow | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
   const [showResetPassword, setShowResetPassword] = useState(false);
@@ -258,6 +297,22 @@ export default function App() {
   const clearAlerts = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
+  };
+
+  const clearRegisterValidation = () => {
+    setRegisterChallenge(null);
+    setRegisterPassword("");
+    setRegisterPasswordConfirm("");
+    setShowRegisterPassword(false);
+    setShowRegisterPasswordConfirm(false);
+  };
+
+  const clearResetValidation = () => {
+    setResetChallenge(null);
+    setResetPassword("");
+    setResetPasswordConfirm("");
+    setShowResetPassword(false);
+    setShowResetPasswordConfirm(false);
   };
 
   const refreshProfile = useCallback(async (activeSession: Session | null) => {
@@ -326,24 +381,40 @@ export default function App() {
     }
   };
 
-  const onRegister = async (event: React.FormEvent<HTMLFormElement>) => {
+  const onValidateRegisterIdentity = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     clearAlerts();
     setBusy(true);
     try {
-      if (registerPassword !== registerPasswordConfirm) {
-        throw new Error("As senhas não conferem.");
-      }
-      if (!passwordIsStrong(registerPassword)) {
-        throw new Error(PASSWORD_HINT);
-      }
-
       const challenge = await rpcStartIdentityChallenge(
         registerMat,
         registerDtNasc,
         registerDtAdm,
         "register"
       );
+      setRegisterChallenge(challenge);
+      setSuccessMessage("Dados validados. Agora defina sua senha.");
+    } catch (error) {
+      setErrorMessage(asErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRegister = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    clearAlerts();
+    setBusy(true);
+    try {
+      if (!registerChallenge) {
+        throw new Error("Valide matrícula e datas antes de definir a senha.");
+      }
+      if (registerPassword !== registerPasswordConfirm) {
+        throw new Error("As senhas não conferem.");
+      }
+      if (!passwordIsStrong(registerPassword)) {
+        throw new Error(PASSWORD_HINT);
+      }
 
       const email = await rpcLoginEmailFromMat(registerMat);
 
@@ -353,7 +424,7 @@ export default function App() {
         options: {
           data: {
             mat: normalizeMat(registerMat),
-            nome: challenge.nome
+            nome: registerChallenge.nome
           }
         }
       });
@@ -368,7 +439,7 @@ export default function App() {
       }
 
       const { error: completeError } = await supabase!.rpc("rpc_complete_registration", {
-        p_challenge_id: challenge.challenge_id
+        p_challenge_id: registerChallenge.challenge_id
       });
       if (completeError) throw completeError;
 
@@ -376,8 +447,30 @@ export default function App() {
       await refreshProfile(sessionData.session);
       setSuccessMessage("Cadastro concluído com sucesso. Você já está logado.");
       setAuthMode("login");
-      setRegisterPassword("");
-      setRegisterPasswordConfirm("");
+      setRegisterMat("");
+      setRegisterDtNasc("");
+      setRegisterDtAdm("");
+      clearRegisterValidation();
+    } catch (error) {
+      setErrorMessage(asErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onValidateResetIdentity = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    clearAlerts();
+    setBusy(true);
+    try {
+      const challenge = await rpcStartIdentityChallenge(
+        resetMat,
+        resetDtNasc,
+        resetDtAdm,
+        "reset_password"
+      );
+      setResetChallenge(challenge);
+      setSuccessMessage("Dados validados. Agora defina a nova senha.");
     } catch (error) {
       setErrorMessage(asErrorMessage(error));
     } finally {
@@ -390,6 +483,9 @@ export default function App() {
     clearAlerts();
     setBusy(true);
     try {
+      if (!resetChallenge) {
+        throw new Error("Valide matrícula e datas antes de definir a nova senha.");
+      }
       if (resetPassword !== resetPasswordConfirm) {
         throw new Error("As senhas não conferem.");
       }
@@ -397,14 +493,8 @@ export default function App() {
         throw new Error(PASSWORD_HINT);
       }
 
-      const challenge = await rpcStartIdentityChallenge(
-        resetMat,
-        resetDtNasc,
-        resetDtAdm,
-        "reset_password"
-      );
       const { data, error } = await supabase!.rpc("rpc_reset_password_with_challenge", {
-        p_challenge_id: challenge.challenge_id,
+        p_challenge_id: resetChallenge.challenge_id,
         p_new_password: resetPassword
       });
       if (error) throw error;
@@ -415,8 +505,10 @@ export default function App() {
       setSuccessMessage("Senha redefinida com sucesso. Faça login novamente.");
       setAuthMode("login");
       setLoginMat(resetMat);
-      setResetPassword("");
-      setResetPasswordConfirm("");
+      setResetMat("");
+      setResetDtNasc("");
+      setResetDtAdm("");
+      clearResetValidation();
     } catch (error) {
       setErrorMessage(asErrorMessage(error));
     } finally {
@@ -428,6 +520,8 @@ export default function App() {
     clearAlerts();
     await supabase!.auth.signOut();
     setAuthMode("login");
+    clearRegisterValidation();
+    clearResetValidation();
     setSuccessMessage("Sessão encerrada.");
   };
 
@@ -510,10 +604,12 @@ export default function App() {
               <button
                 type="button"
                 className="text-link"
-                onClick={() => {
-                  clearAlerts();
-                  setAuthMode("login");
-                }}
+                  onClick={() => {
+                    clearAlerts();
+                    setAuthMode("login");
+                    clearRegisterValidation();
+                    clearResetValidation();
+                  }}
               >
                 ← Voltar para login
               </button>
@@ -556,6 +652,7 @@ export default function App() {
                   onClick={() => {
                     clearAlerts();
                     setAuthMode("register");
+                    clearResetValidation();
                   }}
                 >
                   Quero me cadastrar
@@ -566,6 +663,7 @@ export default function App() {
                   onClick={() => {
                     clearAlerts();
                     setAuthMode("reset");
+                    clearRegisterValidation();
                   }}
                 >
                   Esqueci minha senha
@@ -575,14 +673,21 @@ export default function App() {
           )}
 
           {authMode === "register" && (
-            <form className="form-grid" onSubmit={onRegister}>
+            <form
+              className="form-grid"
+              onSubmit={registerChallenge ? onRegister : onValidateRegisterIdentity}
+            >
               <label>
                 Matrícula
                 <input
                   type="text"
                   inputMode="numeric"
                   value={registerMat}
-                  onChange={(event) => setRegisterMat(event.target.value)}
+                  disabled={Boolean(registerChallenge)}
+                  onChange={(event) => {
+                    setRegisterMat(event.target.value);
+                    clearRegisterValidation();
+                  }}
                   required
                 />
               </label>
@@ -591,7 +696,11 @@ export default function App() {
                 <input
                   type="date"
                   value={registerDtNasc}
-                  onChange={(event) => setRegisterDtNasc(event.target.value)}
+                  disabled={Boolean(registerChallenge)}
+                  onChange={(event) => {
+                    setRegisterDtNasc(event.target.value);
+                    clearRegisterValidation();
+                  }}
                   required
                 />
               </label>
@@ -600,46 +709,80 @@ export default function App() {
                 <input
                   type="date"
                   value={registerDtAdm}
-                  onChange={(event) => setRegisterDtAdm(event.target.value)}
+                  disabled={Boolean(registerChallenge)}
+                  onChange={(event) => {
+                    setRegisterDtAdm(event.target.value);
+                    clearRegisterValidation();
+                  }}
                   required
                 />
               </label>
-              <label>
-                Senha
-                <PasswordField
-                  autoComplete="new-password"
-                  value={registerPassword}
-                  onChange={setRegisterPassword}
-                  visible={showRegisterPassword}
-                  onToggleVisible={() => setShowRegisterPassword((value) => !value)}
-                />
-              </label>
-              <label>
-                Confirmar senha
-                <PasswordField
-                  autoComplete="new-password"
-                  value={registerPasswordConfirm}
-                  onChange={setRegisterPasswordConfirm}
-                  visible={showRegisterPasswordConfirm}
-                  onToggleVisible={() => setShowRegisterPasswordConfirm((value) => !value)}
-                />
-              </label>
-              <small>{PASSWORD_HINT}</small>
-              <button className="btn btn-primary" type="submit" disabled={busy}>
-                {busy ? "Cadastrando..." : "Cadastrar"}
-              </button>
+
+              {registerChallenge ? (
+                <>
+                  <div className="validation-card">
+                    <strong>Dados validados</strong>
+                    <span>{registerChallenge.nome}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => {
+                      clearAlerts();
+                      clearRegisterValidation();
+                    }}
+                  >
+                    Alterar dados validados
+                  </button>
+                  <label>
+                    Senha
+                    <PasswordField
+                      autoComplete="new-password"
+                      value={registerPassword}
+                      onChange={setRegisterPassword}
+                      visible={showRegisterPassword}
+                      onToggleVisible={() => setShowRegisterPassword((value) => !value)}
+                    />
+                  </label>
+                  <label>
+                    Confirmar senha
+                    <PasswordField
+                      autoComplete="new-password"
+                      value={registerPasswordConfirm}
+                      onChange={setRegisterPasswordConfirm}
+                      visible={showRegisterPasswordConfirm}
+                      onToggleVisible={() => setShowRegisterPasswordConfirm((value) => !value)}
+                    />
+                  </label>
+                  <small>{PASSWORD_HINT}</small>
+                  <button className="btn btn-primary" type="submit" disabled={busy}>
+                    {busy ? "Cadastrando..." : "Cadastrar"}
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-primary" type="submit" disabled={busy}>
+                  {busy ? "Validando..." : "Validar dados"}
+                </button>
+              )}
             </form>
           )}
 
           {authMode === "reset" && (
-            <form className="form-grid" onSubmit={onResetPassword}>
+            <form
+              className="form-grid"
+              onSubmit={resetChallenge ? onResetPassword : onValidateResetIdentity}
+            >
               <label>
                 Matrícula
                 <input
                   type="text"
                   inputMode="numeric"
                   value={resetMat}
-                  onChange={(event) => setResetMat(event.target.value)}
+                  disabled={Boolean(resetChallenge)}
+                  onChange={(event) => {
+                    setResetMat(event.target.value);
+                    clearResetValidation();
+                  }}
                   required
                 />
               </label>
@@ -648,7 +791,11 @@ export default function App() {
                 <input
                   type="date"
                   value={resetDtNasc}
-                  onChange={(event) => setResetDtNasc(event.target.value)}
+                  disabled={Boolean(resetChallenge)}
+                  onChange={(event) => {
+                    setResetDtNasc(event.target.value);
+                    clearResetValidation();
+                  }}
                   required
                 />
               </label>
@@ -657,34 +804,61 @@ export default function App() {
                 <input
                   type="date"
                   value={resetDtAdm}
-                  onChange={(event) => setResetDtAdm(event.target.value)}
+                  disabled={Boolean(resetChallenge)}
+                  onChange={(event) => {
+                    setResetDtAdm(event.target.value);
+                    clearResetValidation();
+                  }}
                   required
                 />
               </label>
-              <label>
-                Nova senha
-                <PasswordField
-                  autoComplete="new-password"
-                  value={resetPassword}
-                  onChange={setResetPassword}
-                  visible={showResetPassword}
-                  onToggleVisible={() => setShowResetPassword((value) => !value)}
-                />
-              </label>
-              <label>
-                Confirmar nova senha
-                <PasswordField
-                  autoComplete="new-password"
-                  value={resetPasswordConfirm}
-                  onChange={setResetPasswordConfirm}
-                  visible={showResetPasswordConfirm}
-                  onToggleVisible={() => setShowResetPasswordConfirm((value) => !value)}
-                />
-              </label>
-              <small>{PASSWORD_HINT}</small>
-              <button className="btn btn-primary" type="submit" disabled={busy}>
-                {busy ? "Atualizando..." : "Redefinir senha"}
-              </button>
+
+              {resetChallenge ? (
+                <>
+                  <div className="validation-card">
+                    <strong>Dados validados</strong>
+                    <span>{resetChallenge.nome}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-link"
+                    onClick={() => {
+                      clearAlerts();
+                      clearResetValidation();
+                    }}
+                  >
+                    Alterar dados validados
+                  </button>
+                  <label>
+                    Nova senha
+                    <PasswordField
+                      autoComplete="new-password"
+                      value={resetPassword}
+                      onChange={setResetPassword}
+                      visible={showResetPassword}
+                      onToggleVisible={() => setShowResetPassword((value) => !value)}
+                    />
+                  </label>
+                  <label>
+                    Confirmar nova senha
+                    <PasswordField
+                      autoComplete="new-password"
+                      value={resetPasswordConfirm}
+                      onChange={setResetPasswordConfirm}
+                      visible={showResetPasswordConfirm}
+                      onToggleVisible={() => setShowResetPasswordConfirm((value) => !value)}
+                    />
+                  </label>
+                  <small>{PASSWORD_HINT}</small>
+                  <button className="btn btn-primary" type="submit" disabled={busy}>
+                    {busy ? "Atualizando..." : "Redefinir senha"}
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-primary" type="submit" disabled={busy}>
+                  {busy ? "Validando..." : "Validar dados"}
+                </button>
+              )}
             </form>
           )}
         </section>
