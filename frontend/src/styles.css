@@ -410,16 +410,25 @@ small {
 .topbar-user-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   min-width: 0;
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .topbar-meta {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin-left: auto;
+  width: 100%;
+  margin-left: 0;
 }
 
 .topbar-meta span {
