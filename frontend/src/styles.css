@@ -255,6 +255,8 @@ input:focus {
   position: relative;
   width: 100%;
   min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
 }
 
 .field-icon {
@@ -283,12 +285,22 @@ input:focus {
 }
 
 .input-icon-wrap input {
+  display: block;
   width: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
   padding-left: 42px;
   min-width: 0;
 }
 
 .input-icon-wrap input[type="date"] {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0 !important;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0 !important;
   padding-right: 40px;
 }
 
