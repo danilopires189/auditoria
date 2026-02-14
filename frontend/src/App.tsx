@@ -581,6 +581,8 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
   const [loadingSession, setLoadingSession] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -687,6 +689,19 @@ export default function App() {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showLogoutConfirm) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !logoutBusy) {
+        setShowLogoutConfirm(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showLogoutConfirm, logoutBusy]);
 
   const onLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -886,16 +901,28 @@ export default function App() {
     }
   };
 
-  const onLogout = async () => {
-    const shouldLogout = window.confirm("Deseja realmente sair da sua conta?");
-    if (!shouldLogout) return;
+  const openLogoutConfirm = () => {
+    setShowLogoutConfirm(true);
+  };
 
+  const closeLogoutConfirm = () => {
+    if (logoutBusy) return;
+    setShowLogoutConfirm(false);
+  };
+
+  const onLogout = async () => {
+    setLogoutBusy(true);
     clearAlerts();
-    await supabase!.auth.signOut();
-    setAuthMode("login");
-    clearRegisterValidation();
-    clearResetValidation();
-    setSuccessMessage("Sessão encerrada.");
+    try {
+      await supabase!.auth.signOut();
+      setAuthMode("login");
+      clearRegisterValidation();
+      clearResetValidation();
+      setSuccessMessage("Sessão encerrada.");
+    } finally {
+      setLogoutBusy(false);
+      setShowLogoutConfirm(false);
+    }
   };
 
   const displayContext = useMemo(() => {
@@ -949,7 +976,7 @@ export default function App() {
             </div>
           </div>
           <div className="topbar-right">
-            <button className="btn btn-ghost" onClick={onLogout} type="button">
+            <button className="btn btn-ghost" onClick={openLogoutConfirm} type="button">
               Sair
             </button>
           </div>
@@ -975,6 +1002,34 @@ export default function App() {
             ))}
           </div>
         </section>
+
+        {showLogoutConfirm ? (
+          <div
+            className="confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirm-title"
+            onClick={closeLogoutConfirm}
+          >
+            <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+              <h3 id="logout-confirm-title">Encerrar sessão</h3>
+              <p>Deseja realmente sair da sua conta neste dispositivo?</p>
+              <div className="confirm-actions">
+                <button
+                  className="btn btn-muted"
+                  type="button"
+                  onClick={closeLogoutConfirm}
+                  disabled={logoutBusy}
+                >
+                  Cancelar
+                </button>
+                <button className="btn btn-danger" type="button" onClick={onLogout} disabled={logoutBusy}>
+                  {logoutBusy ? "Saindo..." : "Sair agora"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
