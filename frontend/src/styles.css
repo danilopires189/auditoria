@@ -302,8 +302,8 @@ small {
 .app-topbar {
   border-radius: 16px;
   padding: 10px 12px;
-  background: linear-gradient(140deg, rgba(15, 48, 105, 0.86), rgba(21, 63, 132, 0.56));
-  border: 1px solid rgba(220, 233, 255, 0.18);
+  background: linear-gradient(145deg, rgba(52, 91, 144, 0.92), rgba(79, 116, 168, 0.9));
+  border: 1px solid rgba(225, 236, 255, 0.45);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -327,7 +327,7 @@ small {
 .topbar-user {
   display: grid;
   gap: 1px;
-  color: #eff6ff;
+  color: #f7fbff;
   min-width: 0;
 }
 
@@ -341,7 +341,7 @@ small {
 }
 
 .topbar-user span {
-  color: #cfddf6;
+  color: #e5eefc;
   font-size: 0.8rem;
 }
 
@@ -355,9 +355,9 @@ small {
 .topbar-meta span {
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(232, 240, 255, 0.26);
-  background: rgba(11, 32, 66, 0.44);
-  color: #e8f1ff;
+  border: 1px solid rgba(236, 244, 255, 0.55);
+  background: rgba(255, 255, 255, 0.16);
+  color: #f8fbff;
   font-size: 0.76rem;
   font-weight: 600;
 }
