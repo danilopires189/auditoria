@@ -60,9 +60,22 @@ body {
   text-align: center;
 }
 
+.loading-brands {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
 .loading-logo {
   width: 70px;
-  margin-bottom: 12px;
+}
+
+.loading-pm {
+  width: 112px;
+  max-width: 45%;
+  object-fit: contain;
 }
 
 .auth-card {
