@@ -320,15 +320,30 @@ input:focus {
   width: 100%;
   max-width: 100%;
   min-width: 0 !important;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
   padding-right: 40px;
+  color-scheme: light;
 }
 
 .input-icon-wrap input[type="date"]::-webkit-datetime-edit {
+  padding: 0;
   min-width: 0;
+}
+
+.input-icon-wrap input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.input-icon-wrap input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
 }
 
 .input-icon-wrap input[type="date"]::-webkit-calendar-picker-indicator {
   margin: 0;
+  padding: 0;
   opacity: 0.85;
 }
 
