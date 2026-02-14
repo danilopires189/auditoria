@@ -937,7 +937,7 @@ export default function App() {
 
         <section className="modules-shell">
           <div className="modules-head">
-            <h2>Início</h2>
+            <h2>Prevenção de Perdas CDs</h2>
             <p>Selecione um módulo para iniciar.</p>
           </div>
           <div className="modules-grid">
