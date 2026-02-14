@@ -5,9 +5,22 @@ import { BackIcon, ModuleIcon } from "../ui/icons";
 interface ModulePageTemplateProps {
   moduleDef: DashboardModule;
   isOnline: boolean;
+  userName: string;
 }
 
-export default function ModulePageTemplate({ moduleDef, isOnline }: ModulePageTemplateProps) {
+function toUserDisplayName(value: string): string {
+  const compact = value.trim().replace(/\s+/g, " ");
+  if (!compact) return "Usuário";
+  return compact
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((chunk) => chunk.charAt(0).toLocaleUpperCase("pt-BR") + chunk.slice(1))
+    .join(" ");
+}
+
+export default function ModulePageTemplate({ moduleDef, isOnline, userName }: ModulePageTemplateProps) {
+  const displayUserName = toUserDisplayName(userName);
+
   return (
     <>
       <header className="module-topbar module-topbar-fixed">
@@ -18,9 +31,12 @@ export default function ModulePageTemplate({ moduleDef, isOnline }: ModulePageTe
             </span>
             <span>Início</span>
           </Link>
-          <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
-            {isOnline ? "🟢 Online" : "🔴 Offline"}
-          </span>
+          <div className="module-topbar-user-side">
+            <span className="module-user-greeting">Olá, {displayUserName}</span>
+            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
+              {isOnline ? "🟢 Online" : "🔴 Offline"}
+            </span>
+          </div>
         </div>
         <div className={`module-card module-card-static module-header-card tone-${moduleDef.tone}`}>
           <span className="module-icon" aria-hidden="true">
@@ -32,7 +48,7 @@ export default function ModulePageTemplate({ moduleDef, isOnline }: ModulePageTe
 
       <section className="modules-shell">
         <article className="module-screen surface-enter">
-          <div className="module-screen-body">
+          <div className="module-screen-body module-screen-body-large">
             <p>Em construção. Volte depois.</p>
           </div>
         </article>

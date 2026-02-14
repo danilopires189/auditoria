@@ -720,10 +720,30 @@ small {
 }
 
 .module-topbar-line1 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.module-topbar-user-side {
+  justify-self: end;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.module-user-greeting {
+  color: #eaf2ff;
+  font-family: "Sora", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(44vw, 320px);
 }
 
 .module-topbar-title {
@@ -841,6 +861,15 @@ small {
   text-align: center;
   color: #35517c;
   font-weight: 600;
+}
+
+.module-screen-body-large {
+  min-height: clamp(180px, 32vh, 260px);
+  padding: 18px;
+}
+
+.module-screen-body-large p {
+  font-size: 1.16rem;
 }
 
 .module-card {
@@ -985,6 +1014,20 @@ small {
 
   .confirm-actions .btn {
     width: 100%;
+  }
+
+  .module-topbar-user-side {
+    gap: 6px;
+  }
+
+  .module-user-greeting {
+    max-width: 48vw;
+    font-size: 0.76rem;
+  }
+
+  .module-screen-body-large {
+    min-height: clamp(160px, 30vh, 220px);
+    padding: 14px;
   }
 }
 
