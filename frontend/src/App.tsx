@@ -29,12 +29,14 @@ type ModuleIconName =
 
 type ModuleTone = "blue" | "red" | "teal" | "amber";
 
-const DASHBOARD_MODULES: Array<{
+type DashboardModule = {
   key: string;
   title: string;
   icon: ModuleIconName;
   tone: ModuleTone;
-}> = [
+};
+
+const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "pvps-alocacao", title: "Auditoria de PVPs e Alocação", icon: "audit", tone: "blue" },
   { key: "atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
   { key: "coleta-mercadoria", title: "Coleta de Mercadoria", icon: "collect", tone: "teal" },
@@ -589,6 +591,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileContext | null>(null);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+  const [activeModuleKey, setActiveModuleKey] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [busy, setBusy] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
@@ -925,6 +928,7 @@ export default function App() {
     clearAlerts();
     try {
       await supabase!.auth.signOut();
+      setActiveModuleKey(null);
       setAuthMode("login");
       clearRegisterValidation();
       clearResetValidation();
@@ -953,6 +957,11 @@ export default function App() {
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
   }, [profile, session]);
+
+  const activeModule = useMemo(
+    () => DASHBOARD_MODULES.find((module) => module.key === activeModuleKey) ?? null,
+    [activeModuleKey]
+  );
 
   if (loadingSession) {
     return (
@@ -1005,20 +1014,51 @@ export default function App() {
         </header>
 
         <section className="modules-shell">
-          <div className="modules-head">
-            <h2>Prevenção de Perdas CDs</h2>
-            <p>Selecione um módulo para iniciar.</p>
-          </div>
-          <div className="modules-grid">
-            {DASHBOARD_MODULES.map((module) => (
-              <button key={module.key} type="button" className={`module-card tone-${module.tone}`}>
-                <span className="module-icon" aria-hidden="true">
-                  <ModuleIcon name={module.icon} />
-                </span>
-                <span className="module-title">{module.title}</span>
-              </button>
-            ))}
-          </div>
+          {activeModule ? (
+            <article className="module-screen surface-enter">
+              <header className="module-screen-header">
+                <button type="button" className="text-link module-back" onClick={() => setActiveModuleKey(null)}>
+                  ← Voltar para módulos
+                </button>
+                <div className="module-screen-title-row">
+                  <div className={`module-screen-title tone-${activeModule.tone}`}>
+                    <span className="module-icon" aria-hidden="true">
+                      <ModuleIcon name={activeModule.icon} />
+                    </span>
+                    <h2>{activeModule.title}</h2>
+                  </div>
+                  <span className={`status-pill module-status ${isOnline ? "online" : "offline"}`}>
+                    {isOnline ? "🟢 Online" : "🔴 Offline"}
+                  </span>
+                </div>
+              </header>
+              <div className="module-screen-body">
+                <p>Em construção. Volte depois.</p>
+              </div>
+            </article>
+          ) : (
+            <>
+              <div className="modules-head">
+                <h2>Prevenção de Perdas CDs</h2>
+                <p>Selecione um módulo para iniciar.</p>
+              </div>
+              <div className="modules-grid">
+                {DASHBOARD_MODULES.map((module) => (
+                  <button
+                    key={module.key}
+                    type="button"
+                    className={`module-card tone-${module.tone}`}
+                    onClick={() => setActiveModuleKey(module.key)}
+                  >
+                    <span className="module-icon" aria-hidden="true">
+                      <ModuleIcon name={module.icon} />
+                    </span>
+                    <span className="module-title">{module.title}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </section>
 
         {showLogoutConfirm ? (
