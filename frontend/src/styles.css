@@ -365,6 +365,7 @@ small {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -410,7 +411,7 @@ small {
 .topbar-user-row {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 8px;
   min-width: 0;
 }
