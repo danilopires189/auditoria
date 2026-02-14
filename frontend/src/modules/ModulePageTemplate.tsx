@@ -28,7 +28,7 @@ export default function ModulePageTemplate({ moduleDef, isOnline }: ModulePageTe
         </span>
       </header>
 
-      <section className="modules-shell module-shell-compact">
+      <section className="module-shell-compact">
         <article className="module-screen module-screen-compact surface-enter">
           <div className="module-screen-body">
             <p>Em construção. Volte depois.</p>

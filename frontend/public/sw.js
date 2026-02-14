@@ -1,4 +1,4 @@
-const CACHE_VERSION = "auditoria-shell-v1";
+const CACHE_VERSION = "auditoria-shell-v2";
 const SHELL_CACHE = CACHE_VERSION;
 
 const scopeUrl = new URL(self.registration.scope);
