@@ -340,6 +340,17 @@ function LockIcon() {
   );
 }
 
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+      <path d="M4 10h16" />
+    </svg>
+  );
+}
+
 interface PasswordFieldProps {
   name: string;
   value: string;
@@ -862,6 +873,9 @@ export default function App() {
   };
 
   const onLogout = async () => {
+    const shouldLogout = window.confirm("Deseja realmente sair da sua conta?");
+    if (!shouldLogout) return;
+
     clearAlerts();
     await supabase!.auth.signOut();
     setAuthMode("login");
@@ -1072,29 +1086,39 @@ export default function App() {
               </label>
               <label>
                 Data de nascimento
-                <input
-                  type="date"
-                  value={registerDtNasc}
-                  disabled={Boolean(registerChallenge)}
-                  onChange={(event) => {
-                    setRegisterDtNasc(event.target.value);
-                    clearRegisterValidation();
-                  }}
-                  required
-                />
+                <div className="input-icon-wrap">
+                  <span className="field-icon" aria-hidden="true">
+                    <CalendarIcon />
+                  </span>
+                  <input
+                    type="date"
+                    value={registerDtNasc}
+                    disabled={Boolean(registerChallenge)}
+                    onChange={(event) => {
+                      setRegisterDtNasc(event.target.value);
+                      clearRegisterValidation();
+                    }}
+                    required
+                  />
+                </div>
               </label>
               <label>
                 Data de admissão
-                <input
-                  type="date"
-                  value={registerDtAdm}
-                  disabled={Boolean(registerChallenge)}
-                  onChange={(event) => {
-                    setRegisterDtAdm(event.target.value);
-                    clearRegisterValidation();
-                  }}
-                  required
-                />
+                <div className="input-icon-wrap">
+                  <span className="field-icon" aria-hidden="true">
+                    <CalendarIcon />
+                  </span>
+                  <input
+                    type="date"
+                    value={registerDtAdm}
+                    disabled={Boolean(registerChallenge)}
+                    onChange={(event) => {
+                      setRegisterDtAdm(event.target.value);
+                      clearRegisterValidation();
+                    }}
+                    required
+                  />
+                </div>
               </label>
 
               {registerChallenge ? (
@@ -1175,29 +1199,39 @@ export default function App() {
               </label>
               <label>
                 Data de nascimento
-                <input
-                  type="date"
-                  value={resetDtNasc}
-                  disabled={Boolean(resetChallenge)}
-                  onChange={(event) => {
-                    setResetDtNasc(event.target.value);
-                    clearResetValidation();
-                  }}
-                  required
-                />
+                <div className="input-icon-wrap">
+                  <span className="field-icon" aria-hidden="true">
+                    <CalendarIcon />
+                  </span>
+                  <input
+                    type="date"
+                    value={resetDtNasc}
+                    disabled={Boolean(resetChallenge)}
+                    onChange={(event) => {
+                      setResetDtNasc(event.target.value);
+                      clearResetValidation();
+                    }}
+                    required
+                  />
+                </div>
               </label>
               <label>
                 Data de admissão
-                <input
-                  type="date"
-                  value={resetDtAdm}
-                  disabled={Boolean(resetChallenge)}
-                  onChange={(event) => {
-                    setResetDtAdm(event.target.value);
-                    clearResetValidation();
-                  }}
-                  required
-                />
+                <div className="input-icon-wrap">
+                  <span className="field-icon" aria-hidden="true">
+                    <CalendarIcon />
+                  </span>
+                  <input
+                    type="date"
+                    value={resetDtAdm}
+                    disabled={Boolean(resetChallenge)}
+                    onChange={(event) => {
+                      setResetDtAdm(event.target.value);
+                      clearResetValidation();
+                    }}
+                    required
+                  />
+                </div>
               </label>
 
               {resetChallenge ? (
