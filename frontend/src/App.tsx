@@ -856,18 +856,18 @@ export default function App() {
               />
             )}
           />
-          <Route path="/modulos/pvps-alocacao" element={<PvpsAlocacaoPage isOnline={isOnline} />} />
-          <Route path="/modulos/atividade-extra" element={<AtividadeExtraPage isOnline={isOnline} />} />
-          <Route path="/modulos/coleta-mercadoria" element={<ColetaMercadoriaPage isOnline={isOnline} />} />
-          <Route path="/modulos/conferencia-termo" element={<ConferenciaTermoPage isOnline={isOnline} />} />
-          <Route path="/modulos/conferencia-volume-avulso" element={<ConferenciaVolumeAvulsoPage isOnline={isOnline} />} />
-          <Route path="/modulos/conferencia-pedido-direto" element={<ConferenciaPedidoDiretoPage isOnline={isOnline} />} />
-          <Route path="/modulos/conferencia-entrada-notas" element={<ConferenciaEntradaNotasPage isOnline={isOnline} />} />
-          <Route path="/modulos/devolucao-mercadoria" element={<DevolucaoMercadoriaPage isOnline={isOnline} />} />
-          <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} />} />
-          <Route path="/modulos/meta-mes" element={<MetaMesPage isOnline={isOnline} />} />
-          <Route path="/modulos/produtividade" element={<ProdutividadePage isOnline={isOnline} />} />
-          <Route path="/modulos/zerados" element={<ZeradosPage isOnline={isOnline} />} />
+          <Route path="/modulos/pvps-alocacao" element={<PvpsAlocacaoPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/atividade-extra" element={<AtividadeExtraPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/coleta-mercadoria" element={<ColetaMercadoriaPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/conferencia-termo" element={<ConferenciaTermoPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/conferencia-volume-avulso" element={<ConferenciaVolumeAvulsoPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/conferencia-pedido-direto" element={<ConferenciaPedidoDiretoPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/conferencia-entrada-notas" element={<ConferenciaEntradaNotasPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/devolucao-mercadoria" element={<DevolucaoMercadoriaPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/meta-mes" element={<MetaMesPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/produtividade" element={<ProdutividadePage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/zerados" element={<ZeradosPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Routes>
 
