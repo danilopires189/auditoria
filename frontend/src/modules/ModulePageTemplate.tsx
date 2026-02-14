@@ -10,7 +10,7 @@ interface ModulePageTemplateProps {
 export default function ModulePageTemplate({ moduleDef, isOnline }: ModulePageTemplateProps) {
   return (
     <>
-      <header className="module-topbar">
+      <header className="module-topbar module-topbar-compact">
         <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
           <span className="module-back-icon" aria-hidden="true">
             <BackIcon />
@@ -28,8 +28,8 @@ export default function ModulePageTemplate({ moduleDef, isOnline }: ModulePageTe
         </span>
       </header>
 
-      <section className="modules-shell">
-        <article className="module-screen surface-enter">
+      <section className="modules-shell module-shell-compact">
+        <article className="module-screen module-screen-compact surface-enter">
           <div className="module-screen-body">
             <p>Em construção. Volte depois.</p>
           </div>
