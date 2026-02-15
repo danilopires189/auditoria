@@ -717,7 +717,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
       if (!isOnline) {
         if (!localMeta || localMeta.row_count <= 0) {
-          throw new Error("Sem base local do Termo. Conecte-se e sincronize antes de usar offline.");
+          throw new Error("Sem base local pedido Termo. Conecte-se e sincronize antes de usar offline.");
         }
         if (localBarrasMeta.row_count <= 0) {
           throw new Error("Sem base local de barras. Conecte-se e ative o modo offline para sincronizar.");
@@ -1609,8 +1609,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
       <section className="modules-shell termo-shell">
         <div className="termo-head">
-          <h2>Auditoria de Termo por Etiqueta</h2>
-          <p>Para trabalhar offline, sincronize a base do Termo deste CD.</p>
+          <h2>Auditoria de Termo por Volume</h2>
+          <p>Para trabalhar offline, sincronize a base do pedido de Termo.</p>
           {manifestInfo ? <p className="termo-meta-line">{manifestInfo}</p> : null}
         </div>
 
@@ -2001,12 +2001,19 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       const groupStatus = group.status;
                       return (
                         <div key={group.rota} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
-                          <button
-                            type="button"
-                            className="termo-route-row termo-route-row-button"
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className="termo-route-row-button"
                             onClick={(event) => {
                               event.stopPropagation();
                               setExpandedRoute((current) => current === group.rota ? null : group.rota);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setExpandedRoute((current) => current === group.rota ? null : group.rota);
+                              }
                             }}
                             aria-expanded={isOpen}
                           >
@@ -2026,7 +2033,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                               </span>
                               <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
                             </span>
-                          </button>
+                          </div>
                           {isOpen ? (
                             <div className="termo-route-stores">
                               {group.filiais.map((row) => {
