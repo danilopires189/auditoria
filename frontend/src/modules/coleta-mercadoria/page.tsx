@@ -42,13 +42,6 @@ interface ColetaMercadoriaPageProps {
 const MODULE_DEF = getModuleByKeyOrThrow("coleta-mercadoria");
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-function isWithinAge(value: string | null, maxAgeMs: number): boolean {
-  if (!value) return false;
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return false;
-  return Date.now() - parsed <= maxAgeMs;
-}
-
 function cdCodeLabel(cd: number | null): string {
   if (cd == null) return "CD não definido";
   return `CD ${String(cd).padStart(2, "0")}`;
@@ -444,6 +437,30 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     [isOnline, refreshLocalState]
   );
 
+  const onToggleOfflineMode = useCallback(async () => {
+    const nextOffline = !preferOfflineMode;
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setPreferOfflineMode(nextOffline);
+
+    if (nextOffline) {
+      if (!isOnline) {
+        if (dbBarrasCount <= 0) {
+          setErrorMessage("Sem internet para carregar a base offline. Conecte-se e clique em Atualizar base barras.");
+        } else {
+          setStatusMessage("Modo offline ativado com base local existente.");
+        }
+        return;
+      }
+
+      setStatusMessage("Modo offline ativado. Carregando base de barras...");
+      await runDbBarrasRefresh(false);
+      return;
+    }
+
+    setStatusMessage("Modo online ativado. Busca de barras direto no Supabase.");
+  }, [dbBarrasCount, isOnline, preferOfflineMode, runDbBarrasRefresh]);
+
   const applyRowUpdate = useCallback(
     async (row: ColetaRow, patch: Partial<ColetaRow>) => {
       const nextRow: ColetaRow = {
@@ -634,7 +651,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
       setEtiquetaFixa(prefs.etiqueta_fixa || "");
       setMultiploInput(String(prefs.multiplo_padrao || 1));
-      setPreferOfflineMode(Boolean(prefs.prefer_offline_mode));
+      setPreferOfflineMode(false);
 
       const initialCd = prefs.cd_ativo ?? fixedCd;
       setCdAtivo(initialCd ?? null);
@@ -644,15 +661,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       if (cancelled) return;
 
       setPreferencesReady(true);
-      const meta = await getDbBarrasMeta();
-      const hasFreshCache = meta.row_count > 0 && isWithinAge(meta.last_sync_at, ONE_DAY_MS);
-
-      if (isOnline && !prefs.prefer_offline_mode && !hasFreshCache) {
-        await runDbBarrasRefresh(true);
-      }
-
       await refreshSharedState();
-      if (isOnline && !prefs.prefer_offline_mode) {
+      if (isOnline) {
         await runSync(true);
       }
       focusBarcode();
@@ -662,7 +672,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     return () => {
       cancelled = true;
     };
-  }, [fixedCd, focusBarcode, isOnline, profile.user_id, refreshLocalState, refreshSharedState, runDbBarrasRefresh, runSync]);
+  }, [fixedCd, focusBarcode, isOnline, profile.user_id, refreshLocalState, refreshSharedState, runSync]);
 
   useEffect(() => {
     if (!preferencesReady) return;
@@ -735,12 +745,6 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         setErrorMessage("CD não definido para a coleta atual.");
         return;
       }
-      if (dbBarrasCount <= 0 && (!isOnline || preferOfflineMode)) {
-        setErrorMessage("Base local indisponível. Para trabalhar offline, sincronize a base de barras.");
-        focusBarcode();
-        return;
-      }
-
       const qtd = parseMultiplo(multiploInput);
       let valMmaa: string | null = null;
       try {
@@ -750,8 +754,21 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         return;
       }
 
-      let product = await getDbBarrasByBarcode(barras);
-      if (!product && isOnline && !preferOfflineMode) {
+      let product = null;
+      if (preferOfflineMode) {
+        if (dbBarrasCount <= 0) {
+          setErrorMessage("Base local indisponível. Clique em Atualizar base barras para trabalhar offline.");
+          focusBarcode();
+          return;
+        }
+        product = await getDbBarrasByBarcode(barras);
+      } else {
+        if (!isOnline) {
+          setErrorMessage("Sem internet para busca online. Ative Trabalhar offline para usar base local.");
+          focusBarcode();
+          return;
+        }
+
         product = await fetchDbBarrasByBarcodeOnline(barras);
         if (product) {
           await upsertDbBarrasCacheRow(product);
@@ -891,9 +908,15 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           </div>
         ) : null}
 
-        {!isOnline && dbBarrasCount <= 0 ? (
+        {preferOfflineMode && dbBarrasCount <= 0 ? (
           <div className="alert error">
-            Você está offline e ainda não há cache da DB_BARRAS neste dispositivo. Conecte-se para carregar a base.
+            Modo offline ativo sem base local. Conecte-se e clique em Atualizar base barras.
+          </div>
+        ) : null}
+
+        {!preferOfflineMode && !isOnline ? (
+          <div className="alert error">
+            Você está sem internet. Para continuar coletando, ative Trabalhar offline.
           </div>
         ) : null}
 
@@ -901,11 +924,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           <button
             type="button"
             className={`btn btn-muted coleta-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
-            onClick={() => setPreferOfflineMode((value) => !value)}
+            onClick={() => void onToggleOfflineMode()}
             title={preferOfflineMode ? "Desativar modo offline local" : "Ativar modo offline local"}
           >
             <span aria-hidden="true"><OfflineModeIcon enabled={!preferOfflineMode} /></span>
-            {preferOfflineMode ? "Offline local" : "Online direto"}
+            {preferOfflineMode ? "Offline local" : "Trabalhar offline"}
           </button>
           <button type="button" className="btn btn-muted" onClick={() => void runDbBarrasRefresh(false)} disabled={!isOnline || busyRefresh}>
             {busyRefresh ? "Atualizando base..." : "Atualizar base barras"}
