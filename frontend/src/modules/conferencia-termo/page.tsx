@@ -739,7 +739,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       if (shouldDownload) {
         const bundle = await fetchManifestBundle(currentCd, (step, page, rows) => {
           if (step === "items") {
-            setProgressMessage(`Atualizando manifesto do Termo... itens página ${page} | linhas ${rows}`);
+            setProgressMessage(`Atualizando base pedido de Termo... itens página ${page} | linhas ${rows}`);
           } else {
             setProgressMessage(`Atualizando rotas/filiais... ${rows} rota(s).`);
           }
