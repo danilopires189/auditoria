@@ -220,7 +220,7 @@ export async function fetchRouteOverview(cd: number): Promise<TermoRouteOverview
 
 export async function fetchManifestBundle(
   cd: number,
-  onProgress?: (step: string, pages: number, rows: number) => void,
+  onProgress?: (progress: { step: "items" | "barras" | "routes"; rows: number; total: number; percent: number }) => void,
   options?: { includeBarras?: boolean }
 ): Promise<{
   meta: TermoManifestMeta;
@@ -241,7 +241,14 @@ export async function fetchManifestBundle(
     items.push(...page);
     itemsPages += 1;
     itemsOffset += page.length;
-    onProgress?.("items", itemsPages, items.length);
+    const itemTotal = Math.max(meta.row_count, 0);
+    const itemPercent = itemTotal > 0 ? Math.round(Math.min(1, items.length / itemTotal) * 100) : 100;
+    onProgress?.({
+      step: "items",
+      rows: items.length,
+      total: itemTotal,
+      percent: itemPercent
+    });
     if (page.length < MANIFEST_ITEMS_PAGE_SIZE) break;
   }
 
@@ -255,13 +262,23 @@ export async function fetchManifestBundle(
       barras.push(...page);
       barrasPages += 1;
       barrasOffset += page.length;
-      onProgress?.("barras", barrasPages, barras.length);
+      onProgress?.({
+        step: "barras",
+        rows: barras.length,
+        total: barras.length,
+        percent: 100
+      });
       if (page.length < MANIFEST_BARRAS_PAGE_SIZE) break;
     }
   }
 
   const routes = await fetchRouteOverview(cd);
-  onProgress?.("routes", 1, routes.length);
+  onProgress?.({
+    step: "routes",
+    rows: routes.length,
+    total: routes.length,
+    percent: 100
+  });
 
   return {
     meta,

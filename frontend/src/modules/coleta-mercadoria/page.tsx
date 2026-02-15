@@ -768,8 +768,15 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
 
       try {
-        const result = await refreshDbBarrasCacheSmart((pages, rowsFetched) => {
-          setProgressMessage(`Atualizando base de barras... páginas ${pages} | linhas ${rowsFetched}`);
+        const result = await refreshDbBarrasCacheSmart((progress) => {
+          const percent = Math.max(0, Math.min(100, progress.percent));
+          if (progress.totalRows > 0) {
+            setProgressMessage(
+              `Atualizando base de barras... ${percent}% (${progress.rowsFetched}/${progress.totalRows})`
+            );
+            return;
+          }
+          setProgressMessage(`Atualizando base de barras... ${percent}%`);
         });
         await refreshLocalState();
         if (!silent) {

@@ -19,6 +19,14 @@ import type {
 
 const DB_BARRAS_PAGE_SIZE = 1000;
 
+type DbBarrasProgress = {
+  mode: "full" | "delta";
+  pagesFetched: number;
+  rowsFetched: number;
+  totalRows: number;
+  percent: number;
+};
+
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -117,6 +125,12 @@ export function formatValidade(value: string | null): string {
   return `${value.slice(0, 2)}/${value.slice(2)}`;
 }
 
+function toPercent(current: number, total: number): number {
+  if (total <= 0) return current > 0 ? 100 : 0;
+  const ratio = Math.max(0, Math.min(1, current / total));
+  return Math.round(ratio * 100);
+}
+
 export async function fetchCdOptions(): Promise<CdOption[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
@@ -136,11 +150,38 @@ export async function fetchCdOptions(): Promise<CdOption[]> {
     .filter((row): row is CdOption => row != null);
 }
 
+export async function fetchDbBarrasMetaRemote(): Promise<{ row_count: number; updated_max: string | null }> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_db_barras_meta");
+  if (error) {
+    throw new Error(`Falha ao obter metadados de barras: ${toErrorMessage(error)}`);
+  }
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  return {
+    row_count: parseInteger(first?.row_count, 0),
+    updated_max: parseNullableString(first?.updated_max)
+  };
+}
+
+export async function fetchDbBarrasDeltaCount(updatedAfter: string): Promise<number> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_db_barras_delta_count", {
+    p_updated_after: updatedAfter
+  });
+  if (error) {
+    throw new Error(`Falha ao obter contagem delta de barras: ${toErrorMessage(error)}`);
+  }
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  return parseInteger(first?.row_count, 0);
+}
+
 export async function refreshDbBarrasCache(
-  onProgress?: (pagesFetched: number, rowsFetched: number) => void
-): Promise<{ rows: number; pages: number }> {
+  onProgress?: (progress: DbBarrasProgress) => void
+): Promise<{ rows: number; pages: number; totalRows: number }> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
+  const remoteMeta = await fetchDbBarrasMetaRemote();
+  const totalRows = Math.max(remoteMeta.row_count, 0);
   let offset = 0;
   let pages = 0;
   const allRows: DbBarrasCacheRow[] = [];
@@ -177,17 +218,30 @@ export async function refreshDbBarrasCache(
 
     pages += 1;
     offset += page.length;
-    onProgress?.(pages, allRows.length);
+    onProgress?.({
+      mode: "full",
+      pagesFetched: pages,
+      rowsFetched: allRows.length,
+      totalRows,
+      percent: toPercent(allRows.length, totalRows)
+    });
 
     if (page.length < DB_BARRAS_PAGE_SIZE) break;
   }
 
   await replaceDbBarrasCache(allRows);
-  return { rows: allRows.length, pages };
+  onProgress?.({
+    mode: "full",
+    pagesFetched: pages,
+    rowsFetched: allRows.length,
+    totalRows,
+    percent: 100
+  });
+  return { rows: allRows.length, pages, totalRows };
 }
 
 export async function refreshDbBarrasCacheSmart(
-  onProgress?: (pagesFetched: number, rowsFetched: number) => void
+  onProgress?: (progress: DbBarrasProgress) => void
 ): Promise<{ mode: "full" | "delta"; pages: number; applied: number; total: number }> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
@@ -199,6 +253,24 @@ export async function refreshDbBarrasCacheSmart(
       pages: result.pages,
       applied: result.rows,
       total: result.rows
+    };
+  }
+
+  const deltaTotal = await fetchDbBarrasDeltaCount(meta.last_sync_at);
+  if (deltaTotal <= 0) {
+    await touchDbBarrasMeta(new Date().toISOString());
+    onProgress?.({
+      mode: "delta",
+      pagesFetched: 0,
+      rowsFetched: 0,
+      totalRows: 0,
+      percent: 100
+    });
+    return {
+      mode: "delta",
+      pages: 0,
+      applied: 0,
+      total: meta.row_count
     };
   }
 
@@ -249,7 +321,13 @@ export async function refreshDbBarrasCacheSmart(
 
     pages += 1;
     offset += page.length;
-    onProgress?.(pages, changedRows.length);
+    onProgress?.({
+      mode: "delta",
+      pagesFetched: pages,
+      rowsFetched: changedRows.length,
+      totalRows: deltaTotal,
+      percent: toPercent(changedRows.length, deltaTotal)
+    });
 
     if (page.length < DB_BARRAS_PAGE_SIZE) break;
   }
@@ -265,6 +343,13 @@ export async function refreshDbBarrasCacheSmart(
   }
 
   await touchDbBarrasMeta(new Date().toISOString());
+  onProgress?.({
+    mode: "delta",
+    pagesFetched: pages,
+    rowsFetched: changedRows.length,
+    totalRows: deltaTotal,
+    percent: 100
+  });
   return {
     mode: "delta",
     pages,

@@ -737,11 +737,19 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       let termoRowCount = remoteMeta.row_count;
 
       if (shouldDownload) {
-        const bundle = await fetchManifestBundle(currentCd, (step, page, rows) => {
-          if (step === "items") {
-            setProgressMessage(`Atualizando base pedido de Termo... itens página ${page} | linhas ${rows}`);
-          } else {
-            setProgressMessage(`Atualizando rotas/filiais... ${rows} rota(s).`);
+        const bundle = await fetchManifestBundle(currentCd, (progress) => {
+          if (progress.step === "items") {
+            if (progress.total > 0) {
+              setProgressMessage(
+                `Atualizando base pedido de Termo... ${progress.percent}% (${progress.rows}/${progress.total})`
+              );
+              return;
+            }
+            setProgressMessage(`Atualizando base pedido de Termo... ${progress.percent}%`);
+            return;
+          }
+          if (progress.step === "routes") {
+            setProgressMessage(`Atualizando rotas/filiais... ${progress.percent}% (${progress.rows} rota(s))`);
           }
         }, { includeBarras: false });
 
@@ -762,8 +770,14 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         setRouteRows(routes);
       }
 
-      const barrasSync = await refreshDbBarrasCacheSmart((pages, rows) => {
-        setProgressMessage(`Atualizando base de barras... página ${pages} | linhas ${rows}`);
+      const barrasSync = await refreshDbBarrasCacheSmart((progress) => {
+        if (progress.totalRows > 0) {
+          setProgressMessage(
+            `Atualizando base de barras... ${progress.percent}% (${progress.rowsFetched}/${progress.totalRows})`
+          );
+          return;
+        }
+        setProgressMessage(`Atualizando base de barras... ${progress.percent}%`);
       });
 
       setManifestInfo(
@@ -1982,7 +1996,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-rotas-title" onClick={() => setShowRoutesModal(false)}>
               <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                <h3 id="termo-rotas-title">Rota/Filial do dia</h3>
+                <h3 id="termo-rotas-title">Rota/Pedido do dia</h3>
                 <div className="input-icon-wrap termo-routes-search">
                   <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
                   <input
