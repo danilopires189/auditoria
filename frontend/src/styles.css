@@ -1826,7 +1826,7 @@ small {
 
 @media (min-width: 700px) {
   .modules-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .module-card {
@@ -1895,6 +1895,6 @@ small {
 
 @media (min-width: 1180px) {
   .modules-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }

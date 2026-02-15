@@ -42,10 +42,7 @@ export default function ModulePageTemplate({ moduleDef, isOnline, userName }: Mo
           <span className="module-icon" aria-hidden="true">
             <ModuleIcon name={moduleDef.icon} />
           </span>
-          <div className="module-header-main">
-            <span className="module-title">{moduleDef.title}</span>
-            <span className="module-available-pill">Disponível</span>
-          </div>
+          <span className="module-title">{moduleDef.title}</span>
         </div>
       </header>
 
