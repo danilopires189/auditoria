@@ -368,6 +368,10 @@ function searchIcon() {
   );
 }
 
+function isKeyboardActivate(event: ReactKeyboardEvent<HTMLElement>): boolean {
+  return event.key === "Enter" || event.key === " ";
+}
+
 export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaTermoPageProps) {
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
@@ -1944,10 +1948,16 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       const isOpen = expandedRoute === group.rota;
                       return (
                         <div key={group.rota} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
-                          <button
-                            type="button"
+                          <div
                             className="termo-route-row termo-route-row-button"
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setExpandedRoute((current) => current === group.rota ? null : group.rota)}
+                            onKeyDown={(event) => {
+                              if (!isKeyboardActivate(event)) return;
+                              event.preventDefault();
+                              setExpandedRoute((current) => current === group.rota ? null : group.rota);
+                            }}
                           >
                             <div>
                               <strong>{group.rota}</strong>
@@ -1964,7 +1974,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                               </span>
                               <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
                             </div>
-                          </button>
+                          </div>
                           {isOpen ? (
                             <div className="termo-route-stores">
                               {group.filiais.map((row) => (
