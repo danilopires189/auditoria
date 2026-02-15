@@ -1172,16 +1172,31 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
 
       let product = null;
-      if (preferOfflineMode) {
-        if (dbBarrasCount <= 0) {
-          setErrorMessage("Base local indisponível. Ative Trabalhar offline com internet para carregar a base.");
+      const hasLocalBase = dbBarrasCount > 0;
+
+      // Prioridade: base local (quando já existe no dispositivo).
+      if (hasLocalBase) {
+        product = await getDbBarrasByBarcode(barras);
+      }
+
+      // Fallback online apenas quando necessário.
+      if (!product) {
+        if (preferOfflineMode) {
+          if (!hasLocalBase) {
+            setErrorMessage("Base local indisponível. Ative Trabalhar offline com internet para carregar a base.");
+          } else {
+            setErrorMessage("Código de barras não encontrado na base local.");
+          }
           focusBarcode();
           return;
         }
-        product = await getDbBarrasByBarcode(barras);
-      } else {
+
         if (!isOnline) {
-          setErrorMessage("Sem internet para busca online. Ative Trabalhar offline para usar base local.");
+          if (hasLocalBase) {
+            setErrorMessage("Código de barras não encontrado na base local.");
+          } else {
+            setErrorMessage("Sem internet para busca online. Ative Trabalhar offline para usar base local.");
+          }
           focusBarcode();
           return;
         }
