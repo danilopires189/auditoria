@@ -152,6 +152,24 @@ TABLE_SPECS: dict[str, TableSpec] = {
         },
         has_cd=True,
     ),
+    "db_rotas": TableSpec(
+        name="db_rotas",
+        business_columns=[
+            "cd",
+            "filial",
+            "uf",
+            "nome",
+            "rota",
+        ],
+        sql_types={
+            "cd": "integer",
+            "filial": "bigint",
+            "uf": "text",
+            "nome": "text",
+            "rota": "text",
+        },
+        has_cd=True,
+    ),
     "db_termo": TableSpec(
         name="db_termo",
         business_columns=[

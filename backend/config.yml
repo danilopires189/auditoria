@@ -114,6 +114,20 @@ tables:
       descricao: "text"
       qtd_fat: "integer"
 
+  db_rotas:
+    file: "BD_ROTAS.xlsx"
+    sheet: "BD_ROTAS"
+    mode: "full_replace"
+    unique_keys: ["cd", "filial"]
+    required_columns: ["cd", "filial", "rota"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      filial: "bigint"
+      uf: "text"
+      nome: "text"
+      rota: "text"
+
   db_termo:
     file: "DB_TERMO.xlsx"
     sheet: "DB_TERMO"
