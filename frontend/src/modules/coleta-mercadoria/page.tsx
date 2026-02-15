@@ -714,9 +714,26 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   }, [isOnline, refreshSharedState]);
 
   useEffect(() => {
-    if (!isOnline || preferOfflineMode) return;
-    void runSync(true);
-  }, [isOnline, preferOfflineMode, runSync]);
+    if (!isOnline || pendingCount <= 0) return;
+
+    let cancelled = false;
+    const retryEveryMs = 15000;
+
+    const runAutoSync = async () => {
+      if (cancelled) return;
+      await runSync(true);
+    };
+
+    void runAutoSync();
+    const intervalId = window.setInterval(() => {
+      void runAutoSync();
+    }, retryEveryMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isOnline, pendingCount, runSync]);
 
   useEffect(() => {
     if (!showReport) return;
@@ -820,7 +837,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         void refreshSharedState();
         setStatusMessage("Item coletado e enviado para sincronização.");
       } else {
-        setStatusMessage("Item coletado em modo local. Sincronize quando estiver online.");
+        setStatusMessage("Item coletado localmente. Pendência será sincronizada quando houver internet.");
       }
       focusBarcode();
     } catch (error) {
