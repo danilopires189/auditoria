@@ -183,6 +183,34 @@ export async function refreshDbBarrasCache(
   return { rows: allRows.length, pages };
 }
 
+export async function fetchDbBarrasByBarcodeOnline(barras: string): Promise<DbBarrasCacheRow | null> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const normalized = normalizeBarcode(barras);
+  if (!normalized) return null;
+
+  const { data, error } = await supabase.rpc("rpc_db_barras_lookup", {
+    p_barras: normalized
+  });
+
+  if (error) {
+    throw new Error(`Falha ao buscar barras online: ${toErrorMessage(error)}`);
+  }
+
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) return null;
+
+  const coddv = Number.parseInt(String(first.coddv ?? ""), 10);
+  const descricao = String(first.descricao ?? "").trim();
+  if (!Number.isFinite(coddv)) return null;
+
+  return {
+    barras: normalizeBarcode(String(first.barras ?? normalized)),
+    coddv,
+    descricao,
+    updated_at: first.updated_at == null ? null : String(first.updated_at)
+  };
+}
+
 export async function fetchTodaySharedColetaRows(cd: number, limit = 1200): Promise<ColetaRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 

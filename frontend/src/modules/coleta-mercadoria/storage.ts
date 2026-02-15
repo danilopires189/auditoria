@@ -18,6 +18,7 @@ const INDEX_ROWS_BY_USER = "by_user";
 const INDEX_ROWS_BY_USER_STATUS = "by_user_status";
 
 const META_DB_BARRAS_SYNC = "db_barras_sync";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 const PENDING_STATUSES: ColetaSyncStatus[] = ["pending_insert", "pending_update", "pending_delete", "error"];
 
@@ -40,7 +41,8 @@ function createDefaultPreferences(): ColetaPreferences {
   return {
     etiqueta_fixa: "",
     multiplo_padrao: 1,
-    cd_ativo: null
+    cd_ativo: null,
+    prefer_offline_mode: false
   };
 }
 
@@ -136,6 +138,19 @@ export async function getDbBarrasByBarcode(barras: string): Promise<DbBarrasCach
   return (result as DbBarrasCacheRow | undefined) ?? null;
 }
 
+export async function upsertDbBarrasCacheRow(row: DbBarrasCacheRow): Promise<void> {
+  const db = await getDb();
+  const transaction = db.transaction(STORE_DB_BARRAS, "readwrite");
+  const store = transaction.objectStore(STORE_DB_BARRAS);
+  store.put({
+    barras: row.barras,
+    coddv: row.coddv,
+    descricao: row.descricao,
+    updated_at: row.updated_at
+  });
+  await transactionDone(transaction);
+}
+
 export async function getDbBarrasMeta(): Promise<DbBarrasSyncMeta> {
   const db = await getDb();
   const transaction = db.transaction([STORE_DB_BARRAS, STORE_META], "readonly");
@@ -207,7 +222,8 @@ export async function getColetaPreferences(userId: string): Promise<ColetaPrefer
     multiplo_padrao: normalizePositiveInteger(payload?.multiplo_padrao, 1),
     cd_ativo: typeof payload?.cd_ativo === "number" && Number.isFinite(payload.cd_ativo)
       ? Math.trunc(payload.cd_ativo)
-      : null
+      : null,
+    prefer_offline_mode: Boolean(payload?.prefer_offline_mode)
   };
 }
 
@@ -221,9 +237,78 @@ export async function saveColetaPreferences(userId: string, preferences: ColetaP
     value: {
       etiqueta_fixa: preferences.etiqueta_fixa,
       multiplo_padrao: normalizePositiveInteger(preferences.multiplo_padrao, 1),
-      cd_ativo: preferences.cd_ativo
+      cd_ativo: preferences.cd_ativo,
+      prefer_offline_mode: Boolean(preferences.prefer_offline_mode)
     }
   });
 
+  await transactionDone(transaction);
+}
+
+function safeTimestamp(value: string | null | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export async function cleanupExpiredColetaRows(userId: string, ttlMs = ONE_DAY_MS): Promise<number> {
+  const db = await getDb();
+  const transaction = db.transaction(STORE_COLETA_ROWS, "readwrite");
+  const store = transaction.objectStore(STORE_COLETA_ROWS);
+  const index = store.index(INDEX_ROWS_BY_USER);
+  const request = index.openCursor(IDBKeyRange.only(userId));
+  const threshold = Date.now() - Math.max(ttlMs, 60_000);
+  let removed = 0;
+
+  await new Promise<void>((resolve, reject) => {
+    request.onerror = () => reject(request.error ?? new Error("Falha ao limpar coletas expiradas."));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve();
+        return;
+      }
+
+      const row = cursor.value as ColetaRow;
+      const lastTouch = Math.max(
+        safeTimestamp(row.updated_at),
+        safeTimestamp(row.created_at),
+        safeTimestamp(row.data_hr)
+      );
+
+      if (lastTouch > 0 && lastTouch < threshold) {
+        cursor.delete();
+        removed += 1;
+      }
+      cursor.continue();
+    };
+  });
+
+  await transactionDone(transaction);
+  return removed;
+}
+
+export async function clearUserColetaSessionCache(userId: string): Promise<void> {
+  const db = await getDb();
+  const transaction = db.transaction([STORE_COLETA_ROWS, STORE_PREFS], "readwrite");
+  const rowStore = transaction.objectStore(STORE_COLETA_ROWS);
+  const prefStore = transaction.objectStore(STORE_PREFS);
+  const index = rowStore.index(INDEX_ROWS_BY_USER);
+  const request = index.openCursor(IDBKeyRange.only(userId));
+
+  await new Promise<void>((resolve, reject) => {
+    request.onerror = () => reject(request.error ?? new Error("Falha ao limpar sessão de coleta."));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve();
+        return;
+      }
+      cursor.delete();
+      cursor.continue();
+    };
+  });
+
+  prefStore.delete(prefsKey(userId));
   await transactionDone(transaction);
 }
