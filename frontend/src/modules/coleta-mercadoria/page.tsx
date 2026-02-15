@@ -53,6 +53,14 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const SWIPE_ACTION_WIDTH = 104;
 const SWIPE_OPEN_THRESHOLD = 40;
 
+type RowEditDraft = {
+  qtd: string;
+  etiqueta: string;
+  ocorrencia: "" | "Avariado" | "Vencido";
+  lote: string;
+  validade: string;
+};
+
 function cdCodeLabel(cd: number | null): string {
   if (cd == null) return "CD não definido";
   return `CD ${String(cd).padStart(2, "0")}`;
@@ -368,6 +376,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<RowEditDraft | null>(null);
   const [swipeOpen, setSwipeOpen] = useState<{ rowId: string; side: "edit" | "delete" } | null>(null);
   const [swipeDrag, setSwipeDrag] = useState<{ rowId: string; offset: number } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ColetaRow | null>(null);
@@ -433,6 +443,14 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       setSwipeOpen(null);
     }
   }, [swipeOpen, visibleRows]);
+
+  useEffect(() => {
+    if (!editingRowId) return;
+    if (!visibleRows.some((row) => row.local_id === editingRowId)) {
+      setEditingRowId(null);
+      setEditDraft(null);
+    }
+  }, [editingRowId, visibleRows]);
 
   const refreshLocalState = useCallback(async () => {
     const [nextRows, nextPending, nextMeta] = await Promise.all([
@@ -584,10 +602,23 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     [getOpenedSwipeOffset, swipeDrag]
   );
 
-  const openQuickEdit = useCallback((row: ColetaRow) => {
+  const buildRowEditDraft = useCallback((row: ColetaRow): RowEditDraft => {
+    return {
+      qtd: String(row.qtd),
+      etiqueta: row.etiqueta ?? "",
+      ocorrencia: (row.ocorrencia ?? "") as "" | "Avariado" | "Vencido",
+      lote: row.lote ?? "",
+      validade: formatValidade(row.val_mmaa)
+    };
+  }, []);
+
+  const startRowEdit = useCallback((row: ColetaRow) => {
+    if (!canManageColetaRow(profile, row)) return;
     setSwipeOpen(null);
     setSwipeDrag(null);
     setExpandedRowId(row.local_id);
+    setEditingRowId(row.local_id);
+    setEditDraft(buildRowEditDraft(row));
     window.setTimeout(() => {
       const input = quantityInputRefs.current[row.local_id];
       if (input) {
@@ -595,7 +626,16 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         input.select();
       }
     }, 40);
+  }, [buildRowEditDraft, profile]);
+
+  const cancelRowEdit = useCallback(() => {
+    setEditingRowId(null);
+    setEditDraft(null);
   }, []);
+
+  const openQuickEdit = useCallback((row: ColetaRow) => {
+    startRowEdit(row);
+  }, [startRowEdit]);
 
   const onSwipeActionDelete = useCallback((row: ColetaRow) => {
     setSwipeOpen(null);
@@ -787,6 +827,35 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     [isOnline, preferOfflineMode, refreshLocalState, runSync]
   );
 
+  const saveRowEdit = useCallback(
+    async (row: ColetaRow) => {
+      if (!canManageColetaRow(profile, row) || editingRowId !== row.local_id || !editDraft) return;
+      try {
+        const nextQtd = parseMultiplo(editDraft.qtd);
+        const nextEtiqueta = editDraft.etiqueta.trim() || null;
+        const nextOcorrencia = editDraft.ocorrencia || null;
+        const nextLote = editDraft.lote.trim() || null;
+        const nextValMmaa = normalizeValidadeInput(editDraft.validade);
+
+        const patch: Partial<ColetaRow> = {};
+        if (nextQtd !== row.qtd) patch.qtd = nextQtd;
+        if (nextEtiqueta !== row.etiqueta) patch.etiqueta = nextEtiqueta;
+        if (nextOcorrencia !== row.ocorrencia) patch.ocorrencia = nextOcorrencia;
+        if (nextLote !== row.lote) patch.lote = nextLote;
+        if (nextValMmaa !== row.val_mmaa) patch.val_mmaa = nextValMmaa;
+
+        if (Object.keys(patch).length > 0) {
+          await applyRowUpdate(row, patch);
+        }
+        setEditingRowId(null);
+        setEditDraft(null);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao validar alterações.");
+      }
+    },
+    [applyRowUpdate, editDraft, editingRowId, profile]
+  );
+
   const executeDeleteRow = useCallback(
     async (row: ColetaRow) => {
       if (!canManageColetaRow(profile, row)) {
@@ -826,6 +895,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     await executeDeleteRow(deleteTarget);
     setDeleteTarget(null);
     setExpandedRowId((current) => (current === deleteTarget.local_id ? null : current));
+    setEditingRowId((current) => (current === deleteTarget.local_id ? null : current));
+    setEditDraft(null);
   }, [deleteTarget, executeDeleteRow]);
   const runReportSearch = useCallback(async () => {
     if (!canSeeReportTools) return;
@@ -1662,13 +1733,22 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                           return;
                         }
                         setSwipeOpen(null);
-                        setExpandedRowId((current) => (current === row.local_id ? null : row.local_id));
+                        setExpandedRowId((current) => {
+                          const next = current === row.local_id ? null : row.local_id;
+                          if (next !== editingRowId) {
+                            setEditingRowId(null);
+                            setEditDraft(null);
+                          }
+                          return next;
+                        });
                       }}
                     >
                       <div className="coleta-row-line-main">
                         <strong>{row.descricao}</strong>
                         <p>Barras: {row.barras} | CODDV: {row.coddv}</p>
+                        <p>Qtd: {row.qtd}</p>
                         <p>Coletado em {formatDateTime(row.data_hr)}</p>
+                        <p>Última alteração em {formatDateTime(row.updated_at)}</p>
                       </div>
 
                       <div className="coleta-row-line-right">
@@ -1684,112 +1764,132 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
                   {expandedRowId === row.local_id ? (
                     <div className="coleta-row-edit-card">
-                      <div className="coleta-row-edit-grid">
-                        <label>
-                          Qtd
-                          <input
-                            ref={(element) => {
-                              quantityInputRefs.current[row.local_id] = element;
-                            }}
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            autoComplete="off"
-                            enterKeyHint="done"
-                            defaultValue={row.qtd}
-                            disabled={!canManageRow}
-                            onFocus={(event) => {
-                              event.currentTarget.select();
-                            }}
-                            onClick={(event) => {
-                              event.currentTarget.select();
-                            }}
-                            onBlur={(event) => {
-                              const nextValue = parseMultiplo(event.target.value);
-                              if (nextValue !== row.qtd) {
-                                void applyRowUpdate(row, { qtd: nextValue });
-                              }
-                            }}
-                          />
-                        </label>
+                      {canManageRow && editingRowId === row.local_id && editDraft ? (
+                        <div className="coleta-row-edit-grid">
+                          <label>
+                            Qtd
+                            <input
+                              ref={(element) => {
+                                quantityInputRefs.current[row.local_id] = element;
+                              }}
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              autoComplete="off"
+                              enterKeyHint="done"
+                              value={editDraft.qtd}
+                              onFocus={(event) => event.currentTarget.select()}
+                              onClick={(event) => event.currentTarget.select()}
+                              onChange={(event) => {
+                                const digits = event.target.value.replace(/\D/g, "");
+                                setEditDraft((current) => (current ? { ...current, qtd: digits } : current));
+                              }}
+                            />
+                          </label>
 
-                        <label>
-                          Etiqueta
-                          <input
-                            type="text"
-                            defaultValue={row.etiqueta ?? ""}
-                            disabled={!canManageRow}
-                            onBlur={(event) => {
-                              const nextValue = event.target.value.trim() || null;
-                              if (nextValue !== row.etiqueta) {
-                                void applyRowUpdate(row, { etiqueta: nextValue });
-                              }
-                            }}
-                          />
-                        </label>
+                          <label>
+                            Etiqueta
+                            <input
+                              type="text"
+                              value={editDraft.etiqueta}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setEditDraft((current) => (current ? { ...current, etiqueta: value } : current));
+                              }}
+                            />
+                          </label>
 
-                        <label>
-                          Ocorrência
-                          <select
-                            value={row.ocorrencia ?? ""}
-                            disabled={!canManageRow}
-                            onChange={(event) => {
-                              const next = event.target.value as "" | "Avariado" | "Vencido";
-                              void applyRowUpdate(row, { ocorrencia: next || null });
-                            }}
-                          >
-                            <option value="">Sem ocorrência</option>
-                            <option value="Avariado">Avariado</option>
-                            <option value="Vencido">Vencido</option>
-                          </select>
-                        </label>
+                          <label>
+                            Ocorrência
+                            <select
+                              value={editDraft.ocorrencia}
+                              onChange={(event) => {
+                                const next = event.target.value as "" | "Avariado" | "Vencido";
+                                setEditDraft((current) => (current ? { ...current, ocorrencia: next } : current));
+                              }}
+                            >
+                              <option value="">Sem ocorrência</option>
+                              <option value="Avariado">Avariado</option>
+                              <option value="Vencido">Vencido</option>
+                            </select>
+                          </label>
 
-                        <label>
-                          Lote
-                          <input
-                            type="text"
-                            defaultValue={row.lote ?? ""}
-                            disabled={!canManageRow}
-                            onBlur={(event) => {
-                              const nextValue = event.target.value.trim() || null;
-                              if (nextValue !== row.lote) {
-                                void applyRowUpdate(row, { lote: nextValue });
-                              }
-                            }}
-                          />
-                        </label>
+                          <label>
+                            Lote
+                            <input
+                              type="text"
+                              value={editDraft.lote}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setEditDraft((current) => (current ? { ...current, lote: value } : current));
+                              }}
+                            />
+                          </label>
 
-                        <label>
-                          Validade
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            defaultValue={formatValidade(row.val_mmaa)}
-                            maxLength={5}
-                            disabled={!canManageRow}
-                            onBlur={(event) => {
-                              try {
-                                const nextValue = normalizeValidadeInput(event.target.value);
-                                if (nextValue !== row.val_mmaa) {
-                                  void applyRowUpdate(row, { val_mmaa: nextValue });
-                                }
-                              } catch (error) {
-                                setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
-                              }
-                            }}
-                          />
-                        </label>
-                      </div>
+                          <label>
+                            Validade
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={editDraft.validade}
+                              maxLength={5}
+                              onChange={(event) => {
+                                const value = formatValidadeInput(event.target.value);
+                                setEditDraft((current) => (current ? { ...current, validade: value } : current));
+                              }}
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="coleta-row-detail-grid">
+                          <div className="coleta-row-detail">
+                            <span>Qtd</span>
+                            <strong>{row.qtd}</strong>
+                          </div>
+                          <div className="coleta-row-detail">
+                            <span>Etiqueta</span>
+                            <strong>{row.etiqueta ?? "-"}</strong>
+                          </div>
+                          <div className="coleta-row-detail">
+                            <span>Ocorrência</span>
+                            <strong>{row.ocorrencia ?? "-"}</strong>
+                          </div>
+                          <div className="coleta-row-detail">
+                            <span>Lote</span>
+                            <strong>{row.lote ?? "-"}</strong>
+                          </div>
+                          <div className="coleta-row-detail">
+                            <span>Validade</span>
+                            <strong>{formatValidade(row.val_mmaa) || "-"}</strong>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="coleta-row-footer">
                         <span>
                           Auditor: {row.nome_aud} ({row.mat_aud})
                         </span>
                         {canManageRow ? (
-                          <button className="btn btn-muted coleta-delete-btn" type="button" onClick={() => requestDeleteRow(row)}>
-                            <span aria-hidden="true"><TrashIcon /></span>
-                            Excluir
-                          </button>
+                          editingRowId === row.local_id ? (
+                            <div className="coleta-row-footer-actions">
+                              <button className="btn btn-muted" type="button" onClick={cancelRowEdit}>
+                                Cancelar
+                              </button>
+                              <button className="btn btn-primary" type="button" onClick={() => void saveRowEdit(row)}>
+                                Salvar alterações
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="coleta-row-footer-actions">
+                              <button className="btn btn-muted" type="button" onClick={() => startRowEdit(row)}>
+                                Editar
+                              </button>
+                              <button className="btn btn-muted coleta-delete-btn" type="button" onClick={() => requestDeleteRow(row)}>
+                                <span aria-hidden="true"><TrashIcon /></span>
+                                Excluir
+                              </button>
+                            </div>
+                          )
                         ) : null}
                       </div>
                     </div>

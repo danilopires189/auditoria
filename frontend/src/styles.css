@@ -1542,6 +1542,32 @@ small {
   font-size: 0.92rem;
 }
 
+.coleta-row-detail-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.coleta-row-detail {
+  border: 1px solid #d9e3f3;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 9px;
+  display: grid;
+  gap: 2px;
+}
+
+.coleta-row-detail span {
+  font-size: 0.74rem;
+  color: #59709a;
+}
+
+.coleta-row-detail strong {
+  font-size: 0.88rem;
+  color: #1d345f;
+  word-break: break-word;
+}
+
 .coleta-row-footer {
   display: flex;
   justify-content: space-between;
@@ -1553,6 +1579,13 @@ small {
 .coleta-row-footer span {
   color: #4b5e80;
   font-size: 0.78rem;
+}
+
+.coleta-row-footer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .coleta-delete-btn {
@@ -1862,6 +1895,10 @@ small {
   }
 
   .coleta-row-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coleta-row-detail-grid {
     grid-template-columns: 1fr;
   }
 
