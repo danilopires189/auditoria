@@ -698,7 +698,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       await refreshPendingState();
       if (activeVolume) {
         const refreshed = await getLocalVolume(profile.user_id, activeVolume.cd, activeVolume.conf_date, activeVolume.id_etiqueta);
-        if (refreshed) setActiveVolume(refreshed);
+        if (refreshed) {
+          setActiveVolume(refreshed);
+        } else {
+          setActiveVolume(null);
+          setEtiquetaInput("");
+        }
       }
       if (!silent) {
         if (result.failed > 0) {
@@ -1318,26 +1323,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         await applyVolumeUpdate(nextVolume, false);
         setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outra etiqueta.");
       } else {
-        const finalized = await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
-        const nowIso = new Date().toISOString();
-        const nextStatus =
-          finalized.status === "finalizado_ok" || finalized.status === "finalizado_falta"
-            ? finalized.status
-            : activeVolume.status;
-        const nextVolume: TermoLocalVolume = {
-          ...activeVolume,
-          status: nextStatus,
-          falta_motivo: finalized.falta_motivo,
-          finalized_at: finalized.finalized_at,
-          is_read_only: true,
-          pending_snapshot: false,
-          pending_finalize: false,
-          pending_finalize_reason: null,
-          updated_at: nowIso,
-          sync_error: null,
-          last_synced_at: nowIso
-        };
-        await applyVolumeUpdate(nextVolume, false);
+        await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
+        await removeLocalVolume(activeVolume.local_key);
+        await refreshPendingState();
         setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outra etiqueta.");
       }
       clearConferenceScreen();
@@ -1356,7 +1344,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     divergenciaTotals.sobra,
     finalizeMotivo,
     isOnline,
-    preferOfflineMode
+    preferOfflineMode,
+    refreshPendingState
   ]);
 
   const syncRouteOverview = useCallback(async () => {
@@ -1481,12 +1470,17 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       }
 
       const today = todayIsoBrasilia();
-      const latestToday = volumes.find((row) => row.cd === currentCd && row.conf_date === today);
+      const latestToday = volumes.find(
+        (row) => row.cd === currentCd
+          && row.conf_date === today
+          && (row.status === "em_conferencia" || row.pending_snapshot || row.pending_finalize || row.pending_cancel)
+      );
       if (latestToday) {
         setActiveVolume(latestToday);
         setEtiquetaInput(latestToday.id_etiqueta);
       } else {
         setActiveVolume(null);
+        setEtiquetaInput("");
       }
 
       if (!isOnline) return;

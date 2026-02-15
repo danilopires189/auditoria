@@ -496,7 +496,13 @@ export async function syncPendingTermoVolumes(userId: string): Promise<{
       await saveLocalVolume(row);
       synced += 1;
     } catch (error) {
-      row.sync_error = toErrorMessage(error);
+      const message = toErrorMessage(error);
+      if (message.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
+        await removeLocalVolume(row.local_key);
+        synced += 1;
+        continue;
+      }
+      row.sync_error = message;
       row.updated_at = new Date().toISOString();
       await saveLocalVolume(row);
       failed += 1;
