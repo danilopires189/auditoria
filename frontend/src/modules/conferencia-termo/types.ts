@@ -123,6 +123,7 @@ export interface TermoLocalVolume {
   pending_snapshot: boolean;
   pending_finalize: boolean;
   pending_finalize_reason: string | null;
+  pending_cancel: boolean;
   sync_error: string | null;
   last_synced_at: string | null;
 }
