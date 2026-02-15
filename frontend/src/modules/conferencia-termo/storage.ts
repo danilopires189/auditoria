@@ -464,6 +464,16 @@ export async function saveLocalVolume(volume: TermoLocalVolume): Promise<void> {
   await transactionDone(transaction);
 }
 
+export async function removeLocalVolume(localKey: string): Promise<void> {
+  const key = localKey.trim();
+  if (!key) return;
+  const db = await getDb();
+  const transaction = db.transaction(STORE_VOLUMES, "readwrite");
+  const store = transaction.objectStore(STORE_VOLUMES);
+  store.delete(key);
+  await transactionDone(transaction);
+}
+
 export async function getLocalVolume(
   userId: string,
   cd: number,
@@ -508,7 +518,7 @@ export async function listUserLocalVolumes(userId: string): Promise<TermoLocalVo
 
 export async function listPendingLocalVolumes(userId: string): Promise<TermoLocalVolume[]> {
   const rows = await listUserLocalVolumes(userId);
-  return rows.filter((row) => row.pending_snapshot || row.pending_finalize || Boolean(row.sync_error));
+  return rows.filter((row) => row.pending_snapshot || row.pending_finalize || row.pending_cancel || Boolean(row.sync_error));
 }
 
 export async function getPendingSummary(userId: string): Promise<TermoPendingSummary> {

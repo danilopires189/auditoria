@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-import { saveLocalVolume, listPendingLocalVolumes } from "./storage";
+import { saveLocalVolume, listPendingLocalVolumes, removeLocalVolume } from "./storage";
 import type {
   CdOption,
   TermoItemRow,
@@ -407,6 +407,16 @@ export async function finalizeVolume(
   };
 }
 
+export async function cancelVolume(confId: string): Promise<boolean> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_termo_cancel", {
+    p_conf_id: confId
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  return first?.cancelled === true;
+}
+
 export async function syncPendingTermoVolumes(userId: string): Promise<{
   processed: number;
   synced: number;
@@ -418,9 +428,19 @@ export async function syncPendingTermoVolumes(userId: string): Promise<{
 
   for (const row of pending) {
     try {
+      if (row.pending_cancel) {
+        if (row.remote_conf_id) {
+          await cancelVolume(row.remote_conf_id);
+        }
+        await removeLocalVolume(row.local_key);
+        synced += 1;
+        continue;
+      }
+
       if (row.is_read_only) {
         row.pending_snapshot = false;
         row.pending_finalize = false;
+        row.pending_cancel = false;
         row.sync_error = null;
         row.last_synced_at = new Date().toISOString();
         await saveLocalVolume(row);
@@ -467,6 +487,7 @@ export async function syncPendingTermoVolumes(userId: string): Promise<{
         row.finalized_at = finalized.finalized_at;
         row.is_read_only = status !== "em_conferencia";
         row.pending_finalize = false;
+        row.pending_cancel = false;
       }
 
       row.sync_error = null;

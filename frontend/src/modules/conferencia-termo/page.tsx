@@ -22,9 +22,11 @@ import {
   saveLocalVolume,
   saveManifestSnapshot,
   saveRouteOverviewLocal,
-  saveTermoPreferences
+  saveTermoPreferences,
+  removeLocalVolume
 } from "./storage";
 import {
+  cancelVolume,
   fetchCdOptions,
   fetchActiveVolume,
   fetchManifestBundle,
@@ -201,6 +203,7 @@ function createLocalVolumeFromRemote(
     pending_snapshot: false,
     pending_finalize: false,
     pending_finalize_reason: null,
+    pending_cancel: false,
     sync_error: null,
     last_synced_at: new Date().toISOString()
   };
@@ -250,6 +253,7 @@ function createLocalVolumeFromManifest(
     pending_snapshot: true,
     pending_finalize: false,
     pending_finalize_reason: null,
+    pending_cancel: false,
     sync_error: null,
     last_synced_at: null
   };
@@ -442,6 +446,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const [busyOpenVolume, setBusyOpenVolume] = useState(false);
   const [busySync, setBusySync] = useState(false);
   const [busyFinalize, setBusyFinalize] = useState(false);
+  const [busyCancel, setBusyCancel] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
@@ -1137,6 +1142,21 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     updateItemQtyLocal
   ]);
 
+  const clearConferenceScreen = useCallback(() => {
+    setShowFinalizeModal(false);
+    setFinalizeMotivo("");
+    setFinalizeError(null);
+    setExpandedCoddv(null);
+    setEditingCoddv(null);
+    setEditQtdInput("0");
+    setBarcodeInput("");
+    setActiveVolume(null);
+    setEtiquetaInput("");
+    window.requestAnimationFrame(() => {
+      etiquetaRef.current?.focus();
+    });
+  }, []);
+
   const handleSaveItemEdit = useCallback(async (coddv: number) => {
     if (!activeVolume) return;
     if (!canEditActiveVolume) return;
@@ -1312,17 +1332,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         await applyVolumeUpdate(nextVolume, false);
         setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outra etiqueta.");
       }
-      setShowFinalizeModal(false);
-      setFinalizeMotivo("");
-      setExpandedCoddv(null);
-      setEditingCoddv(null);
-      setEditQtdInput("0");
-      setBarcodeInput("");
-      setActiveVolume(null);
-      setEtiquetaInput("");
-      window.requestAnimationFrame(() => {
-        etiquetaRef.current?.focus();
-      });
+      clearConferenceScreen();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao finalizar.";
       setFinalizeError(normalizeRpcErrorMessage(message));
@@ -1333,6 +1343,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     activeVolume,
     applyVolumeUpdate,
     canEditActiveVolume,
+    clearConferenceScreen,
     divergenciaTotals.falta,
     divergenciaTotals.sobra,
     finalizeMotivo,
@@ -1681,6 +1692,74 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     setShowFinalizeModal(true);
   };
 
+  const requestCancelConference = useCallback(() => {
+    if (!activeVolume || !canEditActiveVolume) return;
+
+    showDialog({
+      title: "Cancelar conferência",
+      message: `A conferência da etiqueta ${activeVolume.id_etiqueta} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
+      confirmLabel: "Cancelar conferência",
+      cancelLabel: "Voltar",
+      onConfirm: () => {
+        void (async () => {
+          closeDialog();
+          setBusyCancel(true);
+          setErrorMessage(null);
+          setStatusMessage(null);
+
+          try {
+            if (activeVolume.remote_conf_id && isOnline) {
+              await cancelVolume(activeVolume.remote_conf_id);
+              await removeLocalVolume(activeVolume.local_key);
+              await refreshPendingState();
+              clearConferenceScreen();
+              setStatusMessage("Conferência cancelada. Os dados foram descartados.");
+              await syncRouteOverview();
+              return;
+            }
+
+            if (activeVolume.remote_conf_id && !isOnline) {
+              const nowIso = new Date().toISOString();
+              const nextVolume: TermoLocalVolume = {
+                ...activeVolume,
+                pending_cancel: true,
+                pending_snapshot: false,
+                pending_finalize: false,
+                pending_finalize_reason: null,
+                sync_error: null,
+                updated_at: nowIso
+              };
+              await saveLocalVolume(nextVolume);
+              await refreshPendingState();
+              clearConferenceScreen();
+              setStatusMessage("Conferência cancelada localmente. A remoção no banco ocorrerá ao reconectar.");
+              return;
+            }
+
+            await removeLocalVolume(activeVolume.local_key);
+            await refreshPendingState();
+            clearConferenceScreen();
+            setStatusMessage("Conferência cancelada. Os dados locais foram descartados.");
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Falha ao cancelar conferência.";
+            setErrorMessage(normalizeRpcErrorMessage(message));
+          } finally {
+            setBusyCancel(false);
+          }
+        })();
+      }
+    });
+  }, [
+    activeVolume,
+    canEditActiveVolume,
+    clearConferenceScreen,
+    closeDialog,
+    isOnline,
+    refreshPendingState,
+    showDialog,
+    syncRouteOverview
+  ]);
+
   const showOnlineBadge = (
     <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
       {isOnline ? "🟢 Online" : "🔴 Offline"}
@@ -1821,13 +1900,30 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                 </p>
               </div>
               <div className="termo-volume-head-right">
-                <span className={`coleta-row-status ${activeVolume.sync_error ? "error" : activeVolume.pending_snapshot || activeVolume.pending_finalize ? "pending" : "synced"}`}>
-                  {activeVolume.sync_error ? "Erro de sync" : activeVolume.pending_snapshot || activeVolume.pending_finalize ? "Pendente sync" : "Sincronizado"}
+                <span className={`coleta-row-status ${activeVolume.sync_error ? "error" : activeVolume.pending_snapshot || activeVolume.pending_finalize || activeVolume.pending_cancel ? "pending" : "synced"}`}>
+                  {activeVolume.sync_error ? "Erro de sync" : activeVolume.pending_snapshot || activeVolume.pending_finalize || activeVolume.pending_cancel ? "Pendente sync" : "Sincronizado"}
                 </span>
                 {canEditActiveVolume ? (
-                  <button className="btn btn-primary" type="button" onClick={requestFinalize}>
-                    Finalizar
-                  </button>
+                  <div className="termo-volume-actions">
+                    <button
+                      className="btn btn-danger termo-cancel-btn"
+                      type="button"
+                      onClick={requestCancelConference}
+                      disabled={busyCancel || busyFinalize}
+                      title="Cancelar conferência"
+                    >
+                      <span aria-hidden="true">{closeIcon()}</span>
+                      {busyCancel ? "Cancelando..." : "Cancelar"}
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      onClick={requestFinalize}
+                      disabled={busyCancel || busyFinalize}
+                    >
+                      Finalizar
+                    </button>
+                  </div>
                 ) : null}
               </div>
             </div>
