@@ -300,6 +300,15 @@ export async function openVolume(idEtiqueta: string, cd: number): Promise<TermoV
   return mapVolume(first);
 }
 
+export async function fetchActiveVolume(): Promise<TermoVolumeRow | null> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_termo_get_active_volume");
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) return null;
+  return mapVolume(first);
+}
+
 export async function fetchVolumeItems(confId: string): Promise<TermoItemRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data: v2Data, error: v2Error } = await supabase.rpc("rpc_conf_termo_get_items_v2", {

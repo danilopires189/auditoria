@@ -26,6 +26,7 @@ import {
 } from "./storage";
 import {
   fetchCdOptions,
+  fetchActiveVolume,
   fetchManifestBundle,
   fetchManifestMeta,
   fetchRouteOverview,
@@ -347,6 +348,9 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
   if (value.includes("BASE_TERMO_VAZIA")) return "A base do termo está vazia para este CD.";
+  if (value.includes("CONFERENCIA_EM_ABERTO_OUTRA_ETIQUETA")) {
+    return "Já existe uma conferência em andamento para sua matrícula. Finalize a etiqueta atual para iniciar outra.";
+  }
   return value;
 }
 
@@ -449,6 +453,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     && !activeVolume.is_read_only
     && activeVolume.started_by === profile.user_id
   );
+  const hasOpenConference = Boolean(activeVolume && activeVolume.status === "em_conferencia" && !activeVolume.is_read_only);
 
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
@@ -799,6 +804,29 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     if (focusInput) focusBarras();
   }, [focusBarras, refreshPendingState]);
 
+  const resumeRemoteActiveVolume = useCallback(async (silent = false): Promise<TermoLocalVolume | null> => {
+    if (!isOnline) return null;
+
+    const remoteActive = await fetchActiveVolume();
+    if (!remoteActive || remoteActive.status !== "em_conferencia") return null;
+
+    if (isGlobalAdmin && cdAtivo !== remoteActive.cd) {
+      setCdAtivo(remoteActive.cd);
+    }
+
+    const remoteItems = await fetchVolumeItems(remoteActive.conf_id);
+    const localVolume = createLocalVolumeFromRemote(profile, remoteActive, remoteItems);
+    await saveLocalVolume(localVolume);
+    setActiveVolume(localVolume);
+    setEtiquetaInput(localVolume.id_etiqueta);
+
+    if (!silent) {
+      setStatusMessage(`Conferência retomada automaticamente: etiqueta ${localVolume.id_etiqueta}.`);
+    }
+
+    return localVolume;
+  }, [cdAtivo, isGlobalAdmin, isOnline, profile]);
+
   const openVolumeFromEtiqueta = useCallback(async (rawEtiqueta: string) => {
     const etiqueta = rawEtiqueta.trim();
     if (!etiqueta) {
@@ -809,10 +837,17 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       setErrorMessage("CD não definido para esta conferência.");
       return;
     }
+    if (hasOpenConference && activeVolume && activeVolume.id_etiqueta !== etiqueta) {
+      setErrorMessage("Existe uma conferência em andamento para sua matrícula. Finalize a etiqueta atual para iniciar outra.");
+      setStatusMessage(`Conferência ativa: ${activeVolume.id_etiqueta}.`);
+      setEtiquetaInput(activeVolume.id_etiqueta);
+      return;
+    }
 
     setBusyOpenVolume(true);
     setStatusMessage(null);
     setErrorMessage(null);
+    let etiquetaFinal = etiqueta;
 
     try {
       const today = todayIsoBrasilia();
@@ -842,6 +877,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             return;
           }
           setActiveVolume(existingToday);
+          etiquetaFinal = existingToday.id_etiqueta;
           setExpandedCoddv(null);
           setEditingCoddv(null);
           setEditQtdInput("0");
@@ -855,6 +891,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
           await saveLocalVolume(localVolume);
           setActiveVolume(localVolume);
+          etiquetaFinal = localVolume.id_etiqueta;
           setStatusMessage(remoteVolume.is_read_only ? "Volume já finalizado. Aberto em leitura." : "Volume aberto para conferência.");
           return;
         }
@@ -871,6 +908,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         const offlineVolume = createLocalVolumeFromManifest(profile, currentCd, etiqueta, manifestItems);
         await saveLocalVolume(offlineVolume);
         setActiveVolume(offlineVolume);
+        etiquetaFinal = offlineVolume.id_etiqueta;
         setStatusMessage("Volume aberto offline. Pendências serão sincronizadas ao voltar a conexão.");
         return;
       }
@@ -884,6 +922,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
       const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
       await saveLocalVolume(localVolume);
+      etiquetaFinal = localVolume.id_etiqueta;
 
       if (remoteVolume.is_read_only) {
         showDialog({
@@ -903,24 +942,40 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       setStatusMessage("Volume aberto para conferência.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao abrir volume.";
+      if (message.includes("CONFERENCIA_EM_ABERTO_OUTRA_ETIQUETA")) {
+        try {
+          const resumed = await resumeRemoteActiveVolume(true);
+          if (resumed) {
+            etiquetaFinal = resumed.id_etiqueta;
+            setErrorMessage(null);
+            setStatusMessage(`Conferência retomada automaticamente: etiqueta ${resumed.id_etiqueta}.`);
+            return;
+          }
+        } catch {
+          // Se falhar ao retomar remoto, mantém tratamento padrão abaixo.
+        }
+      }
       setErrorMessage(normalizeRpcErrorMessage(message));
     } finally {
       setBusyOpenVolume(false);
       setExpandedCoddv(null);
       setEditingCoddv(null);
       setEditQtdInput("0");
-      setEtiquetaInput(etiqueta);
+      setEtiquetaInput(etiquetaFinal);
       focusBarras();
     }
   }, [
+    activeVolume,
     closeDialog,
     currentCd,
     focusBarras,
+    hasOpenConference,
     isOnline,
     manifestReady,
     preferOfflineMode,
     prepareOfflineManifest,
     profile,
+    resumeRemoteActiveVolume,
     showDialog
   ]);
 
@@ -1388,12 +1443,43 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       );
       setRouteRows(localRoutes);
 
+      const latestOpen = volumes.find((row) => row.status === "em_conferencia" && !row.is_read_only) ?? null;
+      if (latestOpen) {
+        if (isGlobalAdmin && latestOpen.cd !== currentCd) {
+          setCdAtivo(latestOpen.cd);
+          return;
+        }
+        if (latestOpen.cd === currentCd) {
+          setActiveVolume(latestOpen);
+          setEtiquetaInput(latestOpen.id_etiqueta);
+          return;
+        }
+      }
+
       const today = todayIsoBrasilia();
       const latestToday = volumes.find((row) => row.cd === currentCd && row.conf_date === today);
       if (latestToday) {
         setActiveVolume(latestToday);
+        setEtiquetaInput(latestToday.id_etiqueta);
       } else {
         setActiveVolume(null);
+      }
+
+      if (!isOnline) return;
+
+      try {
+        const resumed = await resumeRemoteActiveVolume(true);
+        if (cancelled || !resumed) return;
+        if (isGlobalAdmin && resumed.cd !== currentCd) {
+          setCdAtivo(resumed.cd);
+          return;
+        }
+        if (resumed.cd === currentCd) {
+          setActiveVolume(resumed);
+          setEtiquetaInput(resumed.id_etiqueta);
+        }
+      } catch {
+        // Mantém apenas contexto local quando não for possível retomar remoto.
       }
     };
 
@@ -1401,7 +1487,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     return () => {
       cancelled = true;
     };
-  }, [currentCd, profile.user_id]);
+  }, [currentCd, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
 
   useEffect(() => {
     void refreshPendingState();
@@ -1679,40 +1765,42 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           </div>
         ) : null}
 
-        <form className="termo-form termo-open-form" onSubmit={onSubmitEtiqueta}>
-          <h3>Abertura de volume</h3>
-          <label>
-            ID Etiqueta
-            <div className="input-icon-wrap with-action">
-              <span className="field-icon" aria-hidden="true">{barcodeIcon()}</span>
-              <input
-                ref={etiquetaRef}
-                type="text"
-                value={etiquetaInput}
-                onChange={(event) => setEtiquetaInput(event.target.value)}
-                autoComplete="off"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="Digite ou bip a etiqueta e pressione Enter"
-                required
-              />
-              <button
-                type="button"
-                className="input-action-btn"
-                onClick={() => openScannerFor("etiqueta")}
-                title="Ler etiqueta pela câmera"
-                aria-label="Ler etiqueta pela câmera"
-                disabled={!cameraSupported}
-              >
-                {cameraIcon()}
-              </button>
-            </div>
-          </label>
-          <button className="btn btn-primary" type="submit" disabled={busyOpenVolume || currentCd == null}>
-            {busyOpenVolume ? "Abrindo..." : "Abrir volume"}
-          </button>
-        </form>
+        {!hasOpenConference ? (
+          <form className="termo-form termo-open-form" onSubmit={onSubmitEtiqueta}>
+            <h3>Abertura de volume</h3>
+            <label>
+              ID Etiqueta
+              <div className="input-icon-wrap with-action">
+                <span className="field-icon" aria-hidden="true">{barcodeIcon()}</span>
+                <input
+                  ref={etiquetaRef}
+                  type="text"
+                  value={etiquetaInput}
+                  onChange={(event) => setEtiquetaInput(event.target.value)}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="Digite ou bip a etiqueta e pressione Enter"
+                  required
+                />
+                <button
+                  type="button"
+                  className="input-action-btn"
+                  onClick={() => openScannerFor("etiqueta")}
+                  title="Ler etiqueta pela câmera"
+                  aria-label="Ler etiqueta pela câmera"
+                  disabled={!cameraSupported}
+                >
+                  {cameraIcon()}
+                </button>
+              </div>
+            </label>
+            <button className="btn btn-primary" type="submit" disabled={busyOpenVolume || currentCd == null}>
+              {busyOpenVolume ? "Abrindo..." : "Abrir volume"}
+            </button>
+          </form>
+        ) : null}
 
         {activeVolume ? (
           <article className="termo-volume-card">
