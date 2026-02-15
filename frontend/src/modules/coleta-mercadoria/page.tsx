@@ -1504,7 +1504,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             </button>
           ) : null}
           <button type="button" className="btn btn-muted" onClick={() => void refreshSharedState()} disabled={!isOnline || currentCd == null}>
-            Atualizar coletas do dia
+            Atualizar coletas de hoje
           </button>
           <button type="button" className="btn btn-primary coleta-sync-btn" onClick={() => void runSync(false)} disabled={!isOnline || busySync || pendingCount <= 0}>
             <span aria-hidden="true"><UploadIcon /></span>
@@ -1739,7 +1739,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         </form>
 
         <div className="coleta-list-head">
-          <h3>Coletas do dia no depósito</h3>
+          <h3>Coletas de hoje</h3>
           <span>{visibleRows.length} itens</span>
         </div>
 
