@@ -1,9 +1,12 @@
 import { supabase } from "../../lib/supabase";
 import {
   countPendingRows,
+  getDbBarrasMeta,
   getPendingRows,
+  mergeDbBarrasCache,
   removeColetaRow,
   replaceDbBarrasCache,
+  touchDbBarrasMeta,
   upsertColetaRow
 } from "./storage";
 import type {
@@ -181,6 +184,93 @@ export async function refreshDbBarrasCache(
 
   await replaceDbBarrasCache(allRows);
   return { rows: allRows.length, pages };
+}
+
+export async function refreshDbBarrasCacheSmart(
+  onProgress?: (pagesFetched: number, rowsFetched: number) => void
+): Promise<{ mode: "full" | "delta"; pages: number; applied: number; total: number }> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const meta = await getDbBarrasMeta();
+  if (meta.row_count <= 0 || !meta.last_sync_at) {
+    const result = await refreshDbBarrasCache(onProgress);
+    return {
+      mode: "full",
+      pages: result.pages,
+      applied: result.rows,
+      total: result.rows
+    };
+  }
+
+  let offset = 0;
+  let pages = 0;
+  const changedRows: DbBarrasCacheRow[] = [];
+  let maxSeenUpdatedAt: string | null = null;
+
+  while (true) {
+    const { data, error } = await supabase.rpc("rpc_db_barras_delta", {
+      p_updated_after: meta.last_sync_at,
+      p_offset: offset,
+      p_limit: DB_BARRAS_PAGE_SIZE
+    });
+
+    if (error) {
+      throw new Error(`Falha ao atualizar base de barras: ${toErrorMessage(error)}`);
+    }
+
+    const page = Array.isArray(data) ? data : [];
+    if (page.length === 0) break;
+
+    for (const item of page) {
+      const raw = item as Record<string, unknown>;
+      const barras = normalizeBarcode(String(raw.barras ?? ""));
+      const coddv = Number.parseInt(String(raw.coddv ?? ""), 10);
+      const descricao = String(raw.descricao ?? "").trim();
+      const updatedAt = raw.updated_at == null ? null : String(raw.updated_at);
+
+      if (!barras || !Number.isFinite(coddv)) continue;
+      changedRows.push({
+        barras,
+        coddv,
+        descricao,
+        updated_at: updatedAt
+      });
+
+      if (updatedAt) {
+        const parsed = Date.parse(updatedAt);
+        if (Number.isFinite(parsed)) {
+          const currentMax = maxSeenUpdatedAt ? Date.parse(maxSeenUpdatedAt) : 0;
+          if (parsed > currentMax) {
+            maxSeenUpdatedAt = updatedAt;
+          }
+        }
+      }
+    }
+
+    pages += 1;
+    offset += page.length;
+    onProgress?.(pages, changedRows.length);
+
+    if (page.length < DB_BARRAS_PAGE_SIZE) break;
+  }
+
+  if (changedRows.length > 0) {
+    const merged = await mergeDbBarrasCache(changedRows, maxSeenUpdatedAt);
+    return {
+      mode: "delta",
+      pages,
+      applied: changedRows.length,
+      total: merged.row_count
+    };
+  }
+
+  await touchDbBarrasMeta(new Date().toISOString());
+  return {
+    mode: "delta",
+    pages,
+    applied: 0,
+    total: meta.row_count
+  };
 }
 
 export async function fetchDbBarrasByBarcodeOnline(barras: string): Promise<DbBarrasCacheRow | null> {

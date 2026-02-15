@@ -24,7 +24,7 @@ import {
   formatValidade,
   normalizeBarcode,
   normalizeValidadeInput,
-  refreshDbBarrasCache,
+  refreshDbBarrasCacheSmart,
   syncPendingColetaRows
 } from "./sync";
 import type {
@@ -417,12 +417,18 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
 
       try {
-        const result = await refreshDbBarrasCache((pages, rowsFetched) => {
+        const result = await refreshDbBarrasCacheSmart((pages, rowsFetched) => {
           setProgressMessage(`Atualizando base de barras... páginas ${pages} | linhas ${rowsFetched}`);
         });
         await refreshLocalState();
         if (!silent) {
-          setStatusMessage(`Base de barras atualizada: ${result.rows} itens.`);
+          if (result.mode === "full") {
+            setStatusMessage(`Base de barras carregada: ${result.total} itens.`);
+          } else if (result.applied > 0) {
+            setStatusMessage(`Base offline atualizada: ${result.applied} itens novos/alterados.`);
+          } else {
+            setStatusMessage("Base offline já está atualizada.");
+          }
         }
       } catch (error) {
         if (!silent) {
@@ -446,7 +452,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     if (nextOffline) {
       if (!isOnline) {
         if (dbBarrasCount <= 0) {
-          setErrorMessage("Sem internet para carregar a base offline. Conecte-se e clique em Atualizar base barras.");
+          setErrorMessage("Sem internet para carregar base offline agora.");
         } else {
           setStatusMessage("Modo offline ativado com base local existente.");
         }
@@ -649,8 +655,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       const prefs = await getColetaPreferences(profile.user_id);
       if (cancelled) return;
 
-      setEtiquetaFixa(prefs.etiqueta_fixa || "");
-      setMultiploInput(String(prefs.multiplo_padrao || 1));
+      setEtiquetaFixa("");
+      setMultiploInput("1");
       setPreferOfflineMode(false);
 
       const initialCd = prefs.cd_ativo ?? fixedCd;
@@ -678,12 +684,18 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     if (!preferencesReady) return;
     const payloadCd = isGlobalAdmin ? cdAtivo : fixedCd;
     void saveColetaPreferences(profile.user_id, {
-      etiqueta_fixa: etiquetaFixa,
-      multiplo_padrao: parseMultiplo(multiploInput),
+      etiqueta_fixa: "",
+      multiplo_padrao: 1,
       cd_ativo: payloadCd,
       prefer_offline_mode: preferOfflineMode
     });
-  }, [cdAtivo, etiquetaFixa, fixedCd, isGlobalAdmin, multiploInput, preferOfflineMode, preferencesReady, profile.user_id]);
+  }, [cdAtivo, fixedCd, isGlobalAdmin, preferOfflineMode, preferencesReady, profile.user_id]);
+
+  useEffect(() => {
+    if (!isDesktop || !preferOfflineMode) return;
+    setPreferOfflineMode(false);
+    setStatusMessage("Modo online ativado no desktop.");
+  }, [isDesktop, preferOfflineMode]);
 
   useEffect(() => {
     if (!isOnline) return;
@@ -774,7 +786,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       let product = null;
       if (preferOfflineMode) {
         if (dbBarrasCount <= 0) {
-          setErrorMessage("Base local indisponível. Clique em Atualizar base barras para trabalhar offline.");
+          setErrorMessage("Base local indisponível. Ative Trabalhar offline com internet para carregar a base.");
           focusBarcode();
           return;
         }
@@ -827,6 +839,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       await refreshLocalState();
 
       setBarcodeInput("");
+      setMultiploInput("1");
       setOcorrenciaInput("");
       setLoteInput("");
       setValidadeInput("");
@@ -927,29 +940,31 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
         {preferOfflineMode && dbBarrasCount <= 0 ? (
           <div className="alert error">
-            Modo offline ativo sem base local. Conecte-se e clique em Atualizar base barras.
+            Modo offline ativo sem base local. Conecte-se e toque em Trabalhar offline para carregar.
           </div>
         ) : null}
 
         {!preferOfflineMode && !isOnline ? (
           <div className="alert error">
-            Você está sem internet. Para continuar coletando, ative Trabalhar offline.
+            {isDesktop
+              ? "Você está sem internet. No desktop a coleta funciona somente online."
+              : "Você está sem internet. Para continuar coletando, ative Trabalhar offline."}
           </div>
         ) : null}
 
         <div className="coleta-actions-row">
-          <button
-            type="button"
-            className={`btn btn-muted coleta-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
-            onClick={() => void onToggleOfflineMode()}
-            title={preferOfflineMode ? "Desativar modo offline local" : "Ativar modo offline local"}
-          >
-            <span aria-hidden="true"><OfflineModeIcon enabled={!preferOfflineMode} /></span>
-            {preferOfflineMode ? "Offline local" : "Trabalhar offline"}
-          </button>
-          <button type="button" className="btn btn-muted" onClick={() => void runDbBarrasRefresh(false)} disabled={!isOnline || busyRefresh}>
-            {busyRefresh ? "Atualizando base..." : "Atualizar base barras"}
-          </button>
+          {!isDesktop ? (
+            <button
+              type="button"
+              className={`btn btn-muted coleta-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
+              onClick={() => void onToggleOfflineMode()}
+              title={preferOfflineMode ? "Desativar modo offline local" : "Ativar modo offline local"}
+              disabled={busyRefresh}
+            >
+              <span aria-hidden="true"><OfflineModeIcon enabled={!preferOfflineMode} /></span>
+              {busyRefresh ? "Carregando base..." : preferOfflineMode ? "Offline local" : "Trabalhar offline"}
+            </button>
+          ) : null}
           <button type="button" className="btn btn-muted" onClick={() => void refreshSharedState()} disabled={!isOnline || currentCd == null}>
             Atualizar coletas do dia
           </button>
