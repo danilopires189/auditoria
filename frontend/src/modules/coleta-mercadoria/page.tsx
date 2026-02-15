@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -164,6 +165,24 @@ function BarcodeIcon() {
   );
 }
 
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h4l1.5-2h5L16 7h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
 function QuantityIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -254,6 +273,8 @@ function FileIcon() {
 
 export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercadoriaPageProps) {
   const barcodeRef = useRef<HTMLInputElement | null>(null);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
   const syncInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
   const collectInFlightRef = useRef(false);
@@ -297,6 +318,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [reportError, setReportError] = useState<string | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ColetaRow | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => roleIsGlobalAdmin(profile), [profile]);
@@ -304,6 +327,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
 
   const canSeeReportTools = isDesktop && profile.role === "admin";
+  const cameraSupported = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return typeof navigator.mediaDevices?.getUserMedia === "function";
+  }, []);
 
   const visibleRows = useMemo(() => {
     if (currentCd == null) return [];
@@ -372,6 +399,38 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       barcodeRef.current?.focus();
     });
   }, []);
+
+  const stopCameraScanner = useCallback(() => {
+    const controls = scannerControlsRef.current;
+    if (controls) {
+      controls.stop();
+      scannerControlsRef.current = null;
+    }
+
+    const videoEl = scannerVideoRef.current;
+    if (videoEl && videoEl.srcObject instanceof MediaStream) {
+      for (const track of videoEl.srcObject.getTracks()) {
+        track.stop();
+      }
+      videoEl.srcObject = null;
+    }
+  }, []);
+
+  const openCameraScanner = useCallback(() => {
+    if (!cameraSupported) {
+      setErrorMessage("Câmera não disponível neste navegador/dispositivo.");
+      return;
+    }
+    setScannerError(null);
+    setScannerOpen(true);
+  }, [cameraSupported]);
+
+  const closeCameraScanner = useCallback(() => {
+    stopCameraScanner();
+    setScannerOpen(false);
+    setScannerError(null);
+    focusBarcode();
+  }, [focusBarcode, stopCameraScanner]);
 
   const runSync = useCallback(
     async (silent = false) => {
@@ -757,14 +816,14 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     focusBarcode();
   }, [focusBarcode]);
 
-  const handleCollect = useCallback(async () => {
+  const handleCollect = useCallback(async (barcodeOverride?: string) => {
     if (collectInFlightRef.current) return;
     collectInFlightRef.current = true;
     setErrorMessage(null);
     setStatusMessage(null);
 
     try {
-      const barras = normalizeBarcode(barcodeInput);
+      const barras = normalizeBarcode(barcodeOverride ?? barcodeInput);
       if (!barras) {
         setErrorMessage("Informe o código de barras.");
         focusBarcode();
@@ -889,6 +948,71 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     event.preventDefault();
     void handleCollect();
   };
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+
+    let cancelled = false;
+    setScannerError(null);
+
+    const startScanner = async () => {
+      try {
+        const zxing = await import("@zxing/browser");
+        if (cancelled) return;
+
+        const videoEl = scannerVideoRef.current;
+        if (!videoEl) {
+          setScannerError("Falha ao abrir visualização da câmera.");
+          return;
+        }
+
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: "environment" }
+            }
+          },
+          videoEl,
+          (result, error) => {
+            if (cancelled) return;
+
+            if (result) {
+              const scanned = normalizeBarcode(result.getText() ?? "");
+              if (!scanned) return;
+
+              setBarcodeInput(scanned);
+              setScannerOpen(false);
+              stopCameraScanner();
+              void handleCollect(scanned);
+              return;
+            }
+
+            const errorName = (error as { name?: string } | null)?.name;
+            if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
+              setScannerError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
+            }
+          }
+        );
+
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+        scannerControlsRef.current = controls;
+      } catch (error) {
+        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
+      }
+    };
+
+    void startScanner();
+
+    return () => {
+      cancelled = true;
+      stopCameraScanner();
+    };
+  }, [handleCollect, scannerOpen, stopCameraScanner]);
 
   return (
     <>
@@ -1054,7 +1178,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           <div className="coleta-form-grid">
             <label>
               Código de barras
-              <div className="input-icon-wrap">
+              <div className="input-icon-wrap with-action">
                 <span className="field-icon" aria-hidden="true">
                   <BarcodeIcon />
                 </span>
@@ -1072,6 +1196,16 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   placeholder="Bipe ou digite e pressione Enter"
                   required
                 />
+                <button
+                  type="button"
+                  className="input-action-btn"
+                  onClick={openCameraScanner}
+                  title="Ler código pela câmera"
+                  aria-label="Ler código pela câmera"
+                  disabled={!cameraSupported}
+                >
+                  <CameraIcon />
+                </button>
               </div>
             </label>
 
@@ -1288,6 +1422,30 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             ))
           )}
         </div>
+
+        {scannerOpen ? (
+          <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="scanner-title" onClick={closeCameraScanner}>
+            <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+              <div className="scanner-head">
+                <h3 id="scanner-title">Scanner de barras</h3>
+                <button
+                  type="button"
+                  className="scanner-close-btn"
+                  onClick={closeCameraScanner}
+                  aria-label="Fechar scanner"
+                  title="Fechar scanner"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+              <div className="scanner-video-wrap">
+                <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+              </div>
+              <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
+              {scannerError ? <div className="alert error">{scannerError}</div> : null}
+            </div>
+          </div>
+        ) : null}
 
         {deleteTarget ? (
           <div
