@@ -1288,9 +1288,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           sync_error: null
         };
         await applyVolumeUpdate(nextVolume, false);
-        setActiveVolume(nextVolume);
-        if (isOnline) void runPendingSync(true);
-        setStatusMessage("Conferência finalizada localmente. Sincronização pendente.");
+        setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outra etiqueta.");
       } else {
         const finalized = await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
         const nowIso = new Date().toISOString();
@@ -1312,11 +1310,19 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           last_synced_at: nowIso
         };
         await applyVolumeUpdate(nextVolume, false);
-        setActiveVolume(nextVolume);
-        setStatusMessage("Conferência finalizada com sucesso.");
+        setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outra etiqueta.");
       }
       setShowFinalizeModal(false);
       setFinalizeMotivo("");
+      setExpandedCoddv(null);
+      setEditingCoddv(null);
+      setEditQtdInput("0");
+      setBarcodeInput("");
+      setActiveVolume(null);
+      setEtiquetaInput("");
+      window.requestAnimationFrame(() => {
+        etiquetaRef.current?.focus();
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao finalizar.";
       setFinalizeError(normalizeRpcErrorMessage(message));
@@ -1331,8 +1337,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     divergenciaTotals.sobra,
     finalizeMotivo,
     isOnline,
-    preferOfflineMode,
-    runPendingSync
+    preferOfflineMode
   ]);
 
   const syncRouteOverview = useCallback(async () => {
