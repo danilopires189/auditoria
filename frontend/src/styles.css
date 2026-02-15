@@ -1819,6 +1819,10 @@ small {
   stroke-linejoin: round;
 }
 
+.termo-finalize-btn svg {
+  stroke: #8df3a6;
+}
+
 .termo-list-block {
   display: grid;
   gap: 7px;
