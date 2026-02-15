@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
+  cleanupExpiredColetaRows,
   countPendingRows,
   getColetaPreferences,
   getDbBarrasByBarcode,
@@ -11,10 +12,12 @@ import {
   getUserColetaRows,
   removeColetaRow,
   saveColetaPreferences,
+  upsertDbBarrasCacheRow,
   upsertColetaRow
 } from "./storage";
 import {
   countColetaReportRows,
+  fetchDbBarrasByBarcodeOnline,
   fetchCdOptions,
   fetchColetaReportRows,
   fetchTodaySharedColetaRows,
@@ -37,6 +40,19 @@ interface ColetaMercadoriaPageProps {
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("coleta-mercadoria");
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function isWithinAge(value: string | null, maxAgeMs: number): boolean {
+  if (!value) return false;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return false;
+  return Date.now() - parsed <= maxAgeMs;
+}
+
+function cdCodeLabel(cd: number | null): string {
+  if (cd == null) return "CD não definido";
+  return `CD ${String(cd).padStart(2, "0")}`;
+}
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -184,12 +200,41 @@ function UploadIcon() {
   );
 }
 
+function OfflineModeIcon({ enabled }: { enabled: boolean }) {
+  if (enabled) {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 8a10 10 0 0 1 16 0" />
+        <path d="M7 12a6 6 0 0 1 10 0" />
+        <path d="M10 16a2 2 0 0 1 4 0" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 8a10 10 0 0 1 16 0" />
+      <path d="M7 12a6 6 0 0 1 10 0" />
+      <path d="M10 16a2 2 0 0 1 4 0" />
+      <path d="M4 4l16 16" />
+    </svg>
+  );
+}
+
 function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 7h16" />
       <path d="M9 7V4h6v3" />
       <path d="M8 7l1 13h6l1-13" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {open ? <path d="M6 14l6-6 6 6" /> : <path d="M6 10l6 6 6-6" />}
     </svg>
   );
 }
@@ -218,6 +263,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const barcodeRef = useRef<HTMLInputElement | null>(null);
   const syncInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
+  const collectInFlightRef = useRef(false);
 
   const [localRows, setLocalRows] = useState<ColetaRow[]>([]);
   const [sharedTodayRows, setSharedTodayRows] = useState<ColetaRow[]>([]);
@@ -234,6 +280,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
   const [cdAtivo, setCdAtivo] = useState<number | null>(null);
+  const [preferOfflineMode, setPreferOfflineMode] = useState(false);
 
   const [busyRefresh, setBusyRefresh] = useState(false);
   const [busySync, setBusySync] = useState(false);
@@ -255,6 +302,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [reportBusyExport, setReportBusyExport] = useState(false);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ColetaRow | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => roleIsGlobalAdmin(profile), [profile]);
@@ -407,14 +456,14 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       };
       await upsertColetaRow(nextRow);
       await refreshLocalState();
-      if (isOnline) {
+      if (isOnline && !preferOfflineMode) {
         void runSync(true);
       }
     },
-    [isOnline, refreshLocalState, runSync]
+    [isOnline, preferOfflineMode, refreshLocalState, runSync]
   );
 
-  const deleteRow = useCallback(
+  const executeDeleteRow = useCallback(
     async (row: ColetaRow) => {
       if (row.remote_id) {
         const nextRow: ColetaRow = {
@@ -430,12 +479,27 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
 
       await refreshLocalState();
-      if (isOnline) {
+      if (isOnline && !preferOfflineMode) {
         void runSync(true);
       }
     },
-    [isOnline, refreshLocalState, runSync]
+    [isOnline, preferOfflineMode, refreshLocalState, runSync]
   );
+
+  const requestDeleteRow = useCallback((row: ColetaRow) => {
+    setDeleteTarget(row);
+  }, []);
+
+  const closeDeleteConfirm = useCallback(() => {
+    setDeleteTarget(null);
+  }, []);
+
+  const confirmDeleteRow = useCallback(async () => {
+    if (!deleteTarget) return;
+    await executeDeleteRow(deleteTarget);
+    setDeleteTarget(null);
+    setExpandedRowId((current) => (current === deleteTarget.local_id ? null : current));
+  }, [deleteTarget, executeDeleteRow]);
   const runReportSearch = useCallback(async () => {
     if (!canSeeReportTools) return;
     setReportError(null);
@@ -570,19 +634,25 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
       setEtiquetaFixa(prefs.etiqueta_fixa || "");
       setMultiploInput(String(prefs.multiplo_padrao || 1));
+      setPreferOfflineMode(Boolean(prefs.prefer_offline_mode));
 
       const initialCd = prefs.cd_ativo ?? fixedCd;
       setCdAtivo(initialCd ?? null);
 
+      await cleanupExpiredColetaRows(profile.user_id, ONE_DAY_MS);
       await refreshLocalState();
       if (cancelled) return;
 
       setPreferencesReady(true);
-      if (isOnline) {
+      const meta = await getDbBarrasMeta();
+      const hasFreshCache = meta.row_count > 0 && isWithinAge(meta.last_sync_at, ONE_DAY_MS);
+
+      if (isOnline && !prefs.prefer_offline_mode && !hasFreshCache) {
         await runDbBarrasRefresh(true);
       }
+
       await refreshSharedState();
-      if (isOnline) {
+      if (isOnline && !prefs.prefer_offline_mode) {
         await runSync(true);
       }
       focusBarcode();
@@ -600,9 +670,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     void saveColetaPreferences(profile.user_id, {
       etiqueta_fixa: etiquetaFixa,
       multiplo_padrao: parseMultiplo(multiploInput),
-      cd_ativo: payloadCd
+      cd_ativo: payloadCd,
+      prefer_offline_mode: preferOfflineMode
     });
-  }, [cdAtivo, etiquetaFixa, fixedCd, isGlobalAdmin, multiploInput, preferencesReady, profile.user_id]);
+  }, [cdAtivo, etiquetaFixa, fixedCd, isGlobalAdmin, multiploInput, preferOfflineMode, preferencesReady, profile.user_id]);
 
   useEffect(() => {
     if (!isOnline) return;
@@ -633,9 +704,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   }, [isOnline, refreshSharedState]);
 
   useEffect(() => {
-    if (!isOnline) return;
+    if (!isOnline || preferOfflineMode) return;
     void runSync(true);
-  }, [isOnline, runSync]);
+  }, [isOnline, preferOfflineMode, runSync]);
 
   useEffect(() => {
     if (!showReport) return;
@@ -646,82 +717,130 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   useEffect(() => {
     focusBarcode();
   }, [focusBarcode]);
-  const onCollect = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+
+  const handleCollect = useCallback(async () => {
+    if (collectInFlightRef.current) return;
+    collectInFlightRef.current = true;
     setErrorMessage(null);
     setStatusMessage(null);
 
-    const barras = normalizeBarcode(barcodeInput);
-    if (!barras) {
-      setErrorMessage("Informe o código de barras.");
-      focusBarcode();
-      return;
-    }
-    if (dbBarrasCount <= 0) {
-      setErrorMessage("Base de barras indisponível. Conecte-se para carregar e tente novamente.");
-      focusBarcode();
-      return;
-    }
-    if (currentCd == null) {
-      setErrorMessage("CD não definido para a coleta atual.");
-      return;
-    }
-
-    const qtd = parseMultiplo(multiploInput);
-    let valMmaa: string | null = null;
     try {
-      valMmaa = normalizeValidadeInput(validadeInput);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
-      return;
-    }
+      const barras = normalizeBarcode(barcodeInput);
+      if (!barras) {
+        setErrorMessage("Informe o código de barras.");
+        focusBarcode();
+        return;
+      }
+      if (currentCd == null) {
+        setErrorMessage("CD não definido para a coleta atual.");
+        return;
+      }
+      if (dbBarrasCount <= 0 && (!isOnline || preferOfflineMode)) {
+        setErrorMessage("Base local indisponível. Para trabalhar offline, sincronize a base de barras.");
+        focusBarcode();
+        return;
+      }
 
-    const product = await getDbBarrasByBarcode(barras);
-    if (!product) {
-      setErrorMessage("Código de barras não encontrado na base DB_BARRAS.");
+      const qtd = parseMultiplo(multiploInput);
+      let valMmaa: string | null = null;
+      try {
+        valMmaa = normalizeValidadeInput(validadeInput);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
+        return;
+      }
+
+      let product = await getDbBarrasByBarcode(barras);
+      if (!product && isOnline && !preferOfflineMode) {
+        product = await fetchDbBarrasByBarcodeOnline(barras);
+        if (product) {
+          await upsertDbBarrasCacheRow(product);
+          setDbBarrasCount((value) => Math.max(value, 1));
+          setDbBarrasLastSyncAt(new Date().toISOString());
+        }
+      }
+
+      if (!product) {
+        setErrorMessage("Código de barras não encontrado na base de produtos.");
+        focusBarcode();
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const row: ColetaRow = {
+        local_id: safeUuid(),
+        remote_id: null,
+        user_id: profile.user_id,
+        etiqueta: etiquetaFixa.trim() || null,
+        cd: currentCd,
+        barras: product.barras,
+        coddv: product.coddv,
+        descricao: product.descricao,
+        qtd,
+        ocorrencia: ocorrenciaInput || null,
+        lote: loteInput.trim() || null,
+        val_mmaa: valMmaa,
+        mat_aud: profile.mat,
+        nome_aud: profile.nome,
+        data_hr: nowIso,
+        created_at: nowIso,
+        updated_at: nowIso,
+        sync_status: "pending_insert",
+        sync_error: null
+      };
+
+      await upsertColetaRow(row);
+      await refreshLocalState();
+
+      setBarcodeInput("");
+      setOcorrenciaInput("");
+      setLoteInput("");
+      setValidadeInput("");
+      setExpandedRowId(row.local_id);
+
+      if (isOnline && !preferOfflineMode) {
+        void runSync(true);
+        void refreshSharedState();
+        setStatusMessage("Item coletado e enviado para sincronização.");
+      } else {
+        setStatusMessage("Item coletado em modo local. Sincronize quando estiver online.");
+      }
       focusBarcode();
-      return;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar coleta.");
+      focusBarcode();
+    } finally {
+      collectInFlightRef.current = false;
     }
+  }, [
+    barcodeInput,
+    currentCd,
+    dbBarrasCount,
+    etiquetaFixa,
+    focusBarcode,
+    isOnline,
+    loteInput,
+    multiploInput,
+    ocorrenciaInput,
+    preferOfflineMode,
+    profile.mat,
+    profile.nome,
+    profile.user_id,
+    refreshLocalState,
+    refreshSharedState,
+    runSync,
+    validadeInput
+  ]);
 
-    const nowIso = new Date().toISOString();
-    const row: ColetaRow = {
-      local_id: safeUuid(),
-      remote_id: null,
-      user_id: profile.user_id,
-      etiqueta: etiquetaFixa.trim() || null,
-      cd: currentCd,
-      barras: product.barras,
-      coddv: product.coddv,
-      descricao: product.descricao,
-      qtd,
-      ocorrencia: ocorrenciaInput || null,
-      lote: loteInput.trim() || null,
-      val_mmaa: valMmaa,
-      mat_aud: profile.mat,
-      nome_aud: profile.nome,
-      data_hr: nowIso,
-      created_at: nowIso,
-      updated_at: nowIso,
-      sync_status: "pending_insert",
-      sync_error: null
-    };
+  const onCollectSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleCollect();
+  };
 
-    await upsertColetaRow(row);
-    await refreshLocalState();
-
-    setBarcodeInput("");
-    setOcorrenciaInput("");
-    setLoteInput("");
-    setValidadeInput("");
-
-    if (isOnline) {
-      void runSync(true);
-      void refreshSharedState();
-      setStatusMessage("Item coletado e enviado para sincronização.");
-    } else {
-      setStatusMessage("Item coletado em modo offline. Será enviado quando a conexão voltar.");
-    }
-    focusBarcode();
+  const onBarcodeKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void handleCollect();
   };
 
   return (
@@ -756,7 +875,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       <section className="modules-shell coleta-shell">
         <div className="coleta-head">
           <h2>Olá, {displayUserName}</h2>
-          <p>Coletas do dia ficam visíveis para todos do mesmo depósito neste módulo.</p>
+          <p>Para trabalhar offline, sincronize a base de barras antes de iniciar a coleta.</p>
           <p className="coleta-meta-line">
             Base local: <strong>{dbBarrasCount}</strong> itens
             {dbBarrasLastSyncAt ? ` | Atualizada em ${formatDateTime(dbBarrasLastSyncAt)}` : " | Sem atualização ainda"}
@@ -766,6 +885,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {preferOfflineMode ? (
+          <div className="alert success">
+            Modo offline ativo: novas coletas ficam locais e você sincroniza quando quiser.
+          </div>
+        ) : null}
 
         {!isOnline && dbBarrasCount <= 0 ? (
           <div className="alert error">
@@ -774,13 +898,22 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         ) : null}
 
         <div className="coleta-actions-row">
+          <button
+            type="button"
+            className={`btn btn-muted coleta-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
+            onClick={() => setPreferOfflineMode((value) => !value)}
+            title={preferOfflineMode ? "Desativar modo offline local" : "Ativar modo offline local"}
+          >
+            <span aria-hidden="true"><OfflineModeIcon enabled={!preferOfflineMode} /></span>
+            {preferOfflineMode ? "Offline local" : "Online direto"}
+          </button>
           <button type="button" className="btn btn-muted" onClick={() => void runDbBarrasRefresh(false)} disabled={!isOnline || busyRefresh}>
             {busyRefresh ? "Atualizando base..." : "Atualizar DB_BARRAS"}
           </button>
           <button type="button" className="btn btn-muted" onClick={() => void refreshSharedState()} disabled={!isOnline || currentCd == null}>
             Atualizar coletas do dia
           </button>
-          <button type="button" className="btn btn-primary coleta-sync-btn" onClick={() => void runSync(false)} disabled={!isOnline || busySync}>
+          <button type="button" className="btn btn-primary coleta-sync-btn" onClick={() => void runSync(false)} disabled={!isOnline || busySync || pendingCount <= 0}>
             <span aria-hidden="true"><UploadIcon /></span>
             {busySync ? "Sincronizando..." : "Sincronizar agora"}
           </button>
@@ -826,7 +959,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                     <option value="">Todos CDs permitidos</option>
                     {cdOptions.map((option) => (
                       <option key={option.cd} value={option.cd}>
-                        {option.cd_nome}
+                        {cdCodeLabel(option.cd)}
                       </option>
                     ))}
                   </select>
@@ -862,7 +995,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           </section>
         ) : null}
 
-        <form className="coleta-form" onSubmit={onCollect}>
+        <form className="coleta-form" onSubmit={onCollectSubmit}>
           <div className="coleta-form-grid">
             <label>
               Código de barras
@@ -880,6 +1013,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   autoCorrect="off"
                   spellCheck={false}
                   enterKeyHint="done"
+                  onKeyDown={onBarcodeKeyDown}
                   placeholder="Bipe ou digite e pressione Enter"
                   required
                 />
@@ -928,7 +1062,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   <option value="" disabled>Selecione o CD</option>
                   {cdOptions.map((option) => (
                     <option key={option.cd} value={option.cd}>
-                      {option.cd_nome}
+                      {cdCodeLabel(option.cd)}
                     </option>
                   ))}
                 </select>
@@ -938,7 +1072,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                 CD ativo
                 <input
                   type="text"
-                  value={fixedCd != null ? `CD ${String(fixedCd).padStart(2, "0")}` : "CD não definido"}
+                  value={cdCodeLabel(fixedCd)}
                   disabled
                 />
               </label>
@@ -970,7 +1104,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             </label>
           </div>
 
-          <button className="btn btn-primary coleta-submit" type="submit" disabled={dbBarrasCount <= 0}>
+          <button
+            className="btn btn-primary coleta-submit"
+            type="submit"
+            disabled={currentCd == null || (dbBarrasCount <= 0 && (!isOnline || preferOfflineMode))}
+          >
             Salvar coleta
           </button>
         </form>
@@ -985,116 +1123,148 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             <div className="coleta-empty">Nenhuma coleta disponível para hoje neste depósito.</div>
           ) : (
             visibleRows.map((row) => (
-              <article key={row.local_id} className="coleta-row-card">
-                <div className="coleta-row-main">
-                  <div>
+              <article key={row.local_id} className={`coleta-row-card${expandedRowId === row.local_id ? " is-expanded" : ""}`}>
+                <button
+                  type="button"
+                  className="coleta-row-line"
+                  onClick={() => setExpandedRowId((current) => (current === row.local_id ? null : row.local_id))}
+                >
+                  <div className="coleta-row-line-main">
                     <strong>{row.descricao}</strong>
-                    <p>
-                      Barras: {row.barras} | CODDV: {row.coddv}
-                    </p>
-                    <p>
-                      CD {String(row.cd).padStart(2, "0")} | Coletado em {formatDateTime(row.data_hr)}
-                    </p>
+                    <p>Barras: {row.barras} | CODDV: {row.coddv}</p>
+                    <p>Coletado em {formatDateTime(row.data_hr)}</p>
                   </div>
 
-                  <span className={`coleta-row-status ${asStatusClass(row.sync_status)}`} title={row.sync_error ?? undefined}>
-                    {asStatusLabel(row.sync_status)}
-                  </span>
-                </div>
+                  <div className="coleta-row-line-right">
+                    <span className={`coleta-row-status ${asStatusClass(row.sync_status)}`} title={row.sync_error ?? undefined}>
+                      {asStatusLabel(row.sync_status)}
+                    </span>
+                    <span className="coleta-row-expand" aria-hidden="true">
+                      <ChevronIcon open={expandedRowId === row.local_id} />
+                    </span>
+                  </div>
+                </button>
 
-                <div className="coleta-row-edit-grid">
-                  <label>
-                    Qtd
-                    <input
-                      type="number"
-                      min={1}
-                      defaultValue={row.qtd}
-                      onBlur={(event) => {
-                        const nextValue = parseMultiplo(event.target.value);
-                        if (nextValue !== row.qtd) {
-                          void applyRowUpdate(row, { qtd: nextValue });
-                        }
-                      }}
-                    />
-                  </label>
+                {expandedRowId === row.local_id ? (
+                  <div className="coleta-row-edit-card">
+                    <div className="coleta-row-edit-grid">
+                      <label>
+                        Qtd
+                        <input
+                          type="number"
+                          min={1}
+                          defaultValue={row.qtd}
+                          onBlur={(event) => {
+                            const nextValue = parseMultiplo(event.target.value);
+                            if (nextValue !== row.qtd) {
+                              void applyRowUpdate(row, { qtd: nextValue });
+                            }
+                          }}
+                        />
+                      </label>
 
-                  <label>
-                    Etiqueta
-                    <input
-                      type="text"
-                      defaultValue={row.etiqueta ?? ""}
-                      onBlur={(event) => {
-                        const nextValue = event.target.value.trim() || null;
-                        if (nextValue !== row.etiqueta) {
-                          void applyRowUpdate(row, { etiqueta: nextValue });
-                        }
-                      }}
-                    />
-                  </label>
+                      <label>
+                        Etiqueta
+                        <input
+                          type="text"
+                          defaultValue={row.etiqueta ?? ""}
+                          onBlur={(event) => {
+                            const nextValue = event.target.value.trim() || null;
+                            if (nextValue !== row.etiqueta) {
+                              void applyRowUpdate(row, { etiqueta: nextValue });
+                            }
+                          }}
+                        />
+                      </label>
 
-                  <label>
-                    Ocorrência
-                    <select
-                      value={row.ocorrencia ?? ""}
-                      onChange={(event) => {
-                        const next = event.target.value as "" | "Avariado" | "Vencido";
-                        void applyRowUpdate(row, { ocorrencia: next || null });
-                      }}
-                    >
-                      <option value="">Sem ocorrência</option>
-                      <option value="Avariado">Avariado</option>
-                      <option value="Vencido">Vencido</option>
-                    </select>
-                  </label>
+                      <label>
+                        Ocorrência
+                        <select
+                          value={row.ocorrencia ?? ""}
+                          onChange={(event) => {
+                            const next = event.target.value as "" | "Avariado" | "Vencido";
+                            void applyRowUpdate(row, { ocorrencia: next || null });
+                          }}
+                        >
+                          <option value="">Sem ocorrência</option>
+                          <option value="Avariado">Avariado</option>
+                          <option value="Vencido">Vencido</option>
+                        </select>
+                      </label>
 
-                  <label>
-                    Lote
-                    <input
-                      type="text"
-                      defaultValue={row.lote ?? ""}
-                      onBlur={(event) => {
-                        const nextValue = event.target.value.trim() || null;
-                        if (nextValue !== row.lote) {
-                          void applyRowUpdate(row, { lote: nextValue });
-                        }
-                      }}
-                    />
-                  </label>
+                      <label>
+                        Lote
+                        <input
+                          type="text"
+                          defaultValue={row.lote ?? ""}
+                          onBlur={(event) => {
+                            const nextValue = event.target.value.trim() || null;
+                            if (nextValue !== row.lote) {
+                              void applyRowUpdate(row, { lote: nextValue });
+                            }
+                          }}
+                        />
+                      </label>
 
-                  <label>
-                    Validade
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      defaultValue={formatValidade(row.val_mmaa)}
-                      maxLength={5}
-                      onBlur={(event) => {
-                        try {
-                          const nextValue = normalizeValidadeInput(event.target.value);
-                          if (nextValue !== row.val_mmaa) {
-                            void applyRowUpdate(row, { val_mmaa: nextValue });
-                          }
-                        } catch (error) {
-                          setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
-                        }
-                      }}
-                    />
-                  </label>
-                </div>
+                      <label>
+                        Validade
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          defaultValue={formatValidade(row.val_mmaa)}
+                          maxLength={5}
+                          onBlur={(event) => {
+                            try {
+                              const nextValue = normalizeValidadeInput(event.target.value);
+                              if (nextValue !== row.val_mmaa) {
+                                void applyRowUpdate(row, { val_mmaa: nextValue });
+                              }
+                            } catch (error) {
+                              setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
 
-                <div className="coleta-row-footer">
-                  <span>
-                    Auditor: {row.nome_aud} ({row.mat_aud})
-                  </span>
-                  <button className="btn btn-muted coleta-delete-btn" type="button" onClick={() => void deleteRow(row)}>
-                    <span aria-hidden="true"><TrashIcon /></span>
-                    Excluir
-                  </button>
-                </div>
+                    <div className="coleta-row-footer">
+                      <span>
+                        Auditor: {row.nome_aud} ({row.mat_aud})
+                      </span>
+                      <button className="btn btn-muted coleta-delete-btn" type="button" onClick={() => requestDeleteRow(row)}>
+                        <span aria-hidden="true"><TrashIcon /></span>
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </article>
             ))
           )}
         </div>
+
+        {deleteTarget ? (
+          <div
+            className="confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="coleta-delete-title"
+            onClick={closeDeleteConfirm}
+          >
+            <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+              <h3 id="coleta-delete-title">Excluir item coletado</h3>
+              <p>Deseja excluir "{deleteTarget.descricao}" da coleta?</p>
+              <div className="confirm-actions">
+                <button className="btn btn-muted" type="button" onClick={closeDeleteConfirm}>
+                  Cancelar
+                </button>
+                <button className="btn btn-danger" type="button" onClick={() => void confirmDeleteRow()}>
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     </>
   );

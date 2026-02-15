@@ -21,6 +21,7 @@ import ZeradosPage from "./modules/zerados/page";
 import HomePage from "./pages/HomePage";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
+import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const ADMIN_EMAIL_CANDIDATES = [
@@ -1010,6 +1011,14 @@ export default function App() {
     setLogoutBusy(true);
     clearAlerts();
     try {
+      const currentUserId = session?.user.id;
+      if (currentUserId) {
+        try {
+          await clearUserColetaSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
+      }
       await supabase!.auth.signOut();
       setAuthMode("login");
       clearRegisterValidation();

@@ -44,6 +44,7 @@ export interface ColetaPreferences {
   etiqueta_fixa: string;
   multiplo_padrao: number;
   cd_ativo: number | null;
+  prefer_offline_mode: boolean;
 }
 
 export interface DbBarrasSyncMeta {
