@@ -134,6 +134,10 @@ function roleIsGlobalAdmin(profile: ColetaModuleProfile): boolean {
   return profile.role === "admin" && profile.cd_default == null;
 }
 
+function canManageColetaRow(profile: ColetaModuleProfile, row: ColetaRow): boolean {
+  return profile.role === "admin" || row.user_id === profile.user_id;
+}
+
 function fixedCdFromProfile(profile: ColetaModuleProfile): number | null {
   if (typeof profile.cd_default === "number" && Number.isFinite(profile.cd_default)) {
     return Math.trunc(profile.cd_default);
@@ -622,6 +626,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
   const applyRowUpdate = useCallback(
     async (row: ColetaRow, patch: Partial<ColetaRow>) => {
+      if (!canManageColetaRow(profile, row)) {
+        return;
+      }
       const nextRow: ColetaRow = {
         ...row,
         ...patch,
@@ -641,6 +648,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
   const executeDeleteRow = useCallback(
     async (row: ColetaRow) => {
+      if (!canManageColetaRow(profile, row)) {
+        return;
+      }
       if (row.remote_id) {
         const nextRow: ColetaRow = {
           ...row,
@@ -1465,124 +1475,134 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           {visibleRows.length === 0 ? (
             <div className="coleta-empty">Nenhuma coleta disponível para hoje neste depósito.</div>
           ) : (
-            visibleRows.map((row) => (
-              <article key={row.local_id} className={`coleta-row-card${expandedRowId === row.local_id ? " is-expanded" : ""}`}>
-                <button
-                  type="button"
-                  className="coleta-row-line"
-                  onClick={() => setExpandedRowId((current) => (current === row.local_id ? null : row.local_id))}
-                >
-                  <div className="coleta-row-line-main">
-                    <strong>{row.descricao}</strong>
-                    <p>Barras: {row.barras} | CODDV: {row.coddv}</p>
-                    <p>Coletado em {formatDateTime(row.data_hr)}</p>
-                  </div>
-
-                  <div className="coleta-row-line-right">
-                    <span className={`coleta-row-status ${asStatusClass(row.sync_status)}`} title={row.sync_error ?? undefined}>
-                      {asStatusLabel(row.sync_status)}
-                    </span>
-                    <span className="coleta-row-expand" aria-hidden="true">
-                      <ChevronIcon open={expandedRowId === row.local_id} />
-                    </span>
-                  </div>
-                </button>
-
-                {expandedRowId === row.local_id ? (
-                  <div className="coleta-row-edit-card">
-                    <div className="coleta-row-edit-grid">
-                      <label>
-                        Qtd
-                        <input
-                          type="number"
-                          min={1}
-                          defaultValue={row.qtd}
-                          onBlur={(event) => {
-                            const nextValue = parseMultiplo(event.target.value);
-                            if (nextValue !== row.qtd) {
-                              void applyRowUpdate(row, { qtd: nextValue });
-                            }
-                          }}
-                        />
-                      </label>
-
-                      <label>
-                        Etiqueta
-                        <input
-                          type="text"
-                          defaultValue={row.etiqueta ?? ""}
-                          onBlur={(event) => {
-                            const nextValue = event.target.value.trim() || null;
-                            if (nextValue !== row.etiqueta) {
-                              void applyRowUpdate(row, { etiqueta: nextValue });
-                            }
-                          }}
-                        />
-                      </label>
-
-                      <label>
-                        Ocorrência
-                        <select
-                          value={row.ocorrencia ?? ""}
-                          onChange={(event) => {
-                            const next = event.target.value as "" | "Avariado" | "Vencido";
-                            void applyRowUpdate(row, { ocorrencia: next || null });
-                          }}
-                        >
-                          <option value="">Sem ocorrência</option>
-                          <option value="Avariado">Avariado</option>
-                          <option value="Vencido">Vencido</option>
-                        </select>
-                      </label>
-
-                      <label>
-                        Lote
-                        <input
-                          type="text"
-                          defaultValue={row.lote ?? ""}
-                          onBlur={(event) => {
-                            const nextValue = event.target.value.trim() || null;
-                            if (nextValue !== row.lote) {
-                              void applyRowUpdate(row, { lote: nextValue });
-                            }
-                          }}
-                        />
-                      </label>
-
-                      <label>
-                        Validade
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          defaultValue={formatValidade(row.val_mmaa)}
-                          maxLength={5}
-                          onBlur={(event) => {
-                            try {
-                              const nextValue = normalizeValidadeInput(event.target.value);
-                              if (nextValue !== row.val_mmaa) {
-                                void applyRowUpdate(row, { val_mmaa: nextValue });
-                              }
-                            } catch (error) {
-                              setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
-                            }
-                          }}
-                        />
-                      </label>
+            visibleRows.map((row) => {
+              const canManageRow = canManageColetaRow(profile, row);
+              return (
+                <article key={row.local_id} className={`coleta-row-card${expandedRowId === row.local_id ? " is-expanded" : ""}`}>
+                  <button
+                    type="button"
+                    className="coleta-row-line"
+                    onClick={() => setExpandedRowId((current) => (current === row.local_id ? null : row.local_id))}
+                  >
+                    <div className="coleta-row-line-main">
+                      <strong>{row.descricao}</strong>
+                      <p>Barras: {row.barras} | CODDV: {row.coddv}</p>
+                      <p>Coletado em {formatDateTime(row.data_hr)}</p>
                     </div>
 
-                    <div className="coleta-row-footer">
-                      <span>
-                        Auditor: {row.nome_aud} ({row.mat_aud})
+                    <div className="coleta-row-line-right">
+                      <span className={`coleta-row-status ${asStatusClass(row.sync_status)}`} title={row.sync_error ?? undefined}>
+                        {asStatusLabel(row.sync_status)}
                       </span>
-                      <button className="btn btn-muted coleta-delete-btn" type="button" onClick={() => requestDeleteRow(row)}>
-                        <span aria-hidden="true"><TrashIcon /></span>
-                        Excluir
-                      </button>
+                      <span className="coleta-row-expand" aria-hidden="true">
+                        <ChevronIcon open={expandedRowId === row.local_id} />
+                      </span>
                     </div>
-                  </div>
-                ) : null}
-              </article>
-            ))
+                  </button>
+
+                  {expandedRowId === row.local_id ? (
+                    <div className="coleta-row-edit-card">
+                      <div className="coleta-row-edit-grid">
+                        <label>
+                          Qtd
+                          <input
+                            type="number"
+                            min={1}
+                            defaultValue={row.qtd}
+                            disabled={!canManageRow}
+                            onBlur={(event) => {
+                              const nextValue = parseMultiplo(event.target.value);
+                              if (nextValue !== row.qtd) {
+                                void applyRowUpdate(row, { qtd: nextValue });
+                              }
+                            }}
+                          />
+                        </label>
+
+                        <label>
+                          Etiqueta
+                          <input
+                            type="text"
+                            defaultValue={row.etiqueta ?? ""}
+                            disabled={!canManageRow}
+                            onBlur={(event) => {
+                              const nextValue = event.target.value.trim() || null;
+                              if (nextValue !== row.etiqueta) {
+                                void applyRowUpdate(row, { etiqueta: nextValue });
+                              }
+                            }}
+                          />
+                        </label>
+
+                        <label>
+                          Ocorrência
+                          <select
+                            value={row.ocorrencia ?? ""}
+                            disabled={!canManageRow}
+                            onChange={(event) => {
+                              const next = event.target.value as "" | "Avariado" | "Vencido";
+                              void applyRowUpdate(row, { ocorrencia: next || null });
+                            }}
+                          >
+                            <option value="">Sem ocorrência</option>
+                            <option value="Avariado">Avariado</option>
+                            <option value="Vencido">Vencido</option>
+                          </select>
+                        </label>
+
+                        <label>
+                          Lote
+                          <input
+                            type="text"
+                            defaultValue={row.lote ?? ""}
+                            disabled={!canManageRow}
+                            onBlur={(event) => {
+                              const nextValue = event.target.value.trim() || null;
+                              if (nextValue !== row.lote) {
+                                void applyRowUpdate(row, { lote: nextValue });
+                              }
+                            }}
+                          />
+                        </label>
+
+                        <label>
+                          Validade
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            defaultValue={formatValidade(row.val_mmaa)}
+                            maxLength={5}
+                            disabled={!canManageRow}
+                            onBlur={(event) => {
+                              try {
+                                const nextValue = normalizeValidadeInput(event.target.value);
+                                if (nextValue !== row.val_mmaa) {
+                                  void applyRowUpdate(row, { val_mmaa: nextValue });
+                                }
+                              } catch (error) {
+                                setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="coleta-row-footer">
+                        <span>
+                          Auditor: {row.nome_aud} ({row.mat_aud})
+                        </span>
+                        {canManageRow ? (
+                          <button className="btn btn-muted coleta-delete-btn" type="button" onClick={() => requestDeleteRow(row)}>
+                            <span aria-hidden="true"><TrashIcon /></span>
+                            Excluir
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })
           )}
         </div>
 
