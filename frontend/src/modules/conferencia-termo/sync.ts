@@ -131,6 +131,7 @@ function mapItem(raw: Record<string, unknown>): TermoItemRow {
     item_id: String(raw.item_id ?? ""),
     conf_id: String(raw.conf_id ?? ""),
     coddv: parseInteger(raw.coddv),
+    barras: parseNullableString(raw.barras),
     descricao: String(raw.descricao ?? "").trim(),
     qtd_esperada: parseInteger(raw.qtd_esperada),
     qtd_conferida: parseInteger(raw.qtd_conferida),

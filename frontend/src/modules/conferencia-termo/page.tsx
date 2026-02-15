@@ -166,6 +166,7 @@ function createLocalVolumeFromRemote(
   const localKey = buildTermoVolumeKey(profile.user_id, volume.cd, confDate, volume.id_etiqueta);
   const localItems: TermoLocalItem[] = items.map((item) => ({
     coddv: item.coddv,
+    barras: item.barras ?? null,
     descricao: item.descricao,
     qtd_esperada: item.qtd_esperada,
     qtd_conferida: item.qtd_conferida,
@@ -214,6 +215,7 @@ function createLocalVolumeFromManifest(
   const localKey = buildTermoVolumeKey(profile.user_id, cd, confDate, idEtiqueta);
   const items: TermoLocalItem[] = manifestItems.map((row) => ({
     coddv: row.coddv,
+    barras: null,
     descricao: row.descricao,
     qtd_esperada: row.qtd_esperada,
     qtd_conferida: 0,
@@ -890,12 +892,17 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     showDialog
   ]);
 
-  const updateItemQtyLocal = useCallback(async (coddv: number, qtd: number) => {
+  const updateItemQtyLocal = useCallback(async (coddv: number, qtd: number, barras: string | null = null) => {
     if (!activeVolume) return;
     const nowIso = new Date().toISOString();
     const nextItems = activeVolume.items.map((item) => (
       item.coddv === coddv
-        ? { ...item, qtd_conferida: Math.max(0, Math.trunc(qtd)), updated_at: nowIso }
+        ? {
+            ...item,
+            barras: barras ?? item.barras ?? null,
+            qtd_conferida: Math.max(0, Math.trunc(qtd)),
+            updated_at: nowIso
+          }
         : item
     ));
 
@@ -943,6 +950,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     if (!barras) return;
 
     const qtd = parsePositiveInteger(multiploInput, 1);
+    let produtoRegistrado = "";
+    let barrasRegistrada = barras;
+    let registroRemoto = false;
     setStatusMessage(null);
     setErrorMessage(null);
 
@@ -966,17 +976,23 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           });
           return;
         }
-        await updateItemQtyLocal(target.coddv, target.qtd_conferida + qtd);
+        produtoRegistrado = target.descricao;
+        barrasRegistrada = lookup.barras || barras;
+        await updateItemQtyLocal(target.coddv, target.qtd_conferida + qtd, barrasRegistrada);
         if (isOnline) {
           void runPendingSync(true);
         }
       } else {
         const updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd);
+        produtoRegistrado = updated.descricao;
+        barrasRegistrada = barras;
+        registroRemoto = true;
         const nowIso = new Date().toISOString();
         const nextItems = activeVolume.items.map((item) => (
           item.coddv === updated.coddv
             ? {
                 ...item,
+                barras,
                 qtd_conferida: updated.qtd_conferida,
                 qtd_esperada: updated.qtd_esperada,
                 updated_at: updated.updated_at
@@ -997,6 +1013,13 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       setBarcodeInput("");
       setMultiploInput("1");
       await persistPreferences({ multiplo_padrao: 1 });
+      const descricao = produtoRegistrado || "Produto";
+      const baseMessage = `${descricao} | Barras: ${barrasRegistrada} | +${qtd}`;
+      setStatusMessage(
+        registroRemoto
+          ? `Produto registrado na conferência: ${baseMessage}`
+          : `Produto registrado localmente: ${baseMessage}`
+      );
       focusBarras();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar leitura.";
@@ -1749,6 +1772,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
                         <p>CODDV: {item.coddv}</p>
+                        {item.qtd_conferida > 0 ? (
+                          <p>Barras: {item.barras ?? "-"}</p>
+                        ) : null}
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
                       </div>
                       <div className="termo-item-side">
@@ -1810,6 +1836,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
                         <p>CODDV: {item.coddv}</p>
+                        {item.qtd_conferida > 0 ? (
+                          <p>Barras: {item.barras ?? "-"}</p>
+                        ) : null}
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
                       </div>
                       <div className="termo-item-side">
@@ -1870,6 +1899,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
                         <p>CODDV: {item.coddv}</p>
+                        {item.qtd_conferida > 0 ? (
+                          <p>Barras: {item.barras ?? "-"}</p>
+                        ) : null}
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
                       </div>
                       <div className="termo-item-side">
