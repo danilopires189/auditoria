@@ -1996,23 +1996,27 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                   <p>Sem dados de rota/filial disponíveis para este CD.</p>
                 ) : (
                   <div className="termo-routes-list">
-                    {filteredRouteGroups.map((group) => {
-                      const isOpen = expandedRoute === group.rota;
+                    {filteredRouteGroups.map((group, index) => {
+                      const routeKey = `${group.rota}::${index}`;
+                      const isOpen = expandedRoute === routeKey;
                       const groupStatus = group.status;
+                      const toggleRoute = () => {
+                        setExpandedRoute((current) => current === routeKey ? null : routeKey);
+                      };
                       return (
-                        <div key={group.rota} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
+                        <div key={routeKey} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
                           <div
                             role="button"
                             tabIndex={0}
                             className="termo-route-row-button"
-                            onClick={(event) => {
+                            onPointerUp={(event) => {
                               event.stopPropagation();
-                              setExpandedRoute((current) => current === group.rota ? null : group.rota);
+                              toggleRoute();
                             }}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                setExpandedRoute((current) => current === group.rota ? null : group.rota);
+                                toggleRoute();
                               }
                             }}
                             aria-expanded={isOpen}
