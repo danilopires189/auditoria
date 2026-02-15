@@ -1944,19 +1944,29 @@ small {
   padding: 9px 10px;
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 10px;
+  min-height: 62px;
 }
 
 .termo-route-row-button {
   width: 100%;
-  border: 0;
-  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: #fff;
   text-align: left;
   cursor: pointer;
+  user-select: none;
 }
 
 .termo-route-row-button:hover {
   background: #f8fbff;
+}
+
+.termo-route-row-button:focus-visible {
+  outline: none;
+  border-color: #7aa0dd;
+  box-shadow: 0 0 0 2px rgba(59, 110, 198, 0.2);
 }
 
 .termo-route-row strong {
@@ -1968,6 +1978,7 @@ small {
   margin: 2px 0 0;
   color: #4b5e81;
   font-size: 0.8rem;
+  line-height: 1.2;
 }
 
 .termo-route-metrics {
