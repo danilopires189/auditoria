@@ -55,7 +55,7 @@ tables:
     sheet: "DB_USUARIO"
     mode: "full_replace"
     unique_keys: ["cd", "mat"]
-    required_columns: ["cd", "mat", "nome"]
+    required_columns: ["mat", "nome"]
     refresh_before_load: false
     types:
       cd: "integer"
