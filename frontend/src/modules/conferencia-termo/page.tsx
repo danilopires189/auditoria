@@ -66,7 +66,8 @@ interface ConferenciaTermoPageProps {
   profile: TermoModuleProfile;
 }
 
-type TermoRouteStatus = "conferido" | "em_conferencia" | "pendente";
+type TermoStoreStatus = "pendente" | "em_andamento" | "concluido";
+type TermoRouteStatus = "pendente" | "iniciado" | "concluido";
 
 interface TermoRouteGroup {
   rota: string;
@@ -377,21 +378,32 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
-function resolveRouteStatus(conferidas: number, total: number): TermoRouteStatus {
-  if (total > 0 && conferidas >= total) return "conferido";
-  if (conferidas > 0) return "em_conferencia";
+function normalizeStoreStatus(value: string | null | undefined): TermoStoreStatus {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized === "concluido" || normalized === "conferido") return "concluido";
+  if (normalized === "em_andamento" || normalized === "em_conferencia" || normalized === "iniciado") return "em_andamento";
   return "pendente";
 }
 
-function routeStatusLabel(status: TermoRouteStatus): string {
-  if (status === "conferido") return "Conferido";
-  if (status === "em_conferencia") return "Em conferência";
+function resolveRouteGroupStatus(filiais: TermoRouteOverviewRow[]): TermoRouteStatus {
+  if (filiais.length === 0) return "pendente";
+  const allPendente = filiais.every((item) => normalizeStoreStatus(item.status) === "pendente");
+  if (allPendente) return "pendente";
+  const allConcluido = filiais.every((item) => normalizeStoreStatus(item.status) === "concluido");
+  if (allConcluido) return "concluido";
+  return "iniciado";
+}
+
+function routeStatusLabel(status: TermoRouteStatus | TermoStoreStatus | string): string {
+  if (status === "concluido" || status === "conferido") return "Concluído";
+  if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
+  if (status === "iniciado") return "Iniciado";
   return "Pendente";
 }
 
-function routeStatusClass(status: TermoRouteStatus): "correto" | "andamento" | "falta" {
-  if (status === "conferido") return "correto";
-  if (status === "em_conferencia") return "andamento";
+function routeStatusClass(status: TermoRouteStatus | TermoStoreStatus | string): "correto" | "andamento" | "falta" {
+  if (status === "concluido" || status === "conferido") return "correto";
+  if (status === "em_andamento" || status === "em_conferencia" || status === "iniciado") return "andamento";
   return "falta";
 }
 
@@ -518,27 +530,26 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     for (const row of routeRows) {
       const rota = (row.rota || "SEM ROTA").trim() || "SEM ROTA";
-      const filialStatus = resolveRouteStatus(row.conferidas, row.total_etiquetas);
+      const lojaStatus = normalizeStoreStatus(row.status);
       const current = grouped.get(rota);
 
       if (!current) {
         grouped.set(rota, {
           rota,
           lojas_total: 1,
-          lojas_conferidas: filialStatus === "conferido" ? 1 : 0,
+          lojas_conferidas: lojaStatus === "concluido" ? 1 : 0,
           etiquetas_total: row.total_etiquetas,
           etiquetas_conferidas: row.conferidas,
-          status: filialStatus,
+          status: lojaStatus === "concluido" ? "concluido" : lojaStatus === "pendente" ? "pendente" : "iniciado",
           filiais: [row]
         });
         continue;
       }
 
       current.lojas_total += 1;
-      current.lojas_conferidas += filialStatus === "conferido" ? 1 : 0;
+      current.lojas_conferidas += lojaStatus === "concluido" ? 1 : 0;
       current.etiquetas_total += row.total_etiquetas;
       current.etiquetas_conferidas += row.conferidas;
-      current.status = resolveRouteStatus(current.etiquetas_conferidas, current.etiquetas_total);
       current.filiais.push(row);
     }
 
@@ -552,19 +563,22 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
         const searchBlob = normalizeSearchText([
           group.rota,
-          routeStatusLabel(group.status),
+          routeStatusLabel(resolveRouteGroupStatus(filiaisOrdenadas)),
           `${group.lojas_conferidas}/${group.lojas_total}`,
           `${group.etiquetas_conferidas}/${group.etiquetas_total}`,
           ...filiaisOrdenadas.map((item) => [
             item.filial_nome ?? "",
             item.filial != null ? String(item.filial) : "",
             `${item.conferidas}/${item.total_etiquetas}`,
-            routeStatusLabel(resolveRouteStatus(item.conferidas, item.total_etiquetas))
+            routeStatusLabel(item.status),
+            item.colaborador_nome ?? "",
+            item.colaborador_mat ?? ""
           ].join(" "))
         ].join(" "));
 
         return {
           ...group,
+          status: resolveRouteGroupStatus(filiaisOrdenadas),
           filiais: filiaisOrdenadas,
           search_blob: searchBlob
         };
@@ -2302,13 +2316,21 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                           {isOpen ? (
                             <div className="termo-route-stores">
                               {group.filiais.map((row) => {
-                                const lojaStatus = resolveRouteStatus(row.conferidas, row.total_etiquetas);
+                                const lojaStatus = normalizeStoreStatus(row.status);
+                                const colaboradorNome = row.colaborador_nome?.trim() || "";
+                                const colaboradorMat = row.colaborador_mat?.trim() || "";
                                 return (
                                   <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
                                     <div>
                                       <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
                                       <p>Etiquetas: {row.conferidas}/{row.total_etiquetas}</p>
                                       <p>Status da loja: {routeStatusLabel(lojaStatus)}</p>
+                                      {lojaStatus === "em_andamento" && colaboradorNome ? (
+                                        <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
+                                      ) : null}
+                                      {lojaStatus === "concluido" && colaboradorNome ? (
+                                        <p>Concluído por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
+                                      ) : null}
                                     </div>
                                     <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
                                       {routeStatusLabel(lojaStatus)}

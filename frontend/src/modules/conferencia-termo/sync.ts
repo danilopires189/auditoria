@@ -82,7 +82,12 @@ function mapManifestBarras(raw: Record<string, unknown>): TermoManifestBarrasRow
 
 function mapRouteOverview(raw: Record<string, unknown>): TermoRouteOverviewRow {
   const statusRaw = String(raw.status ?? "pendente").toLowerCase();
-  const status = statusRaw === "conferido" ? "conferido" : "pendente";
+  const status =
+    statusRaw === "concluido" || statusRaw === "conferido"
+      ? "concluido"
+      : statusRaw === "em_andamento" || statusRaw === "em_conferencia"
+        ? "em_andamento"
+        : "pendente";
 
   return {
     rota: String(raw.rota ?? "SEM ROTA"),
@@ -91,7 +96,9 @@ function mapRouteOverview(raw: Record<string, unknown>): TermoRouteOverviewRow {
     total_etiquetas: parseInteger(raw.total_etiquetas),
     conferidas: parseInteger(raw.conferidas),
     pendentes: parseInteger(raw.pendentes),
-    status
+    status,
+    colaborador_nome: parseNullableString(raw.colaborador_nome),
+    colaborador_mat: parseNullableString(raw.colaborador_mat)
   };
 }
 
