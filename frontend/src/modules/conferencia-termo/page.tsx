@@ -363,6 +363,9 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("CONFERENCIA_EM_ABERTO_OUTRA_ETIQUETA")) {
     return "Já existe uma conferência em andamento para sua matrícula. Finalize a etiqueta atual para iniciar outra.";
   }
+  if (value.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
+    return "Esta conferência não existe mais ou já foi finalizada. Abra uma nova etiqueta.";
+  }
   return value;
 }
 
@@ -1041,6 +1044,41 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     }
   }, [isOnline]);
 
+  const clearConferenceScreen = useCallback(() => {
+    setShowFinalizeModal(false);
+    setFinalizeMotivo("");
+    setFinalizeError(null);
+    setExpandedCoddv(null);
+    setEditingCoddv(null);
+    setEditQtdInput("0");
+    setBarcodeInput("");
+    setActiveVolume(null);
+    setEtiquetaInput("");
+    window.requestAnimationFrame(() => {
+      etiquetaRef.current?.focus();
+    });
+  }, []);
+
+  const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
+    if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
+      return false;
+    }
+    try {
+      if (activeVolume?.local_key) {
+        await removeLocalVolume(activeVolume.local_key);
+      }
+    } catch {
+      // Ignora falha local de limpeza.
+    }
+    await refreshPendingState();
+    clearConferenceScreen();
+    setShowFinalizeModal(false);
+    setFinalizeError(null);
+    setStatusMessage(null);
+    setErrorMessage(normalizeRpcErrorMessage(rawMessage));
+    return true;
+  }, [activeVolume, clearConferenceScreen, refreshPendingState]);
+
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
       setErrorMessage("Abra um volume para iniciar a conferência.");
@@ -1128,6 +1166,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       focusBarras();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar leitura.";
+      if (await handleClosedConferenceError(message)) return;
       if (message.includes("PRODUTO_FORA_DO_VOLUME")) {
         const lookup = await resolveBarcodeProduct(barras);
         const produtoNome = lookup?.descricao?.trim() || `Barras ${barras}`;
@@ -1152,23 +1191,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     resolveBarcodeProduct,
     runPendingSync,
     showDialog,
-    updateItemQtyLocal
+    updateItemQtyLocal,
+    handleClosedConferenceError
   ]);
-
-  const clearConferenceScreen = useCallback(() => {
-    setShowFinalizeModal(false);
-    setFinalizeMotivo("");
-    setFinalizeError(null);
-    setExpandedCoddv(null);
-    setEditingCoddv(null);
-    setEditQtdInput("0");
-    setBarcodeInput("");
-    setActiveVolume(null);
-    setEtiquetaInput("");
-    window.requestAnimationFrame(() => {
-      etiquetaRef.current?.focus();
-    });
-  }, []);
 
   const handleSaveItemEdit = useCallback(async (coddv: number) => {
     if (!activeVolume) return;
@@ -1207,6 +1232,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       setEditQtdInput("0");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao salvar item.";
+      if (await handleClosedConferenceError(message)) return;
       setErrorMessage(normalizeRpcErrorMessage(message));
     }
   }, [
@@ -1217,7 +1243,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     isOnline,
     preferOfflineMode,
     runPendingSync,
-    updateItemQtyLocal
+    updateItemQtyLocal,
+    handleClosedConferenceError
   ]);
 
   const requestResetItem = useCallback((coddv: number) => {
@@ -1265,6 +1292,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             setEditQtdInput("0");
           } catch (error) {
             const message = error instanceof Error ? error.message : "Falha ao limpar item.";
+            if (await handleClosedConferenceError(message)) return;
             setErrorMessage(normalizeRpcErrorMessage(message));
           } finally {
             closeDialog();
@@ -1281,7 +1309,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     preferOfflineMode,
     runPendingSync,
     showDialog,
-    updateItemQtyLocal
+    updateItemQtyLocal,
+    handleClosedConferenceError
   ]);
 
   const handleFinalizeVolume = useCallback(async () => {
@@ -1331,6 +1360,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       clearConferenceScreen();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao finalizar.";
+      if (await handleClosedConferenceError(message)) return;
       setFinalizeError(normalizeRpcErrorMessage(message));
     } finally {
       setBusyFinalize(false);
@@ -1345,7 +1375,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     finalizeMotivo,
     isOnline,
     preferOfflineMode,
-    refreshPendingState
+    refreshPendingState,
+    handleClosedConferenceError
   ]);
 
   const syncRouteOverview = useCallback(async () => {
@@ -1744,6 +1775,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             setStatusMessage("Conferência cancelada. Os dados locais foram descartados.");
           } catch (error) {
             const message = error instanceof Error ? error.message : "Falha ao cancelar conferência.";
+            if (await handleClosedConferenceError(message)) return;
             setErrorMessage(normalizeRpcErrorMessage(message));
           } finally {
             setBusyCancel(false);
@@ -1759,7 +1791,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     isOnline,
     refreshPendingState,
     showDialog,
-    syncRouteOverview
+    syncRouteOverview,
+    handleClosedConferenceError
   ]);
 
   const showOnlineBadge = (
