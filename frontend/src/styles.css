@@ -537,8 +537,8 @@ small {
 
 .btn-logout {
   color: #f7fbff;
-  width: 46px;
-  height: 44px;
+  width: 44px;
+  height: 42px;
   padding: 0;
   border-radius: 13px;
   border: 1px solid rgba(235, 244, 255, 0.42);
@@ -579,6 +579,8 @@ small {
   padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px 20px;
   display: grid;
   gap: 12px;
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
 .app-shell-module {
@@ -590,7 +592,7 @@ small {
 
 .app-topbar {
   border-radius: 16px;
-  padding: 9px 11px;
+  padding: 8px 10px;
   background: linear-gradient(145deg, rgba(52, 91, 144, 0.92), rgba(79, 116, 168, 0.9));
   border: 1px solid rgba(225, 236, 255, 0.45);
   display: grid;
@@ -599,8 +601,8 @@ small {
     "id right"
     "meta meta";
   align-items: start;
-  column-gap: 10px;
-  row-gap: 7px;
+  column-gap: 8px;
+  row-gap: 6px;
 }
 
 .topbar-id {
@@ -613,8 +615,8 @@ small {
 }
 
 .topbar-id img {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
   padding: 6px;
   border-radius: 12px;
@@ -632,7 +634,7 @@ small {
 
 .topbar-user strong {
   font-family: "Sora", sans-serif;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   line-height: 1.1;
   min-width: 0;
   white-space: nowrap;
@@ -642,7 +644,7 @@ small {
 
 .topbar-user span {
   color: #e5eefc;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
 }
 
 .topbar-user .topbar-cargo {
@@ -678,17 +680,17 @@ small {
   gap: 6px;
   flex-wrap: wrap;
   width: auto;
-  padding-left: 54px;
+  padding-left: 50px;
   margin-left: 0;
 }
 
 .topbar-meta span {
-  padding: 4px 8px;
+  padding: 3px 7px;
   border-radius: 999px;
   border: 1px solid rgba(236, 244, 255, 0.55);
   background: rgba(255, 255, 255, 0.16);
   color: #f8fbff;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 600;
 }
 
@@ -1689,6 +1691,27 @@ small {
   font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.24;
+}
+
+.module-header-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.module-available-pill {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 225, 176, 0.78);
+  background: rgba(35, 156, 92, 0.16);
+  color: #0d7a44;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .tone-blue {
