@@ -1943,17 +1943,17 @@ small {
   border: 1px solid #d6dfed;
   border-radius: 12px;
   background: #fff;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .termo-route-row-button {
   width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 10px;
   padding: 9px 10px;
-  min-height: 72px;
+  min-height: 80px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: #fff;
@@ -1982,7 +1982,7 @@ small {
   flex: 1 1 auto;
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 4px;
 }
 
 .termo-route-title {
@@ -1995,21 +1995,23 @@ small {
 .termo-route-sub {
   display: block;
   color: #4b5e81;
-  font-size: 0.8rem;
-  line-height: 1.2;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .termo-route-metrics {
-  display: grid;
-  gap: 5px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   flex: 0 0 auto;
-  justify-items: end;
-  align-content: flex-start;
+  justify-content: flex-end;
 }
 
 .termo-route-metrics span:first-child {
   color: #2c436f;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
 }
 
