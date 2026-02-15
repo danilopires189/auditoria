@@ -23,6 +23,8 @@ import HomePage from "./pages/HomePage";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
+import type { TermoModuleProfile } from "./modules/conferencia-termo/types";
+import { clearUserTermoSessionCache } from "./modules/conferencia-termo/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const ADMIN_EMAIL_CANDIDATES = [
@@ -1019,6 +1021,11 @@ export default function App() {
         } catch {
           // Ignore local cleanup failures and proceed with logout.
         }
+        try {
+          await clearUserTermoSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
       }
       await supabase!.auth.signOut();
       setAuthMode("login");
@@ -1043,6 +1050,18 @@ export default function App() {
   }, [profile, session]);
 
   const coletaProfile = useMemo<ColetaModuleProfile | null>(() => {
+    if (!session || !effectiveProfile) return null;
+    return {
+      user_id: effectiveProfile.user_id || session.user.id,
+      nome: effectiveProfile.nome || "Usuário",
+      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfile.role || "auditor",
+      cd_default: effectiveProfile.cd_default,
+      cd_nome: effectiveProfile.cd_nome
+    };
+  }, [effectiveProfile, session]);
+
+  const termoProfile = useMemo<TermoModuleProfile | null>(() => {
     if (!session || !effectiveProfile) return null;
     return {
       user_id: effectiveProfile.user_id || session.user.id,
@@ -1112,7 +1131,16 @@ export default function App() {
               )
             }
           />
-          <Route path="/modulos/conferencia-termo" element={<ConferenciaTermoPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/conferencia-termo"
+            element={
+              termoProfile ? (
+                <ConferenciaTermoPage isOnline={isOnline} profile={termoProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="/modulos/conferencia-volume-avulso" element={<ConferenciaVolumeAvulsoPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/conferencia-pedido-direto" element={<ConferenciaPedidoDiretoPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/conferencia-entrada-notas" element={<ConferenciaEntradaNotasPage isOnline={isOnline} userName={displayContext.nome} />} />
