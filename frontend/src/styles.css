@@ -1819,8 +1819,17 @@ small {
   stroke-linejoin: round;
 }
 
+.termo-finalize-btn {
+  color: #fff;
+  background: linear-gradient(130deg, #1f9a5a, #27b86a);
+}
+
+.termo-finalize-btn:hover:not(:disabled) {
+  background: linear-gradient(130deg, #1a844d, #1f9a5a);
+}
+
 .termo-finalize-btn svg {
-  stroke: #8df3a6;
+  stroke: currentColor;
 }
 
 .termo-list-block {
