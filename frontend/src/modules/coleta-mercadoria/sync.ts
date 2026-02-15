@@ -6,7 +6,13 @@ import {
   replaceDbBarrasCache,
   upsertColetaRow
 } from "./storage";
-import type { CdOption, ColetaRow, DbBarrasCacheRow } from "./types";
+import type {
+  CdOption,
+  ColetaReportFilters,
+  ColetaReportRow,
+  ColetaRow,
+  DbBarrasCacheRow
+} from "./types";
 
 const DB_BARRAS_PAGE_SIZE = 1000;
 
@@ -17,8 +23,70 @@ function toErrorMessage(error: unknown): string {
     const candidate = error as Record<string, unknown>;
     if (typeof candidate.message === "string") return candidate.message;
     if (typeof candidate.error_description === "string") return candidate.error_description;
+    if (typeof candidate.details === "string") return candidate.details;
   }
   return "Erro inesperado";
+}
+
+function parseInteger(value: unknown, fallback = 0): number {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseNullableString(value: unknown): string | null {
+  if (value == null) return null;
+  const parsed = String(value).trim();
+  return parsed ? parsed : null;
+}
+
+function mapRpcRowToColetaRow(raw: Record<string, unknown>, userIdFallback = ""): ColetaRow {
+  const id = typeof raw.id === "string" ? raw.id : "";
+  const dataHr = typeof raw.data_hr === "string" ? raw.data_hr : new Date().toISOString();
+  const createdAt = typeof raw.created_at === "string" ? raw.created_at : dataHr;
+  const updatedAt = typeof raw.updated_at === "string" ? raw.updated_at : dataHr;
+
+  return {
+    local_id: id ? `remote:${id}` : `remote:${Date.now()}`,
+    remote_id: id || null,
+    user_id: typeof raw.user_id === "string" ? raw.user_id : userIdFallback,
+    etiqueta: parseNullableString(raw.etiqueta),
+    cd: parseInteger(raw.cd),
+    barras: String(raw.barras ?? ""),
+    coddv: parseInteger(raw.coddv),
+    descricao: String(raw.descricao ?? "").trim(),
+    qtd: parseInteger(raw.qtd, 1),
+    ocorrencia: raw.ocorrencia === "Avariado" || raw.ocorrencia === "Vencido" ? raw.ocorrencia : null,
+    lote: parseNullableString(raw.lote),
+    val_mmaa: parseNullableString(raw.val_mmaa),
+    mat_aud: String(raw.mat_aud ?? ""),
+    nome_aud: String(raw.nome_aud ?? ""),
+    data_hr: dataHr,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    sync_status: "synced",
+    sync_error: null
+  };
+}
+
+function mapRpcRowToReport(raw: Record<string, unknown>): ColetaReportRow {
+  return {
+    id: String(raw.id ?? ""),
+    etiqueta: parseNullableString(raw.etiqueta),
+    cd: parseInteger(raw.cd),
+    barras: String(raw.barras ?? ""),
+    coddv: parseInteger(raw.coddv),
+    descricao: String(raw.descricao ?? ""),
+    qtd: parseInteger(raw.qtd),
+    ocorrencia: raw.ocorrencia === "Avariado" || raw.ocorrencia === "Vencido" ? raw.ocorrencia : null,
+    lote: parseNullableString(raw.lote),
+    val_mmaa: parseNullableString(raw.val_mmaa),
+    mat_aud: String(raw.mat_aud ?? ""),
+    nome_aud: String(raw.nome_aud ?? ""),
+    user_id: String(raw.user_id ?? ""),
+    data_hr: String(raw.data_hr ?? ""),
+    created_at: String(raw.created_at ?? ""),
+    updated_at: String(raw.updated_at ?? "")
+  };
 }
 
 export function normalizeBarcode(value: string): string {
@@ -115,6 +183,25 @@ export async function refreshDbBarrasCache(
   return { rows: allRows.length, pages };
 }
 
+export async function fetchTodaySharedColetaRows(cd: number, limit = 1200): Promise<ColetaRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_aud_coleta_today", {
+    p_cd: cd,
+    p_limit: limit
+  });
+
+  if (error) {
+    throw new Error(`Falha ao buscar coletas do dia: ${toErrorMessage(error)}`);
+  }
+
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .map((item) => mapRpcRowToColetaRow(item as Record<string, unknown>))
+    .filter((item) => item.remote_id != null);
+}
+
 function patchError(row: ColetaRow, message: string): ColetaRow {
   return {
     ...row,
@@ -124,38 +211,7 @@ function patchError(row: ColetaRow, message: string): ColetaRow {
   };
 }
 
-function toRowFromRpc(base: ColetaRow, payload: Record<string, unknown>): ColetaRow {
-  const remoteId = typeof payload.id === "string" ? payload.id : base.remote_id;
-  const dataHr = typeof payload.data_hr === "string" ? payload.data_hr : base.data_hr;
-  const createdAt = typeof payload.created_at === "string" ? payload.created_at : base.created_at;
-  const updatedAt = typeof payload.updated_at === "string" ? payload.updated_at : new Date().toISOString();
-
-  return {
-    ...base,
-    remote_id: remoteId,
-    etiqueta: typeof payload.etiqueta === "string" ? payload.etiqueta : base.etiqueta,
-    cd: Number.parseInt(String(payload.cd ?? base.cd), 10),
-    barras: typeof payload.barras === "string" ? payload.barras : base.barras,
-    coddv: Number.parseInt(String(payload.coddv ?? base.coddv), 10),
-    descricao: typeof payload.descricao === "string" ? payload.descricao : base.descricao,
-    qtd: Number.parseInt(String(payload.qtd ?? base.qtd), 10),
-    ocorrencia:
-      payload.ocorrencia === "Avariado" || payload.ocorrencia === "Vencido"
-        ? payload.ocorrencia
-        : null,
-    lote: typeof payload.lote === "string" ? payload.lote : base.lote,
-    val_mmaa: typeof payload.val_mmaa === "string" ? payload.val_mmaa : base.val_mmaa,
-    mat_aud: typeof payload.mat_aud === "string" ? payload.mat_aud : base.mat_aud,
-    nome_aud: typeof payload.nome_aud === "string" ? payload.nome_aud : base.nome_aud,
-    data_hr: dataHr,
-    created_at: createdAt,
-    updated_at: updatedAt,
-    sync_status: "synced",
-    sync_error: null
-  };
-}
-
-async function syncInsert(row: ColetaRow): Promise<ColetaRow> {
+async function syncInsert(row: ColetaRow): Promise<void> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const { data, error } = await supabase.rpc("rpc_aud_coleta_insert", {
@@ -177,11 +233,9 @@ async function syncInsert(row: ColetaRow): Promise<ColetaRow> {
   if (!first || typeof first !== "object") {
     throw new Error("Resposta inválida ao inserir coleta.");
   }
-
-  return toRowFromRpc(row, first as Record<string, unknown>);
 }
 
-async function syncUpdate(row: ColetaRow): Promise<ColetaRow> {
+async function syncUpdate(row: ColetaRow): Promise<void> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   if (!row.remote_id) {
     throw new Error("Linha sem ID remoto para atualização.");
@@ -204,8 +258,6 @@ async function syncUpdate(row: ColetaRow): Promise<ColetaRow> {
   if (!first || typeof first !== "object") {
     throw new Error("Resposta inválida ao atualizar coleta.");
   }
-
-  return toRowFromRpc(row, first as Record<string, unknown>);
 }
 
 async function syncDelete(row: ColetaRow): Promise<void> {
@@ -247,11 +299,15 @@ export async function syncPendingColetaRows(userId: string): Promise<{
       if (row.sync_status === "pending_delete") {
         await syncDelete(row);
       } else if (row.sync_status === "pending_update") {
-        const syncedRow = await syncUpdate(row);
-        await upsertColetaRow(syncedRow);
+        await syncUpdate(row);
+        await removeColetaRow(row.local_id);
       } else {
-        const syncedRow = row.remote_id ? await syncUpdate(row) : await syncInsert(row);
-        await upsertColetaRow(syncedRow);
+        if (row.remote_id) {
+          await syncUpdate(row);
+        } else {
+          await syncInsert(row);
+        }
+        await removeColetaRow(row.local_id);
       }
       synced += 1;
     } catch (error) {
@@ -267,4 +323,41 @@ export async function syncPendingColetaRows(userId: string): Promise<{
     failed,
     pending
   };
+}
+
+export async function countColetaReportRows(filters: ColetaReportFilters): Promise<number> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_aud_coleta_report_count", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd
+  });
+
+  if (error) {
+    throw new Error(toErrorMessage(error));
+  }
+
+  return parseInteger(data, 0);
+}
+
+export async function fetchColetaReportRows(
+  filters: ColetaReportFilters,
+  limit = 20000
+): Promise<ColetaReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_aud_coleta_report_rows", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd,
+    p_limit: limit
+  });
+
+  if (error) {
+    throw new Error(toErrorMessage(error));
+  }
+
+  if (!Array.isArray(data)) return [];
+  return data.map((item) => mapRpcRowToReport(item as Record<string, unknown>));
 }

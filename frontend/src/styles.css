@@ -933,6 +933,23 @@ small {
   gap: 6px;
 }
 
+.coleta-report-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.coleta-report-toggle svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .coleta-sync-btn svg {
   width: 15px;
   height: 15px;
@@ -976,6 +993,74 @@ small {
 .coleta-form-grid select:focus {
   outline: 2px solid rgba(22, 63, 135, 0.25);
   border-color: var(--accent);
+}
+
+.coleta-report-panel {
+  border: 1px solid #d4deef;
+  border-radius: 14px;
+  background: #f9fbff;
+  padding: 10px;
+  display: grid;
+  gap: 9px;
+}
+
+.coleta-report-head h3 {
+  margin: 0;
+  color: #12305e;
+  font-family: "Sora", sans-serif;
+  font-size: 0.95rem;
+}
+
+.coleta-report-head p {
+  margin: 3px 0 0;
+  color: #4b5e81;
+  font-size: 0.8rem;
+}
+
+.coleta-report-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.coleta-report-grid label {
+  font-size: 0.8rem;
+}
+
+.coleta-report-grid input,
+.coleta-report-grid select {
+  height: 40px;
+  font-size: 0.92rem;
+}
+
+.coleta-report-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.coleta-export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.coleta-export-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.coleta-report-count {
+  margin: 0;
+  color: #2c436f;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .coleta-submit {
@@ -1387,6 +1472,20 @@ small {
 
   .coleta-row-edit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .coleta-report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .coleta-report-actions .btn {
+    width: 100%;
+  }
+}
+
+@media (min-width: 980px) {
+  .coleta-report-toggle {
+    display: inline-flex;
   }
 }
 
