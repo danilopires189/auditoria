@@ -1668,6 +1668,13 @@ small {
   flex-wrap: wrap;
 }
 
+.termo-actions-row .termo-pending-pill {
+  border-color: #b8cbea;
+  background: #edf3fd;
+  color: #1b3f74;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
 .termo-actions-row .btn {
   padding: 9px 11px;
   font-size: 0.88rem;

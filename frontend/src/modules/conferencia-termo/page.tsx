@@ -77,7 +77,13 @@ interface TermoRouteGroup {
   etiquetas_conferidas: number;
   status: TermoRouteStatus;
   filiais: TermoRouteOverviewRow[];
+  route_blob: string;
   search_blob: string;
+}
+
+interface TermoRouteGroupView extends TermoRouteGroup {
+  visible_filiais: TermoRouteOverviewRow[];
+  force_open: boolean;
 }
 
 type DialogState = {
@@ -378,6 +384,33 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
+function buildRouteSearchBlob(group: {
+  rota: string;
+  status: TermoRouteStatus;
+  lojas_conferidas: number;
+  lojas_total: number;
+  etiquetas_conferidas: number;
+  etiquetas_total: number;
+}): string {
+  return normalizeSearchText([
+    group.rota,
+    routeStatusLabel(group.status),
+    `${group.lojas_conferidas}/${group.lojas_total}`,
+    `${group.etiquetas_conferidas}/${group.etiquetas_total}`
+  ].join(" "));
+}
+
+function buildStoreSearchBlob(item: TermoRouteOverviewRow): string {
+  return normalizeSearchText([
+    item.filial_nome ?? "",
+    item.filial != null ? String(item.filial) : "",
+    `${item.conferidas}/${item.total_etiquetas}`,
+    routeStatusLabel(item.status),
+    item.colaborador_nome ?? "",
+    item.colaborador_mat ?? ""
+  ].join(" "));
+}
+
 function normalizeStoreStatus(value: string | null | undefined): TermoStoreStatus {
   const normalized = String(value ?? "").toLowerCase();
   if (normalized === "concluido" || normalized === "conferido") return "concluido";
@@ -526,7 +559,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const routeGroups = useMemo<TermoRouteGroup[]>(() => {
     if (routeRows.length === 0) return [];
 
-    const grouped = new Map<string, Omit<TermoRouteGroup, "search_blob">>();
+    const grouped = new Map<string, Omit<TermoRouteGroup, "search_blob" | "route_blob">>();
 
     for (const row of routeRows) {
       const rota = (row.rota || "SEM ROTA").trim() || "SEM ROTA";
@@ -561,35 +594,55 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           return (a.filial_nome ?? "").localeCompare(b.filial_nome ?? "", "pt-BR");
         });
 
+        const routeStatus = resolveRouteGroupStatus(filiaisOrdenadas);
+        const routeBlob = buildRouteSearchBlob({
+          rota: group.rota,
+          status: routeStatus,
+          lojas_conferidas: group.lojas_conferidas,
+          lojas_total: group.lojas_total,
+          etiquetas_conferidas: group.etiquetas_conferidas,
+          etiquetas_total: group.etiquetas_total
+        });
+
         const searchBlob = normalizeSearchText([
-          group.rota,
-          routeStatusLabel(resolveRouteGroupStatus(filiaisOrdenadas)),
-          `${group.lojas_conferidas}/${group.lojas_total}`,
-          `${group.etiquetas_conferidas}/${group.etiquetas_total}`,
-          ...filiaisOrdenadas.map((item) => [
-            item.filial_nome ?? "",
-            item.filial != null ? String(item.filial) : "",
-            `${item.conferidas}/${item.total_etiquetas}`,
-            routeStatusLabel(item.status),
-            item.colaborador_nome ?? "",
-            item.colaborador_mat ?? ""
-          ].join(" "))
+          routeBlob,
+          ...filiaisOrdenadas.map((item) => buildStoreSearchBlob(item))
         ].join(" "));
 
         return {
           ...group,
-          status: resolveRouteGroupStatus(filiaisOrdenadas),
+          status: routeStatus,
           filiais: filiaisOrdenadas,
+          route_blob: routeBlob,
           search_blob: searchBlob
         };
       })
       .sort((a, b) => a.rota.localeCompare(b.rota, "pt-BR"));
   }, [routeRows]);
 
-  const filteredRouteGroups = useMemo(() => {
+  const filteredRouteGroups = useMemo<TermoRouteGroupView[]>(() => {
     const query = normalizeSearchText(routeSearchInput);
-    if (!query) return routeGroups;
-    return routeGroups.filter((group) => group.search_blob.includes(query));
+    if (!query) {
+      return routeGroups.map((group) => ({
+        ...group,
+        visible_filiais: group.filiais,
+        force_open: false
+      }));
+    }
+
+    const mapped: Array<TermoRouteGroupView | null> = routeGroups.map((group) => {
+      const routeMatches = group.route_blob.includes(query);
+      const matchedFiliais = group.filiais.filter((item) => buildStoreSearchBlob(item).includes(query));
+      if (!routeMatches && matchedFiliais.length === 0) return null;
+
+      return {
+        ...group,
+        visible_filiais: routeMatches ? group.filiais : matchedFiliais,
+        force_open: true
+      };
+    });
+
+    return mapped.filter((group): group is TermoRouteGroupView => group !== null);
   }, [routeGroups, routeSearchInput]);
 
   const focusBarras = useCallback(() => {
@@ -1904,7 +1957,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         </div>
 
         <div className="termo-actions-row">
-          <span className="coleta-pending-pill">
+          <span className="coleta-pending-pill termo-pending-pill">
             Pendentes: {pendingCount}
             {pendingErrors > 0 ? ` | Erros: ${pendingErrors}` : ""}
           </span>
@@ -2307,22 +2360,26 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                   <div className="termo-routes-list">
                     {filteredRouteGroups.map((group, index) => {
                       const routeKey = `${group.rota}::${index}`;
-                      const isOpen = expandedRoute === routeKey;
+                      const isOpen = group.force_open || expandedRoute === routeKey;
                       const groupStatus = group.status;
+                      const canToggle = !group.force_open;
                       const toggleRoute = () => {
+                        if (!canToggle) return;
                         setExpandedRoute((current) => current === routeKey ? null : routeKey);
                       };
                       return (
                         <div key={routeKey} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
                           <div
                             role="button"
-                            tabIndex={0}
+                            tabIndex={canToggle ? 0 : -1}
                             className="termo-route-row-button"
                             onPointerUp={(event) => {
+                              if (!canToggle) return;
                               event.stopPropagation();
                               toggleRoute();
                             }}
                             onKeyDown={(event) => {
+                              if (!canToggle) return;
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
                                 toggleRoute();
@@ -2344,12 +2401,14 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                               <span className={`termo-divergencia ${routeStatusClass(groupStatus)}`}>
                                 {routeStatusLabel(groupStatus)}
                               </span>
-                              <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
+                              {canToggle ? (
+                                <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
+                              ) : null}
                             </span>
                           </div>
                           {isOpen ? (
                             <div className="termo-route-stores">
-                              {group.filiais.map((row) => {
+                              {group.visible_filiais.map((row) => {
                                 const lojaStatus = normalizeStoreStatus(row.status);
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
                                 const colaboradorMat = row.colaborador_mat?.trim() || "";
