@@ -1187,6 +1187,29 @@ small {
   gap: 6px;
 }
 
+.coleta-report-toggle .coleta-report-toggle-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #dfe8f7;
+  color: #476387;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.coleta-report-toggle.is-active {
+  border-color: #6a8ec4;
+  background: #dce8fb;
+  color: #1f3f73;
+}
+
+.coleta-report-toggle.is-active .coleta-report-toggle-icon {
+  background: #3169bf;
+  color: #ffffff;
+}
+
 .coleta-report-toggle svg {
   width: 15px;
   height: 15px;
