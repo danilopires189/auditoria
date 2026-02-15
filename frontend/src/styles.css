@@ -1944,6 +1944,13 @@ small {
   border-radius: 12px;
   background: #fff;
   overflow: visible;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.termo-route-group.is-open {
+  border-color: #7ea4df;
+  box-shadow: 0 0 0 2px rgba(56, 104, 187, 0.2);
+  background: #f8fbff;
 }
 
 .termo-route-row-button {
@@ -1975,7 +1982,8 @@ small {
 }
 
 .termo-route-row-button[aria-expanded="true"] {
-  background: #f8fbff;
+  background: #f3f8ff;
+  border-color: #7ea4df;
 }
 
 .termo-route-main {
