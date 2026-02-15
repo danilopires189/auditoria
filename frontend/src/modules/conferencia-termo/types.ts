@@ -58,6 +58,7 @@ export interface TermoItemRow {
   item_id: string;
   conf_id: string;
   coddv: number;
+  barras: string | null;
   descricao: string;
   qtd_esperada: number;
   qtd_conferida: number;
@@ -90,6 +91,7 @@ export interface TermoVolumeRow {
 
 export interface TermoLocalItem {
   coddv: number;
+  barras: string | null;
   descricao: string;
   qtd_esperada: number;
   qtd_conferida: number;
