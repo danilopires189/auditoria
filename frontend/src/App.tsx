@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import logoImage from "../assets/logo.png";
@@ -1123,33 +1124,36 @@ export default function App() {
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Routes>
 
-        {showLogoutConfirm ? (
-          <div
-            className="confirm-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="logout-confirm-title"
-            onClick={closeLogoutConfirm}
-          >
-            <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-              <h3 id="logout-confirm-title">Encerrar sessão</h3>
-              <p>Deseja realmente sair da sua conta neste dispositivo?</p>
-              <div className="confirm-actions">
-                <button
-                  className="btn btn-muted"
-                  type="button"
-                  onClick={closeLogoutConfirm}
-                  disabled={logoutBusy}
-                >
-                  Cancelar
-                </button>
-                <button className="btn btn-danger" type="button" onClick={onLogout} disabled={logoutBusy}>
-                  {logoutBusy ? "Saindo..." : "Sair agora"}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        {showLogoutConfirm && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="confirm-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="logout-confirm-title"
+                onClick={closeLogoutConfirm}
+              >
+                <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <h3 id="logout-confirm-title">Encerrar sessão</h3>
+                  <p>Deseja realmente sair da sua conta neste dispositivo?</p>
+                  <div className="confirm-actions">
+                    <button
+                      className="btn btn-muted"
+                      type="button"
+                      onClick={closeLogoutConfirm}
+                      disabled={logoutBusy}
+                    >
+                      Cancelar
+                    </button>
+                    <button className="btn btn-danger" type="button" onClick={onLogout} disabled={logoutBusy}>
+                      {logoutBusy ? "Saindo..." : "Sair agora"}
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
       </div>
     );
   }

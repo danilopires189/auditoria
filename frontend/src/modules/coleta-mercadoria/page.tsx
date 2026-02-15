@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { IScannerControls } from "@zxing/browser";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -1157,7 +1158,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           <section className="coleta-report-panel">
             <div className="coleta-report-head">
               <h3>Relatório de Coletas (Admin)</h3>
-              <p>Busca por período com contagem antes da extração para reduzir egress.</p>
+              <p>Busca por período com contagem antes da extração.</p>
             </div>
 
             {reportError ? <div className="alert error">{reportError}</div> : null}
@@ -1508,28 +1509,31 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           </div>
         ) : null}
 
-        {deleteTarget ? (
-          <div
-            className="confirm-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="coleta-delete-title"
-            onClick={closeDeleteConfirm}
-          >
-            <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-              <h3 id="coleta-delete-title">Excluir item coletado</h3>
-              <p>Deseja excluir "{deleteTarget.descricao}" da coleta?</p>
-              <div className="confirm-actions">
-                <button className="btn btn-muted" type="button" onClick={closeDeleteConfirm}>
-                  Cancelar
-                </button>
-                <button className="btn btn-danger" type="button" onClick={() => void confirmDeleteRow()}>
-                  Excluir
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        {deleteTarget && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="confirm-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="coleta-delete-title"
+                onClick={closeDeleteConfirm}
+              >
+                <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <h3 id="coleta-delete-title">Excluir item coletado</h3>
+                  <p>Deseja excluir "{deleteTarget.descricao}" da coleta?</p>
+                  <div className="confirm-actions">
+                    <button className="btn btn-muted" type="button" onClick={closeDeleteConfirm}>
+                      Cancelar
+                    </button>
+                    <button className="btn btn-danger" type="button" onClick={() => void confirmDeleteRow()}>
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
       </section>
     </>
   );
