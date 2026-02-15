@@ -908,7 +908,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             {preferOfflineMode ? "Offline local" : "Online direto"}
           </button>
           <button type="button" className="btn btn-muted" onClick={() => void runDbBarrasRefresh(false)} disabled={!isOnline || busyRefresh}>
-            {busyRefresh ? "Atualizando base..." : "Atualizar DB_BARRAS"}
+            {busyRefresh ? "Atualizando base..." : "Atualizar base barras"}
           </button>
           <button type="button" className="btn btn-muted" onClick={() => void refreshSharedState()} disabled={!isOnline || currentCd == null}>
             Atualizar coletas do dia
@@ -1053,7 +1053,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
             {isGlobalAdmin ? (
               <label>
-                CD ativo
+                Depósito
                 <select
                   value={cdAtivo ?? ""}
                   onChange={(event) => setCdAtivo(Number.parseInt(event.target.value, 10))}
@@ -1067,16 +1067,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   ))}
                 </select>
               </label>
-            ) : (
-              <label>
-                CD ativo
-                <input
-                  type="text"
-                  value={cdCodeLabel(fixedCd)}
-                  disabled
-                />
-              </label>
-            )}
+            ) : null}
             <label>
               Ocorrência
               <select value={ocorrenciaInput} onChange={(event) => setOcorrenciaInput(event.target.value as "" | "Avariado" | "Vencido")}>
