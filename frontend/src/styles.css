@@ -1113,15 +1113,60 @@ small {
   margin-left: 0;
 }
 
-.coleta-pending-pill {
-  padding: 3px 8px;
+.sync-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(236, 244, 255, 0.55);
-  background: rgba(255, 255, 255, 0.16);
-  color: #f8fbff;
-  font-size: 0.74rem;
+  border: 1px solid #c5d5ea;
+  background: #eef4ff;
+  color: #1e3f71;
+  font-size: 0.76rem;
   font-weight: 700;
   white-space: nowrap;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
+.sync-pending-badge-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.sync-pending-badge-icon svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sync-pending-badge.is-clear {
+  border-color: #b8dfca;
+  background: #edf9f2;
+  color: #174f31;
+}
+
+.sync-pending-badge.is-pending {
+  border-color: #e6b3ba;
+  background: #fff0f2;
+  color: #7e1f2e;
+}
+
+.sync-pending-badge-icon.is-clear {
+  background: rgba(30, 154, 89, 0.16);
+  color: #1f9a5a;
+}
+
+.sync-pending-badge-icon.is-pending {
+  background: rgba(191, 47, 69, 0.15);
+  color: #bf2f45;
 }
 
 .coleta-shell {
@@ -1666,13 +1711,6 @@ small {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.termo-actions-row .termo-pending-pill {
-  border-color: #b8cbea;
-  background: #edf3fd;
-  color: #1b3f74;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 .termo-actions-row .btn {

@@ -11,6 +11,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   cleanupExpiredColetaRows,
@@ -1440,9 +1441,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           </Link>
 
           <div className="module-topbar-user-side">
-            <span className="coleta-pending-pill" title="Linhas pendentes de envio">
-              Pendentes: {pendingCount}
-            </span>
+            <PendingSyncBadge
+              pendingCount={pendingCount}
+              title="Linhas pendentes de envio"
+            />
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
               {isOnline ? "🟢 Online" : "🔴 Offline"}
             </span>

@@ -8,6 +8,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   buildTermoVolumeKey,
@@ -1957,10 +1958,11 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         </div>
 
         <div className="termo-actions-row">
-          <span className="coleta-pending-pill termo-pending-pill">
-            Pendentes: {pendingCount}
-            {pendingErrors > 0 ? ` | Erros: ${pendingErrors}` : ""}
-          </span>
+          <PendingSyncBadge
+            pendingCount={pendingCount}
+            errorCount={pendingErrors}
+            title="Conferências pendentes de envio"
+          />
 
           <button type="button" className="btn btn-muted termo-sync-btn" onClick={() => void runPendingSync()} disabled={busySync}>
             <span aria-hidden="true">{refreshIcon()}</span>

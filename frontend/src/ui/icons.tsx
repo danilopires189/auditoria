@@ -174,3 +174,13 @@ export function BackIcon() {
     </svg>
   );
 }
+
+export function SyncArrowUpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 16V7" />
+      <path d="M8.5 10.5L12 7l3.5 3.5" />
+      <path d="M5 20h14" />
+    </svg>
+  );
+}
