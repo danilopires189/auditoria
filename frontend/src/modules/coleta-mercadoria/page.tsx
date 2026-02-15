@@ -1013,6 +1013,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       const fileName = `relatorio-coletas-${reportDtIni}-${reportDtFim}-${suffix}.xlsx`;
 
       XLSX.writeFile(workbook, fileName, { compression: true });
+      setReportDtIni("");
+      setReportDtFim("");
+      setReportCount(null);
       setReportMessage(`Relatório gerado com sucesso (${rows.length} linhas).`);
     } catch (error) {
       setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório Excel.");
