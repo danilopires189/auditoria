@@ -97,6 +97,19 @@ function formatDateTime(value: string): string {
   }).format(parsed);
 }
 
+function hasRowChangeAfterCollect(row: ColetaRow): boolean {
+  const updatedAtMs = Date.parse(row.updated_at || "");
+  const baseMs = Date.parse(row.created_at || row.data_hr || "");
+
+  if (Number.isFinite(updatedAtMs) && Number.isFinite(baseMs)) {
+    return updatedAtMs - baseMs > 1000;
+  }
+
+  const updatedRaw = (row.updated_at || "").trim();
+  const createdRaw = (row.created_at || row.data_hr || "").trim();
+  return Boolean(updatedRaw && createdRaw && updatedRaw !== createdRaw);
+}
+
 function asStatusLabel(status: ColetaRow["sync_status"]): string {
   if (status === "pending_insert") return "Pendente envio";
   if (status === "pending_update") return "Pendente atualização";
@@ -1477,9 +1490,18 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
               type="button"
               className="btn btn-muted coleta-report-toggle"
               onClick={() => {
-                setShowReport((value) => !value);
+                setShowReport((value) => {
+                  const next = !value;
+                  if (next) {
+                    const today = todayIsoBrasilia();
+                    setReportDtIni(today);
+                    setReportDtFim(today);
+                  }
+                  return next;
+                });
                 setReportError(null);
                 setReportMessage(null);
+                setReportCount(null);
               }}
               title="Buscar coletas para relatório"
             >
@@ -1501,11 +1523,23 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             <div className="coleta-report-grid">
               <label>
                 Data inicial
-                <input type="date" value={reportDtIni} onChange={(event) => setReportDtIni(event.target.value)} required />
+                <input
+                  type="date"
+                  autoComplete="off"
+                  value={reportDtIni}
+                  onChange={(event) => setReportDtIni(event.target.value)}
+                  required
+                />
               </label>
               <label>
                 Data final
-                <input type="date" value={reportDtFim} onChange={(event) => setReportDtFim(event.target.value)} required />
+                <input
+                  type="date"
+                  autoComplete="off"
+                  value={reportDtFim}
+                  onChange={(event) => setReportDtFim(event.target.value)}
+                  required
+                />
               </label>
               {isGlobalAdmin ? (
                 <label>
@@ -1748,7 +1782,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                         <p>Barras: {row.barras} | CODDV: {row.coddv}</p>
                         <p>Qtd: {row.qtd}</p>
                         <p>Coletado em {formatDateTime(row.data_hr)}</p>
-                        <p>Última alteração em {formatDateTime(row.updated_at)}</p>
+                        {hasRowChangeAfterCollect(row) ? (
+                          <p>Última alteração em {formatDateTime(row.updated_at)}</p>
+                        ) : null}
                       </div>
 
                       <div className="coleta-row-line-right">
@@ -1900,51 +1936,54 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           )}
         </div>
 
-        {scannerOpen ? (
-          <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="scanner-title" onClick={closeCameraScanner}>
-            <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-              <div className="scanner-head">
-                <h3 id="scanner-title">Scanner de barras</h3>
-                <div className="scanner-head-actions">
-                  {!isDesktop ? (
-                    <button
-                      type="button"
-                      className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
-                      onClick={() => void toggleTorch()}
-                      aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
-                      title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
-                      disabled={!torchSupported}
-                    >
-                      <FlashIcon on={torchEnabled} />
-                      <span>{torchEnabled ? "Flash on" : "Flash"}</span>
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="scanner-close-btn"
-                    onClick={closeCameraScanner}
-                    aria-label="Fechar scanner"
-                    title="Fechar scanner"
-                  >
-                    <CloseIcon />
-                  </button>
+        {scannerOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="scanner-title" onClick={closeCameraScanner}>
+                <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <div className="scanner-head">
+                    <h3 id="scanner-title">Scanner de barras</h3>
+                    <div className="scanner-head-actions">
+                      {!isDesktop ? (
+                        <button
+                          type="button"
+                          className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
+                          onClick={() => void toggleTorch()}
+                          aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
+                          title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
+                          disabled={!torchSupported}
+                        >
+                          <FlashIcon on={torchEnabled} />
+                          <span>{torchEnabled ? "Flash on" : "Flash"}</span>
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="scanner-close-btn"
+                        onClick={closeCameraScanner}
+                        aria-label="Fechar scanner"
+                        title="Fechar scanner"
+                      >
+                        <CloseIcon />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="scanner-video-wrap">
+                    <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+                    <div className="scanner-frame" aria-hidden="true">
+                      <div className="scanner-frame-corner top-left" />
+                      <div className="scanner-frame-corner top-right" />
+                      <div className="scanner-frame-corner bottom-left" />
+                      <div className="scanner-frame-corner bottom-right" />
+                      <div className="scanner-frame-line" />
+                    </div>
+                  </div>
+                  <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
+                  {scannerError ? <div className="alert error">{scannerError}</div> : null}
                 </div>
-              </div>
-              <div className="scanner-video-wrap">
-                <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
-                <div className="scanner-frame" aria-hidden="true">
-                  <div className="scanner-frame-corner top-left" />
-                  <div className="scanner-frame-corner top-right" />
-                  <div className="scanner-frame-corner bottom-left" />
-                  <div className="scanner-frame-corner bottom-right" />
-                  <div className="scanner-frame-line" />
-                </div>
-              </div>
-              <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
-              {scannerError ? <div className="alert error">{scannerError}</div> : null}
-            </div>
-          </div>
-        ) : null}
+              </div>,
+              document.body
+            )
+          : null}
 
         {deleteTarget && typeof document !== "undefined"
           ? createPortal(
