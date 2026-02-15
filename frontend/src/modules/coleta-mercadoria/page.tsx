@@ -1203,7 +1203,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           <span className="module-icon" aria-hidden="true">
             <ModuleIcon name={MODULE_DEF.icon} />
           </span>
-          <span className="module-title">{MODULE_DEF.title}</span>
+          <div className="module-header-main">
+            <span className="module-title">{MODULE_DEF.title}</span>
+            <span className="module-available-pill">Disponível</span>
+          </div>
         </div>
       </header>
 
