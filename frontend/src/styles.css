@@ -807,8 +807,9 @@ small {
   inset: 0;
   z-index: 1300;
   display: grid;
-  place-items: center;
-  padding: 14px;
+  justify-items: center;
+  align-content: start;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 14px;
   background: rgba(7, 16, 30, 0.72);
   backdrop-filter: blur(2px);
 }
