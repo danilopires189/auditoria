@@ -14,14 +14,22 @@ import {
   upsertColetaRow
 } from "./storage";
 import {
+  countColetaReportRows,
   fetchCdOptions,
+  fetchColetaReportRows,
+  fetchTodaySharedColetaRows,
   formatValidade,
   normalizeBarcode,
   normalizeValidadeInput,
   refreshDbBarrasCache,
   syncPendingColetaRows
 } from "./sync";
-import type { CdOption, ColetaModuleProfile, ColetaRow } from "./types";
+import type {
+  CdOption,
+  ColetaModuleProfile,
+  ColetaReportFilters,
+  ColetaRow
+} from "./types";
 
 interface ColetaMercadoriaPageProps {
   isOnline: boolean;
@@ -41,7 +49,6 @@ function parseCdFromLabel(label: string | null): number | null {
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
   if (!compact) return "Usuário";
-
   return compact
     .toLocaleLowerCase("pt-BR")
     .split(" ")
@@ -76,6 +83,17 @@ function asStatusClass(status: ColetaRow["sync_status"]): string {
   return "pending";
 }
 
+function sortRows(rows: ColetaRow[]): ColetaRow[] {
+  return [...rows].sort((a, b) => {
+    const aTime = Date.parse(a.data_hr || a.updated_at || a.created_at || "");
+    const bTime = Date.parse(b.data_hr || b.updated_at || b.created_at || "");
+    if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+      return bTime - aTime;
+    }
+    return (b.updated_at || "").localeCompare(a.updated_at || "");
+  });
+}
+
 function safeUuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -104,6 +122,22 @@ function fixedCdFromProfile(profile: ColetaModuleProfile): number | null {
     return Math.trunc(profile.cd_default);
   }
   return parseCdFromLabel(profile.cd_nome);
+}
+
+function todayIsoBrasilia(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+}
+
+function toPendingLocalId(row: ColetaRow): string {
+  if (row.remote_id) {
+    return row.local_id.startsWith("pending:") ? row.local_id : `pending:${row.remote_id}`;
+  }
+  return row.local_id;
 }
 
 function BarcodeIcon() {
@@ -160,12 +194,33 @@ function TrashIcon() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-4-4" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
+    </svg>
+  );
+}
+
 export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercadoriaPageProps) {
   const barcodeRef = useRef<HTMLInputElement | null>(null);
   const syncInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
 
-  const [rows, setRows] = useState<ColetaRow[]>([]);
+  const [localRows, setLocalRows] = useState<ColetaRow[]>([]);
+  const [sharedTodayRows, setSharedTodayRows] = useState<ColetaRow[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [dbBarrasCount, setDbBarrasCount] = useState(0);
   const [dbBarrasLastSyncAt, setDbBarrasLastSyncAt] = useState<string | null>(null);
@@ -187,14 +242,66 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [preferencesReady, setPreferencesReady] = useState(false);
 
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 980px)").matches;
+  });
+  const [showReport, setShowReport] = useState(false);
+  const [reportDtIni, setReportDtIni] = useState(todayIsoBrasilia());
+  const [reportDtFim, setReportDtFim] = useState(todayIsoBrasilia());
+  const [reportCd, setReportCd] = useState<string>("");
+  const [reportCount, setReportCount] = useState<number | null>(null);
+  const [reportBusySearch, setReportBusySearch] = useState(false);
+  const [reportBusyExport, setReportBusyExport] = useState(false);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => roleIsGlobalAdmin(profile), [profile]);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
+  const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
 
-  const visibleRows = useMemo(
-    () => rows.filter((row) => row.sync_status !== "pending_delete"),
-    [rows]
-  );
+  const canSeeReportTools = isDesktop && profile.role === "admin";
+
+  const visibleRows = useMemo(() => {
+    if (currentCd == null) return [];
+
+    const localCurrent = localRows.filter((row) => row.cd === currentCd && row.sync_status !== "synced");
+    const pendingByRemoteId = new Map<string, ColetaRow>();
+    const pendingDeleteIds = new Set<string>();
+    const pendingNewRows: ColetaRow[] = [];
+
+    for (const row of localCurrent) {
+      if (row.remote_id) {
+        if (row.sync_status === "pending_delete") {
+          pendingDeleteIds.add(row.remote_id);
+        } else {
+          pendingByRemoteId.set(row.remote_id, row);
+        }
+      } else if (row.sync_status !== "pending_delete") {
+        pendingNewRows.push(row);
+      }
+    }
+
+    const remoteIds = new Set<string>();
+    const mergedRemote = sharedTodayRows
+      .filter((row) => row.cd === currentCd && row.remote_id)
+      .filter((row) => {
+        if (!row.remote_id) return true;
+        remoteIds.add(row.remote_id);
+        return !pendingDeleteIds.has(row.remote_id);
+      })
+      .map((row) => {
+        if (!row.remote_id) return row;
+        return pendingByRemoteId.get(row.remote_id) ?? row;
+      });
+
+    const pendingOrphans = localCurrent.filter(
+      (row) => row.remote_id && !remoteIds.has(row.remote_id) && row.sync_status !== "pending_delete"
+    );
+
+    return sortRows([...pendingNewRows, ...pendingOrphans, ...mergedRemote]);
+  }, [currentCd, localRows, sharedTodayRows]);
 
   const refreshLocalState = useCallback(async () => {
     const [nextRows, nextPending, nextMeta] = await Promise.all([
@@ -202,12 +309,21 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       countPendingRows(profile.user_id),
       getDbBarrasMeta()
     ]);
-
-    setRows(nextRows);
+    setLocalRows(nextRows);
     setPendingCount(nextPending);
     setDbBarrasCount(nextMeta.row_count);
     setDbBarrasLastSyncAt(nextMeta.last_sync_at);
   }, [profile.user_id]);
+
+  const refreshSharedState = useCallback(async () => {
+    if (!isOnline || currentCd == null) return;
+    try {
+      const rows = await fetchTodaySharedColetaRows(currentCd);
+      setSharedTodayRows(rows);
+    } catch {
+      // Keep existing shared rows when network call fails.
+    }
+  }, [currentCd, isOnline]);
 
   const focusBarcode = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -218,7 +334,6 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const runSync = useCallback(
     async (silent = false) => {
       if (!isOnline || syncInFlightRef.current) return;
-
       syncInFlightRef.current = true;
       setBusySync(true);
       if (!silent) {
@@ -229,6 +344,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       try {
         const result = await syncPendingColetaRows(profile.user_id);
         await refreshLocalState();
+        await refreshSharedState();
         if (!silent) {
           setStatusMessage(
             result.processed === 0
@@ -245,13 +361,12 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         setBusySync(false);
       }
     },
-    [isOnline, profile.user_id, refreshLocalState]
+    [isOnline, profile.user_id, refreshLocalState, refreshSharedState]
   );
 
   const runDbBarrasRefresh = useCallback(
     async (silent = false) => {
       if (!isOnline || refreshInFlightRef.current) return;
-
       refreshInFlightRef.current = true;
       setBusyRefresh(true);
       if (!silent) {
@@ -263,7 +378,6 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         const result = await refreshDbBarrasCache((pages, rowsFetched) => {
           setProgressMessage(`Atualizando base de barras... páginas ${pages} | linhas ${rowsFetched}`);
         });
-
         await refreshLocalState();
         if (!silent) {
           setStatusMessage(`Base de barras atualizada: ${result.rows} itens.`);
@@ -283,24 +397,16 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
   const applyRowUpdate = useCallback(
     async (row: ColetaRow, patch: Partial<ColetaRow>) => {
-      const nextStatus =
-        row.sync_status === "pending_insert"
-          ? "pending_insert"
-          : row.remote_id
-            ? "pending_update"
-            : "pending_insert";
-
       const nextRow: ColetaRow = {
         ...row,
         ...patch,
-        sync_status: nextStatus,
+        local_id: toPendingLocalId(row),
+        sync_status: row.remote_id ? "pending_update" : "pending_insert",
         sync_error: null,
         updated_at: new Date().toISOString()
       };
-
       await upsertColetaRow(nextRow);
       await refreshLocalState();
-
       if (isOnline) {
         void runSync(true);
       }
@@ -311,12 +417,14 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const deleteRow = useCallback(
     async (row: ColetaRow) => {
       if (row.remote_id) {
-        await upsertColetaRow({
+        const nextRow: ColetaRow = {
           ...row,
+          local_id: toPendingLocalId(row),
           sync_status: "pending_delete",
           sync_error: null,
           updated_at: new Date().toISOString()
-        });
+        };
+        await upsertColetaRow(nextRow);
       } else {
         await removeColetaRow(row.local_id);
       }
@@ -328,6 +436,130 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     },
     [isOnline, refreshLocalState, runSync]
   );
+  const runReportSearch = useCallback(async () => {
+    if (!canSeeReportTools) return;
+    setReportError(null);
+    setReportMessage(null);
+    setReportCount(null);
+
+    if (!reportDtIni || !reportDtFim) {
+      setReportError("Informe data inicial e final.");
+      return;
+    }
+
+    const dtIni = new Date(reportDtIni);
+    const dtFim = new Date(reportDtFim);
+    if (Number.isNaN(dtIni.getTime()) || Number.isNaN(dtFim.getTime())) {
+      setReportError("Período inválido.");
+      return;
+    }
+    if (dtFim < dtIni) {
+      setReportError("A data final não pode ser menor que a data inicial.");
+      return;
+    }
+
+    const parsedCd = reportCd ? Number.parseInt(reportCd, 10) : Number.NaN;
+    const filters: ColetaReportFilters = {
+      dtIni: reportDtIni,
+      dtFim: reportDtFim,
+      cd: Number.isFinite(parsedCd) ? parsedCd : null
+    };
+
+    setReportBusySearch(true);
+    try {
+      const count = await countColetaReportRows(filters);
+      setReportCount(count);
+      if (count > 0) {
+        setReportMessage(`Foram encontradas ${count} coletas no período.`);
+      } else {
+        setReportMessage("Nenhuma coleta encontrada no período informado.");
+      }
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Falha ao buscar coletas para relatório.");
+    } finally {
+      setReportBusySearch(false);
+    }
+  }, [canSeeReportTools, reportCd, reportDtFim, reportDtIni]);
+
+  const runReportExport = useCallback(async () => {
+    if (!canSeeReportTools || !reportCount || reportCount <= 0) return;
+    setReportError(null);
+    setReportBusyExport(true);
+
+    try {
+      const parsedCd = reportCd ? Number.parseInt(reportCd, 10) : Number.NaN;
+      const filters: ColetaReportFilters = {
+        dtIni: reportDtIni,
+        dtFim: reportDtFim,
+        cd: Number.isFinite(parsedCd) ? parsedCd : null
+      };
+
+      const rows = await fetchColetaReportRows(filters, 50000);
+      if (rows.length === 0) {
+        setReportMessage("Nenhuma coleta disponível para exportação.");
+        return;
+      }
+
+      const XLSX = await import("xlsx");
+      const exportRows = rows.map((row) => ({
+        "Data/Hora": formatDateTime(row.data_hr),
+        CD: row.cd,
+        Etiqueta: row.etiqueta ?? "",
+        Barras: row.barras,
+        CODDV: row.coddv,
+        Descricao: row.descricao,
+        Quantidade: row.qtd,
+        Ocorrencia: row.ocorrencia ?? "",
+        Lote: row.lote ?? "",
+        Validade: formatValidade(row.val_mmaa),
+        Matricula_Auditor: row.mat_aud,
+        Nome_Auditor: row.nome_aud
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      worksheet["!cols"] = [
+        { wch: 20 },
+        { wch: 8 },
+        { wch: 16 },
+        { wch: 20 },
+        { wch: 10 },
+        { wch: 48 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 16 },
+        { wch: 11 },
+        { wch: 18 },
+        { wch: 32 }
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Coletas");
+      const suffix = filters.cd == null ? "todos-cds" : `cd-${filters.cd}`;
+      const fileName = `relatorio-coletas-${reportDtIni}-${reportDtFim}-${suffix}.xlsx`;
+
+      XLSX.writeFile(workbook, fileName, { compression: true });
+      setReportMessage(`Relatório gerado com sucesso (${rows.length} linhas).`);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório Excel.");
+    } finally {
+      setReportBusyExport(false);
+    }
+  }, [canSeeReportTools, reportCd, reportCount, reportDtFim, reportDtIni]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(min-width: 980px)");
+    const onChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+
+    setIsDesktop(media.matches);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", onChange);
+      return () => media.removeEventListener("change", onChange);
+    }
+
+    media.addListener(onChange);
+    return () => media.removeListener(onChange);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -339,35 +571,31 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       setEtiquetaFixa(prefs.etiqueta_fixa || "");
       setMultiploInput(String(prefs.multiplo_padrao || 1));
 
-      const fallbackCd = fixedCd;
-      const initialCd = prefs.cd_ativo ?? fallbackCd;
+      const initialCd = prefs.cd_ativo ?? fixedCd;
       setCdAtivo(initialCd ?? null);
 
       await refreshLocalState();
       if (cancelled) return;
 
       setPreferencesReady(true);
-
       if (isOnline) {
         await runDbBarrasRefresh(true);
-        if (!cancelled) {
-          await runSync(true);
-        }
       }
-
+      await refreshSharedState();
+      if (isOnline) {
+        await runSync(true);
+      }
       focusBarcode();
     };
 
     void bootstrap();
-
     return () => {
       cancelled = true;
     };
-  }, [fixedCd, focusBarcode, isOnline, profile.user_id, refreshLocalState, runDbBarrasRefresh, runSync]);
+  }, [fixedCd, focusBarcode, isOnline, profile.user_id, refreshLocalState, refreshSharedState, runDbBarrasRefresh, runSync]);
 
   useEffect(() => {
     if (!preferencesReady) return;
-
     const payloadCd = isGlobalAdmin ? cdAtivo : fixedCd;
     void saveColetaPreferences(profile.user_id, {
       etiqueta_fixa: etiquetaFixa,
@@ -377,8 +605,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   }, [cdAtivo, etiquetaFixa, fixedCd, isGlobalAdmin, multiploInput, preferencesReady, profile.user_id]);
 
   useEffect(() => {
-    if (!isGlobalAdmin || !isOnline) return;
-
+    if (!isOnline) return;
     let cancelled = false;
 
     const loadOptions = async () => {
@@ -386,19 +613,15 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         const options = await fetchCdOptions();
         if (cancelled) return;
         setCdOptions(options);
-
-        if (options.length > 0 && (cdAtivo == null || !options.some((item) => item.cd === cdAtivo))) {
+        if (isGlobalAdmin && options.length > 0 && (cdAtivo == null || !options.some((item) => item.cd === cdAtivo))) {
           setCdAtivo(options[0].cd);
         }
       } catch {
-        if (!cancelled) {
-          setCdOptions([]);
-        }
+        if (!cancelled) setCdOptions([]);
       }
     };
 
     void loadOptions();
-
     return () => {
       cancelled = true;
     };
@@ -406,13 +629,23 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
   useEffect(() => {
     if (!isOnline) return;
+    void refreshSharedState();
+  }, [isOnline, refreshSharedState]);
+
+  useEffect(() => {
+    if (!isOnline) return;
     void runSync(true);
   }, [isOnline, runSync]);
 
   useEffect(() => {
+    if (!showReport) return;
+    const baseCd = isGlobalAdmin ? currentCd : fixedCd;
+    setReportCd(baseCd != null ? String(baseCd) : "");
+  }, [currentCd, fixedCd, isGlobalAdmin, showReport]);
+
+  useEffect(() => {
     focusBarcode();
   }, [focusBarcode]);
-
   const onCollect = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage(null);
@@ -424,21 +657,17 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       focusBarcode();
       return;
     }
-
     if (dbBarrasCount <= 0) {
       setErrorMessage("Base de barras indisponível. Conecte-se para carregar e tente novamente.");
       focusBarcode();
       return;
     }
-
-    const qtd = parseMultiplo(multiploInput);
-    const resolvedCd = isGlobalAdmin ? cdAtivo : fixedCd;
-
-    if (resolvedCd == null) {
+    if (currentCd == null) {
       setErrorMessage("CD não definido para a coleta atual.");
       return;
     }
 
+    const qtd = parseMultiplo(multiploInput);
     let valMmaa: string | null = null;
     try {
       valMmaa = normalizeValidadeInput(validadeInput);
@@ -455,13 +684,12 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     }
 
     const nowIso = new Date().toISOString();
-
     const row: ColetaRow = {
       local_id: safeUuid(),
       remote_id: null,
       user_id: profile.user_id,
       etiqueta: etiquetaFixa.trim() || null,
-      cd: resolvedCd,
+      cd: currentCd,
       barras: product.barras,
       coddv: product.coddv,
       descricao: product.descricao,
@@ -488,11 +716,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
     if (isOnline) {
       void runSync(true);
+      void refreshSharedState();
       setStatusMessage("Item coletado e enviado para sincronização.");
     } else {
       setStatusMessage("Item coletado em modo offline. Será enviado quando a conexão voltar.");
     }
-
     focusBarcode();
   };
 
@@ -528,9 +756,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       <section className="modules-shell coleta-shell">
         <div className="coleta-head">
           <h2>Olá, {displayUserName}</h2>
-          <p>
-            Scanner integrado ou digitação manual. Cada leitura gera 1 linha de coleta.
-          </p>
+          <p>Coletas do dia ficam visíveis para todos do mesmo depósito neste módulo.</p>
           <p className="coleta-meta-line">
             Base local: <strong>{dbBarrasCount}</strong> itens
             {dbBarrasLastSyncAt ? ` | Atualizada em ${formatDateTime(dbBarrasLastSyncAt)}` : " | Sem atualização ainda"}
@@ -551,11 +777,90 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           <button type="button" className="btn btn-muted" onClick={() => void runDbBarrasRefresh(false)} disabled={!isOnline || busyRefresh}>
             {busyRefresh ? "Atualizando base..." : "Atualizar DB_BARRAS"}
           </button>
+          <button type="button" className="btn btn-muted" onClick={() => void refreshSharedState()} disabled={!isOnline || currentCd == null}>
+            Atualizar coletas do dia
+          </button>
           <button type="button" className="btn btn-primary coleta-sync-btn" onClick={() => void runSync(false)} disabled={!isOnline || busySync}>
             <span aria-hidden="true"><UploadIcon /></span>
             {busySync ? "Sincronizando..." : "Sincronizar agora"}
           </button>
+          {canSeeReportTools ? (
+            <button
+              type="button"
+              className="btn btn-muted coleta-report-toggle"
+              onClick={() => {
+                setShowReport((value) => !value);
+                setReportError(null);
+                setReportMessage(null);
+              }}
+              title="Buscar coletas para relatório"
+            >
+              <span aria-hidden="true"><SearchIcon /></span>
+              Buscar coletas
+            </button>
+          ) : null}
         </div>
+        {showReport && canSeeReportTools ? (
+          <section className="coleta-report-panel">
+            <div className="coleta-report-head">
+              <h3>Relatório de Coletas (Admin)</h3>
+              <p>Busca por período com contagem antes da extração para reduzir egress.</p>
+            </div>
+
+            {reportError ? <div className="alert error">{reportError}</div> : null}
+            {reportMessage ? <div className="alert success">{reportMessage}</div> : null}
+
+            <div className="coleta-report-grid">
+              <label>
+                Data inicial
+                <input type="date" value={reportDtIni} onChange={(event) => setReportDtIni(event.target.value)} required />
+              </label>
+              <label>
+                Data final
+                <input type="date" value={reportDtFim} onChange={(event) => setReportDtFim(event.target.value)} required />
+              </label>
+              {isGlobalAdmin ? (
+                <label>
+                  CD
+                  <select value={reportCd} onChange={(event) => setReportCd(event.target.value)}>
+                    <option value="">Todos CDs permitidos</option>
+                    {cdOptions.map((option) => (
+                      <option key={option.cd} value={option.cd}>
+                        {option.cd_nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <label>
+                  CD
+                  <input
+                    type="text"
+                    value={fixedCd != null ? `CD ${String(fixedCd).padStart(2, "0")}` : "CD não definido"}
+                    disabled
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="coleta-report-actions">
+              <button type="button" className="btn btn-muted" onClick={() => void runReportSearch()} disabled={reportBusySearch}>
+                {reportBusySearch ? "Buscando..." : "Buscar no período"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary coleta-export-btn"
+                onClick={() => void runReportExport()}
+                disabled={reportBusyExport || (reportCount ?? 0) <= 0}
+              >
+                <span aria-hidden="true"><FileIcon /></span>
+                {reportBusyExport ? "Gerando Excel..." : "Gerar relatório Excel"}
+              </button>
+            </div>
+
+            {reportCount != null ? <p className="coleta-report-count">Registros encontrados: {reportCount}</p> : null}
+          </section>
+        ) : null}
 
         <form className="coleta-form" onSubmit={onCollect}>
           <div className="coleta-form-grid">
@@ -615,7 +920,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             {isGlobalAdmin ? (
               <label>
                 CD ativo
-                <select value={cdAtivo ?? ""} onChange={(event) => setCdAtivo(Number.parseInt(event.target.value, 10))} required>
+                <select
+                  value={cdAtivo ?? ""}
+                  onChange={(event) => setCdAtivo(Number.parseInt(event.target.value, 10))}
+                  required
+                >
                   <option value="" disabled>Selecione o CD</option>
                   {cdOptions.map((option) => (
                     <option key={option.cd} value={option.cd}>
@@ -627,13 +936,16 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             ) : (
               <label>
                 CD ativo
-                <input type="text" value={fixedCd != null ? `CD ${String(fixedCd).padStart(2, "0")}` : "CD não definido"} disabled />
+                <input
+                  type="text"
+                  value={fixedCd != null ? `CD ${String(fixedCd).padStart(2, "0")}` : "CD não definido"}
+                  disabled
+                />
               </label>
             )}
-
             <label>
               Ocorrência
-              <select value={ocorrenciaInput} onChange={(event) => setOcorrenciaInput(event.target.value as "" | "Avariado" | "Vencido") }>
+              <select value={ocorrenciaInput} onChange={(event) => setOcorrenciaInput(event.target.value as "" | "Avariado" | "Vencido")}>
                 <option value="">Sem ocorrência</option>
                 <option value="Avariado">Avariado</option>
                 <option value="Vencido">Vencido</option>
@@ -664,13 +976,13 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         </form>
 
         <div className="coleta-list-head">
-          <h3>Coletas registradas</h3>
+          <h3>Coletas do dia no depósito</h3>
           <span>{visibleRows.length} itens</span>
         </div>
 
         <div className="coleta-list">
           {visibleRows.length === 0 ? (
-            <div className="coleta-empty">Nenhuma coleta registrada ainda.</div>
+            <div className="coleta-empty">Nenhuma coleta disponível para hoje neste depósito.</div>
           ) : (
             visibleRows.map((row) => (
               <article key={row.local_id} className="coleta-row-card">

@@ -55,3 +55,28 @@ export interface CdOption {
   cd: number;
   cd_nome: string;
 }
+
+export interface ColetaReportFilters {
+  dtIni: string;
+  dtFim: string;
+  cd: number | null;
+}
+
+export interface ColetaReportRow {
+  id: string;
+  etiqueta: string | null;
+  cd: number;
+  barras: string;
+  coddv: number;
+  descricao: string;
+  qtd: number;
+  ocorrencia: ColetaOcorrencia;
+  lote: string | null;
+  val_mmaa: string | null;
+  mat_aud: string;
+  nome_aud: string;
+  user_id: string;
+  data_hr: string;
+  created_at: string;
+  updated_at: string;
+}
