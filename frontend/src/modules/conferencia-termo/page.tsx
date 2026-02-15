@@ -2331,6 +2331,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                                       {lojaStatus === "concluido" && colaboradorNome ? (
                                         <p>Concluído por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
                                       ) : null}
+                                      {lojaStatus === "em_andamento" && row.status_at ? (
+                                        <p>Iniciado em: {formatDateTime(row.status_at)}</p>
+                                      ) : null}
+                                      {lojaStatus === "concluido" && row.status_at ? (
+                                        <p>Concluído em: {formatDateTime(row.status_at)}</p>
+                                      ) : null}
                                     </div>
                                     <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
                                       {routeStatusLabel(lojaStatus)}

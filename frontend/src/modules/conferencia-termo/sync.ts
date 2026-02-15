@@ -98,7 +98,8 @@ function mapRouteOverview(raw: Record<string, unknown>): TermoRouteOverviewRow {
     pendentes: parseInteger(raw.pendentes),
     status,
     colaborador_nome: parseNullableString(raw.colaborador_nome),
-    colaborador_mat: parseNullableString(raw.colaborador_mat)
+    colaborador_mat: parseNullableString(raw.colaborador_mat),
+    status_at: parseNullableString(raw.status_at)
   };
 }
 
