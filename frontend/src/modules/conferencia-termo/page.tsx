@@ -1443,6 +1443,36 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     await syncRouteOverview();
   }, [syncRouteOverview]);
 
+  const markStorePendingAfterCancel = useCallback(async (volume: TermoLocalVolume) => {
+    if (volume.filial == null) return;
+    if (routeRows.length === 0) return;
+
+    const nextRows = routeRows.map((row) => {
+      if (row.filial !== volume.filial) return row;
+      const totalEtiquetas = Math.max(row.total_etiquetas, 0);
+      const adjustedConferidas =
+        totalEtiquetas > 0 && row.conferidas >= totalEtiquetas
+          ? Math.max(totalEtiquetas - 1, 0)
+          : Math.max(row.conferidas, 0);
+      const adjustedPendentes = Math.max(totalEtiquetas - adjustedConferidas, 0);
+
+      return {
+        ...row,
+        conferidas: adjustedConferidas,
+        pendentes: adjustedPendentes,
+        status: "pendente" as const,
+        colaborador_nome: null,
+        colaborador_mat: null,
+        status_at: null
+      };
+    });
+
+    setRouteRows(nextRows);
+    if (currentCd === volume.cd) {
+      await saveRouteOverviewLocal(profile.user_id, volume.cd, nextRows);
+    }
+  }, [currentCd, profile.user_id, routeRows]);
+
   useEffect(() => {
     const media = window.matchMedia("(min-width: 980px)");
     const onChange = () => setIsDesktop(media.matches);
@@ -1780,6 +1810,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             if (activeVolume.remote_conf_id && isOnline) {
               await cancelVolume(activeVolume.remote_conf_id);
               await removeLocalVolume(activeVolume.local_key);
+              await markStorePendingAfterCancel(activeVolume);
               await refreshPendingState();
               clearConferenceScreen();
               setStatusMessage("Conferência cancelada. Os dados foram descartados.");
@@ -1799,6 +1830,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                 updated_at: nowIso
               };
               await saveLocalVolume(nextVolume);
+              await markStorePendingAfterCancel(activeVolume);
               await refreshPendingState();
               clearConferenceScreen();
               setStatusMessage("Conferência cancelada localmente. A remoção no banco ocorrerá ao reconectar.");
@@ -1806,6 +1838,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             }
 
             await removeLocalVolume(activeVolume.local_key);
+            await markStorePendingAfterCancel(activeVolume);
             await refreshPendingState();
             clearConferenceScreen();
             setStatusMessage("Conferência cancelada. Os dados locais foram descartados.");
@@ -1825,6 +1858,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     clearConferenceScreen,
     closeDialog,
     isOnline,
+    markStorePendingAfterCancel,
     refreshPendingState,
     showDialog,
     syncRouteOverview,
