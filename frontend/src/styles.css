@@ -1369,10 +1369,65 @@ small {
   border-color: #bfcde4;
 }
 
+.coleta-row-swipe {
+  position: relative;
+  overflow: hidden;
+}
+
+.coleta-row-actions {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.coleta-row-action {
+  width: min(30vw, 112px);
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #f8fbff;
+  pointer-events: auto;
+}
+
+.coleta-row-action span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.coleta-row-action svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.coleta-row-action.edit {
+  justify-content: flex-start;
+  padding-left: 14px;
+  background: linear-gradient(135deg, #3f79c8, #2858a3);
+}
+
+.coleta-row-action.delete {
+  justify-content: flex-end;
+  padding-right: 14px;
+  background: linear-gradient(135deg, #d6505e, #b93b48);
+}
+
 .coleta-row-line {
   width: 100%;
   border: 0;
-  background: transparent;
+  background: #fff;
   padding: 10px;
   display: flex;
   align-items: center;
@@ -1380,6 +1435,16 @@ small {
   gap: 10px;
   text-align: left;
   cursor: pointer;
+}
+
+.coleta-row-line.is-swipeable {
+  touch-action: pan-y;
+  will-change: transform;
+  transition: transform 180ms ease;
+}
+
+.coleta-row-line.is-dragging {
+  transition: none;
 }
 
 .coleta-row-line-main {

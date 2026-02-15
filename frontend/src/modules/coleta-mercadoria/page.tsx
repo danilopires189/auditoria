@@ -4,7 +4,8 @@ import type {
   FocusEvent as ReactFocusEvent,
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
-  MouseEvent as ReactMouseEvent
+  MouseEvent as ReactMouseEvent,
+  TouchEvent as ReactTouchEvent
 } from "react";
 import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
@@ -49,6 +50,8 @@ interface ColetaMercadoriaPageProps {
 
 const MODULE_DEF = getModuleByKeyOrThrow("coleta-mercadoria");
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const SWIPE_ACTION_WIDTH = 104;
+const SWIPE_OPEN_THRESHOLD = 40;
 
 function cdCodeLabel(cd: number | null): string {
   if (cd == null) return "CD não definido";
@@ -263,6 +266,24 @@ function TrashIcon() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 21l3-0.5 11-11a2 2 0 0 0 0-2.8l-0.7-0.7a2 2 0 0 0-2.8 0l-11 11z" />
+      <path d="M13 6l5 5" />
+    </svg>
+  );
+}
+
+function XMarkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
 function ChevronIcon({ open }: { open: boolean }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -293,10 +314,18 @@ function FileIcon() {
 
 export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercadoriaPageProps) {
   const barcodeRef = useRef<HTMLInputElement | null>(null);
+  const quantityInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
+  const swipeTouchRowRef = useRef<string | null>(null);
+  const swipeStartXRef = useRef(0);
+  const swipeStartYRef = useRef(0);
+  const swipeStartOffsetRef = useRef(0);
+  const swipeCurrentOffsetRef = useRef(0);
+  const swipeDraggingRef = useRef(false);
+  const suppressRowClickRef = useRef<string | null>(null);
   const syncInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
   const collectInFlightRef = useRef(false);
@@ -339,6 +368,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [swipeOpen, setSwipeOpen] = useState<{ rowId: string; side: "edit" | "delete" } | null>(null);
+  const [swipeDrag, setSwipeDrag] = useState<{ rowId: string; offset: number } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ColetaRow | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
@@ -395,6 +426,13 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
     return sortRows([...pendingNewRows, ...pendingOrphans, ...mergedRemote]);
   }, [currentCd, localRows, sharedTodayRows]);
+
+  useEffect(() => {
+    if (!swipeOpen) return;
+    if (!visibleRows.some((row) => row.local_id === swipeOpen.rowId)) {
+      setSwipeOpen(null);
+    }
+  }, [swipeOpen, visibleRows]);
 
   const refreshLocalState = useCallback(async () => {
     const [nextRows, nextPending, nextMeta] = await Promise.all([
@@ -529,6 +567,109 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       setScannerError("Não foi possível alternar o flash.");
     }
   }, [resolveScannerTrack, torchEnabled]);
+
+  const getOpenedSwipeOffset = useCallback(
+    (rowId: string): number => {
+      if (!swipeOpen || swipeOpen.rowId !== rowId) return 0;
+      return swipeOpen.side === "edit" ? SWIPE_ACTION_WIDTH : -SWIPE_ACTION_WIDTH;
+    },
+    [swipeOpen]
+  );
+
+  const getRowSwipeOffset = useCallback(
+    (rowId: string): number => {
+      if (swipeDrag && swipeDrag.rowId === rowId) return swipeDrag.offset;
+      return getOpenedSwipeOffset(rowId);
+    },
+    [getOpenedSwipeOffset, swipeDrag]
+  );
+
+  const openQuickEdit = useCallback((row: ColetaRow) => {
+    setSwipeOpen(null);
+    setSwipeDrag(null);
+    setExpandedRowId(row.local_id);
+    window.setTimeout(() => {
+      const input = quantityInputRefs.current[row.local_id];
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 40);
+  }, []);
+
+  const onSwipeActionDelete = useCallback((row: ColetaRow) => {
+    setSwipeOpen(null);
+    setSwipeDrag(null);
+    setDeleteTarget(row);
+  }, []);
+
+  const onRowTouchStart = useCallback(
+    (event: ReactTouchEvent<HTMLButtonElement>, rowId: string, canManageRow: boolean) => {
+      if (!canManageRow) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      swipeTouchRowRef.current = rowId;
+      swipeStartXRef.current = touch.clientX;
+      swipeStartYRef.current = touch.clientY;
+      swipeStartOffsetRef.current = getRowSwipeOffset(rowId);
+      swipeCurrentOffsetRef.current = swipeStartOffsetRef.current;
+      swipeDraggingRef.current = false;
+      if (swipeOpen && swipeOpen.rowId !== rowId) {
+        setSwipeOpen(null);
+      }
+    },
+    [getRowSwipeOffset, swipeOpen]
+  );
+
+  const onRowTouchMove = useCallback(
+    (event: ReactTouchEvent<HTMLButtonElement>, rowId: string, canManageRow: boolean) => {
+      if (!canManageRow || swipeTouchRowRef.current !== rowId) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      const deltaX = touch.clientX - swipeStartXRef.current;
+      const deltaY = touch.clientY - swipeStartYRef.current;
+
+      if (!swipeDraggingRef.current) {
+        if (Math.abs(deltaX) < 8) return;
+        if (Math.abs(deltaX) <= Math.abs(deltaY)) {
+          swipeTouchRowRef.current = null;
+          return;
+        }
+        swipeDraggingRef.current = true;
+      }
+
+      event.preventDefault();
+      const rawOffset = swipeStartOffsetRef.current + deltaX;
+      const clamped = Math.max(-SWIPE_ACTION_WIDTH, Math.min(SWIPE_ACTION_WIDTH, rawOffset));
+      swipeCurrentOffsetRef.current = clamped;
+      setSwipeDrag({ rowId, offset: clamped });
+    },
+    []
+  );
+
+  const onRowTouchEnd = useCallback((rowId: string) => {
+    if (swipeTouchRowRef.current !== rowId) return;
+    const wasDragging = swipeDraggingRef.current;
+    const finalOffset = swipeCurrentOffsetRef.current;
+
+    swipeTouchRowRef.current = null;
+    swipeDraggingRef.current = false;
+    swipeStartOffsetRef.current = 0;
+    swipeCurrentOffsetRef.current = 0;
+    setSwipeDrag(null);
+
+    if (!wasDragging) return;
+    suppressRowClickRef.current = rowId;
+    if (finalOffset >= SWIPE_OPEN_THRESHOLD) {
+      setSwipeOpen({ rowId, side: "edit" });
+      return;
+    }
+    if (finalOffset <= -SWIPE_OPEN_THRESHOLD) {
+      setSwipeOpen({ rowId, side: "delete" });
+      return;
+    }
+    setSwipeOpen(null);
+  }, []);
 
   const runSync = useCallback(
     async (silent = false) => {
@@ -1480,28 +1621,69 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           ) : (
             visibleRows.map((row) => {
               const canManageRow = canManageColetaRow(profile, row);
+              const rowOffset = canManageRow ? getRowSwipeOffset(row.local_id) : 0;
+              const isDraggingRow = swipeDrag?.rowId === row.local_id;
               return (
                 <article key={row.local_id} className={`coleta-row-card${expandedRowId === row.local_id ? " is-expanded" : ""}`}>
-                  <button
-                    type="button"
-                    className="coleta-row-line"
-                    onClick={() => setExpandedRowId((current) => (current === row.local_id ? null : row.local_id))}
-                  >
-                    <div className="coleta-row-line-main">
-                      <strong>{row.descricao}</strong>
-                      <p>Barras: {row.barras} | CODDV: {row.coddv}</p>
-                      <p>Coletado em {formatDateTime(row.data_hr)}</p>
-                    </div>
+                  <div className="coleta-row-swipe">
+                    {canManageRow ? (
+                      <div className="coleta-row-actions" aria-hidden="true">
+                        <button
+                          type="button"
+                          className="coleta-row-action edit"
+                          onClick={() => openQuickEdit(row)}
+                          title="Editar quantidade"
+                          aria-label="Editar quantidade"
+                        >
+                          <span aria-hidden="true"><PencilIcon /></span>
+                          <span>Editar</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="coleta-row-action delete"
+                          onClick={() => onSwipeActionDelete(row)}
+                          title="Apagar item"
+                          aria-label="Apagar item"
+                        >
+                          <span aria-hidden="true"><XMarkIcon /></span>
+                          <span>Apagar</span>
+                        </button>
+                      </div>
+                    ) : null}
 
-                    <div className="coleta-row-line-right">
-                      <span className={`coleta-row-status ${asStatusClass(row.sync_status)}`} title={row.sync_error ?? undefined}>
-                        {asStatusLabel(row.sync_status)}
-                      </span>
-                      <span className="coleta-row-expand" aria-hidden="true">
-                        <ChevronIcon open={expandedRowId === row.local_id} />
-                      </span>
-                    </div>
-                  </button>
+                    <button
+                      type="button"
+                      className={`coleta-row-line${canManageRow ? " is-swipeable" : ""}${isDraggingRow ? " is-dragging" : ""}`}
+                      style={canManageRow ? { transform: `translateX(${rowOffset}px)` } : undefined}
+                      onTouchStart={(event) => onRowTouchStart(event, row.local_id, canManageRow)}
+                      onTouchMove={(event) => onRowTouchMove(event, row.local_id, canManageRow)}
+                      onTouchEnd={() => onRowTouchEnd(row.local_id)}
+                      onTouchCancel={() => onRowTouchEnd(row.local_id)}
+                      onClick={() => {
+                        if (suppressRowClickRef.current === row.local_id) {
+                          suppressRowClickRef.current = null;
+                          return;
+                        }
+                        setSwipeOpen(null);
+                        setExpandedRowId((current) => (current === row.local_id ? null : row.local_id));
+                      }}
+                    >
+                      <div className="coleta-row-line-main">
+                        <strong>{row.descricao}</strong>
+                        <p>Barras: {row.barras} | CODDV: {row.coddv}</p>
+                        <p>Coletado em {formatDateTime(row.data_hr)}</p>
+                      </div>
+
+                      <div className="coleta-row-line-right">
+                        <span className={`coleta-row-status ${asStatusClass(row.sync_status)}`} title={row.sync_error ?? undefined}>
+                          {asStatusLabel(row.sync_status)}
+                        </span>
+                        <span className="coleta-row-expand" aria-hidden="true">
+                          <ChevronIcon open={expandedRowId === row.local_id} />
+                        </span>
+                      </div>
+                    </button>
+                  </div>
 
                   {expandedRowId === row.local_id ? (
                     <div className="coleta-row-edit-card">
@@ -1509,10 +1691,22 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                         <label>
                           Qtd
                           <input
-                            type="number"
-                            min={1}
+                            ref={(element) => {
+                              quantityInputRefs.current[row.local_id] = element;
+                            }}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            autoComplete="off"
+                            enterKeyHint="done"
                             defaultValue={row.qtd}
                             disabled={!canManageRow}
+                            onFocus={(event) => {
+                              event.currentTarget.select();
+                            }}
+                            onClick={(event) => {
+                              event.currentTarget.select();
+                            }}
                             onBlur={(event) => {
                               const nextValue = parseMultiplo(event.target.value);
                               if (nextValue !== row.qtd) {
