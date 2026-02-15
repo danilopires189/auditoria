@@ -879,6 +879,246 @@ small {
   margin-left: 0;
 }
 
+.coleta-pending-pill {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(236, 244, 255, 0.55);
+  background: rgba(255, 255, 255, 0.16);
+  color: #f8fbff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.coleta-shell {
+  gap: 10px;
+}
+
+.coleta-head {
+  display: grid;
+  gap: 3px;
+}
+
+.coleta-head h2 {
+  margin: 0;
+  font-size: 1.01rem;
+  color: #12305e;
+}
+
+.coleta-head p {
+  margin: 0;
+  color: #445474;
+  font-size: 0.87rem;
+}
+
+.coleta-head .coleta-meta-line {
+  font-size: 0.8rem;
+}
+
+.coleta-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.coleta-actions-row .btn {
+  padding: 9px 11px;
+  font-size: 0.88rem;
+}
+
+.coleta-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.coleta-sync-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.coleta-form {
+  border: 1px solid #d3dcec;
+  border-radius: 14px;
+  background: #f9fbff;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.coleta-form-grid {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 1fr;
+}
+
+.coleta-form-grid label {
+  min-width: 0;
+}
+
+.coleta-form-grid select {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 0.98rem;
+  background: #fff;
+  color: var(--text);
+  height: 48px;
+}
+
+.coleta-form-grid select:focus {
+  outline: 2px solid rgba(22, 63, 135, 0.25);
+  border-color: var(--accent);
+}
+
+.coleta-submit {
+  width: 100%;
+}
+
+.coleta-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.coleta-list-head h3 {
+  margin: 0;
+  color: #12305e;
+  font-family: "Sora", sans-serif;
+  font-size: 0.96rem;
+}
+
+.coleta-list-head span {
+  color: #526386;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.coleta-list {
+  display: grid;
+  gap: 8px;
+}
+
+.coleta-empty {
+  border: 1px dashed #c8d5ea;
+  border-radius: 12px;
+  background: #f6f9ff;
+  color: #516488;
+  text-align: center;
+  padding: 14px 12px;
+  font-weight: 600;
+}
+
+.coleta-row-card {
+  border: 1px solid #d4deef;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.coleta-row-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.coleta-row-main strong {
+  font-size: 0.92rem;
+  color: #142d58;
+}
+
+.coleta-row-main p {
+  margin: 2px 0 0;
+  font-size: 0.79rem;
+  color: #4b5e81;
+}
+
+.coleta-row-status {
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.coleta-row-status.synced {
+  border-color: #8edab4;
+  background: #e8f8ef;
+  color: #116943;
+}
+
+.coleta-row-status.pending {
+  border-color: #d9c08a;
+  background: #fbf3df;
+  color: #8a6014;
+}
+
+.coleta-row-status.error {
+  border-color: #f0aaa5;
+  background: #fbe9e8;
+  color: #aa2f2a;
+}
+
+.coleta-row-edit-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.coleta-row-edit-grid label {
+  font-size: 0.77rem;
+}
+
+.coleta-row-edit-grid input,
+.coleta-row-edit-grid select {
+  height: 40px;
+  font-size: 0.92rem;
+}
+
+.coleta-row-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.coleta-row-footer span {
+  color: #4b5e80;
+  font-size: 0.78rem;
+}
+
+.coleta-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.coleta-delete-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .module-screen {
   display: grid;
   gap: 8px;
@@ -1139,6 +1379,14 @@ small {
   .module-screen-body-large {
     min-height: clamp(160px, 30vh, 220px);
     padding: 14px;
+  }
+
+  .coleta-actions-row .btn {
+    flex: 1 1 0;
+  }
+
+  .coleta-row-edit-grid {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -20,6 +20,7 @@ import RegistroEmbarquePage from "./modules/registro-embarque/page";
 import ZeradosPage from "./modules/zerados/page";
 import HomePage from "./pages/HomePage";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
+import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const ADMIN_EMAIL_CANDIDATES = [
@@ -1021,10 +1022,31 @@ export default function App() {
     }
   };
 
-  const displayContext = useMemo(() => {
+  const effectiveProfile = useMemo<ProfileContext | null>(() => {
     if (!session) return null;
     const fallback = fallbackProfileFromSession(session);
-    const merged = profile ?? fallback;
+    const merged = profile ? mergeProfileContext(profile, fallback) : fallback;
+    return {
+      ...merged,
+      user_id: session.user.id
+    };
+  }, [profile, session]);
+
+  const coletaProfile = useMemo<ColetaModuleProfile | null>(() => {
+    if (!session || !effectiveProfile) return null;
+    return {
+      user_id: effectiveProfile.user_id || session.user.id,
+      nome: effectiveProfile.nome || "Usuário",
+      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfile.role || "auditor",
+      cd_default: effectiveProfile.cd_default,
+      cd_nome: effectiveProfile.cd_nome
+    };
+  }, [effectiveProfile, session]);
+
+  const displayContext = useMemo(() => {
+    if (!session || !effectiveProfile) return null;
+    const merged = effectiveProfile;
     const role = merged.role || "auditor";
     const isGlobalAdmin = role === "admin" && merged.cd_default == null;
     const rawCd =
@@ -1038,7 +1060,7 @@ export default function App() {
       cdLabel: formatCdLabel(rawCd, merged.cd_default, isGlobalAdmin),
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
-  }, [profile, session]);
+  }, [effectiveProfile, session]);
   const isModuleRoute = useMemo(() => findModuleByPath(location.pathname) != null, [location.pathname]);
   if (loadingSession) {
     return (
@@ -1070,7 +1092,16 @@ export default function App() {
           />
           <Route path="/modulos/pvps-alocacao" element={<PvpsAlocacaoPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/atividade-extra" element={<AtividadeExtraPage isOnline={isOnline} userName={displayContext.nome} />} />
-          <Route path="/modulos/coleta-mercadoria" element={<ColetaMercadoriaPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/coleta-mercadoria"
+            element={
+              coletaProfile ? (
+                <ColetaMercadoriaPage isOnline={isOnline} profile={coletaProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="/modulos/conferencia-termo" element={<ConferenciaTermoPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/conferencia-volume-avulso" element={<ConferenciaVolumeAvulsoPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/conferencia-pedido-direto" element={<ConferenciaPedidoDiretoPage isOnline={isOnline} userName={displayContext.nome} />} />
