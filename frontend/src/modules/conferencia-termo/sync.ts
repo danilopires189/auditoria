@@ -285,6 +285,19 @@ export async function openVolume(idEtiqueta: string, cd: number): Promise<TermoV
 
 export async function fetchVolumeItems(confId: string): Promise<TermoItemRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data: v2Data, error: v2Error } = await supabase.rpc("rpc_conf_termo_get_items_v2", {
+    p_conf_id: confId
+  });
+  if (!v2Error) {
+    if (!Array.isArray(v2Data)) return [];
+    return v2Data.map((row) => mapItem(row as Record<string, unknown>));
+  }
+
+  const fallbackNeeded = /rpc_conf_termo_get_items_v2/i.test(toErrorMessage(v2Error));
+  if (!fallbackNeeded) {
+    throw new Error(toErrorMessage(v2Error));
+  }
+
   const { data, error } = await supabase.rpc("rpc_conf_termo_get_items", {
     p_conf_id: confId
   });
@@ -333,12 +346,18 @@ export async function resetItem(confId: string, coddv: number): Promise<TermoIte
 
 export async function syncSnapshot(
   confId: string,
-  items: Array<{ coddv: number; qtd_conferida: number }>
+  items: Array<{ coddv: number; qtd_conferida: number; barras?: string | null }>
 ): Promise<void> {
   if (!supabase) throw new Error("Supabase não inicializado.");
+  const payload = items.map((item) => ({
+    coddv: item.coddv,
+    qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
+    barras: item.barras ? normalizeBarcode(item.barras) : null
+  }));
+
   const { error } = await supabase.rpc("rpc_conf_termo_sync_snapshot", {
     p_conf_id: confId,
-    p_items: items
+    p_items: payload
   });
   if (error) throw new Error(toErrorMessage(error));
 }
@@ -404,7 +423,8 @@ export async function syncPendingTermoVolumes(userId: string): Promise<{
           remoteConfId,
           row.items.map((item) => ({
             coddv: item.coddv,
-            qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida))
+            qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
+            barras: item.barras ?? null
           }))
         );
         row.pending_snapshot = false;

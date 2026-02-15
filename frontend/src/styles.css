@@ -1875,6 +1875,12 @@ small {
   color: #116943;
 }
 
+.termo-divergencia.andamento {
+  border-color: #e8cf9e;
+  background: #fff4dd;
+  color: #9a640f;
+}
+
 .termo-item-detail {
   border-top: 1px solid #e2e9f5;
   background: #fbfdff;
@@ -1946,14 +1952,20 @@ small {
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
-  min-height: 62px;
+  min-height: 0;
 }
 
 .termo-route-row-button {
   width: 100%;
+  display: flex;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 12px;
   background: #fff;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
   text-align: left;
   cursor: pointer;
   user-select: none;
@@ -1972,6 +1984,26 @@ small {
 .termo-route-row strong {
   color: #12305e;
   font-size: 0.9rem;
+}
+
+.termo-route-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.termo-route-title {
+  color: #12305e;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.termo-route-sub {
+  display: block;
+  color: #4b5e81;
+  font-size: 0.8rem;
+  line-height: 1.2;
 }
 
 .termo-route-row p {

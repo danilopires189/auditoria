@@ -63,13 +63,15 @@ interface ConferenciaTermoPageProps {
   profile: TermoModuleProfile;
 }
 
+type TermoRouteStatus = "conferido" | "em_conferencia" | "pendente";
+
 interface TermoRouteGroup {
   rota: string;
   lojas_total: number;
   lojas_conferidas: number;
   etiquetas_total: number;
   etiquetas_conferidas: number;
-  status: "conferido" | "pendente";
+  status: TermoRouteStatus;
   filiais: TermoRouteOverviewRow[];
   search_blob: string;
 }
@@ -356,6 +358,24 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
+function resolveRouteStatus(conferidas: number, total: number): TermoRouteStatus {
+  if (total > 0 && conferidas >= total) return "conferido";
+  if (conferidas > 0) return "em_conferencia";
+  return "pendente";
+}
+
+function routeStatusLabel(status: TermoRouteStatus): string {
+  if (status === "conferido") return "Conferido";
+  if (status === "em_conferencia") return "Em conferência";
+  return "Pendente";
+}
+
+function routeStatusClass(status: TermoRouteStatus): "correto" | "andamento" | "falta" {
+  if (status === "conferido") return "correto";
+  if (status === "em_conferencia") return "andamento";
+  return "falta";
+}
+
 function isBrowserDesktop(): boolean {
   if (typeof window === "undefined") return true;
   return window.matchMedia("(min-width: 980px)").matches;
@@ -368,10 +388,6 @@ function searchIcon() {
       <path d="M20 20l-3.7-3.7" />
     </svg>
   );
-}
-
-function isKeyboardActivate(event: ReactKeyboardEvent<HTMLElement>): boolean {
-  return event.key === "Enter" || event.key === " ";
 }
 
 export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaTermoPageProps) {
@@ -481,26 +497,27 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     for (const row of routeRows) {
       const rota = (row.rota || "SEM ROTA").trim() || "SEM ROTA";
+      const filialStatus = resolveRouteStatus(row.conferidas, row.total_etiquetas);
       const current = grouped.get(rota);
 
       if (!current) {
         grouped.set(rota, {
           rota,
           lojas_total: 1,
-          lojas_conferidas: row.status === "conferido" ? 1 : 0,
+          lojas_conferidas: filialStatus === "conferido" ? 1 : 0,
           etiquetas_total: row.total_etiquetas,
           etiquetas_conferidas: row.conferidas,
-          status: row.pendentes > 0 ? "pendente" : "conferido",
+          status: filialStatus,
           filiais: [row]
         });
         continue;
       }
 
       current.lojas_total += 1;
-      current.lojas_conferidas += row.status === "conferido" ? 1 : 0;
+      current.lojas_conferidas += filialStatus === "conferido" ? 1 : 0;
       current.etiquetas_total += row.total_etiquetas;
       current.etiquetas_conferidas += row.conferidas;
-      if (row.pendentes > 0) current.status = "pendente";
+      current.status = resolveRouteStatus(current.etiquetas_conferidas, current.etiquetas_total);
       current.filiais.push(row);
     }
 
@@ -514,13 +531,14 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
         const searchBlob = normalizeSearchText([
           group.rota,
+          routeStatusLabel(group.status),
           `${group.lojas_conferidas}/${group.lojas_total}`,
           `${group.etiquetas_conferidas}/${group.etiquetas_total}`,
           ...filiaisOrdenadas.map((item) => [
             item.filial_nome ?? "",
             item.filial != null ? String(item.filial) : "",
             `${item.conferidas}/${item.total_etiquetas}`,
-            item.status === "conferido" ? "conferido" : "pendente"
+            routeStatusLabel(resolveRouteStatus(item.conferidas, item.total_etiquetas))
           ].join(" "))
         ].join(" "));
 
@@ -985,14 +1003,14 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       } else {
         const updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd);
         produtoRegistrado = updated.descricao;
-        barrasRegistrada = barras;
+        barrasRegistrada = updated.barras ?? barras;
         registroRemoto = true;
         const nowIso = new Date().toISOString();
         const nextItems = activeVolume.items.map((item) => (
           item.coddv === updated.coddv
             ? {
                 ...item,
-                barras,
+                barras: updated.barras ?? barras,
                 qtd_conferida: updated.qtd_conferida,
                 qtd_esperada: updated.qtd_esperada,
                 updated_at: updated.updated_at
@@ -1066,6 +1084,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           item.coddv === updated.coddv
             ? {
                 ...item,
+                barras: updated.barras ?? item.barras ?? null,
                 qtd_conferida: updated.qtd_conferida,
                 qtd_esperada: updated.qtd_esperada,
                 updated_at: updated.updated_at
@@ -1123,6 +1142,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                 row.coddv === updated.coddv
                   ? {
                       ...row,
+                      barras: updated.barras ?? row.barras ?? null,
                       qtd_conferida: updated.qtd_conferida,
                       qtd_esperada: updated.qtd_esperada,
                       updated_at: updated.updated_at
@@ -1978,48 +1998,52 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                   <div className="termo-routes-list">
                     {filteredRouteGroups.map((group) => {
                       const isOpen = expandedRoute === group.rota;
+                      const groupStatus = group.status;
                       return (
                         <div key={group.rota} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
-                          <div
+                          <button
+                            type="button"
                             className="termo-route-row termo-route-row-button"
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => setExpandedRoute((current) => current === group.rota ? null : group.rota)}
-                            onKeyDown={(event) => {
-                              if (!isKeyboardActivate(event)) return;
-                              event.preventDefault();
+                            onClick={(event) => {
+                              event.stopPropagation();
                               setExpandedRoute((current) => current === group.rota ? null : group.rota);
                             }}
+                            aria-expanded={isOpen}
                           >
-                            <div>
-                              <strong>{group.rota}</strong>
-                              <p>
+                            <span className="termo-route-main">
+                              <span className="termo-route-title">{group.rota}</span>
+                              <span className="termo-route-sub">
                                 Lojas: {group.lojas_conferidas}/{group.lojas_total} conferidas
                                 {" | "}
                                 Etiquetas: {group.etiquetas_conferidas}/{group.etiquetas_total}
-                              </p>
-                            </div>
-                            <div className="termo-route-metrics">
+                              </span>
+                              <span className="termo-route-sub">Status da rota: {routeStatusLabel(groupStatus)}</span>
+                            </span>
+                            <span className="termo-route-metrics">
                               <span>{group.lojas_conferidas}/{group.lojas_total}</span>
-                              <span className={`termo-divergencia ${group.status === "conferido" ? "correto" : "falta"}`}>
-                                {group.status === "conferido" ? "Conferido" : "Pendente"}
+                              <span className={`termo-divergencia ${routeStatusClass(groupStatus)}`}>
+                                {routeStatusLabel(groupStatus)}
                               </span>
                               <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
-                            </div>
-                          </div>
+                            </span>
+                          </button>
                           {isOpen ? (
                             <div className="termo-route-stores">
-                              {group.filiais.map((row) => (
-                                <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
-                                  <div>
-                                    <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
-                                    <p>Etiquetas: {row.conferidas}/{row.total_etiquetas}</p>
+                              {group.filiais.map((row) => {
+                                const lojaStatus = resolveRouteStatus(row.conferidas, row.total_etiquetas);
+                                return (
+                                  <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
+                                    <div>
+                                      <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
+                                      <p>Etiquetas: {row.conferidas}/{row.total_etiquetas}</p>
+                                      <p>Status da loja: {routeStatusLabel(lojaStatus)}</p>
+                                    </div>
+                                    <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
+                                      {routeStatusLabel(lojaStatus)}
+                                    </span>
                                   </div>
-                                  <span className={`termo-divergencia ${row.status === "conferido" ? "correto" : "falta"}`}>
-                                    {row.status === "conferido" ? "Conferido" : "Pendente"}
-                                  </span>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           ) : null}
                         </div>
