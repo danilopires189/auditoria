@@ -324,6 +324,14 @@ function closeIcon() {
   );
 }
 
+function checkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 12.5l4.2 4.2L19 7" />
+    </svg>
+  );
+}
+
 function flashIcon(on: boolean) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1916,11 +1924,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       {busyCancel ? "Cancelando..." : "Cancelar"}
                     </button>
                     <button
-                      className="btn btn-primary"
+                      className="btn btn-primary termo-finalize-btn"
                       type="button"
                       onClick={requestFinalize}
                       disabled={busyCancel || busyFinalize}
                     >
+                      <span aria-hidden="true">{checkIcon()}</span>
                       Finalizar
                     </button>
                   </div>

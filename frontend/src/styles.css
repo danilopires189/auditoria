@@ -1794,14 +1794,22 @@ small {
   flex-wrap: wrap;
 }
 
-.termo-cancel-btn {
+.termo-cancel-btn,
+.termo-finalize-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   white-space: nowrap;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 1rem;
+  line-height: 1;
 }
 
-.termo-cancel-btn svg {
+.termo-cancel-btn svg,
+.termo-finalize-btn svg {
   width: 16px;
   height: 16px;
   fill: none;
