@@ -122,11 +122,26 @@ export async function replaceDbBarrasCache(rows: DbBarrasCacheRow[]): Promise<vo
 
   metaStore.put({
     key: META_DB_BARRAS_SYNC,
-    last_sync_at: new Date().toISOString(),
+    last_sync_at: maxUpdatedAt(rows) ?? new Date().toISOString(),
     row_count: rows.length
   });
 
   await transactionDone(transaction);
+}
+
+function maxUpdatedAt(rows: DbBarrasCacheRow[]): string | null {
+  let maxIso: string | null = null;
+  let maxTs = 0;
+  for (const row of rows) {
+    if (!row.updated_at) continue;
+    const parsed = Date.parse(row.updated_at);
+    if (!Number.isFinite(parsed)) continue;
+    if (parsed > maxTs) {
+      maxTs = parsed;
+      maxIso = row.updated_at;
+    }
+  }
+  return maxIso;
 }
 
 export async function getDbBarrasByBarcode(barras: string): Promise<DbBarrasCacheRow | null> {
@@ -147,6 +162,54 @@ export async function upsertDbBarrasCacheRow(row: DbBarrasCacheRow): Promise<voi
     coddv: row.coddv,
     descricao: row.descricao,
     updated_at: row.updated_at
+  });
+  await transactionDone(transaction);
+}
+
+export async function mergeDbBarrasCache(
+  rows: DbBarrasCacheRow[],
+  syncAt?: string | null
+): Promise<{ row_count: number; last_sync_at: string }> {
+  const db = await getDb();
+  const transaction = db.transaction([STORE_DB_BARRAS, STORE_META], "readwrite");
+  const barrasStore = transaction.objectStore(STORE_DB_BARRAS);
+  const metaStore = transaction.objectStore(STORE_META);
+
+  for (const row of rows) {
+    barrasStore.put({
+      barras: row.barras,
+      coddv: row.coddv,
+      descricao: row.descricao,
+      updated_at: row.updated_at
+    });
+  }
+
+  const count = await requestToPromise(barrasStore.count());
+  const effectiveSyncAt = syncAt ?? maxUpdatedAt(rows) ?? new Date().toISOString();
+
+  metaStore.put({
+    key: META_DB_BARRAS_SYNC,
+    last_sync_at: effectiveSyncAt,
+    row_count: normalizePositiveInteger((count as number | undefined) ?? 0, 0)
+  });
+
+  await transactionDone(transaction);
+  return {
+    row_count: normalizePositiveInteger((count as number | undefined) ?? 0, 0),
+    last_sync_at: effectiveSyncAt
+  };
+}
+
+export async function touchDbBarrasMeta(syncAt?: string | null): Promise<void> {
+  const db = await getDb();
+  const transaction = db.transaction([STORE_DB_BARRAS, STORE_META], "readwrite");
+  const barrasStore = transaction.objectStore(STORE_DB_BARRAS);
+  const metaStore = transaction.objectStore(STORE_META);
+  const count = await requestToPromise(barrasStore.count());
+  metaStore.put({
+    key: META_DB_BARRAS_SYNC,
+    last_sync_at: syncAt ?? new Date().toISOString(),
+    row_count: normalizePositiveInteger((count as number | undefined) ?? 0, 0)
   });
   await transactionDone(transaction);
 }
