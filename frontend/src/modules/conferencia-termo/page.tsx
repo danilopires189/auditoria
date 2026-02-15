@@ -1063,6 +1063,28 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
       return false;
     }
+    if (isOnline && activeVolume) {
+      try {
+        const remoteVolume = await openVolume(activeVolume.id_etiqueta, activeVolume.cd);
+        const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
+        const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+        await saveLocalVolume(localVolume);
+        setActiveVolume(localVolume);
+        setEtiquetaInput(localVolume.id_etiqueta);
+        await refreshPendingState();
+        setShowFinalizeModal(false);
+        setFinalizeError(null);
+        if (localVolume.is_read_only || localVolume.status !== "em_conferencia") {
+          setStatusMessage("Conferência atualizada: este volume já foi finalizado em outro dispositivo.");
+        } else {
+          setStatusMessage("Conferência retomada automaticamente neste dispositivo.");
+        }
+        setErrorMessage(null);
+        return true;
+      } catch {
+        // Se não conseguir retomar do servidor, segue fluxo de limpeza local abaixo.
+      }
+    }
     try {
       if (activeVolume?.local_key) {
         await removeLocalVolume(activeVolume.local_key);
@@ -1077,7 +1099,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     setStatusMessage(null);
     setErrorMessage(normalizeRpcErrorMessage(rawMessage));
     return true;
-  }, [activeVolume, clearConferenceScreen, refreshPendingState]);
+  }, [activeVolume, clearConferenceScreen, isOnline, profile, refreshPendingState]);
 
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
@@ -1900,7 +1922,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
-                  placeholder="Digite ou bip a etiqueta e pressione Enter"
+                  placeholder="Informe a etiqueta do volume"
                   required
                 />
                 <button
