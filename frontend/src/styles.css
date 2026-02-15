@@ -1925,14 +1925,38 @@ small {
   padding-right: 2px;
 }
 
-.termo-route-row {
+.termo-routes-search {
+  margin-bottom: 10px;
+}
+
+.termo-routes-search input {
+  font-size: 0.92rem;
+}
+
+.termo-route-group {
   border: 1px solid #d6dfed;
   border-radius: 12px;
   background: #fff;
+  overflow: hidden;
+}
+
+.termo-route-row {
   padding: 9px 10px;
   display: flex;
   justify-content: space-between;
   gap: 10px;
+}
+
+.termo-route-row-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.termo-route-row-button:hover {
+  background: #f8fbff;
 }
 
 .termo-route-row strong {
@@ -1957,6 +1981,36 @@ small {
   color: #2c436f;
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.termo-route-stores {
+  border-top: 1px solid #e2e9f4;
+  background: #fbfdff;
+  padding: 8px 9px;
+  display: grid;
+  gap: 7px;
+}
+
+.termo-route-store-row {
+  border: 1px solid #d6dfed;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.termo-route-store-row strong {
+  color: #12305e;
+  font-size: 0.86rem;
+}
+
+.termo-route-store-row p {
+  margin: 2px 0 0;
+  color: #4b5e81;
+  font-size: 0.78rem;
 }
 
 .termo-finalize-dialog label {
