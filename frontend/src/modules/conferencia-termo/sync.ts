@@ -219,13 +219,15 @@ export async function fetchRouteOverview(cd: number): Promise<TermoRouteOverview
 
 export async function fetchManifestBundle(
   cd: number,
-  onProgress?: (step: string, pages: number, rows: number) => void
+  onProgress?: (step: string, pages: number, rows: number) => void,
+  options?: { includeBarras?: boolean }
 ): Promise<{
   meta: TermoManifestMeta;
   items: TermoManifestItemRow[];
   barras: TermoManifestBarrasRow[];
   routes: TermoRouteOverviewRow[];
 }> {
+  const includeBarras = options?.includeBarras ?? true;
   const meta = await fetchManifestMeta(cd);
 
   let itemsOffset = 0;
@@ -242,18 +244,19 @@ export async function fetchManifestBundle(
     if (page.length < MANIFEST_ITEMS_PAGE_SIZE) break;
   }
 
-  let barrasOffset = 0;
-  let barrasPages = 0;
   const barras: TermoManifestBarrasRow[] = [];
-
-  while (true) {
-    const page = await fetchManifestBarrasPage(cd, barrasOffset, MANIFEST_BARRAS_PAGE_SIZE);
-    if (!page.length) break;
-    barras.push(...page);
-    barrasPages += 1;
-    barrasOffset += page.length;
-    onProgress?.("barras", barrasPages, barras.length);
-    if (page.length < MANIFEST_BARRAS_PAGE_SIZE) break;
+  if (includeBarras) {
+    let barrasOffset = 0;
+    let barrasPages = 0;
+    while (true) {
+      const page = await fetchManifestBarrasPage(cd, barrasOffset, MANIFEST_BARRAS_PAGE_SIZE);
+      if (!page.length) break;
+      barras.push(...page);
+      barrasPages += 1;
+      barrasOffset += page.length;
+      onProgress?.("barras", barrasPages, barras.length);
+      if (page.length < MANIFEST_BARRAS_PAGE_SIZE) break;
+    }
   }
 
   const routes = await fetchRouteOverview(cd);

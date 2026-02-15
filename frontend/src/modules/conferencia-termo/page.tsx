@@ -12,7 +12,6 @@ import { getModuleByKeyOrThrow } from "../registry";
 import {
   buildTermoVolumeKey,
   cleanupExpiredTermoVolumes,
-  findManifestBarras,
   getLocalVolume,
   getManifestItemsByEtiqueta,
   getManifestMetaLocal,
@@ -38,6 +37,15 @@ import {
   setItemQtd,
   syncPendingTermoVolumes
 } from "./sync";
+import {
+  getDbBarrasByBarcode,
+  getDbBarrasMeta,
+  upsertDbBarrasCacheRow
+} from "../coleta-mercadoria/storage";
+import {
+  fetchDbBarrasByBarcodeOnline,
+  refreshDbBarrasCacheSmart
+} from "../coleta-mercadoria/sync";
 import type {
   CdOption,
   TermoDivergenciaTipo,
@@ -53,6 +61,17 @@ import type {
 interface ConferenciaTermoPageProps {
   isOnline: boolean;
   profile: TermoModuleProfile;
+}
+
+interface TermoRouteGroup {
+  rota: string;
+  lojas_total: number;
+  lojas_conferidas: number;
+  etiquetas_total: number;
+  etiquetas_conferidas: number;
+  status: "conferido" | "pendente";
+  filiais: TermoRouteOverviewRow[];
+  search_blob: string;
 }
 
 type DialogState = {
@@ -327,9 +346,26 @@ function normalizeRpcErrorMessage(value: string): string {
   return value;
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
+}
+
 function isBrowserDesktop(): boolean {
   if (typeof window === "undefined") return true;
   return window.matchMedia("(min-width: 980px)").matches;
+}
+
+function searchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.7-3.7" />
+    </svg>
+  );
 }
 
 export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaTermoPageProps) {
@@ -370,6 +406,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const [torchEnabled, setTorchEnabled] = useState(false);
 
   const [showRoutesModal, setShowRoutesModal] = useState(false);
+  const [routeSearchInput, setRouteSearchInput] = useState("");
+  const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeMotivo, setFinalizeMotivo] = useState("");
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
@@ -429,6 +467,71 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       correto: groupedItems.correto.length
     };
   }, [activeVolume, groupedItems]);
+
+  const routeGroups = useMemo<TermoRouteGroup[]>(() => {
+    if (routeRows.length === 0) return [];
+
+    const grouped = new Map<string, Omit<TermoRouteGroup, "search_blob">>();
+
+    for (const row of routeRows) {
+      const rota = (row.rota || "SEM ROTA").trim() || "SEM ROTA";
+      const current = grouped.get(rota);
+
+      if (!current) {
+        grouped.set(rota, {
+          rota,
+          lojas_total: 1,
+          lojas_conferidas: row.status === "conferido" ? 1 : 0,
+          etiquetas_total: row.total_etiquetas,
+          etiquetas_conferidas: row.conferidas,
+          status: row.pendentes > 0 ? "pendente" : "conferido",
+          filiais: [row]
+        });
+        continue;
+      }
+
+      current.lojas_total += 1;
+      current.lojas_conferidas += row.status === "conferido" ? 1 : 0;
+      current.etiquetas_total += row.total_etiquetas;
+      current.etiquetas_conferidas += row.conferidas;
+      if (row.pendentes > 0) current.status = "pendente";
+      current.filiais.push(row);
+    }
+
+    return Array.from(grouped.values())
+      .map((group) => {
+        const filiaisOrdenadas = [...group.filiais].sort((a, b) => {
+          const byFilial = (a.filial ?? Number.MAX_SAFE_INTEGER) - (b.filial ?? Number.MAX_SAFE_INTEGER);
+          if (byFilial !== 0) return byFilial;
+          return (a.filial_nome ?? "").localeCompare(b.filial_nome ?? "", "pt-BR");
+        });
+
+        const searchBlob = normalizeSearchText([
+          group.rota,
+          `${group.lojas_conferidas}/${group.lojas_total}`,
+          `${group.etiquetas_conferidas}/${group.etiquetas_total}`,
+          ...filiaisOrdenadas.map((item) => [
+            item.filial_nome ?? "",
+            item.filial != null ? String(item.filial) : "",
+            `${item.conferidas}/${item.total_etiquetas}`,
+            item.status === "conferido" ? "conferido" : "pendente"
+          ].join(" "))
+        ].join(" "));
+
+        return {
+          ...group,
+          filiais: filiaisOrdenadas,
+          search_blob: searchBlob
+        };
+      })
+      .sort((a, b) => a.rota.localeCompare(b.rota, "pt-BR"));
+  }, [routeRows]);
+
+  const filteredRouteGroups = useMemo(() => {
+    const query = normalizeSearchText(routeSearchInput);
+    if (!query) return routeGroups;
+    return routeGroups.filter((group) => group.search_blob.includes(query));
+  }, [routeGroups, routeSearchInput]);
 
   const focusBarras = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -583,51 +686,65 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     setStatusMessage(null);
 
     try {
-      const localMeta = await getManifestMetaLocal(profile.user_id, currentCd);
+      const [localMeta, localBarrasMeta] = await Promise.all([
+        getManifestMetaLocal(profile.user_id, currentCd),
+        getDbBarrasMeta()
+      ]);
 
       if (!isOnline) {
         if (!localMeta || localMeta.row_count <= 0) {
           throw new Error("Sem base local do Termo. Conecte-se e sincronize antes de usar offline.");
         }
+        if (localBarrasMeta.row_count <= 0) {
+          throw new Error("Sem base local de barras. Conecte-se e ative o modo offline para sincronizar.");
+        }
         const localRoutes = await getRouteOverviewLocal(profile.user_id, currentCd);
         setRouteRows(localRoutes);
         setManifestReady(true);
-        setManifestInfo(`Base local pronta: ${localMeta.row_count} item(ns).`);
+        setManifestInfo(
+          `Base local pronta: Termo ${localMeta.row_count} item(ns) | Barras ${localBarrasMeta.row_count} item(ns).`
+        );
         return;
       }
 
       const remoteMeta = await fetchManifestMeta(currentCd);
       const sameHash = localMeta && localMeta.manifest_hash === remoteMeta.manifest_hash;
       const shouldDownload = forceRefresh || !sameHash || (localMeta?.row_count ?? 0) <= 0;
+      let termoRowCount = remoteMeta.row_count;
 
       if (shouldDownload) {
         const bundle = await fetchManifestBundle(currentCd, (step, page, rows) => {
           if (step === "items") {
             setProgressMessage(`Atualizando manifesto do Termo... itens página ${page} | linhas ${rows}`);
-          } else if (step === "barras") {
-            setProgressMessage(`Atualizando mapa de barras... página ${page} | linhas ${rows}`);
           } else {
             setProgressMessage(`Atualizando rotas/filiais... ${rows} rota(s).`);
           }
-        });
+        }, { includeBarras: false });
 
         await saveManifestSnapshot({
           user_id: profile.user_id,
           cd: currentCd,
           meta: bundle.meta,
           items: bundle.items,
-          barras: bundle.barras,
+          barras: [],
           routes: bundle.routes
         });
 
         setRouteRows(bundle.routes);
-        setManifestInfo(`Base offline atualizada: ${bundle.meta.row_count} item(ns) no CD ${currentCd}.`);
+        termoRowCount = bundle.meta.row_count;
       } else {
         const routes = await fetchRouteOverview(currentCd);
         await saveRouteOverviewLocal(profile.user_id, currentCd, routes);
         setRouteRows(routes);
-        setManifestInfo(`Base offline já está atualizada (${remoteMeta.row_count} item(ns)).`);
       }
+
+      const barrasSync = await refreshDbBarrasCacheSmart((pages, rows) => {
+        setProgressMessage(`Atualizando base de barras... página ${pages} | linhas ${rows}`);
+      });
+
+      setManifestInfo(
+        `Base offline pronta: Termo ${termoRowCount} item(ns) | Barras ${barrasSync.total} item(ns).`
+      );
 
       setManifestReady(true);
       setStatusMessage("Base do Termo pronta para trabalho offline.");
@@ -788,6 +905,26 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     await applyVolumeUpdate(nextVolume);
   }, [activeVolume, applyVolumeUpdate]);
 
+  const resolveBarcodeProduct = useCallback(async (barras: string) => {
+    const normalized = normalizeBarcode(barras);
+    if (!normalized) return null;
+
+    const local = await getDbBarrasByBarcode(normalized);
+    if (local) return local;
+
+    if (!isOnline) return null;
+
+    try {
+      const online = await fetchDbBarrasByBarcodeOnline(normalized);
+      if (online) {
+        await upsertDbBarrasCacheRow(online);
+      }
+      return online;
+    } catch {
+      return null;
+    }
+  }, [isOnline]);
+
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
       setErrorMessage("Abra um volume para iniciar a conferência.");
@@ -807,7 +944,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     try {
       if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
-        const lookup = await findManifestBarras(profile.user_id, activeVolume.cd, barras);
+        const lookup = await resolveBarcodeProduct(barras);
         if (!lookup) {
           showDialog({
             title: "Código não encontrado",
@@ -817,9 +954,10 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         }
         const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
         if (!target) {
+          const produtoNome = lookup.descricao?.trim() || `CODDV ${lookup.coddv}`;
           showDialog({
             title: "Produto fora do volume",
-            message: "O produto lido não faz parte do volume em conferência.",
+            message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
             confirmLabel: "OK"
           });
           return;
@@ -858,6 +996,16 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       focusBarras();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar leitura.";
+      if (message.includes("PRODUTO_FORA_DO_VOLUME")) {
+        const lookup = await resolveBarcodeProduct(barras);
+        const produtoNome = lookup?.descricao?.trim() || `Barras ${barras}`;
+        showDialog({
+          title: "Produto fora do volume",
+          message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
+          confirmLabel: "OK"
+        });
+        return;
+      }
       setErrorMessage(normalizeRpcErrorMessage(message));
     }
   }, [
@@ -869,7 +1017,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     multiploInput,
     persistPreferences,
     preferOfflineMode,
-    profile.user_id,
+    resolveBarcodeProduct,
     runPendingSync,
     showDialog,
     updateItemQtyLocal
@@ -928,11 +1076,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     if (!activeVolume || !canEditActiveVolume) return;
     const item = activeVolume.items.find((row) => row.coddv === coddv);
     if (!item) return;
+    if (item.qtd_conferida <= 0) return;
 
     showDialog({
-      title: "Zerar item conferido",
-      message: `Deseja zerar a quantidade conferida de "${item.descricao}"?`,
-      confirmLabel: "Zerar",
+      title: "Limpar conferência do item",
+      message: `O produto "${item.descricao}" está com quantidade ${item.qtd_conferida}. Ao confirmar, a quantidade será alterada para 0. Deseja continuar?`,
+      confirmLabel: "Limpar",
       cancelLabel: "Cancelar",
       onConfirm: () => {
         void (async () => {
@@ -966,7 +1115,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             setEditingCoddv(null);
             setEditQtdInput("0");
           } catch (error) {
-            const message = error instanceof Error ? error.message : "Falha ao zerar item.";
+            const message = error instanceof Error ? error.message : "Falha ao limpar item.";
             setErrorMessage(normalizeRpcErrorMessage(message));
           } finally {
             closeDialog();
@@ -1092,6 +1241,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   }, [currentCd, isOnline, profile.user_id]);
 
   const openRoutesModal = useCallback(async () => {
+    setRouteSearchInput("");
+    setExpandedRoute(null);
     setShowRoutesModal(true);
     await syncRouteOverview();
   }, [syncRouteOverview]);
@@ -1160,15 +1311,20 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     let cancelled = false;
     const loadLocalContext = async () => {
-      const [localMeta, localRoutes, volumes] = await Promise.all([
+      const [localMeta, localRoutes, volumes, barrasMeta] = await Promise.all([
         getManifestMetaLocal(profile.user_id, currentCd),
         getRouteOverviewLocal(profile.user_id, currentCd),
-        listUserLocalVolumes(profile.user_id)
+        listUserLocalVolumes(profile.user_id),
+        getDbBarrasMeta()
       ]);
       if (cancelled) return;
 
       setManifestReady(Boolean(localMeta && localMeta.row_count > 0));
-      setManifestInfo(localMeta ? `Base local: ${localMeta.row_count} item(ns).` : "Sem base local.");
+      setManifestInfo(
+        localMeta
+          ? `Base local: Termo ${localMeta.row_count} item(ns) | Barras ${barrasMeta.row_count} item(ns).`
+          : `Sem base local do Termo. Barras local: ${barrasMeta.row_count} item(ns).`
+      );
       setRouteRows(localRoutes);
 
       const today = todayIsoBrasilia();
@@ -1601,7 +1757,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingCoddv === item.coddv ? (
+                            {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
                               <>
                                 <input
                                   type="text"
@@ -1617,12 +1773,16 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                               </>
                             ) : (
                               <>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
-                                  Editar
-                                </button>
-                                <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
-                                  Apagar
-                                </button>
+                                {item.qtd_conferida > 0 ? (
+                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                    Editar
+                                  </button>
+                                ) : null}
+                                {item.qtd_conferida > 0 ? (
+                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
+                                    Limpar
+                                  </button>
+                                ) : null}
                               </>
                             )}
                           </div>
@@ -1658,7 +1818,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingCoddv === item.coddv ? (
+                            {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
                               <>
                                 <input
                                   type="text"
@@ -1674,12 +1834,16 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                               </>
                             ) : (
                               <>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
-                                  Editar
-                                </button>
-                                <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
-                                  Apagar
-                                </button>
+                                {item.qtd_conferida > 0 ? (
+                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                    Editar
+                                  </button>
+                                ) : null}
+                                {item.qtd_conferida > 0 ? (
+                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
+                                    Limpar
+                                  </button>
+                                ) : null}
                               </>
                             )}
                           </div>
@@ -1714,7 +1878,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingCoddv === item.coddv ? (
+                            {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
                               <>
                                 <input
                                   type="text"
@@ -1730,12 +1894,16 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                               </>
                             ) : (
                               <>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
-                                  Editar
-                                </button>
-                                <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
-                                  Apagar
-                                </button>
+                                {item.qtd_conferida > 0 ? (
+                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                    Editar
+                                  </button>
+                                ) : null}
+                                {item.qtd_conferida > 0 ? (
+                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
+                                    Limpar
+                                  </button>
+                                ) : null}
                               </>
                             )}
                           </div>
@@ -1759,24 +1927,62 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-rotas-title" onClick={() => setShowRoutesModal(false)}>
               <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="termo-rotas-title">Rota/Filial do dia</h3>
-                {routeRows.length === 0 ? (
+                <div className="input-icon-wrap termo-routes-search">
+                  <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
+                  <input
+                    type="text"
+                    value={routeSearchInput}
+                    onChange={(event) => setRouteSearchInput(event.target.value)}
+                    placeholder="Buscar rota, filial, loja, status..."
+                  />
+                </div>
+                {filteredRouteGroups.length === 0 ? (
                   <p>Sem dados de rota/filial disponíveis para este CD.</p>
                 ) : (
                   <div className="termo-routes-list">
-                    {routeRows.map((row) => (
-                      <div key={`${row.rota}-${row.filial ?? "na"}`} className="termo-route-row">
-                        <div>
-                          <strong>{row.rota}</strong>
-                          <p>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</p>
+                    {filteredRouteGroups.map((group) => {
+                      const isOpen = expandedRoute === group.rota;
+                      return (
+                        <div key={group.rota} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
+                          <button
+                            type="button"
+                            className="termo-route-row termo-route-row-button"
+                            onClick={() => setExpandedRoute((current) => current === group.rota ? null : group.rota)}
+                          >
+                            <div>
+                              <strong>{group.rota}</strong>
+                              <p>
+                                Lojas: {group.lojas_conferidas}/{group.lojas_total} conferidas
+                                {" | "}
+                                Etiquetas: {group.etiquetas_conferidas}/{group.etiquetas_total}
+                              </p>
+                            </div>
+                            <div className="termo-route-metrics">
+                              <span>{group.lojas_conferidas}/{group.lojas_total}</span>
+                              <span className={`termo-divergencia ${group.status === "conferido" ? "correto" : "falta"}`}>
+                                {group.status === "conferido" ? "Conferido" : "Pendente"}
+                              </span>
+                              <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
+                            </div>
+                          </button>
+                          {isOpen ? (
+                            <div className="termo-route-stores">
+                              {group.filiais.map((row) => (
+                                <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
+                                  <div>
+                                    <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
+                                    <p>Etiquetas: {row.conferidas}/{row.total_etiquetas}</p>
+                                  </div>
+                                  <span className={`termo-divergencia ${row.status === "conferido" ? "correto" : "falta"}`}>
+                                    {row.status === "conferido" ? "Conferido" : "Pendente"}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="termo-route-metrics">
-                          <span>{row.conferidas}/{row.total_etiquetas}</span>
-                          <span className={`termo-divergencia ${row.status === "conferido" ? "correto" : "falta"}`}>
-                            {row.status === "conferido" ? "Conferido" : "Pendente"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 <div className="confirm-actions">
