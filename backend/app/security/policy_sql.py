@@ -6,6 +6,7 @@ APP_TABLES_WITH_CD = [
     "db_usuario",
     "db_devolucao",
     "db_pedido_direto",
+    "db_rotas",
     "db_termo",
 ]
 
