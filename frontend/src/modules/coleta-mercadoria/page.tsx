@@ -183,6 +183,15 @@ function CloseIcon() {
   );
 }
 
+function FlashIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {on ? <path d="M7 2h10l-4 7h5l-9 13 2-9H6z" /> : <path d="M7 2h10l-4 7h5l-9 13 2-9H6z" />}
+      {!on ? <path d="M4 4l16 16" /> : null}
+    </svg>
+  );
+}
+
 function QuantityIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -320,6 +329,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [deleteTarget, setDeleteTarget] = useState<ColetaRow | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => roleIsGlobalAdmin(profile), [profile]);
@@ -403,6 +414,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const stopCameraScanner = useCallback(() => {
     const controls = scannerControlsRef.current;
     if (controls) {
+      if (controls.switchTorch && torchEnabled) {
+        void controls.switchTorch(false).catch(() => {
+          // Ignore torch shutdown failures on unsupported browsers.
+        });
+      }
       controls.stop();
       scannerControlsRef.current = null;
     }
@@ -414,7 +430,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
       videoEl.srcObject = null;
     }
-  }, []);
+  }, [torchEnabled]);
 
   const openCameraScanner = useCallback(() => {
     if (!cameraSupported) {
@@ -422,6 +438,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       return;
     }
     setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
     setScannerOpen(true);
   }, [cameraSupported]);
 
@@ -429,8 +447,26 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     stopCameraScanner();
     setScannerOpen(false);
     setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
     focusBarcode();
   }, [focusBarcode, stopCameraScanner]);
+
+  const toggleTorch = useCallback(async () => {
+    const controls = scannerControlsRef.current;
+    if (!controls?.switchTorch) {
+      setScannerError("Flash não disponível neste dispositivo.");
+      return;
+    }
+    try {
+      const next = !torchEnabled;
+      await controls.switchTorch(next);
+      setTorchEnabled(next);
+      setScannerError(null);
+    } catch {
+      setScannerError("Não foi possível alternar o flash.");
+    }
+  }, [torchEnabled]);
 
   const runSync = useCallback(
     async (silent = false) => {
@@ -954,6 +990,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
     let cancelled = false;
     setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
 
     const startScanner = async () => {
       try {
@@ -985,6 +1023,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
               setBarcodeInput(scanned);
               setScannerOpen(false);
               stopCameraScanner();
+              setTorchEnabled(false);
+              setTorchSupported(false);
               void handleCollect(scanned);
               return;
             }
@@ -1001,6 +1041,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           return;
         }
         scannerControlsRef.current = controls;
+        setTorchSupported(typeof controls.switchTorch === "function");
       } catch (error) {
         setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
       }
@@ -1428,18 +1469,38 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
               <div className="scanner-head">
                 <h3 id="scanner-title">Scanner de barras</h3>
-                <button
-                  type="button"
-                  className="scanner-close-btn"
-                  onClick={closeCameraScanner}
-                  aria-label="Fechar scanner"
-                  title="Fechar scanner"
-                >
-                  <CloseIcon />
-                </button>
+                <div className="scanner-head-actions">
+                  <button
+                    type="button"
+                    className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
+                    onClick={() => void toggleTorch()}
+                    aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
+                    title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
+                    disabled={!torchSupported}
+                  >
+                    <FlashIcon on={torchEnabled} />
+                    <span>{torchEnabled ? "Flash on" : "Flash"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="scanner-close-btn"
+                    onClick={closeCameraScanner}
+                    aria-label="Fechar scanner"
+                    title="Fechar scanner"
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
               </div>
               <div className="scanner-video-wrap">
                 <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+                <div className="scanner-frame" aria-hidden="true">
+                  <div className="scanner-frame-corner top-left" />
+                  <div className="scanner-frame-corner top-right" />
+                  <div className="scanner-frame-corner bottom-left" />
+                  <div className="scanner-frame-corner bottom-right" />
+                  <div className="scanner-frame-line" />
+                </div>
               </div>
               <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
               {scannerError ? <div className="alert error">{scannerError}</div> : null}
