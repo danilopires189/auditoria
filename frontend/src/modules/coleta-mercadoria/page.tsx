@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import type {
+  ChangeEvent as ReactChangeEvent,
+  FocusEvent as ReactFocusEvent,
+  FormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent
+} from "react";
 import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
@@ -285,6 +291,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const barcodeRef = useRef<HTMLInputElement | null>(null);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
+  const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
   const syncInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
   const collectInFlightRef = useRef(false);
@@ -412,16 +420,48 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     });
   }, []);
 
+  const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
+    const videoEl = scannerVideoRef.current;
+    if (videoEl?.srcObject instanceof MediaStream) {
+      const [track] = videoEl.srcObject.getVideoTracks();
+      return track ?? null;
+    }
+    return null;
+  }, []);
+
+  const supportsTrackTorch = useCallback((track: MediaStreamTrack | null): boolean => {
+    if (!track) return false;
+    const trackWithCaps = track as MediaStreamTrack & {
+      getCapabilities?: () => MediaTrackCapabilities;
+    };
+    if (typeof trackWithCaps.getCapabilities !== "function") return false;
+    const capabilities = trackWithCaps.getCapabilities();
+    return Boolean((capabilities as { torch?: boolean } | null)?.torch);
+  }, []);
+
   const stopCameraScanner = useCallback(() => {
     const controls = scannerControlsRef.current;
+    const activeTrack = scannerTrackRef.current ?? resolveScannerTrack();
     if (controls) {
-      if (controls.switchTorch && torchEnabled) {
+      if (controls.switchTorch && torchEnabled && scannerTorchModeRef.current === "controls") {
         void controls.switchTorch(false).catch(() => {
           // Ignore torch shutdown failures on unsupported browsers.
         });
       }
       controls.stop();
       scannerControlsRef.current = null;
+    }
+    if (activeTrack && torchEnabled && scannerTorchModeRef.current === "track") {
+      const trackWithConstraints = activeTrack as MediaStreamTrack & {
+        applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+      };
+      if (typeof trackWithConstraints.applyConstraints === "function") {
+        void trackWithConstraints
+          .applyConstraints({ advanced: [{ torch: false } as MediaTrackConstraintSet] })
+          .catch(() => {
+            // Ignore torch shutdown failures on unsupported browsers.
+          });
+      }
     }
 
     const videoEl = scannerVideoRef.current;
@@ -431,7 +471,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
       videoEl.srcObject = null;
     }
-  }, [torchEnabled]);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+  }, [resolveScannerTrack, torchEnabled]);
 
   const openCameraScanner = useCallback(() => {
     if (!cameraSupported) {
@@ -441,6 +483,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     setScannerError(null);
     setTorchEnabled(false);
     setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
     setScannerOpen(true);
   }, [cameraSupported]);
 
@@ -450,24 +494,37 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     setScannerError(null);
     setTorchEnabled(false);
     setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
     focusBarcode();
   }, [focusBarcode, stopCameraScanner]);
 
   const toggleTorch = useCallback(async () => {
     const controls = scannerControlsRef.current;
-    if (!controls?.switchTorch) {
+    const track = scannerTrackRef.current ?? resolveScannerTrack();
+    if (!controls?.switchTorch && scannerTorchModeRef.current !== "track") {
       setScannerError("Flash não disponível neste dispositivo.");
       return;
     }
     try {
       const next = !torchEnabled;
-      await controls.switchTorch(next);
+      if (scannerTorchModeRef.current === "controls" && controls?.switchTorch) {
+        await controls.switchTorch(next);
+      } else {
+        const trackWithConstraints = track as MediaStreamTrack & {
+          applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+        };
+        if (!trackWithConstraints || typeof trackWithConstraints.applyConstraints !== "function") {
+          throw new Error("Track sem suporte de constraints");
+        }
+        await trackWithConstraints.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      }
       setTorchEnabled(next);
       setScannerError(null);
     } catch {
       setScannerError("Não foi possível alternar o flash.");
     }
-  }, [torchEnabled]);
+  }, [resolveScannerTrack, torchEnabled]);
 
   const runSync = useCallback(
     async (silent = false) => {
@@ -986,13 +1043,40 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     void handleCollect();
   };
 
+  const onMultiploFocus = (event: ReactFocusEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    window.requestAnimationFrame(() => {
+      input.select();
+    });
+  };
+
+  const onMultiploClick = (event: ReactMouseEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    window.requestAnimationFrame(() => {
+      input.select();
+    });
+  };
+
+  const onMultiploChange = (event: ReactChangeEvent<HTMLInputElement>) => {
+    const digits = event.target.value.replace(/\D/g, "");
+    if (!digits) {
+      setMultiploInput("");
+      return;
+    }
+    const parsed = Number.parseInt(digits, 10);
+    setMultiploInput(Number.isFinite(parsed) ? String(Math.max(1, parsed)) : "1");
+  };
+
   useEffect(() => {
     if (!scannerOpen) return;
 
     let cancelled = false;
+    let torchProbeTimer: number | null = null;
+    let torchProbeAttempts = 0;
     setScannerError(null);
     setTorchEnabled(false);
     setTorchSupported(false);
+    scannerTorchModeRef.current = "none";
 
     const startScanner = async () => {
       try {
@@ -1042,7 +1126,32 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           return;
         }
         scannerControlsRef.current = controls;
-        setTorchSupported(typeof controls.switchTorch === "function");
+        const probeTorchAvailability = () => {
+          if (cancelled) return;
+          if (typeof controls.switchTorch === "function") {
+            scannerTorchModeRef.current = "controls";
+            setTorchSupported(true);
+            return;
+          }
+          const track = resolveScannerTrack();
+          if (track) {
+            scannerTrackRef.current = track;
+          }
+          if (supportsTrackTorch(track)) {
+            scannerTorchModeRef.current = "track";
+            setTorchSupported(true);
+            return;
+          }
+          if (torchProbeAttempts < 10) {
+            torchProbeAttempts += 1;
+            torchProbeTimer = window.setTimeout(probeTorchAvailability, 120);
+            return;
+          }
+          scannerTorchModeRef.current = "none";
+          setTorchSupported(false);
+        };
+
+        probeTorchAvailability();
       } catch (error) {
         setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
       }
@@ -1052,9 +1161,12 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
     return () => {
       cancelled = true;
+      if (torchProbeTimer != null) {
+        window.clearTimeout(torchProbeTimer);
+      }
       stopCameraScanner();
     };
-  }, [handleCollect, scannerOpen, stopCameraScanner]);
+  }, [handleCollect, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch]);
 
   return (
     <>
@@ -1258,11 +1370,20 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   <QuantityIcon />
                 </span>
                 <input
-                  type="number"
-                  min={1}
-                  step={1}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  enterKeyHint="done"
                   value={multiploInput}
-                  onChange={(event) => setMultiploInput(event.target.value)}
+                  onFocus={onMultiploFocus}
+                  onClick={onMultiploClick}
+                  onBlur={() => {
+                    if (!multiploInput) {
+                      setMultiploInput("1");
+                    }
+                  }}
+                  onChange={onMultiploChange}
                 />
               </div>
             </label>
@@ -1471,17 +1592,19 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
               <div className="scanner-head">
                 <h3 id="scanner-title">Scanner de barras</h3>
                 <div className="scanner-head-actions">
-                  <button
-                    type="button"
-                    className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
-                    onClick={() => void toggleTorch()}
-                    aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
-                    title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
-                    disabled={!torchSupported}
-                  >
-                    <FlashIcon on={torchEnabled} />
-                    <span>{torchEnabled ? "Flash on" : "Flash"}</span>
-                  </button>
+                  {!isDesktop ? (
+                    <button
+                      type="button"
+                      className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
+                      onClick={() => void toggleTorch()}
+                      aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
+                      title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
+                      disabled={!torchSupported}
+                    >
+                      <FlashIcon on={torchEnabled} />
+                      <span>{torchEnabled ? "Flash on" : "Flash"}</span>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="scanner-close-btn"
