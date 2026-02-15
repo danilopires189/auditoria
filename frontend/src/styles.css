@@ -1364,10 +1364,16 @@ small {
   border-radius: 12px;
   background: #ffffff;
   overflow: hidden;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .coleta-row-card.is-expanded {
-  border-color: #bfcde4;
+  border-color: #89a7d3;
+  box-shadow: 0 0 0 1px rgba(77, 116, 176, 0.38), 0 8px 20px rgba(18, 45, 87, 0.14);
+}
+
+.coleta-row-card.is-expanded .coleta-row-edit-card {
+  border-top-color: #b8cbe8;
 }
 
 .coleta-row-swipe {
