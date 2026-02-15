@@ -57,7 +57,10 @@ export default function HomePage({ displayContext, isOnline, onRequestLogout }: 
               <span className="module-icon" aria-hidden="true">
                 <ModuleIcon name={moduleDef.icon} />
               </span>
-              <span className="module-title">{moduleDef.title}</span>
+              <div className="module-header-main">
+                <span className="module-title">{moduleDef.title}</span>
+                <span className="module-available-pill">Disponível</span>
+              </div>
             </Link>
           ))}
         </div>
