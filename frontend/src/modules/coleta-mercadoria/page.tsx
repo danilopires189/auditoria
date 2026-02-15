@@ -1506,7 +1506,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           {canSeeReportTools ? (
             <button
               type="button"
-              className="btn btn-muted coleta-report-toggle"
+              className={`btn btn-muted coleta-report-toggle${showReport ? " is-active" : ""}`}
+              aria-pressed={showReport}
               onClick={() => {
                 setShowReport((value) => {
                   const next = !value;
@@ -1523,7 +1524,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
               }}
               title="Buscar coletas para relatório"
             >
-              <span aria-hidden="true"><SearchIcon /></span>
+              <span className="coleta-report-toggle-icon" aria-hidden="true"><SearchIcon /></span>
               Buscar coletas
             </button>
           ) : null}
