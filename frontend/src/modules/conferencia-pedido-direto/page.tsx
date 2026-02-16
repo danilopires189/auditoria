@@ -449,6 +449,34 @@ function buildStoreSearchBlob(item: PedidoDiretoRouteOverviewRow): string {
   ].join(" "));
 }
 
+function resolveIdVolFromPedidosSeq(value: string | null | undefined): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  for (const chunk of raw.split(",")) {
+    const token = chunk.trim();
+    if (!token) continue;
+
+    const slashMatch = /^(\d+)\s*\/\s*(\d+)$/.exec(token);
+    if (slashMatch) {
+      try {
+        const pedido = BigInt(slashMatch[1]);
+        const seq = BigInt(slashMatch[2]);
+        return `${pedido.toString()}${seq.toString()}`;
+      } catch {
+        // segue para outras tentativas
+      }
+    }
+
+    const digitsOnly = token.replace(/\D+/g, "");
+    if (!digitsOnly) continue;
+    const normalized = digitsOnly.replace(/^0+/, "");
+    return normalized || "0";
+  }
+
+  return null;
+}
+
 function normalizeStoreStatus(value: string | null | undefined): PedidoDiretoStoreStatus {
   const normalized = String(value ?? "").toLowerCase();
   if (normalized === "concluido" || normalized === "conferido") return "concluido";
@@ -2505,6 +2533,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                 const lojaStatus = normalizeStoreStatus(row.status);
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
                                 const colaboradorMat = row.colaborador_mat?.trim() || "";
+                                const idVolFromRoute = resolveIdVolFromPedidosSeq(row.pedidos_seq);
                                 return (
                                   <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
                                     <div>
@@ -2512,6 +2541,18 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                       <p>Volumes: {row.conferidas}/{row.total_etiquetas}</p>
                                       <p>Pedidos/Seq: {row.pedidos_seq ?? "-"}</p>
                                       <p>Status da loja: {routeStatusLabel(lojaStatus)}</p>
+                                      <button
+                                        className="btn btn-primary"
+                                        type="button"
+                                        onClick={() => {
+                                          if (!idVolFromRoute) return;
+                                          setShowRoutesModal(false);
+                                          void openVolumeFromEtiqueta(idVolFromRoute);
+                                        }}
+                                        disabled={!idVolFromRoute}
+                                      >
+                                        {lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
+                                      </button>
                                       {lojaStatus === "em_andamento" && colaboradorNome ? (
                                         <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
                                       ) : null}
