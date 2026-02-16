@@ -628,34 +628,9 @@ export async function setItemQtd(confId: string, coddv: number, qtdConferida: nu
   return mapItem(first);
 }
 
-export async function setItemQtdAvulsa(confId: string, coddv: number, qtdConferida: number): Promise<EntradaNotasItemRow> {
-  if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_set_item_qtd", {
-    p_conf_id: confId,
-    p_coddv: coddv,
-    p_qtd_conferida: Math.max(0, Math.trunc(qtdConferida))
-  });
-  if (error) throw new Error(toErrorMessage(error));
-  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-  if (!first) throw new Error("Falha ao salvar quantidade.");
-  return mapItem(first);
-}
-
 export async function resetItem(confId: string, coddv: number): Promise<EntradaNotasItemRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_reset_item", {
-    p_conf_id: confId,
-    p_coddv: coddv
-  });
-  if (error) throw new Error(toErrorMessage(error));
-  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-  if (!first) throw new Error("Falha ao zerar item.");
-  return mapItem(first);
-}
-
-export async function resetItemAvulsa(confId: string, coddv: number): Promise<EntradaNotasItemRow> {
-  if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_reset_item", {
     p_conf_id: confId,
     p_coddv: coddv
   });
@@ -677,24 +652,6 @@ export async function syncSnapshot(
   }));
 
   const { error } = await supabase.rpc("rpc_conf_entrada_notas_sync_snapshot", {
-    p_conf_id: confId,
-    p_items: payload
-  });
-  if (error) throw new Error(toErrorMessage(error));
-}
-
-export async function syncSnapshotAvulsa(
-  confId: string,
-  items: Array<{ coddv: number; qtd_conferida: number; barras?: string | null }>
-): Promise<void> {
-  if (!supabase) throw new Error("Supabase não inicializado.");
-  const payload = items.map((item) => ({
-    coddv: item.coddv,
-    qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
-    barras: item.barras ? normalizeBarcode(item.barras) : null
-  }));
-
-  const { error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_sync_snapshot", {
     p_conf_id: confId,
     p_items: payload
   });
