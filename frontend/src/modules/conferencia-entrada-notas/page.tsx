@@ -15,6 +15,7 @@ import {
   cleanupExpiredEntradaNotasVolumes,
   getLocalVolume,
   getManifestItemsByEtiqueta,
+  listManifestItemsByCd,
   getManifestMetaLocal,
   getPendingSummary,
   getRouteOverviewLocal,
@@ -27,17 +28,24 @@ import {
   removeLocalVolume
 } from "./storage";
 import {
+  cancelAvulsaVolume,
   cancelVolume,
   fetchCdOptions,
+  fetchActiveAvulsaVolume,
   fetchActiveVolume,
+  fetchAvulsaItems,
   fetchManifestBundle,
   fetchManifestMeta,
   fetchRouteOverview,
   fetchVolumeItems,
+  finalizeAvulsaVolume,
   finalizeVolume,
   normalizeBarcode,
+  openAvulsaVolume,
   openVolume,
+  scanBarcodeAvulsa,
   scanBarcode,
+  setItemQtdAvulsa,
   setItemQtd,
   syncPendingEntradaNotasVolumes
 } from "./sync";
@@ -238,6 +246,7 @@ function createLocalVolumeFromRemote(
     user_id: profile.user_id,
     conf_date: confDate,
     cd: volume.cd,
+    conference_kind: volume.conference_kind ?? "seq_nf",
     seq_entrada: seqEntrada,
     nf,
     transportadora,
@@ -297,6 +306,7 @@ function createLocalVolumeFromManifest(
     user_id: profile.user_id,
     conf_date: confDate,
     cd,
+    conference_kind: "seq_nf",
     seq_entrada: seqEntrada,
     nf,
     transportadora,
@@ -318,6 +328,78 @@ function createLocalVolumeFromManifest(
     updated_at: nowIso,
     is_read_only: false,
     items: items.sort(itemSort),
+    pending_snapshot: true,
+    pending_finalize: false,
+    pending_finalize_reason: null,
+    pending_cancel: false,
+    sync_error: null,
+    last_synced_at: null
+  };
+}
+
+function createLocalAvulsaFromManifest(
+  profile: EntradaNotasModuleProfile,
+  cd: number,
+  manifestItems: EntradaNotasManifestItemRow[]
+): EntradaNotasLocalVolume {
+  const nowIso = new Date().toISOString();
+  const confDate = todayIsoBrasilia();
+  const localKey = buildEntradaNotasVolumeKey(profile.user_id, cd, confDate, "AVULSA");
+  const grouped = new Map<number, EntradaNotasLocalItem>();
+
+  for (const row of manifestItems) {
+    const coddv = Number.parseInt(String(row.coddv ?? 0), 10);
+    if (!Number.isFinite(coddv) || coddv <= 0) continue;
+    const qtd = Math.max(Number.parseInt(String(row.qtd_esperada ?? 0), 10) || 0, 0);
+    const current = grouped.get(coddv);
+    if (current) {
+      current.qtd_esperada += qtd;
+      if (!current.descricao && row.descricao) current.descricao = row.descricao;
+      continue;
+    }
+    grouped.set(coddv, {
+      coddv,
+      barras: null,
+      descricao: row.descricao || `Produto ${coddv}`,
+      qtd_esperada: qtd,
+      qtd_conferida: 0,
+      updated_at: nowIso
+    });
+  }
+
+  const items = [...grouped.values()]
+    .map((item) => ({
+      ...item,
+      qtd_esperada: item.qtd_esperada > 0 ? item.qtd_esperada : 1
+    }))
+    .sort(itemSort);
+  return {
+    local_key: localKey,
+    user_id: profile.user_id,
+    conf_date: confDate,
+    cd,
+    conference_kind: "avulsa",
+    seq_entrada: 0,
+    nf: 0,
+    transportadora: "CONFERENCIA AVULSA",
+    fornecedor: "GERAL",
+    nr_volume: "AVULSA",
+    caixa: null,
+    pedido: null,
+    filial: null,
+    filial_nome: "GERAL",
+    rota: "CONFERENCIA AVULSA",
+    remote_conf_id: null,
+    status: "em_conferencia",
+    falta_motivo: null,
+    started_by: profile.user_id,
+    started_mat: profile.mat || "",
+    started_nome: profile.nome || "Usuário",
+    started_at: nowIso,
+    finalized_at: null,
+    updated_at: nowIso,
+    is_read_only: false,
+    items,
     pending_snapshot: true,
     pending_finalize: false,
     pending_finalize_reason: null,
@@ -426,7 +508,12 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("CONFERENCIA_JA_FINALIZADA_OUTRO_USUARIO")) {
     return "Esta conferência já foi finalizada por outro usuário.";
   }
+  if (value.includes("CONFERENCIA_AVULSA_EM_USO")) return "A conferência avulsa está em uso por outro usuário.";
+  if (value.includes("CONFERENCIA_AVULSA_JA_FINALIZADA_OUTRO_USUARIO")) {
+    return "A conferência avulsa de hoje já foi finalizada por outro usuário.";
+  }
   if (value.includes("PRODUTO_FORA_DA_ENTRADA")) return "Produto fora da entrada selecionada.";
+  if (value.includes("PRODUTO_FORA_BASE_AVULSA")) return "Produto fora da base de recebimento deste CD.";
   if (value.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")) {
     return "Produto não faz parte de nenhum recebimento. Revise o código.";
   }
@@ -991,21 +1078,32 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const resumeRemoteActiveVolume = useCallback(async (silent = false): Promise<EntradaNotasLocalVolume | null> => {
     if (!isOnline) return null;
 
-    const remoteActive = await fetchActiveVolume();
-    if (!remoteActive || remoteActive.status !== "em_conferencia") return null;
+    const [remoteSeqNf, remoteAvulsa] = await Promise.all([
+      fetchActiveVolume(),
+      fetchActiveAvulsaVolume()
+    ]);
+    const remoteActive =
+      (remoteSeqNf && remoteSeqNf.status === "em_conferencia" ? remoteSeqNf : null)
+      ?? (remoteAvulsa && remoteAvulsa.status === "em_conferencia" ? remoteAvulsa : null);
+    if (!remoteActive) return null;
 
     if (isGlobalAdmin && cdAtivo !== remoteActive.cd) {
       setCdAtivo(remoteActive.cd);
     }
 
-    const remoteItems = await fetchVolumeItems(remoteActive.conf_id);
+    const remoteItems = remoteActive.conference_kind === "avulsa"
+      ? await fetchAvulsaItems(remoteActive.conf_id)
+      : await fetchVolumeItems(remoteActive.conf_id);
     const localVolume = createLocalVolumeFromRemote(profile, remoteActive, remoteItems);
     await saveLocalVolume(localVolume);
     setActiveVolume(localVolume);
     setEtiquetaInput(localVolume.nr_volume);
 
     if (!silent) {
-      setStatusMessage(`Conferência retomada automaticamente: Seq/NF ${localVolume.nr_volume}.`);
+      const label = localVolume.conference_kind === "avulsa"
+        ? "Conferência Avulsa"
+        : `Seq/NF ${localVolume.nr_volume}`;
+      setStatusMessage(`Conferência retomada automaticamente: ${label}.`);
     }
 
     return localVolume;
@@ -1022,8 +1120,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return;
     }
     if (hasOpenConference && activeVolume && activeVolume.nr_volume !== etiqueta) {
-      setErrorMessage("Existe uma conferência em andamento para sua matrícula. Finalize o Seq/NF atual para iniciar outro.");
-      setStatusMessage(`Conferência ativa: Seq/NF ${activeVolume.nr_volume}.`);
+      const activeLabel = activeVolume.conference_kind === "avulsa"
+        ? "Conferência Avulsa"
+        : `Seq/NF ${activeVolume.nr_volume}`;
+      setErrorMessage("Existe uma conferência em andamento para sua matrícula. Finalize a conferência ativa antes de iniciar outra.");
+      setStatusMessage(`Conferência ativa: ${activeLabel}.`);
       setEtiquetaInput(activeVolume.nr_volume);
       return;
     }
@@ -1146,11 +1247,177 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           if (resumed) {
             etiquetaFinal = resumed.nr_volume;
             setErrorMessage(null);
-            setStatusMessage(`Conferência retomada automaticamente: Seq/NF ${resumed.nr_volume}.`);
+            const label = resumed.conference_kind === "avulsa"
+              ? "Conferência Avulsa"
+              : `Seq/NF ${resumed.nr_volume}`;
+            setStatusMessage(`Conferência retomada automaticamente: ${label}.`);
             return;
           }
         } catch {
           // Se falhar ao retomar remoto, mantém tratamento padrão abaixo.
+        }
+      }
+      setErrorMessage(normalizeRpcErrorMessage(message));
+    } finally {
+      setBusyOpenVolume(false);
+      setExpandedCoddv(null);
+      setEditingCoddv(null);
+      setEditQtdInput("0");
+      setEtiquetaInput(etiquetaFinal);
+      focusBarras();
+    }
+  }, [
+    activeVolume,
+    closeDialog,
+    currentCd,
+    focusBarras,
+    hasOpenConference,
+    isOnline,
+    busyManifest,
+    manifestReady,
+    preferOfflineMode,
+    prepareOfflineManifest,
+    profile,
+    resumeRemoteActiveVolume,
+    showDialog
+  ]);
+
+  const openAvulsaConference = useCallback(async () => {
+    if (currentCd == null) {
+      setErrorMessage("CD não definido para esta conferência.");
+      return;
+    }
+
+    if (hasOpenConference && activeVolume && activeVolume.conference_kind !== "avulsa") {
+      setErrorMessage("Existe uma conferência Seq/NF em andamento. Finalize-a antes de iniciar a avulsa.");
+      return;
+    }
+
+    setBusyOpenVolume(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    let etiquetaFinal = "AVULSA";
+
+    try {
+      const today = todayIsoBrasilia();
+      const waitingOfflineBase = preferOfflineMode && !manifestReady;
+
+      if (preferOfflineMode) {
+        if (!manifestReady) {
+          if (!isOnline) {
+            await prepareOfflineManifest(false);
+          } else if (!busyManifest) {
+            void prepareOfflineManifest(false, true).catch((error) => {
+              const message = error instanceof Error ? error.message : "Falha ao preparar base offline.";
+              setErrorMessage(normalizeRpcErrorMessage(message));
+            });
+          }
+        }
+
+        const existingToday = await getLocalVolume(profile.user_id, currentCd, today, "AVULSA");
+        if (existingToday) {
+          if (existingToday.status !== "em_conferencia") {
+            showDialog({
+              title: "Conferência avulsa já finalizada",
+              message: "A conferência avulsa já foi finalizada por você hoje. Deseja abrir em modo leitura?",
+              confirmLabel: "Abrir leitura",
+              cancelLabel: "Cancelar",
+              onConfirm: () => {
+                setActiveVolume(existingToday);
+                setExpandedCoddv(null);
+                setEditingCoddv(null);
+                setEditQtdInput("0");
+                setStatusMessage("Conferência avulsa aberta em modo leitura.");
+                closeDialog();
+              }
+            });
+            return;
+          }
+          setActiveVolume(existingToday);
+          setExpandedCoddv(null);
+          setEditingCoddv(null);
+          setEditQtdInput("0");
+          setStatusMessage("Conferência avulsa retomada do cache local.");
+          return;
+        }
+
+        if (isOnline) {
+          const remoteVolume = await openAvulsaVolume(currentCd);
+          const remoteItems = await fetchAvulsaItems(remoteVolume.conf_id);
+          const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+          await saveLocalVolume(localVolume);
+          setActiveVolume(localVolume);
+          etiquetaFinal = localVolume.nr_volume;
+          setStatusMessage(
+            remoteVolume.is_read_only
+              ? "Conferência avulsa já finalizada. Aberta em leitura."
+              : waitingOfflineBase
+                ? "Conferência avulsa aberta online enquanto a base offline sincroniza em segundo plano."
+                : "Conferência avulsa aberta para bipagem."
+          );
+          return;
+        }
+
+        const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+        if (!manifestItems.length) {
+          showDialog({
+            title: "Base indisponível",
+            message: "Sem itens de entrada na base local para iniciar a conferência avulsa."
+          });
+          return;
+        }
+
+        const offlineVolume = createLocalAvulsaFromManifest(profile, currentCd, manifestItems);
+        await saveLocalVolume(offlineVolume);
+        setActiveVolume(offlineVolume);
+        etiquetaFinal = offlineVolume.nr_volume;
+        setStatusMessage("Conferência avulsa aberta offline. Pendências serão sincronizadas ao reconectar.");
+        return;
+      }
+
+      if (!isOnline) {
+        setErrorMessage("Sem internet no momento. Ative 'Trabalhar offline' para usar a base local.");
+        return;
+      }
+
+      const remoteVolume = await openAvulsaVolume(currentCd);
+      const remoteItems = await fetchAvulsaItems(remoteVolume.conf_id);
+      const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+      await saveLocalVolume(localVolume);
+      etiquetaFinal = localVolume.nr_volume;
+
+      if (remoteVolume.is_read_only) {
+        showDialog({
+          title: "Conferência avulsa já finalizada",
+          message: "A conferência avulsa já foi finalizada por você hoje. Deseja abrir em modo leitura?",
+          confirmLabel: "Abrir leitura",
+          cancelLabel: "Cancelar",
+          onConfirm: () => {
+            setActiveVolume(localVolume);
+            closeDialog();
+          }
+        });
+        return;
+      }
+
+      setActiveVolume(localVolume);
+      setStatusMessage("Conferência avulsa aberta para bipagem.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao iniciar conferência avulsa.";
+      if (
+        message.includes("CONFERENCIA_EM_ABERTO_OUTRA_ENTRADA")
+        || message.includes("CONFERENCIA_AVULSA_EM_USO")
+      ) {
+        try {
+          const resumed = await resumeRemoteActiveVolume(true);
+          if (resumed) {
+            etiquetaFinal = resumed.nr_volume;
+            setErrorMessage(null);
+            setStatusMessage("Conferência em andamento retomada automaticamente.");
+            return;
+          }
+        } catch {
+          // segue tratamento padrão
         }
       }
       setErrorMessage(normalizeRpcErrorMessage(message));
@@ -1242,8 +1509,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
     if (isOnline && activeVolume) {
       try {
-        const remoteVolume = await openVolume(activeVolume.nr_volume, activeVolume.cd);
-        const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
+        const remoteVolume = activeVolume.conference_kind === "avulsa"
+          ? await openAvulsaVolume(activeVolume.cd)
+          : await openVolume(activeVolume.nr_volume, activeVolume.cd);
+        const remoteItems = activeVolume.conference_kind === "avulsa"
+          ? await fetchAvulsaItems(remoteVolume.conf_id)
+          : await fetchVolumeItems(remoteVolume.conf_id);
         const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
         await saveLocalVolume(localVolume);
         setActiveVolume(localVolume);
@@ -1312,8 +1583,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         if (!target) {
           const produtoNome = lookup.descricao?.trim() || `CODDV ${lookup.coddv}`;
           showDialog({
-            title: "Produto fora da entrada",
-            message: `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
+            title: activeVolume.conference_kind === "avulsa" ? "Produto inválido" : "Produto fora da entrada",
+            message: activeVolume.conference_kind === "avulsa"
+              ? `Produto "${produtoNome}" não faz parte de nenhum recebimento.`
+              : `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
             confirmLabel: "OK"
           });
           return;
@@ -1325,7 +1598,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           void runPendingSync(true);
         }
       } else {
-        const updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd);
+        const updated = activeVolume.conference_kind === "avulsa"
+          ? await scanBarcodeAvulsa(activeVolume.remote_conf_id, barras, qtd)
+          : await scanBarcode(activeVolume.remote_conf_id, barras, qtd);
         produtoRegistrado = updated.descricao;
         barrasRegistrada = updated.barras ?? barras;
         registroRemoto = true;
@@ -1370,8 +1645,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         const lookup = await resolveBarcodeProduct(barras);
         const produtoNome = lookup?.descricao?.trim() || `Barras ${barras}`;
         showDialog({
-          title: "Produto fora da entrada",
-          message: `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
+          title: activeVolume?.conference_kind === "avulsa" ? "Produto inválido" : "Produto fora da entrada",
+          message: activeVolume?.conference_kind === "avulsa"
+            ? `Produto "${produtoNome}" não faz parte de nenhum recebimento.`
+            : `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
+          confirmLabel: "OK"
+        });
+        return;
+      }
+      if (message.includes("PRODUTO_FORA_BASE_AVULSA")) {
+        const lookup = await resolveBarcodeProduct(barras);
+        const produtoNome = lookup?.descricao?.trim() || `Barras ${barras}`;
+        showDialog({
+          title: "Produto inválido",
+          message: `Produto "${produtoNome}" não faz parte da base de recebimento deste CD.`,
           confirmLabel: "OK"
         });
         return;
@@ -1412,7 +1699,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         await updateItemQtyLocal(coddv, qtd);
         if (isOnline) void runPendingSync(true);
       } else {
-        const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, qtd);
+        const updated = activeVolume.conference_kind === "avulsa"
+          ? await setItemQtdAvulsa(activeVolume.remote_conf_id, coddv, qtd)
+          : await setItemQtd(activeVolume.remote_conf_id, coddv, qtd);
         const nowIso = new Date().toISOString();
         const nextItems = activeVolume.items.map((item) => (
           item.coddv === updated.coddv
@@ -1472,7 +1761,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               await updateItemQtyLocal(coddv, 0);
               if (isOnline) void runPendingSync(true);
             } else {
-              const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, 0);
+              const updated = activeVolume.conference_kind === "avulsa"
+                ? await setItemQtdAvulsa(activeVolume.remote_conf_id, coddv, 0)
+                : await setItemQtd(activeVolume.remote_conf_id, coddv, 0);
               const nowIso = new Date().toISOString();
               const nextItems = activeVolume.items.map((row) => (
                 row.coddv === updated.coddv
@@ -1548,7 +1839,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         await applyVolumeUpdate(nextVolume, false);
         setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outra conferência.");
       } else {
-        await finalizeVolume(activeVolume.remote_conf_id, null);
+        if (activeVolume.conference_kind === "avulsa") {
+          await finalizeAvulsaVolume(activeVolume.remote_conf_id);
+        } else {
+          await finalizeVolume(activeVolume.remote_conf_id, null);
+        }
         await removeLocalVolume(activeVolume.local_key);
         await refreshPendingState();
         setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outra conferência.");
@@ -1964,7 +2259,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
     showDialog({
       title: "Cancelar conferência",
-      message: `A conferência do Seq/NF ${activeVolume.nr_volume} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
+      message: activeVolume.conference_kind === "avulsa"
+        ? "A conferência avulsa será cancelada e todos os dados lançados serão perdidos. Deseja continuar?"
+        : `A conferência do Seq/NF ${activeVolume.nr_volume} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
       confirmLabel: "Cancelar conferência",
       cancelLabel: "Voltar",
       onConfirm: () => {
@@ -1976,7 +2273,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
           try {
             if (activeVolume.remote_conf_id && isOnline) {
-              await cancelVolume(activeVolume.remote_conf_id);
+              if (activeVolume.conference_kind === "avulsa") {
+                await cancelAvulsaVolume(activeVolume.remote_conf_id);
+              } else {
+                await cancelVolume(activeVolume.remote_conf_id);
+              }
               await removeLocalVolume(activeVolume.local_key);
               await markStorePendingAfterCancel(activeVolume);
               await refreshPendingState();
@@ -2152,9 +2453,19 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 </button>
               </div>
             </label>
-            <button className="btn btn-primary" type="submit" disabled={busyOpenVolume || currentCd == null}>
-              {busyOpenVolume ? "Abrindo..." : "Iniciar conferência"}
-            </button>
+            <div className="confirm-actions">
+              <button className="btn btn-primary" type="submit" disabled={busyOpenVolume || currentCd == null}>
+                {busyOpenVolume ? "Abrindo..." : "Iniciar por Seq/NF"}
+              </button>
+              <button
+                className="btn btn-muted"
+                type="button"
+                disabled={busyOpenVolume || currentCd == null}
+                onClick={() => void openAvulsaConference()}
+              >
+                {busyOpenVolume ? "Abrindo..." : "Iniciar Conferência Avulsa"}
+              </button>
+            </div>
           </form>
         ) : null}
 
@@ -2168,7 +2479,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   {" | "}
                   Fornecedor: {activeVolume.fornecedor ?? activeVolume.filial_nome ?? "SEM FORNECEDOR"}
                   {" | "}
-                  Seq/NF: <strong>{activeVolume.nr_volume}</strong>
+                  {activeVolume.conference_kind === "avulsa" ? "Modo: " : "Seq/NF: "}
+                  <strong>{activeVolume.conference_kind === "avulsa" ? "Conferência Avulsa" : activeVolume.nr_volume}</strong>
                 </p>
                 <p>
                   Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com divergência"}

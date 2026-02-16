@@ -409,6 +409,33 @@ export async function getManifestItemsByEtiqueta(
     .sort((a, b) => a.coddv - b.coddv);
 }
 
+export async function listManifestItemsByCd(
+  userId: string,
+  cd: number
+): Promise<EntradaNotasManifestItemRow[]> {
+  const db = await getDb();
+  const transaction = db.transaction(STORE_MANIFEST_ITEMS, "readonly");
+  const store = transaction.objectStore(STORE_MANIFEST_ITEMS);
+  const index = store.index(INDEX_ITEMS_BY_USER_CD);
+  const rows = (await requestToPromise(
+    index.getAll(IDBKeyRange.only([userId, cd]))
+  )) as ManifestItemStoreRow[];
+  await transactionDone(transaction);
+  return rows
+    .map((row) => ({
+      nr_volume: row.nr_volume,
+      caixa: row.caixa,
+      pedido: row.pedido,
+      filial: row.filial,
+      filial_nome: row.filial_nome,
+      rota: row.rota,
+      coddv: row.coddv,
+      descricao: row.descricao,
+      qtd_esperada: row.qtd_esperada
+    }))
+    .sort((a, b) => a.coddv - b.coddv);
+}
+
 export async function findManifestBarras(
   userId: string,
   cd: number,

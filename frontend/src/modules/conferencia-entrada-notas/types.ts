@@ -97,6 +97,7 @@ export interface EntradaNotasVolumeRow {
   conf_id: string;
   conf_date: string;
   cd: number;
+  conference_kind?: "seq_nf" | "avulsa";
   seq_entrada?: number;
   nf?: number;
   transportadora?: string;
@@ -134,6 +135,7 @@ export interface EntradaNotasLocalVolume {
   user_id: string;
   conf_date: string;
   cd: number;
+  conference_kind?: "seq_nf" | "avulsa";
   seq_entrada?: number;
   nf?: number;
   transportadora?: string;
