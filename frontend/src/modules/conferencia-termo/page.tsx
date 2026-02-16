@@ -595,6 +595,10 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     };
   }, [activeVolume, groupedItems]);
 
+  const hasAnyItemInformed = useMemo(() => (
+    Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
+  ), [activeVolume]);
+
   const routeGroups = useMemo<TermoRouteGroup[]>(() => {
     if (routeRows.length === 0) return [];
 
@@ -1938,7 +1942,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   };
 
   const requestFinalize = () => {
-    if (!activeVolume) return;
+    if (!activeVolume || !hasAnyItemInformed) return;
     setFinalizeError(null);
     setFinalizeMotivo(activeVolume.falta_motivo ?? "");
     setShowFinalizeModal(true);
@@ -2178,15 +2182,17 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       <span aria-hidden="true">{closeIcon()}</span>
                       {busyCancel ? "Cancelando..." : "Cancelar"}
                     </button>
-                    <button
-                      className="btn btn-primary termo-finalize-btn"
-                      type="button"
-                      onClick={requestFinalize}
-                      disabled={busyCancel || busyFinalize}
-                    >
-                      <span aria-hidden="true">{checkIcon()}</span>
-                      Finalizar
-                    </button>
+                    {hasAnyItemInformed ? (
+                      <button
+                        className="btn btn-primary termo-finalize-btn"
+                        type="button"
+                        onClick={requestFinalize}
+                        disabled={busyCancel || busyFinalize}
+                      >
+                        <span aria-hidden="true">{checkIcon()}</span>
+                        Finalizar
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -2564,7 +2570,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           )
         : null}
 
-      {showFinalizeModal && activeVolume && typeof document !== "undefined"
+      {showFinalizeModal && activeVolume && hasAnyItemInformed && typeof document !== "undefined"
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-finalizar-title" onClick={() => setShowFinalizeModal(false)}>
               <div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
