@@ -393,7 +393,8 @@ function chevronIcon(open: boolean) {
 function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("ID_VOL_OBRIGATORIO")) return "Informe o ID_VOL para abrir o volume.";
   if (value.includes("ID_VOL_NAO_ENCONTRADO")) return "ID_VOL não encontrado na base do dia.";
-  if (value.includes("ID_VOL_INVALIDO")) return "ID_VOL inválido. Use o formato pedido&seq.";
+  if (value.includes("ID_VOL_INVALIDO")) return "ID_VOL inválido. Use apenas números (pedido+seq).";
+  if (value.includes("ID_VOL_AMBIGUO")) return "ID_VOL ambíguo na base. Valide pedido/seq com o suporte.";
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
   if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário hoje.";
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";

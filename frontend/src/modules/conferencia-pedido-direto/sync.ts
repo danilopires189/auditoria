@@ -48,15 +48,22 @@ export function normalizeBarcode(value: string): string {
 
 export function normalizeIdVol(value: string): string {
   const compact = value.replace(/\s+/g, "").trim();
+  if (!compact) return "";
+
   const matched = /^(\d+)&(\d+)$/.exec(compact);
-  if (!matched) return compact;
-  try {
-    const pedido = BigInt(matched[1]);
-    const sq = BigInt(matched[2]);
-    return `${pedido.toString()}&${sq.toString()}`;
-  } catch {
-    return compact;
+  if (matched) {
+    try {
+      const pedido = BigInt(matched[1]);
+      const sq = BigInt(matched[2]);
+      return `${pedido.toString()}${sq.toString()}`;
+    } catch {
+      return compact;
+    }
   }
+
+  if (!/^\d+$/.test(compact)) return compact;
+  const normalized = compact.replace(/^0+/, "");
+  return normalized || "0";
 }
 
 function mapManifestMeta(raw: Record<string, unknown>): PedidoDiretoManifestMeta {
