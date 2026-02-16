@@ -818,8 +818,13 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         return;
       }
 
-      setStatusMessage("Modo offline ativado. Carregando base de barras...");
-      await runDbBarrasRefresh(false);
+      if (dbBarrasCount > 0) {
+        setStatusMessage("Modo offline ativado com base local existente.");
+        return;
+      }
+
+      setStatusMessage("Modo offline ativado. Sem base local ainda, usando busca online até concluir o download.");
+      void runDbBarrasRefresh(true);
       return;
     }
 
@@ -1190,19 +1195,16 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         product = await getDbBarrasByBarcode(barras);
       }
 
-      // Fallback online apenas quando necessário.
+      // Fallback online quando necessário (inclusive durante carga offline em andamento).
       if (!product) {
-        if (preferOfflineMode) {
-          if (!hasLocalBase) {
-            setErrorMessage("Base local indisponível. Ative Trabalhar offline com internet para carregar a base.");
-          } else {
-            setErrorMessage("Código de barras não encontrado na base local.");
+        if (isOnline) {
+          product = await fetchDbBarrasByBarcodeOnline(barras);
+          if (product) {
+            await upsertDbBarrasCacheRow(product);
+            setDbBarrasCount((value) => Math.max(value, 1));
+            setDbBarrasLastSyncAt(new Date().toISOString());
           }
-          focusBarcode();
-          return;
-        }
-
-        if (!isOnline) {
+        } else {
           if (hasLocalBase) {
             setErrorMessage("Código de barras não encontrado na base local.");
           } else {
@@ -1210,13 +1212,6 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           }
           focusBarcode();
           return;
-        }
-
-        product = await fetchDbBarrasByBarcodeOnline(barras);
-        if (product) {
-          await upsertDbBarrasCacheRow(product);
-          setDbBarrasCount((value) => Math.max(value, 1));
-          setDbBarrasLastSyncAt(new Date().toISOString());
         }
       }
 
@@ -1479,9 +1474,15 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         ) : null}
 
         {preferOfflineMode && dbBarrasCount <= 0 ? (
-          <div className="alert error">
-            Modo offline ativo sem base local. Conecte-se e toque em Trabalhar offline para carregar.
-          </div>
+          isOnline ? (
+            <div className="alert success">
+              Modo offline ativo sem base local completa. Enquanto carrega, a busca continua online.
+            </div>
+          ) : (
+            <div className="alert error">
+              Modo offline ativo sem base local. Conecte-se para carregar a base.
+            </div>
+          )
         ) : null}
 
         {!preferOfflineMode && !isOnline ? (
@@ -1734,7 +1735,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           <button
             className="btn btn-primary coleta-submit"
             type="submit"
-            disabled={currentCd == null || (dbBarrasCount <= 0 && (!isOnline || preferOfflineMode))}
+            disabled={currentCd == null || (!isOnline && dbBarrasCount <= 0)}
           >
             Salvar coleta
           </button>

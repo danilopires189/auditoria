@@ -152,6 +152,38 @@ function formatDateTime(value: string | null): string {
   }).format(parsed);
 }
 
+function latestTimestamp(values: Array<string | null | undefined>): string | null {
+  let bestIso: string | null = null;
+  let bestTs = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (!value) continue;
+    const parsed = Date.parse(value);
+    if (!Number.isFinite(parsed)) continue;
+    if (parsed > bestTs) {
+      bestTs = parsed;
+      bestIso = value;
+    }
+  }
+  return bestIso;
+}
+
+function buildManifestInfoLine(params: {
+  termoRows: number;
+  barrasRows: number;
+  termoUpdatedAt?: string | null;
+  barrasUpdatedAt?: string | null;
+  hasTermoBase: boolean;
+}): string {
+  const updatedAt = latestTimestamp([params.termoUpdatedAt, params.barrasUpdatedAt]);
+  const updatedText = updatedAt ? ` | Atualizada em ${formatDateTime(updatedAt)}` : " | Sem atualização ainda";
+
+  if (params.hasTermoBase) {
+    return `Base local: Termo ${params.termoRows} item(ns) | Barras ${params.barrasRows} item(ns)${updatedText}`;
+  }
+
+  return `Sem base local do Termo. Barras local: ${params.barrasRows} item(ns)${updatedText}`;
+}
+
 function withDivergencia(item: TermoLocalItem): {
   item: TermoLocalItem;
   divergencia: TermoDivergenciaTipo;
@@ -795,13 +827,15 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     }
   }, [activeVolume, busySync, isOnline, profile.user_id, refreshPendingState]);
 
-  const prepareOfflineManifest = useCallback(async (forceRefresh: boolean) => {
+  const prepareOfflineManifest = useCallback(async (forceRefresh: boolean, background = false) => {
     if (currentCd == null) throw new Error("Selecione um CD antes de trabalhar offline.");
 
     setBusyManifest(true);
     setProgressMessage(null);
-    setErrorMessage(null);
-    setStatusMessage(null);
+    if (!background) {
+      setErrorMessage(null);
+      setStatusMessage(null);
+    }
 
     try {
       const [localMeta, localBarrasMeta] = await Promise.all([
@@ -820,7 +854,13 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         setRouteRows(localRoutes);
         setManifestReady(true);
         setManifestInfo(
-          `Base local pronta: Termo ${localMeta.row_count} item(ns) | Barras ${localBarrasMeta.row_count} item(ns).`
+          buildManifestInfoLine({
+            termoRows: localMeta.row_count,
+            barrasRows: localBarrasMeta.row_count,
+            termoUpdatedAt: localMeta.cached_at ?? localMeta.generated_at,
+            barrasUpdatedAt: localBarrasMeta.last_sync_at,
+            hasTermoBase: true
+          })
         );
         return;
       }
@@ -864,22 +904,39 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         setRouteRows(routes);
       }
 
-      const barrasSync = await refreshDbBarrasCacheSmart((progress) => {
-        if (progress.totalRows > 0) {
-          setProgressMessage(
-            `Atualizando base de barras... ${progress.percent}% (${progress.rowsFetched}/${progress.totalRows})`
-          );
-          return;
-        }
-        setProgressMessage(`Atualizando base de barras... ${progress.percent}%`);
-      });
+      let barrasTotal = localBarrasMeta.row_count;
+      if (forceRefresh || localBarrasMeta.row_count <= 0) {
+        const barrasSync = await refreshDbBarrasCacheSmart((progress) => {
+          if (progress.totalRows > 0) {
+            setProgressMessage(
+              `Atualizando base de barras... ${progress.percent}% (${progress.rowsFetched}/${progress.totalRows})`
+            );
+            return;
+          }
+          setProgressMessage(`Atualizando base de barras... ${progress.percent}%`);
+        });
+        barrasTotal = barrasSync.total;
+      }
+
+      const [metaAfterSync, barrasMetaAfterSync] = await Promise.all([
+        getManifestMetaLocal(profile.user_id, currentCd),
+        getDbBarrasMeta()
+      ]);
 
       setManifestInfo(
-        `Base offline pronta: Termo ${termoRowCount} item(ns) | Barras ${barrasSync.total} item(ns).`
+        buildManifestInfoLine({
+          termoRows: metaAfterSync?.row_count ?? termoRowCount,
+          barrasRows: barrasMetaAfterSync.row_count || barrasTotal,
+          termoUpdatedAt: metaAfterSync?.cached_at ?? metaAfterSync?.generated_at ?? remoteMeta.generated_at,
+          barrasUpdatedAt: barrasMetaAfterSync.last_sync_at,
+          hasTermoBase: (metaAfterSync?.row_count ?? termoRowCount) > 0
+        })
       );
 
       setManifestReady(true);
-      setStatusMessage("Base do Termo pronta para trabalho offline.");
+      if (!background) {
+        setStatusMessage("Base do Termo pronta para trabalho offline.");
+      }
     } finally {
       setBusyManifest(false);
       setProgressMessage(null);
@@ -940,10 +997,18 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     try {
       const today = todayIsoBrasilia();
+      const waitingOfflineBase = preferOfflineMode && !manifestReady;
 
       if (preferOfflineMode) {
         if (!manifestReady) {
-          await prepareOfflineManifest(false);
+          if (!isOnline) {
+            await prepareOfflineManifest(false);
+          } else if (!busyManifest) {
+            void prepareOfflineManifest(false, true).catch((error) => {
+              const message = error instanceof Error ? error.message : "Falha ao preparar base offline.";
+              setErrorMessage(normalizeRpcErrorMessage(message));
+            });
+          }
         }
 
         const existingToday = await getLocalVolume(profile.user_id, currentCd, today, etiqueta);
@@ -981,7 +1046,13 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           await saveLocalVolume(localVolume);
           setActiveVolume(localVolume);
           etiquetaFinal = localVolume.id_etiqueta;
-          setStatusMessage(remoteVolume.is_read_only ? "Volume já finalizado. Aberto em leitura." : "Volume aberto para conferência.");
+          setStatusMessage(
+            remoteVolume.is_read_only
+              ? "Volume já finalizado. Aberto em leitura."
+              : waitingOfflineBase
+                ? "Volume aberto online enquanto a base offline é sincronizada em segundo plano."
+                : "Volume aberto para conferência."
+          );
           return;
         }
 
@@ -1060,6 +1131,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     focusBarras,
     hasOpenConference,
     isOnline,
+    busyManifest,
     manifestReady,
     preferOfflineMode,
     prepareOfflineManifest,
@@ -1601,9 +1673,13 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
       setManifestReady(Boolean(localMeta && localMeta.row_count > 0));
       setManifestInfo(
-        localMeta
-          ? `Base local: Termo ${localMeta.row_count} item(ns) | Barras ${barrasMeta.row_count} item(ns).`
-          : `Sem base local do Termo. Barras local: ${barrasMeta.row_count} item(ns).`
+        buildManifestInfoLine({
+          termoRows: localMeta?.row_count ?? 0,
+          barrasRows: barrasMeta.row_count,
+          termoUpdatedAt: localMeta?.cached_at ?? localMeta?.generated_at,
+          barrasUpdatedAt: barrasMeta.last_sync_at,
+          hasTermoBase: Boolean(localMeta && localMeta.row_count > 0)
+        })
       );
       setRouteRows(localRoutes);
 
@@ -1823,19 +1899,25 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
   const handleToggleOffline = async () => {
     const next = !preferOfflineMode;
-    if (next) {
-      try {
-        await prepareOfflineManifest(false);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Falha ao preparar base offline.";
-        setErrorMessage(normalizeRpcErrorMessage(message));
-        setPreferOfflineMode(false);
-        await persistPreferences({ prefer_offline_mode: false });
-        return;
-      }
-    }
     setPreferOfflineMode(next);
     await persistPreferences({ prefer_offline_mode: next });
+    if (next) {
+      if (isOnline) {
+        setStatusMessage("Modo offline ativado. A base será sincronizada em segundo plano.");
+        if (!busyManifest) {
+          void prepareOfflineManifest(false, true).catch((error) => {
+            const message = error instanceof Error ? error.message : "Falha ao preparar base offline.";
+            setErrorMessage(normalizeRpcErrorMessage(message));
+          });
+        }
+      } else if (manifestReady) {
+        setStatusMessage("Modo offline ativado com base local existente.");
+      } else {
+        setErrorMessage("Sem base local do Termo. Conecte-se para sincronizar a base offline.");
+      }
+      return;
+    }
+    setStatusMessage("Modo online ativado.");
   };
 
   const requestFinalize = () => {
