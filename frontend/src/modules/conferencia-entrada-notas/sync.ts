@@ -777,7 +777,8 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
           const queue = [...(row.avulsa_queue ?? [])]
             .sort((a, b) => Date.parse(a.created_at || "") - Date.parse(b.created_at || ""));
 
-          for (const event of queue) {
+          for (let index = 0; index < queue.length; index += 1) {
+            const event = queue[index];
             if (event.kind === "scan") {
               await applyAvulsaScan(
                 remoteConfId,
@@ -786,17 +787,26 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
                 event.seq_entrada,
                 event.nf
               );
-              continue;
+            } else {
+              const targetConfId = event.target_conf_id
+                ?? (await openVolume(`${event.seq_entrada}/${event.nf}`, row.cd)).conf_id;
+              await setItemQtd(targetConfId, event.coddv, Math.max(0, Math.trunc(event.qtd)));
             }
 
-            const targetConfId = event.target_conf_id
-              ?? (await openVolume(`${event.seq_entrada}/${event.nf}`, row.cd)).conf_id;
-            await setItemQtd(targetConfId, event.coddv, Math.max(0, Math.trunc(event.qtd)));
+            // Evita reprocessamento duplicado quando um erro ocorre após parte da fila.
+            row.avulsa_queue = queue.slice(index + 1);
+            row.updated_at = new Date().toISOString();
+            await saveLocalVolume(row);
           }
 
           row.avulsa_queue = [];
-          row.avulsa_targets = await fetchAvulsaTargets(remoteConfId);
-          row.items = await fetchAvulsaItems(remoteConfId);
+          row.pending_snapshot = false;
+          try {
+            row.avulsa_targets = await fetchAvulsaTargets(remoteConfId);
+            row.items = await fetchAvulsaItems(remoteConfId);
+          } catch {
+            // A bipagem já foi aplicada; atualização visual pode ocorrer no próximo sync.
+          }
         } else {
           const payload = row.items.map((item) => ({
             coddv: item.coddv,
@@ -804,8 +814,8 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
             barras: item.barras ?? null
           }));
           await syncSnapshot(remoteConfId, payload);
+          row.pending_snapshot = false;
         }
-        row.pending_snapshot = false;
       }
 
       if (!row.is_read_only && row.pending_finalize) {
