@@ -103,7 +103,10 @@ function mapManifestBarras(raw: Record<string, unknown>): PedidoDiretoManifestBa
 function mapRouteOverview(raw: Record<string, unknown>): PedidoDiretoRouteOverviewRow {
   const statusRaw = String(raw.status ?? "pendente").toLowerCase();
   const status =
-    statusRaw === "concluido" || statusRaw === "conferido"
+    statusRaw === "concluido"
+    || statusRaw === "conferido"
+    || statusRaw === "finalizado_ok"
+    || statusRaw === "finalizado_falta"
       ? "concluido"
       : statusRaw === "em_andamento" || statusRaw === "em_conferencia"
         ? "em_andamento"

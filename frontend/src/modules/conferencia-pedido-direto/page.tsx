@@ -479,7 +479,12 @@ function resolveIdVolFromPedidosSeq(value: string | null | undefined): string | 
 
 function normalizeStoreStatus(value: string | null | undefined): PedidoDiretoStoreStatus {
   const normalized = String(value ?? "").toLowerCase();
-  if (normalized === "concluido" || normalized === "conferido") return "concluido";
+  if (
+    normalized === "concluido"
+    || normalized === "conferido"
+    || normalized === "finalizado_ok"
+    || normalized === "finalizado_falta"
+  ) return "concluido";
   if (normalized === "em_andamento" || normalized === "em_conferencia" || normalized === "iniciado") return "em_andamento";
   return "pendente";
 }
