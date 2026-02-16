@@ -2594,12 +2594,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 {divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? (
                   <div className="termo-item-detail">
                     <p>Itens com divergência:</p>
-                    {groupedItems.falta.map(({ item, qtd_falta }) => (
-                      <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>
-                    ))}
-                    {groupedItems.sobra.map(({ item, qtd_sobra }) => (
-                      <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>
-                    ))}
+                    <div className="termo-routes-list">
+                      {groupedItems.falta.map(({ item, qtd_falta }) => (
+                        <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>
+                      ))}
+                      {groupedItems.sobra.map(({ item, qtd_sobra }) => (
+                        <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
                 {finalizeError ? <div className="alert error">{finalizeError}</div> : null}
