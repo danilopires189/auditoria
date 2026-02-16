@@ -1937,7 +1937,11 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           </Link>
 
           <div className="module-topbar-user-side">
-            <span className="module-user-greeting">Olá, {displayUserName}</span>
+            <PendingSyncBadge
+              pendingCount={pendingCount}
+              errorCount={pendingErrors}
+              title="Conferências pendentes de envio"
+            />
             {showOnlineBadge}
           </div>
         </div>
@@ -1952,18 +1956,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
       <section className="modules-shell termo-shell">
         <div className="termo-head">
-          <h2>Auditoria de Termo por Volume</h2>
+          <h2>Olá, {displayUserName}</h2>
           <p>Para trabalhar offline, sincronize a base do pedido de Termo.</p>
           {manifestInfo ? <p className="termo-meta-line">{manifestInfo}</p> : null}
         </div>
 
         <div className="termo-actions-row">
-          <PendingSyncBadge
-            pendingCount={pendingCount}
-            errorCount={pendingErrors}
-            title="Conferências pendentes de envio"
-          />
-
           <button type="button" className="btn btn-muted termo-sync-btn" onClick={() => void runPendingSync()} disabled={busySync}>
             <span aria-hidden="true">{refreshIcon()}</span>
             {busySync ? "Sincronizando..." : "Sincronizar agora"}
