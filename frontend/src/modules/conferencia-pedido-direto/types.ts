@@ -48,6 +48,7 @@ export interface PedidoDiretoRouteOverviewRow {
   rota: string;
   filial: number | null;
   filial_nome: string;
+  pedidos_seq: string | null;
   total_etiquetas: number;
   conferidas: number;
   pendentes: number;

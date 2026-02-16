@@ -113,6 +113,7 @@ function mapRouteOverview(raw: Record<string, unknown>): PedidoDiretoRouteOvervi
     rota: String(raw.rota ?? "SEM ROTA"),
     filial: parseIntegerOrNull(raw.filial),
     filial_nome: String(raw.filial_nome ?? "Filial"),
+    pedidos_seq: parseNullableString(raw.pedidos_seq),
     total_etiquetas: parseInteger(raw.total_etiquetas),
     conferidas: parseInteger(raw.conferidas),
     pendentes: parseInteger(raw.pendentes),
