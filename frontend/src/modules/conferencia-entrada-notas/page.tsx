@@ -2595,10 +2595,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   <div className="termo-item-detail">
                     <p>Itens com divergência:</p>
                     {groupedItems.falta.map(({ item, qtd_falta }) => (
-                      <p key={`fim-falta-${item.coddv}`}>CODDV {item.coddv} - {item.descricao}: Falta {qtd_falta}</p>
+                      <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>
                     ))}
                     {groupedItems.sobra.map(({ item, qtd_sobra }) => (
-                      <p key={`fim-sobra-${item.coddv}`}>CODDV {item.coddv} - {item.descricao}: Sobra {qtd_sobra}</p>
+                      <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>
                     ))}
                   </div>
                 ) : null}
