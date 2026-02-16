@@ -91,6 +91,67 @@ export interface EntradaNotasItemRow {
   qtd_sobra: number;
   divergencia_tipo: EntradaNotasDivergenciaTipo;
   updated_at: string;
+  seq_entrada?: number | null;
+  nf?: number | null;
+  target_conf_id?: string | null;
+  item_key?: string | null;
+}
+
+export interface EntradaNotasAvulsaTargetOption {
+  coddv: number;
+  descricao: string;
+  barras: string;
+  seq_entrada: number;
+  nf: number;
+  transportadora: string;
+  fornecedor: string;
+  qtd_esperada: number;
+  qtd_conferida: number;
+  qtd_pendente: number;
+  target_conf_id: string | null;
+  target_status: string | null;
+  started_by: string | null;
+  started_nome: string | null;
+  started_mat: string | null;
+  is_locked: boolean;
+  is_available: boolean;
+}
+
+export interface EntradaNotasAvulsaTargetSummary {
+  avulsa_conf_id: string;
+  target_conf_id: string;
+  seq_entrada: number;
+  nf: number;
+  transportadora: string;
+  fornecedor: string;
+  status: EntradaNotasConfStatus;
+  total_itens: number;
+  itens_conferidos: number;
+  falta_count: number;
+  sobra_count: number;
+  correto_count: number;
+  first_scan_at: string | null;
+  last_scan_at: string | null;
+}
+
+export interface EntradaNotasAvulsaConflictCheck {
+  conf_id: string;
+  has_remote_data: boolean;
+  remote_targets: number;
+  remote_items_conferidos: number;
+  seq_nf_list: string;
+}
+
+export interface EntradaNotasAvulsaQueueEvent {
+  event_id: string;
+  kind: "scan" | "set_qtd";
+  barras: string;
+  coddv: number;
+  qtd: number;
+  seq_entrada: number;
+  nf: number;
+  target_conf_id: string | null;
+  created_at: string;
 }
 
 export interface EntradaNotasVolumeRow {
@@ -128,6 +189,10 @@ export interface EntradaNotasLocalItem {
   qtd_esperada: number;
   qtd_conferida: number;
   updated_at: string;
+  seq_entrada?: number | null;
+  nf?: number | null;
+  target_conf_id?: string | null;
+  item_key?: string | null;
 }
 
 export interface EntradaNotasLocalVolume {
@@ -150,6 +215,8 @@ export interface EntradaNotasLocalVolume {
   updated_at: string;
   is_read_only: boolean;
   items: EntradaNotasLocalItem[];
+  avulsa_targets?: EntradaNotasAvulsaTargetSummary[];
+  avulsa_queue?: EntradaNotasAvulsaQueueEvent[];
   pending_snapshot: boolean;
   pending_finalize: boolean;
   pending_cancel: boolean;

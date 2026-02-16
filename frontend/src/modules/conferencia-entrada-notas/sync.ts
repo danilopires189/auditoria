@@ -1,6 +1,9 @@
 import { supabase } from "../../lib/supabase";
 import { saveLocalVolume, listPendingLocalVolumes, removeLocalVolume } from "./storage";
 import type {
+  EntradaNotasAvulsaConflictCheck,
+  EntradaNotasAvulsaTargetOption,
+  EntradaNotasAvulsaTargetSummary,
   CdOption,
   EntradaNotasItemRow,
   EntradaNotasLocalVolume,
@@ -238,7 +241,62 @@ function mapItem(raw: Record<string, unknown>): EntradaNotasItemRow {
     qtd_falta: parseInteger(raw.qtd_falta),
     qtd_sobra: parseInteger(raw.qtd_sobra),
     divergencia_tipo,
-    updated_at: String(raw.updated_at ?? new Date().toISOString())
+    updated_at: String(raw.updated_at ?? new Date().toISOString()),
+    seq_entrada: parseIntegerOrNull(raw.seq_entrada),
+    nf: parseIntegerOrNull(raw.nf),
+    target_conf_id: parseNullableString(raw.target_conf_id),
+    item_key: parseNullableString(raw.item_key)
+  };
+}
+
+function mapAvulsaTargetOption(raw: Record<string, unknown>): EntradaNotasAvulsaTargetOption {
+  return {
+    coddv: parseInteger(raw.coddv),
+    descricao: String(raw.descricao ?? "").trim() || `Produto ${parseInteger(raw.coddv)}`,
+    barras: normalizeBarcode(String(raw.barras ?? "")),
+    seq_entrada: parseInteger(raw.seq_entrada),
+    nf: parseInteger(raw.nf),
+    transportadora: String(raw.transportadora ?? "SEM TRANSPORTADORA").trim() || "SEM TRANSPORTADORA",
+    fornecedor: String(raw.fornecedor ?? "SEM FORNECEDOR").trim() || "SEM FORNECEDOR",
+    qtd_esperada: Math.max(parseInteger(raw.qtd_esperada), 0),
+    qtd_conferida: Math.max(parseInteger(raw.qtd_conferida), 0),
+    qtd_pendente: Math.max(parseInteger(raw.qtd_pendente), 0),
+    target_conf_id: parseNullableString(raw.target_conf_id),
+    target_status: parseNullableString(raw.target_status),
+    started_by: parseNullableString(raw.started_by),
+    started_nome: parseNullableString(raw.started_nome),
+    started_mat: parseNullableString(raw.started_mat),
+    is_locked: raw.is_locked === true,
+    is_available: raw.is_available === true
+  };
+}
+
+function mapAvulsaTargetSummary(raw: Record<string, unknown>): EntradaNotasAvulsaTargetSummary {
+  return {
+    avulsa_conf_id: String(raw.avulsa_conf_id ?? ""),
+    target_conf_id: String(raw.target_conf_id ?? ""),
+    seq_entrada: parseInteger(raw.seq_entrada),
+    nf: parseInteger(raw.nf),
+    transportadora: String(raw.transportadora ?? "SEM TRANSPORTADORA").trim() || "SEM TRANSPORTADORA",
+    fornecedor: String(raw.fornecedor ?? "SEM FORNECEDOR").trim() || "SEM FORNECEDOR",
+    status: normalizeConferenceStatus(raw.status),
+    total_itens: Math.max(parseInteger(raw.total_itens), 0),
+    itens_conferidos: Math.max(parseInteger(raw.itens_conferidos), 0),
+    falta_count: Math.max(parseInteger(raw.falta_count), 0),
+    sobra_count: Math.max(parseInteger(raw.sobra_count), 0),
+    correto_count: Math.max(parseInteger(raw.correto_count), 0),
+    first_scan_at: parseNullableString(raw.first_scan_at),
+    last_scan_at: parseNullableString(raw.last_scan_at)
+  };
+}
+
+function mapAvulsaConflict(raw: Record<string, unknown>): EntradaNotasAvulsaConflictCheck {
+  return {
+    conf_id: String(raw.conf_id ?? ""),
+    has_remote_data: raw.has_remote_data === true,
+    remote_targets: Math.max(parseInteger(raw.remote_targets), 0),
+    remote_items_conferidos: Math.max(parseInteger(raw.remote_items_conferidos), 0),
+    seq_nf_list: String(raw.seq_nf_list ?? "")
   };
 }
 
@@ -424,6 +482,76 @@ export async function fetchActiveAvulsaVolume(): Promise<EntradaNotasVolumeRow |
   return mapAvulsaVolume(first);
 }
 
+export async function resolveAvulsaTargets(confId: string, barras: string): Promise<EntradaNotasAvulsaTargetOption[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_resolve_targets", {
+    p_conf_id: confId,
+    p_barras: normalizeBarcode(barras)
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapAvulsaTargetOption(row as Record<string, unknown>));
+}
+
+export async function applyAvulsaScan(
+  confId: string,
+  barras: string,
+  qtd: number,
+  seqEntrada?: number | null,
+  nf?: number | null
+): Promise<EntradaNotasItemRow> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_apply_scan", {
+    p_conf_id: confId,
+    p_barras: normalizeBarcode(barras),
+    p_qtd: Math.max(1, Math.trunc(qtd)),
+    p_seq_entrada: seqEntrada != null ? Math.max(0, Math.trunc(seqEntrada)) : null,
+    p_nf: nf != null ? Math.max(0, Math.trunc(nf)) : null
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao aplicar bipagem avulsa.");
+  const mapped = mapItem(first);
+  if (!mapped.item_key) {
+    const seq = mapped.seq_entrada ?? parseInteger(first.seq_entrada);
+    const nfValue = mapped.nf ?? parseInteger(first.nf);
+    mapped.item_key = `${seq}/${nfValue}:${mapped.coddv}`;
+  }
+  if (!mapped.target_conf_id) {
+    mapped.target_conf_id = parseNullableString(first.target_conf_id) ?? mapped.conf_id;
+  }
+  return mapped;
+}
+
+export async function fetchAvulsaTargets(confId: string): Promise<EntradaNotasAvulsaTargetSummary[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_get_targets", {
+    p_conf_id: confId
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapAvulsaTargetSummary(row as Record<string, unknown>));
+}
+
+export async function checkAvulsaConflict(confId: string): Promise<EntradaNotasAvulsaConflictCheck> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_check_conflict", {
+    p_conf_id: confId
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) {
+    return {
+      conf_id: confId,
+      has_remote_data: false,
+      remote_targets: 0,
+      remote_items_conferidos: 0,
+      seq_nf_list: ""
+    };
+  }
+  return mapAvulsaConflict(first);
+}
+
 export async function fetchVolumeItems(confId: string): Promise<EntradaNotasItemRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data: v2Data, error: v2Error } = await supabase.rpc("rpc_conf_entrada_notas_get_items_v2", {
@@ -484,16 +612,7 @@ export async function scanBarcode(confId: string, barras: string, qtd: number): 
 }
 
 export async function scanBarcodeAvulsa(confId: string, barras: string, qtd: number): Promise<EntradaNotasItemRow> {
-  if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_scan_barcode", {
-    p_conf_id: confId,
-    p_barras: normalizeBarcode(barras),
-    p_qtd: Math.max(1, Math.trunc(qtd))
-  });
-  if (error) throw new Error(toErrorMessage(error));
-  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-  if (!first) throw new Error("Falha ao atualizar item conferido.");
-  return mapItem(first);
+  return applyAvulsaScan(confId, barras, qtd, null, null);
 }
 
 export async function setItemQtd(confId: string, coddv: number, qtdConferida: number): Promise<EntradaNotasItemRow> {
@@ -605,16 +724,18 @@ export async function finalizeAvulsaVolume(
   confId: string
 ): Promise<{ status: string; falta_motivo: string | null; finalized_at: string | null }> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_finalize", {
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_finalize_batch", {
     p_conf_id: confId
   });
   if (error) throw new Error(toErrorMessage(error));
-  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-  if (!first) throw new Error("Falha ao finalizar conferência avulsa.");
+  const rows = Array.isArray(data) ? data as Record<string, unknown>[] : [];
+  if (!rows.length) throw new Error("Falha ao finalizar conferência avulsa.");
+  const avulsaStatus = String(rows[0]?.avulsa_status ?? "em_conferencia");
+  const finalizedAt = parseNullableString(rows[0]?.finalized_at) ?? new Date().toISOString();
   return {
-    status: String(first.status ?? "em_conferencia"),
+    status: avulsaStatus,
     falta_motivo: null,
-    finalized_at: parseNullableString(first.finalized_at)
+    finalized_at: finalizedAt
   };
 }
 
@@ -630,7 +751,7 @@ export async function cancelVolume(confId: string): Promise<boolean> {
 
 export async function cancelAvulsaVolume(confId: string): Promise<boolean> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_cancel", {
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_avulsa_cancel_batch", {
     p_conf_id: confId
   });
   if (error) throw new Error(toErrorMessage(error));
@@ -695,14 +816,36 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
       }
 
       if (!row.is_read_only && row.pending_snapshot) {
-        const payload = row.items.map((item) => ({
-          coddv: item.coddv,
-          qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
-          barras: item.barras ?? null
-        }));
         if (isAvulsa) {
-          await syncSnapshotAvulsa(remoteConfId, payload);
+          const queue = [...(row.avulsa_queue ?? [])]
+            .sort((a, b) => Date.parse(a.created_at || "") - Date.parse(b.created_at || ""));
+
+          for (const event of queue) {
+            if (event.kind === "scan") {
+              await applyAvulsaScan(
+                remoteConfId,
+                event.barras,
+                Math.max(1, Math.trunc(event.qtd)),
+                event.seq_entrada,
+                event.nf
+              );
+              continue;
+            }
+
+            const targetConfId = event.target_conf_id
+              ?? (await openVolume(`${event.seq_entrada}/${event.nf}`, row.cd)).conf_id;
+            await setItemQtd(targetConfId, event.coddv, Math.max(0, Math.trunc(event.qtd)));
+          }
+
+          row.avulsa_queue = [];
+          row.avulsa_targets = await fetchAvulsaTargets(remoteConfId);
+          row.items = await fetchAvulsaItems(remoteConfId);
         } else {
+          const payload = row.items.map((item) => ({
+            coddv: item.coddv,
+            qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
+            barras: item.barras ?? null
+          }));
           await syncSnapshot(remoteConfId, payload);
         }
         row.pending_snapshot = false;
@@ -719,6 +862,10 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         row.is_read_only = status !== "em_conferencia";
         row.pending_finalize = false;
         row.pending_cancel = false;
+
+        if (isAvulsa && row.remote_conf_id) {
+          row.avulsa_targets = await fetchAvulsaTargets(row.remote_conf_id);
+        }
       }
 
       row.sync_error = null;
