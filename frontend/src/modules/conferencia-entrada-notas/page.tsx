@@ -777,6 +777,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     };
   }, [activeVolume, groupedItems]);
 
+  const hasAnyItemInformed = useMemo(() => (
+    Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
+  ), [activeVolume]);
+
   const offlineBaseBadge = useMemo(() => {
     const overall = offlineBaseState.entrada_ready && offlineBaseState.barras_ready
       ? (offlineBaseState.stale ? "desatualizado" : "completo")
@@ -2866,7 +2870,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   };
 
   const requestFinalize = () => {
-    if (!activeVolume) return;
+    if (!activeVolume || !hasAnyItemInformed) return;
     setFinalizeError(null);
     setShowFinalizeModal(true);
   };
@@ -3131,15 +3135,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       <span aria-hidden="true">{closeIcon()}</span>
                       {busyCancel ? "Cancelando..." : "Cancelar"}
                     </button>
-                    <button
-                      className="btn btn-primary termo-finalize-btn"
-                      type="button"
-                      onClick={requestFinalize}
-                      disabled={busyCancel || busyFinalize}
-                    >
-                      <span aria-hidden="true">{checkIcon()}</span>
-                      Finalizar
-                    </button>
+                    {hasAnyItemInformed ? (
+                      <button
+                        className="btn btn-primary termo-finalize-btn"
+                        type="button"
+                        onClick={requestFinalize}
+                        disabled={busyCancel || busyFinalize}
+                      >
+                        <span aria-hidden="true">{checkIcon()}</span>
+                        Finalizar
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -3585,7 +3591,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           )
         : null}
 
-      {showFinalizeModal && activeVolume && typeof document !== "undefined"
+      {showFinalizeModal && activeVolume && hasAnyItemInformed && typeof document !== "undefined"
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-finalizar-title" onClick={() => setShowFinalizeModal(false)}>
               <div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
