@@ -53,6 +53,7 @@ const MODULE_DEF = getModuleByKeyOrThrow("coleta-mercadoria");
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const SWIPE_ACTION_WIDTH = 104;
 const SWIPE_OPEN_THRESHOLD = 40;
+const QUICK_SYNC_THROTTLE_MS = 2500;
 
 type RowEditDraft = {
   qtd: string;
@@ -60,6 +61,11 @@ type RowEditDraft = {
   ocorrencia: "" | "Avariado" | "Vencido";
   lote: string;
   validade: string;
+};
+
+type BlockingAlertState = {
+  title: string;
+  message: string;
 };
 
 function cdCodeLabel(cd: number | null): string {
@@ -351,6 +357,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const syncInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
   const collectInFlightRef = useRef(false);
+  const lastQuickSyncAtRef = useRef(0);
 
   const [localRows, setLocalRows] = useState<ColetaRow[]>([]);
   const [sharedTodayRows, setSharedTodayRows] = useState<ColetaRow[]>([]);
@@ -399,6 +406,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [blockingAlert, setBlockingAlert] = useState<BlockingAlertState | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => roleIsGlobalAdmin(profile), [profile]);
@@ -729,7 +737,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     async (silent = false) => {
       if (!isOnline || syncInFlightRef.current) return;
       syncInFlightRef.current = true;
-      setBusySync(true);
+      if (!silent) {
+        setBusySync(true);
+      }
       if (!silent) {
         setErrorMessage(null);
         setStatusMessage(null);
@@ -752,7 +762,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         }
       } finally {
         syncInFlightRef.current = false;
-        setBusySync(false);
+        if (!silent) {
+          setBusySync(false);
+        }
       }
     },
     [isOnline, profile.user_id, refreshLocalState, refreshSharedState]
@@ -830,6 +842,15 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
     setStatusMessage("Modo online ativado. Busca de barras direto no Supabase.");
   }, [dbBarrasCount, isOnline, preferOfflineMode, runDbBarrasRefresh]);
+
+  const openBlockingAlert = useCallback((title: string, message: string) => {
+    setBlockingAlert({ title, message });
+  }, []);
+
+  const closeBlockingAlert = useCallback(() => {
+    setBlockingAlert(null);
+    focusBarcode();
+  }, [focusBarcode]);
 
   const applyRowUpdate = useCallback(
     async (row: ColetaRow, patch: Partial<ColetaRow>) => {
@@ -1072,9 +1093,6 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
       setPreferencesReady(true);
       await refreshSharedState();
-      if (isOnline) {
-        await runSync(true);
-      }
       focusBarcode();
     };
 
@@ -1082,7 +1100,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     return () => {
       cancelled = true;
     };
-  }, [fixedCd, focusBarcode, isOnline, profile.user_id, refreshLocalState, refreshSharedState, runSync]);
+  }, [fixedCd, focusBarcode, profile.user_id, refreshLocalState, refreshSharedState]);
 
   useEffect(() => {
     if (!preferencesReady) return;
@@ -1170,7 +1188,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     try {
       const barras = normalizeBarcode(barcodeOverride ?? barcodeInput);
       if (!barras) {
-        setErrorMessage("Informe o código de barras.");
+        openBlockingAlert("Código de barras obrigatório", "Informe o código de barras para continuar.");
         focusBarcode();
         return;
       }
@@ -1206,9 +1224,15 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           }
         } else {
           if (hasLocalBase) {
-            setErrorMessage(`O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`);
+            openBlockingAlert(
+              "Código de barras inválido",
+              `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
+            );
           } else {
-            setErrorMessage("Sem internet para busca online. Ative Trabalhar offline para usar base local.");
+            openBlockingAlert(
+              "Base de barras indisponível",
+              "Sem internet para validação online e sem base local db_barras. Conecte-se e atualize a base."
+            );
           }
           focusBarcode();
           return;
@@ -1216,7 +1240,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
 
       if (!product) {
-        setErrorMessage(`O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`);
+        openBlockingAlert(
+          "Código de barras inválido",
+          `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
+        );
         focusBarcode();
         return;
       }
@@ -1245,7 +1272,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       };
 
       await upsertColetaRow(row);
-      await refreshLocalState();
+      void refreshLocalState();
 
       setBarcodeInput("");
       setMultiploInput("1");
@@ -1255,8 +1282,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       setExpandedRowId(row.local_id);
 
       if (isOnline && !preferOfflineMode) {
-        void runSync(true);
-        void refreshSharedState();
+        const nowMs = Date.now();
+        if (nowMs - lastQuickSyncAtRef.current >= QUICK_SYNC_THROTTLE_MS) {
+          lastQuickSyncAtRef.current = nowMs;
+          void runSync(true);
+        }
         setStatusMessage("Item coletado e enviado para sincronização.");
       } else {
         setStatusMessage("Item coletado localmente. Pendência será sincronizada quando houver internet.");
@@ -1283,8 +1313,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     profile.nome,
     profile.user_id,
     refreshLocalState,
-    refreshSharedState,
     runSync,
+    openBlockingAlert,
     validadeInput
   ]);
 
@@ -2008,6 +2038,29 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   </div>
                   <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
                   {scannerError ? <div className="alert error">{scannerError}</div> : null}
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
+
+        {blockingAlert && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="confirm-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="coleta-blocking-alert-title"
+                aria-describedby="coleta-blocking-alert-message"
+              >
+                <div className="confirm-dialog surface-enter">
+                  <h3 id="coleta-blocking-alert-title">{blockingAlert.title}</h3>
+                  <p id="coleta-blocking-alert-message">{blockingAlert.message}</p>
+                  <div className="confirm-actions">
+                    <button className="btn btn-primary" type="button" onClick={closeBlockingAlert}>
+                      OK
+                    </button>
+                  </div>
                 </div>
               </div>,
               document.body

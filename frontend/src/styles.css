@@ -1206,6 +1206,7 @@ small {
 .coleta-actions-row .btn {
   padding: 9px 11px;
   font-size: 0.88rem;
+  min-height: 40px;
 }
 
 .coleta-sync-btn {
@@ -1213,6 +1214,8 @@ small {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-width: 168px;
+  white-space: nowrap;
 }
 
 .coleta-offline-toggle {
@@ -1220,6 +1223,17 @@ small {
   align-items: center;
   justify-content: center;
   gap: 6px;
+}
+
+.coleta-sync-btn > span[aria-hidden="true"],
+.coleta-offline-toggle > span[aria-hidden="true"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  flex: 0 0 16px;
 }
 
 .coleta-offline-toggle.is-active {
@@ -1271,6 +1285,7 @@ small {
 .coleta-sync-btn svg {
   width: 15px;
   height: 15px;
+  display: block;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -1281,6 +1296,7 @@ small {
 .coleta-offline-toggle svg {
   width: 15px;
   height: 15px;
+  display: block;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
