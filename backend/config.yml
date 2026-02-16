@@ -101,11 +101,12 @@ tables:
     file: "DB_PEDIDO_DIRETO.xlsx"
     sheet: "DB_PEDIDODIRETO"
     mode: "full_replace"
-    unique_keys: ["cd", "pedido", "sq", "coddv"]
-    required_columns: ["cd", "pedido", "sq", "coddv", "dt_pedido"]
+    unique_keys: ["cd", "pedidoseq", "coddv"]
+    required_columns: ["cd", "pedidoseq", "coddv", "dt_pedido"]
     refresh_before_load: false
     types:
       cd: "integer"
+      pedidoseq: "text"
       pedido: "bigint"
       sq: "bigint"
       filial: "bigint"

@@ -132,6 +132,7 @@ TABLE_SPECS: dict[str, TableSpec] = {
         name="db_pedido_direto",
         business_columns=[
             "cd",
+            "pedidoseq",
             "pedido",
             "sq",
             "filial",
@@ -142,6 +143,7 @@ TABLE_SPECS: dict[str, TableSpec] = {
         ],
         sql_types={
             "cd": "integer",
+            "pedidoseq": "text",
             "pedido": "bigint",
             "sq": "bigint",
             "filial": "bigint",
