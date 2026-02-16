@@ -2188,6 +2188,21 @@ small {
   gap: 10px;
 }
 
+.termo-route-store-status {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.termo-route-store-note-falta {
+  font-size: 0.68rem;
+  line-height: 1;
+  color: #8a6014;
+  font-weight: 600;
+  opacity: 0.86;
+}
+
 .termo-route-store-row strong {
   color: #12305e;
   font-size: 0.86rem;
