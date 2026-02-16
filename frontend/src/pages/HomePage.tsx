@@ -59,7 +59,9 @@ export default function HomePage({ displayContext, isOnline, onRequestLogout }: 
               </span>
               <div className="module-header-main">
                 <span className="module-title">{moduleDef.title}</span>
-                {moduleDef.key === "coleta-mercadoria" || moduleDef.key === "conferencia-termo" ? (
+                {moduleDef.key === "coleta-mercadoria"
+                || moduleDef.key === "conferencia-termo"
+                || moduleDef.key === "conferencia-pedido-direto" ? (
                   <span className="module-available-pill">Disponível</span>
                 ) : null}
               </div>
