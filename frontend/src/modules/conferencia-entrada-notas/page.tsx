@@ -668,6 +668,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
   const etiquetaRef = useRef<HTMLInputElement | null>(null);
   const barrasRef = useRef<HTMLInputElement | null>(null);
+  const activeVolumeRef = useRef<EntradaNotasLocalVolume | null>(null);
 
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -731,6 +732,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     && activeVolume.started_by === profile.user_id
   );
   const hasOpenConference = Boolean(activeVolume && activeVolume.status === "em_conferencia" && !activeVolume.is_read_only);
+
+  useEffect(() => {
+    activeVolumeRef.current = activeVolume;
+  }, [activeVolume]);
 
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
@@ -1158,6 +1163,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const applyVolumeUpdate = useCallback(async (nextVolume: EntradaNotasLocalVolume, focusInput = true) => {
     await saveLocalVolume(nextVolume);
+    activeVolumeRef.current = nextVolume;
     setActiveVolume(nextVolume);
     await refreshPendingState();
     if (focusInput) focusBarras();
@@ -1599,10 +1605,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   ]);
 
   const updateItemQtyLocal = useCallback(async (itemKey: string, qtd: number, barras: string | null = null) => {
-    if (!activeVolume) return;
+    const currentVolume = activeVolumeRef.current;
+    if (!currentVolume) return;
     const nowIso = new Date().toISOString();
     const nextQtd = Math.max(0, Math.trunc(qtd));
-    const nextItems = activeVolume.items
+    const nextItems = currentVolume.items
       .map((item) => (
         (item.item_key ?? String(item.coddv)) === itemKey
           ? {
@@ -1614,20 +1621,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           : item
       ))
       .filter((item) => (
-        activeVolume.conference_kind !== "avulsa"
+        currentVolume.conference_kind !== "avulsa"
           || (item.item_key ?? String(item.coddv)) !== itemKey
           || item.qtd_conferida > 0
       ));
 
     const nextVolume: EntradaNotasLocalVolume = {
-      ...activeVolume,
+      ...currentVolume,
       items: nextItems.sort(itemSort),
       pending_snapshot: true,
       updated_at: nowIso,
       sync_error: null
     };
     await applyVolumeUpdate(nextVolume);
-  }, [activeVolume, applyVolumeUpdate]);
+  }, [applyVolumeUpdate]);
 
   const upsertAvulsaItemLocal = useCallback(async (params: {
     target_conf_id: string | null;
@@ -1639,12 +1646,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     qtd_esperada: number;
     qtd_conferida: number;
   }) => {
-    if (!activeVolume) return;
+    const currentVolume = activeVolumeRef.current;
+    if (!currentVolume) return;
     const nowIso = new Date().toISOString();
     const itemKey = buildAvulsaItemKey(params.seq_entrada, params.nf, params.coddv);
     let found = false;
 
-    const nextItems = activeVolume.items.map((item) => {
+    const nextItems = currentVolume.items.map((item) => {
       const currentKey = item.item_key ?? String(item.coddv);
       if (currentKey !== itemKey) return item;
       found = true;
@@ -1678,14 +1686,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     const nextVolume: EntradaNotasLocalVolume = {
-      ...activeVolume,
+      ...currentVolume,
       items: nextItems.sort(itemSort),
       pending_snapshot: true,
       updated_at: nowIso,
       sync_error: null
     };
     await applyVolumeUpdate(nextVolume);
-  }, [activeVolume, applyVolumeUpdate]);
+  }, [applyVolumeUpdate]);
 
   const enqueueAvulsaEvent = useCallback(async (event: {
     kind: "scan" | "set_qtd";
@@ -1696,9 +1704,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     nf: number;
     target_conf_id: string | null;
   }) => {
-    if (!activeVolume) return;
+    const currentVolume = activeVolumeRef.current;
+    if (!currentVolume) return;
     const nowIso = new Date().toISOString();
-    const queue = [...(activeVolume.avulsa_queue ?? [])];
+    const queue = [...(currentVolume.avulsa_queue ?? [])];
     queue.push({
       event_id: `${nowIso}:${Math.random().toString(16).slice(2)}`,
       kind: event.kind,
@@ -1712,14 +1721,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     });
 
     const nextVolume: EntradaNotasLocalVolume = {
-      ...activeVolume,
+      ...currentVolume,
       avulsa_queue: queue,
       pending_snapshot: true,
       updated_at: nowIso,
       sync_error: null
     };
     await applyVolumeUpdate(nextVolume);
-  }, [activeVolume, applyVolumeUpdate]);
+  }, [applyVolumeUpdate]);
 
   const resolveBarcodeProduct = useCallback(async (barras: string) => {
     const normalized = normalizeBarcode(barras);
@@ -1828,6 +1837,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setEditingItemKey(null);
     setEditQtdInput("0");
     setBarcodeInput("");
+    activeVolumeRef.current = null;
     setActiveVolume(null);
     setEtiquetaInput("");
     window.requestAnimationFrame(() => {
@@ -1978,7 +1988,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       nf: chosen.nf,
       target_conf_id: chosen.target_conf_id
     });
-    if (isOnline) void runPendingSync(true);
+    if (isOnline && !preferOfflineMode) void runPendingSync(true);
     return {
       produtoRegistrado: `${chosen.descricao} (Seq ${chosen.seq_entrada}/NF ${chosen.nf})`,
       barrasRegistrada: barras,
@@ -2243,7 +2253,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             target_conf_id: item.target_conf_id ?? null
           });
         }
-        if (isOnline) void runPendingSync(true);
+        if (isOnline && !preferOfflineMode) void runPendingSync(true);
       } else {
         let targetConfId: string | null = activeVolume.remote_conf_id;
         if (activeVolume.conference_kind === "avulsa") {
@@ -2334,7 +2344,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   target_conf_id: item.target_conf_id ?? null
                 });
             }
-            if (isOnline) void runPendingSync(true);
+            if (isOnline && !preferOfflineMode) void runPendingSync(true);
           } else {
               let targetConfId: string | null = activeVolume.remote_conf_id;
               if (activeVolume.conference_kind === "avulsa") {
@@ -3103,7 +3113,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 </p>
               </div>
               <div className="termo-volume-head-right">
-                <span className={`coleta-row-status ${activeVolume.sync_error ? "error" : activeVolume.pending_snapshot || activeVolume.pending_finalize || activeVolume.pending_cancel ? "pending" : "synced"}`}>
+                <span
+                  className={`coleta-row-status ${activeVolume.sync_error ? "error" : activeVolume.pending_snapshot || activeVolume.pending_finalize || activeVolume.pending_cancel ? "pending" : "synced"}`}
+                  title={activeVolume.sync_error ?? undefined}
+                >
                   {activeVolume.sync_error ? "Erro de sync" : activeVolume.pending_snapshot || activeVolume.pending_finalize || activeVolume.pending_cancel ? "Pendente sync" : "Sincronizado"}
                 </span>
                 {canEditActiveVolume ? (
