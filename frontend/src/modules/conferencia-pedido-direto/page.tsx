@@ -441,6 +441,7 @@ function buildStoreSearchBlob(item: PedidoDiretoRouteOverviewRow): string {
   return normalizeSearchText([
     item.filial_nome ?? "",
     item.filial != null ? String(item.filial) : "",
+    item.pedidos_seq ?? "",
     `${item.conferidas}/${item.total_etiquetas}`,
     routeStatusLabel(item.status),
     item.colaborador_nome ?? "",
@@ -2503,6 +2504,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                     <div>
                                       <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
                                       <p>Volumes: {row.conferidas}/{row.total_etiquetas}</p>
+                                      <p>Pedidos/Seq: {row.pedidos_seq ?? "-"}</p>
                                       <p>Status da loja: {routeStatusLabel(lojaStatus)}</p>
                                       {lojaStatus === "em_andamento" && colaboradorNome ? (
                                         <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
@@ -2645,4 +2647,3 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     </>
   );
 }
-
