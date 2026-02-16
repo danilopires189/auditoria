@@ -42,6 +42,12 @@ function parseIntegerOrNull(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "true" || normalized === "t" || normalized === "1";
+}
+
 export function normalizeBarcode(value: string): string {
   return value.replace(/\s+/g, "").trim();
 }
@@ -121,6 +127,7 @@ function mapRouteOverview(raw: Record<string, unknown>): PedidoDiretoRouteOvervi
     conferidas: parseInteger(raw.conferidas),
     pendentes: parseInteger(raw.pendentes),
     status,
+    tem_falta: parseBoolean(raw.tem_falta),
     colaborador_nome: parseNullableString(raw.colaborador_nome),
     colaborador_mat: parseNullableString(raw.colaborador_mat),
     status_at: parseNullableString(raw.status_at)
