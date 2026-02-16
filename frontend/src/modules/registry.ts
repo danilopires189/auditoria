@@ -4,6 +4,7 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "pvps-alocacao", path: "/modulos/pvps-alocacao", title: "Auditoria de PVPs e Alocação", icon: "audit", tone: "blue" },
   { key: "atividade-extra", path: "/modulos/atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
   { key: "coleta-mercadoria", path: "/modulos/coleta-mercadoria", title: "Coleta de Mercadoria", icon: "collect", tone: "teal" },
+  { key: "check-list", path: "/modulos/check-list", title: "Check List", icon: "checklist", tone: "blue" },
   { key: "conferencia-termo", path: "/modulos/conferencia-termo", title: "Conferência de Termo", icon: "term", tone: "blue" },
   { key: "conferencia-volume-avulso", path: "/modulos/conferencia-volume-avulso", title: "Conferência de Volume Avulso", icon: "volume", tone: "teal" },
   { key: "conferencia-pedido-direto", path: "/modulos/conferencia-pedido-direto", title: "Conferência de Pedido Direto", icon: "direct", tone: "blue" },

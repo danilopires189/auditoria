@@ -25,6 +25,17 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M8 10V8a4 4 0 0 1 8 0v2" />
         </svg>
       );
+    case "checklist":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 5h11" />
+          <path d="M9 12h11" />
+          <path d="M9 19h11" />
+          <path d="M4 5l1.8 1.8L8 4.6" />
+          <path d="M4 12l1.8 1.8L8 11.6" />
+          <path d="M4 19l1.8 1.8L8 18.6" />
+        </svg>
+      );
     case "term":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">

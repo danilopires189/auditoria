@@ -8,6 +8,7 @@ import pmImage from "../assets/pm.png";
 import { supabase, supabaseInitError } from "./lib/supabase";
 import { findModuleByPath } from "./modules/registry";
 import AtividadeExtraPage from "./modules/atividade-extra/page";
+import CheckListPage from "./modules/check-list/page";
 import ColetaMercadoriaPage from "./modules/coleta-mercadoria/page";
 import ConferenciaEntradaNotasPage from "./modules/conferencia-entrada-notas/page";
 import ConferenciaPedidoDiretoPage from "./modules/conferencia-pedido-direto/page";
@@ -1121,6 +1122,7 @@ export default function App() {
           />
           <Route path="/modulos/pvps-alocacao" element={<PvpsAlocacaoPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/atividade-extra" element={<AtividadeExtraPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/check-list" element={<CheckListPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/coleta-mercadoria"
             element={
