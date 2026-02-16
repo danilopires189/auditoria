@@ -392,9 +392,9 @@ function chevronIcon(open: boolean) {
 
 function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("ID_VOL_OBRIGATORIO")) return "Informe o PedidoSeq para abrir o volume.";
-  if (value.includes("ID_VOL_NAO_ENCONTRADO")) return "ID_VOL não encontrado na base do dia.";
-  if (value.includes("ID_VOL_INVALIDO")) return "ID_VOL inválido. Use apenas números (pedido+seq).";
-  if (value.includes("ID_VOL_AMBIGUO")) return "ID_VOL ambíguo na base. Valide pedido/seq com o suporte.";
+  if (value.includes("ID_VOL_NAO_ENCONTRADO")) return "PedidoSeq não encontrado na base do dia.";
+  if (value.includes("ID_VOL_INVALIDO")) return "PedidoSeq inválido. Use apenas números (pedido+seq).";
+  if (value.includes("ID_VOL_AMBIGUO")) return "PedidoSeq ambíguo na base. Valide pedido/seq com o suporte.";
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
   if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário hoje.";
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";
@@ -405,10 +405,10 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
   if (value.includes("BASE_PEDIDO_DIRETO_VAZIA")) return "A base de Pedido Direto está vazia para este CD.";
   if (value.includes("CONFERENCIA_EM_ABERTO_OUTRO_ID_VOL")) {
-    return "Já existe uma conferência em andamento para sua matrícula. Finalize o ID_VOL atual para iniciar outro.";
+    return "Já existe uma conferência em andamento para sua matrícula. Finalize o PedidoSeq atual para iniciar outro.";
   }
   if (value.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
-    return "Esta conferência não existe mais ou já foi finalizada. Abra um novo ID_VOL.";
+    return "Esta conferência não existe mais ou já foi finalizada. Abra um novo PedidoSeq.";
   }
   return value;
 }
@@ -971,7 +971,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     setEtiquetaInput(localVolume.id_vol);
 
     if (!silent) {
-      setStatusMessage(`Conferência retomada automaticamente: ID_VOL ${localVolume.id_vol}.`);
+      setStatusMessage(`Conferência retomada automaticamente: PedidoSeq ${localVolume.id_vol}.`);
     }
 
     return localVolume;
@@ -988,8 +988,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       return;
     }
     if (hasOpenConference && activeVolume && activeVolume.id_vol !== etiqueta) {
-      setErrorMessage("Existe uma conferência em andamento para sua matrícula. Finalize o ID_VOL atual para iniciar outro.");
-      setStatusMessage(`Conferência ativa: ${activeVolume.id_vol}.`);
+      setErrorMessage("Existe uma conferência em andamento para sua matrícula. Finalize o PedidoSeq atual para iniciar outro.");
+      setStatusMessage(`Conferência ativa: PedidoSeq ${activeVolume.id_vol}.`);
       setEtiquetaInput(activeVolume.id_vol);
       return;
     }
@@ -1063,8 +1063,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         const manifestItems = await getManifestItemsByEtiqueta(profile.user_id, currentCd, etiqueta);
         if (!manifestItems.length) {
           showDialog({
-            title: "ID_VOL inválido",
-            message: "ID_VOL não encontrado na base local do Pedido Direto para este CD."
+            title: "PedidoSeq inválido",
+            message: "PedidoSeq não encontrado na base local do Pedido Direto para este CD."
           });
           return;
         }
@@ -1112,7 +1112,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           if (resumed) {
             etiquetaFinal = resumed.id_vol;
             setErrorMessage(null);
-            setStatusMessage(`Conferência retomada automaticamente: ID_VOL ${resumed.id_vol}.`);
+            setStatusMessage(`Conferência retomada automaticamente: PedidoSeq ${resumed.id_vol}.`);
             return;
           }
         } catch {
@@ -1516,12 +1516,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           sync_error: null
         };
         await applyVolumeUpdate(nextVolume, false);
-        setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outro ID_VOL.");
+        setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outro PedidoSeq.");
       } else {
         await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
         await removeLocalVolume(activeVolume.local_key);
         await refreshPendingState();
-        setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outro ID_VOL.");
+        setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outro PedidoSeq.");
       }
       clearConferenceScreen();
     } catch (error) {
@@ -1936,7 +1936,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
     showDialog({
       title: "Cancelar conferência",
-      message: `A conferência do ID_VOL ${activeVolume.id_vol} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
+      message: `A conferência do PedidoSeq ${activeVolume.id_vol} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
       confirmLabel: "Cancelar conferência",
       cancelLabel: "Voltar",
       onConfirm: () => {
@@ -2097,7 +2097,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           <form className="termo-form termo-open-form" onSubmit={onSubmitEtiqueta}>
             <h3>Abertura de volume</h3>
             <label>
-              ID_VOL
+              PedidoSeq
               <div className="input-icon-wrap with-action">
                 <span className="field-icon" aria-hidden="true">{barcodeIcon()}</span>
                 <input
@@ -2116,8 +2116,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                   type="button"
                   className="input-action-btn"
                   onClick={() => openScannerFor("etiqueta")}
-                  title="Ler ID_VOL pela câmera"
-                  aria-label="Ler ID_VOL pela câmera"
+                  title="Ler PedidoSeq pela câmera"
+                  aria-label="Ler PedidoSeq pela câmera"
                   disabled={!cameraSupported}
                 >
                   {cameraIcon()}
@@ -2134,7 +2134,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           <article className="termo-volume-card">
             <div className="termo-volume-head">
               <div>
-                <h3>Volume {activeVolume.id_vol}</h3>
+                <h3>PedidoSeq {activeVolume.id_vol}</h3>
                 <p>
                   Rota: {activeVolume.rota ?? "SEM ROTA"} | Filial: {activeVolume.filial_nome ?? "-"}
                   {activeVolume.filial != null ? ` (${activeVolume.filial})` : ""}
@@ -2605,7 +2605,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <div className="scanner-head">
                   <h3 id="termo-scanner-title">
-                    {scannerTarget === "etiqueta" ? "Scanner de ID_VOL" : "Scanner de barras"}
+                    {scannerTarget === "etiqueta" ? "Scanner de PedidoSeq" : "Scanner de barras"}
                   </h3>
                   <div className="scanner-head-actions">
                     {!isDesktop ? (
@@ -2645,6 +2645,4 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     </>
   );
 }
-
-
 
