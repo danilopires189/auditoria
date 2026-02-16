@@ -394,7 +394,7 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
   if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário hoje.";
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";
-  if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras não encontrado na base.";
+  if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SOBRA_PENDENTE")) return "Existem sobras. Corrija antes de finalizar.";
   if (value.includes("FALTA_MOTIVO_OBRIGATORIO")) return "Informe o motivo da falta para finalizar.";
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
@@ -1266,14 +1266,14 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         const lookup = await resolveBarcodeProduct(barras);
         if (!lookup) {
           showDialog({
-            title: "Código não encontrado",
-            message: "Código de barras não encontrado na base local."
+            title: "Código de barras inválido",
+            message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
           });
           return;
         }
         const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
         if (!target) {
-          const produtoNome = lookup.descricao?.trim() || `CODDV ${lookup.coddv}`;
+          const produtoNome = `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
           showDialog({
             title: "Produto fora do volume",
             message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
@@ -1329,9 +1329,19 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar leitura.";
       if (await handleClosedConferenceError(message)) return;
+      if (message.includes("BARRAS_NAO_ENCONTRADA")) {
+        showDialog({
+          title: "Código de barras inválido",
+          message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`,
+          confirmLabel: "OK"
+        });
+        return;
+      }
       if (message.includes("PRODUTO_FORA_DO_VOLUME")) {
         const lookup = await resolveBarcodeProduct(barras);
-        const produtoNome = lookup?.descricao?.trim() || `Barras ${barras}`;
+        const produtoNome = lookup
+          ? `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
+          : `Código de barras ${barras}`;
         showDialog({
           title: "Produto fora do volume",
           message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,

@@ -565,7 +565,7 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")) {
     return "Produto não faz parte de nenhum recebimento. Revise o código.";
   }
-  if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras não encontrado na base.";
+  if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
   if (value.includes("BASE_AVULSO_VAZIA") || value.includes("BASE_ENTRADA_NOTAS_VAZIA")) {
@@ -2022,14 +2022,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           const lookup = await resolveBarcodeProduct(barras);
           if (!lookup) {
             showDialog({
-              title: "Código não encontrado",
-              message: "Código de barras não encontrado na base local."
+              title: "Código de barras inválido",
+              message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
             });
             return;
           }
           const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
           if (!target) {
-            const produtoNome = lookup.descricao?.trim() || `Produto ${lookup.coddv}`;
+            const produtoNome = `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
             showDialog({
               title: "Produto fora da entrada",
               message: `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
@@ -2075,8 +2075,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         const lookup = await resolveBarcodeProduct(barras);
         if (!lookup) {
           showDialog({
-            title: "Código não encontrado",
-            message: "Código de barras não encontrado na base local."
+            title: "Código de barras inválido",
+            message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
           });
           return;
         }
@@ -2128,13 +2128,23 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar leitura.";
       if (await handleClosedConferenceError(message)) return;
+      if (message.includes("BARRAS_NAO_ENCONTRADA")) {
+        showDialog({
+          title: "Código de barras inválido",
+          message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`,
+          confirmLabel: "OK"
+        });
+        return;
+      }
       if (message.includes("PRODUTO_FORA_DA_ENTRADA")) {
         const lookup = await resolveBarcodeProduct(barras);
-        const produtoNome = lookup?.descricao?.trim() || `Barras ${barras}`;
+        const produtoNome = lookup
+          ? `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
+          : `Código de barras ${barras}`;
         showDialog({
           title: activeVolume?.conference_kind === "avulsa" ? "Produto inválido" : "Produto fora da entrada",
           message: activeVolume?.conference_kind === "avulsa"
-            ? `Produto "${produtoNome}" não faz parte de nenhum recebimento.`
+            ? `Produto "${produtoNome}" não faz parte de nenhum recebimento pendente para esta conferência.`
             : `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
           confirmLabel: "OK"
         });
@@ -2142,18 +2152,24 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       }
       if (message.includes("PRODUTO_FORA_BASE_AVULSA")) {
         const lookup = await resolveBarcodeProduct(barras);
-        const produtoNome = lookup?.descricao?.trim() || `Barras ${barras}`;
+        const produtoNome = lookup
+          ? `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
+          : `Código de barras ${barras}`;
         showDialog({
           title: "Produto inválido",
-          message: `Produto "${produtoNome}" não faz parte da base de recebimento deste CD.`,
+          message: `Produto "${produtoNome}" não faz parte de nenhum recebimento pendente para esta conferência.`,
           confirmLabel: "OK"
         });
         return;
       }
       if (message.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")) {
+        const lookup = await resolveBarcodeProduct(barras);
+        const produtoNome = lookup
+          ? `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
+          : `Código de barras ${barras}`;
         showDialog({
           title: "Produto inválido",
-          message: "Produto não faz parte de nenhum recebimento. Revise o código informado.",
+          message: `Produto "${produtoNome}" não faz parte de nenhum recebimento pendente para esta conferência.`,
           confirmLabel: "OK"
         });
         return;
