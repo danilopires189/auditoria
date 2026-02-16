@@ -439,6 +439,7 @@ function buildStoreSearchBlob(item: VolumeAvulsoRouteOverviewRow): string {
     item.filial != null ? String(item.filial) : "",
     `${item.conferidas}/${item.total_etiquetas}`,
     routeStatusLabel(item.status),
+    item.tem_falta ? "falta" : "",
     item.colaborador_nome ?? "",
     item.colaborador_mat ?? ""
   ].join(" "));
@@ -446,7 +447,12 @@ function buildStoreSearchBlob(item: VolumeAvulsoRouteOverviewRow): string {
 
 function normalizeStoreStatus(value: string | null | undefined): VolumeAvulsoStoreStatus {
   const normalized = String(value ?? "").toLowerCase();
-  if (normalized === "concluido" || normalized === "conferido") return "concluido";
+  if (
+    normalized === "concluido"
+    || normalized === "conferido"
+    || normalized === "finalizado_ok"
+    || normalized === "finalizado_falta"
+  ) return "concluido";
   if (normalized === "em_andamento" || normalized === "em_conferencia" || normalized === "iniciado") return "em_andamento";
   return "pendente";
 }
@@ -1597,6 +1603,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         conferidas: adjustedConferidas,
         pendentes: adjustedPendentes,
         status: "pendente" as const,
+        tem_falta: false,
         colaborador_nome: null,
         colaborador_mat: null,
         status_at: null
@@ -2508,6 +2515,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                             <div className="termo-route-stores">
                               {group.visible_filiais.map((row) => {
                                 const lojaStatus = normalizeStoreStatus(row.status);
+                                const lojaConcluidaComFalta = lojaStatus === "concluido" && row.tem_falta;
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
                                 const colaboradorMat = row.colaborador_mat?.trim() || "";
                                 return (
@@ -2529,9 +2537,14 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                                         <p>Concluído em: {formatDateTime(row.status_at)}</p>
                                       ) : null}
                                     </div>
-                                    <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
-                                      {routeStatusLabel(lojaStatus)}
-                                    </span>
+                                    <div className="termo-route-store-status">
+                                      <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
+                                        {routeStatusLabel(lojaStatus)}
+                                      </span>
+                                      {lojaConcluidaComFalta ? (
+                                        <span className="termo-route-store-note-falta">Falta</span>
+                                      ) : null}
+                                    </div>
                                   </div>
                                 );
                               })}

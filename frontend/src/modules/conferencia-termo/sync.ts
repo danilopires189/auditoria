@@ -42,6 +42,12 @@ function parseIntegerOrNull(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "true" || normalized === "t" || normalized === "1";
+}
+
 export function normalizeBarcode(value: string): string {
   return value.replace(/\s+/g, "").trim();
 }
@@ -83,7 +89,10 @@ function mapManifestBarras(raw: Record<string, unknown>): TermoManifestBarrasRow
 function mapRouteOverview(raw: Record<string, unknown>): TermoRouteOverviewRow {
   const statusRaw = String(raw.status ?? "pendente").toLowerCase();
   const status =
-    statusRaw === "concluido" || statusRaw === "conferido"
+    statusRaw === "concluido"
+    || statusRaw === "conferido"
+    || statusRaw === "finalizado_ok"
+    || statusRaw === "finalizado_falta"
       ? "concluido"
       : statusRaw === "em_andamento" || statusRaw === "em_conferencia"
         ? "em_andamento"
@@ -97,6 +106,7 @@ function mapRouteOverview(raw: Record<string, unknown>): TermoRouteOverviewRow {
     conferidas: parseInteger(raw.conferidas),
     pendentes: parseInteger(raw.pendentes),
     status,
+    tem_falta: parseBoolean(raw.tem_falta),
     colaborador_nome: parseNullableString(raw.colaborador_nome),
     colaborador_mat: parseNullableString(raw.colaborador_mat),
     status_at: parseNullableString(raw.status_at)
