@@ -2138,7 +2138,13 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                 <h3>PedidoSeq {activeVolume.id_vol}</h3>
                 <p>
                   Rota: {activeVolume.rota ?? "SEM ROTA"} | Filial: {activeVolume.filial_nome ?? "-"}
-                  {activeVolume.filial != null ? ` (${activeVolume.filial})` : ""}
+                  {activeVolume.filial != null ? (
+                    <>
+                      {" "}(
+                      <strong>{activeVolume.filial}</strong>
+                      )
+                    </>
+                  ) : null}
                 </p>
                 <p>
                   Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com falta"}
