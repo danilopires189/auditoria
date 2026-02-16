@@ -52,6 +52,7 @@ export interface TermoRouteOverviewRow {
   conferidas: number;
   pendentes: number;
   status: "pendente" | "em_andamento" | "concluido";
+  tem_falta: boolean;
   colaborador_nome: string | null;
   colaborador_mat: string | null;
   status_at: string | null;

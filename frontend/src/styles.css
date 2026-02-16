@@ -2190,7 +2190,8 @@ small {
 
 .termo-route-store-status {
   display: grid;
-  justify-items: end;
+  justify-items: center;
+  text-align: center;
   gap: 4px;
   flex: 0 0 auto;
 }
