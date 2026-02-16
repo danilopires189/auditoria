@@ -28,6 +28,8 @@ import type { PedidoDiretoModuleProfile } from "./modules/conferencia-pedido-dir
 import { clearUserPedidoDiretoSessionCache } from "./modules/conferencia-pedido-direto/storage";
 import type { TermoModuleProfile } from "./modules/conferencia-termo/types";
 import { clearUserTermoSessionCache } from "./modules/conferencia-termo/storage";
+import type { VolumeAvulsoModuleProfile } from "./modules/conferencia-volume-avulso/types";
+import { clearUserVolumeAvulsoSessionCache } from "./modules/conferencia-volume-avulso/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const ADMIN_EMAIL_CANDIDATES = [
@@ -1034,6 +1036,11 @@ export default function App() {
         } catch {
           // Ignore local cleanup failures and proceed with logout.
         }
+        try {
+          await clearUserVolumeAvulsoSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
       }
       await supabase!.auth.signOut();
       setAuthMode("login");
@@ -1082,6 +1089,18 @@ export default function App() {
   }, [effectiveProfile, session]);
 
   const pedidoDiretoProfile = useMemo<PedidoDiretoModuleProfile | null>(() => {
+    if (!session || !effectiveProfile) return null;
+    return {
+      user_id: effectiveProfile.user_id || session.user.id,
+      nome: effectiveProfile.nome || "Usuário",
+      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfile.role || "auditor",
+      cd_default: effectiveProfile.cd_default,
+      cd_nome: effectiveProfile.cd_nome
+    };
+  }, [effectiveProfile, session]);
+
+  const volumeAvulsoProfile = useMemo<VolumeAvulsoModuleProfile | null>(() => {
     if (!session || !effectiveProfile) return null;
     return {
       user_id: effectiveProfile.user_id || session.user.id,
@@ -1162,7 +1181,16 @@ export default function App() {
               )
             }
           />
-          <Route path="/modulos/conferencia-volume-avulso" element={<ConferenciaVolumeAvulsoPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/conferencia-volume-avulso"
+            element={
+              volumeAvulsoProfile ? (
+                <ConferenciaVolumeAvulsoPage isOnline={isOnline} profile={volumeAvulsoProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route
             path="/modulos/conferencia-pedido-direto"
             element={
