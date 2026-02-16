@@ -26,6 +26,8 @@ import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
 import type { PedidoDiretoModuleProfile } from "./modules/conferencia-pedido-direto/types";
 import { clearUserPedidoDiretoSessionCache } from "./modules/conferencia-pedido-direto/storage";
+import type { EntradaNotasModuleProfile } from "./modules/conferencia-entrada-notas/types";
+import { clearUserEntradaNotasSessionCache } from "./modules/conferencia-entrada-notas/storage";
 import type { TermoModuleProfile } from "./modules/conferencia-termo/types";
 import { clearUserTermoSessionCache } from "./modules/conferencia-termo/storage";
 import type { VolumeAvulsoModuleProfile } from "./modules/conferencia-volume-avulso/types";
@@ -1041,6 +1043,11 @@ export default function App() {
         } catch {
           // Ignore local cleanup failures and proceed with logout.
         }
+        try {
+          await clearUserEntradaNotasSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
       }
       await supabase!.auth.signOut();
       setAuthMode("login");
@@ -1101,6 +1108,18 @@ export default function App() {
   }, [effectiveProfile, session]);
 
   const volumeAvulsoProfile = useMemo<VolumeAvulsoModuleProfile | null>(() => {
+    if (!session || !effectiveProfile) return null;
+    return {
+      user_id: effectiveProfile.user_id || session.user.id,
+      nome: effectiveProfile.nome || "Usuário",
+      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfile.role || "auditor",
+      cd_default: effectiveProfile.cd_default,
+      cd_nome: effectiveProfile.cd_nome
+    };
+  }, [effectiveProfile, session]);
+
+  const entradaNotasProfile = useMemo<EntradaNotasModuleProfile | null>(() => {
     if (!session || !effectiveProfile) return null;
     return {
       user_id: effectiveProfile.user_id || session.user.id,
@@ -1201,7 +1220,16 @@ export default function App() {
               )
             }
           />
-          <Route path="/modulos/conferencia-entrada-notas" element={<ConferenciaEntradaNotasPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/conferencia-entrada-notas"
+            element={
+              entradaNotasProfile ? (
+                <ConferenciaEntradaNotasPage isOnline={isOnline} profile={entradaNotasProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="/modulos/devolucao-mercadoria" element={<DevolucaoMercadoriaPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/meta-mes" element={<MetaMesPage isOnline={isOnline} userName={displayContext.nome} />} />
