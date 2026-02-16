@@ -789,6 +789,9 @@ small {
   margin: 0;
   font-size: 0.92rem;
   color: #44516a;
+  max-height: min(44vh, 320px);
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .confirm-actions {
@@ -1707,6 +1710,43 @@ small {
   font-size: 0.8rem;
 }
 
+.entrada-base-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.entrada-base-status-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #2a426d;
+}
+
+.entrada-base-chip {
+  font-size: 0.75rem;
+  border: 1px solid #d7deeb;
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #5a6f95;
+  background: #f5f8ff;
+}
+
+.entrada-base-chip.is-ready {
+  border-color: #b6d9bf;
+  color: #1f6f34;
+  background: #ecf8ef;
+}
+
+.entrada-base-status.is-desatualizado .entrada-base-status-title {
+  color: #8a5d10;
+}
+
+.entrada-base-status.is-parcial .entrada-base-status-title {
+  color: #8e3c3c;
+}
+
 .termo-actions-row {
   display: flex;
   gap: 8px;
@@ -2155,6 +2195,13 @@ small {
   padding: 10px 12px;
   font: inherit;
   resize: vertical;
+}
+
+.termo-finalize-list {
+  border: 1px solid #d6dfed;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
 }
 
 .module-screen {

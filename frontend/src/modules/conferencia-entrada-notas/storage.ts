@@ -311,6 +311,10 @@ export async function saveManifestSnapshot(params: {
         filial: row.filial ?? null,
         filial_nome: row.filial_nome ?? null,
         rota: row.rota ?? null,
+        seq_entrada: row.seq_entrada ?? undefined,
+        nf: row.nf ?? undefined,
+        transportadora: row.transportadora ?? row.rota ?? undefined,
+        fornecedor: row.fornecedor ?? row.filial_nome ?? undefined,
         coddv,
         descricao: row.descricao,
         qtd_esperada: parsePositiveInt(row.qtd_esperada, 1)
@@ -402,11 +406,21 @@ export async function getManifestItemsByEtiqueta(
       filial: row.filial,
       filial_nome: row.filial_nome,
       rota: row.rota,
+      seq_entrada: row.seq_entrada ?? undefined,
+      nf: row.nf ?? undefined,
+      transportadora: row.transportadora ?? row.rota ?? undefined,
+      fornecedor: row.fornecedor ?? row.filial_nome ?? undefined,
       coddv: row.coddv,
       descricao: row.descricao,
       qtd_esperada: row.qtd_esperada
     }))
-    .sort((a, b) => a.coddv - b.coddv);
+    .sort((a, b) => {
+      const bySeq = (a.seq_entrada ?? Number.MAX_SAFE_INTEGER) - (b.seq_entrada ?? Number.MAX_SAFE_INTEGER);
+      if (bySeq !== 0) return bySeq;
+      const byNf = (a.nf ?? Number.MAX_SAFE_INTEGER) - (b.nf ?? Number.MAX_SAFE_INTEGER);
+      if (byNf !== 0) return byNf;
+      return a.coddv - b.coddv;
+    });
 }
 
 export async function listManifestItemsByCd(
@@ -429,11 +443,21 @@ export async function listManifestItemsByCd(
       filial: row.filial,
       filial_nome: row.filial_nome,
       rota: row.rota,
+      seq_entrada: row.seq_entrada ?? undefined,
+      nf: row.nf ?? undefined,
+      transportadora: row.transportadora ?? row.rota ?? undefined,
+      fornecedor: row.fornecedor ?? row.filial_nome ?? undefined,
       coddv: row.coddv,
       descricao: row.descricao,
       qtd_esperada: row.qtd_esperada
     }))
-    .sort((a, b) => a.coddv - b.coddv);
+    .sort((a, b) => {
+      const bySeq = (a.seq_entrada ?? Number.MAX_SAFE_INTEGER) - (b.seq_entrada ?? Number.MAX_SAFE_INTEGER);
+      if (bySeq !== 0) return bySeq;
+      const byNf = (a.nf ?? Number.MAX_SAFE_INTEGER) - (b.nf ?? Number.MAX_SAFE_INTEGER);
+      if (byNf !== 0) return byNf;
+      return a.coddv - b.coddv;
+    });
 }
 
 export async function findManifestBarras(

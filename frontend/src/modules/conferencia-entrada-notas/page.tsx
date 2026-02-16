@@ -28,6 +28,9 @@ import {
   removeLocalVolume
 } from "./storage";
 import {
+  applyAvulsaScan,
+  checkAvulsaConflict,
+  fetchAvulsaTargets,
   cancelAvulsaVolume,
   cancelVolume,
   fetchCdOptions,
@@ -43,10 +46,9 @@ import {
   normalizeBarcode,
   openAvulsaVolume,
   openVolume,
-  scanBarcodeAvulsa,
   scanBarcode,
-  setItemQtdAvulsa,
   setItemQtd,
+  resolveAvulsaTargets,
   syncPendingEntradaNotasVolumes
 } from "./sync";
 import {
@@ -59,6 +61,8 @@ import {
   refreshDbBarrasCacheSmart
 } from "../coleta-mercadoria/sync";
 import type {
+  EntradaNotasAvulsaTargetOption,
+  EntradaNotasAvulsaTargetSummary,
   CdOption,
   EntradaNotasDivergenciaTipo,
   EntradaNotasItemRow,
@@ -103,8 +107,27 @@ type DialogState = {
   onConfirm?: () => void;
 };
 
+type OfflineBaseState = {
+  entrada_ready: boolean;
+  barras_ready: boolean;
+  stale: boolean;
+  entrada_rows: number;
+  barras_rows: number;
+  entrada_updated_at: string | null;
+  barras_updated_at: string | null;
+};
+
+type AvulsaPendingScan = {
+  barras: string;
+  qtd: number;
+  coddv: number;
+  descricao: string;
+  options: EntradaNotasAvulsaTargetOption[];
+};
+
 const MODULE_DEF = getModuleByKeyOrThrow("conferencia-entrada-notas");
 const PREFERRED_SYNC_DELAY_MS = 800;
+const OFFLINE_BASE_STALE_MS = 1000 * 60 * 60 * 24;
 
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
@@ -192,6 +215,36 @@ function buildManifestInfoLine(params: {
   return `Sem base local da Entrada de Notas. Barras local: ${params.barrasRows} item(ns)${updatedText}`;
 }
 
+function isBaseTimestampStale(value: string | null | undefined): boolean {
+  if (!value) return true;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return true;
+  return Date.now() - parsed > OFFLINE_BASE_STALE_MS;
+}
+
+function buildOfflineBaseState(params: {
+  entradaRows: number;
+  barrasRows: number;
+  entradaUpdatedAt?: string | null;
+  barrasUpdatedAt?: string | null;
+}): OfflineBaseState {
+  const entradaReady = params.entradaRows > 0;
+  const barrasReady = params.barrasRows > 0;
+  const stale =
+    isBaseTimestampStale(params.entradaUpdatedAt)
+    || isBaseTimestampStale(params.barrasUpdatedAt);
+
+  return {
+    entrada_ready: entradaReady,
+    barras_ready: barrasReady,
+    stale,
+    entrada_rows: Math.max(params.entradaRows, 0),
+    barras_rows: Math.max(params.barrasRows, 0),
+    entrada_updated_at: params.entradaUpdatedAt ?? null,
+    barras_updated_at: params.barrasUpdatedAt ?? null
+  };
+}
+
 function withDivergencia(item: EntradaNotasLocalItem): {
   item: EntradaNotasLocalItem;
   divergencia: EntradaNotasDivergenciaTipo;
@@ -205,9 +258,19 @@ function withDivergencia(item: EntradaNotasLocalItem): {
 }
 
 function itemSort(a: EntradaNotasLocalItem, b: EntradaNotasLocalItem): number {
+  const aSeq = a.seq_entrada ?? 0;
+  const bSeq = b.seq_entrada ?? 0;
+  if (aSeq !== bSeq) return aSeq - bSeq;
+  const aNf = a.nf ?? 0;
+  const bNf = b.nf ?? 0;
+  if (aNf !== bNf) return aNf - bNf;
   const byDesc = a.descricao.localeCompare(b.descricao);
   if (byDesc !== 0) return byDesc;
   return a.coddv - b.coddv;
+}
+
+function buildAvulsaItemKey(seqEntrada: number, nf: number, coddv: number): string {
+  return `${seqEntrada}/${nf}:${coddv}`;
 }
 
 function parseSeqNfFromVolumeLabel(value: string): { seq_entrada: number; nf: number } {
@@ -238,7 +301,16 @@ function createLocalVolumeFromRemote(
     descricao: item.descricao,
     qtd_esperada: item.qtd_esperada,
     qtd_conferida: item.qtd_conferida,
-    updated_at: item.updated_at
+    updated_at: item.updated_at,
+    seq_entrada: item.seq_entrada ?? null,
+    nf: item.nf ?? null,
+    target_conf_id: item.target_conf_id ?? null,
+    item_key: item.item_key
+      ?? (
+        (volume.conference_kind === "avulsa" && item.seq_entrada != null && item.nf != null)
+          ? buildAvulsaItemKey(item.seq_entrada, item.nf, item.coddv)
+          : String(item.coddv)
+      )
   }));
 
   return {
@@ -268,6 +340,8 @@ function createLocalVolumeFromRemote(
     updated_at: volume.updated_at,
     is_read_only: volume.is_read_only,
     items: localItems.sort(itemSort),
+    avulsa_targets: [],
+    avulsa_queue: [],
     pending_snapshot: false,
     pending_finalize: false,
     pending_finalize_reason: null,
@@ -340,39 +414,11 @@ function createLocalVolumeFromManifest(
 function createLocalAvulsaFromManifest(
   profile: EntradaNotasModuleProfile,
   cd: number,
-  manifestItems: EntradaNotasManifestItemRow[]
+  _manifestItems: EntradaNotasManifestItemRow[]
 ): EntradaNotasLocalVolume {
   const nowIso = new Date().toISOString();
   const confDate = todayIsoBrasilia();
   const localKey = buildEntradaNotasVolumeKey(profile.user_id, cd, confDate, "AVULSA");
-  const grouped = new Map<number, EntradaNotasLocalItem>();
-
-  for (const row of manifestItems) {
-    const coddv = Number.parseInt(String(row.coddv ?? 0), 10);
-    if (!Number.isFinite(coddv) || coddv <= 0) continue;
-    const qtd = Math.max(Number.parseInt(String(row.qtd_esperada ?? 0), 10) || 0, 0);
-    const current = grouped.get(coddv);
-    if (current) {
-      current.qtd_esperada += qtd;
-      if (!current.descricao && row.descricao) current.descricao = row.descricao;
-      continue;
-    }
-    grouped.set(coddv, {
-      coddv,
-      barras: null,
-      descricao: row.descricao || `Produto ${coddv}`,
-      qtd_esperada: qtd,
-      qtd_conferida: 0,
-      updated_at: nowIso
-    });
-  }
-
-  const items = [...grouped.values()]
-    .map((item) => ({
-      ...item,
-      qtd_esperada: item.qtd_esperada > 0 ? item.qtd_esperada : 1
-    }))
-    .sort(itemSort);
   return {
     local_key: localKey,
     user_id: profile.user_id,
@@ -399,8 +445,10 @@ function createLocalAvulsaFromManifest(
     finalized_at: null,
     updated_at: nowIso,
     is_read_only: false,
-    items,
-    pending_snapshot: true,
+    items: [],
+    avulsa_targets: [],
+    avulsa_queue: [],
+    pending_snapshot: false,
     pending_finalize: false,
     pending_finalize_reason: null,
     pending_cancel: false,
@@ -625,6 +673,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
   const [manifestReady, setManifestReady] = useState(false);
   const [manifestInfo, setManifestInfo] = useState<string>("");
+  const [offlineBaseState, setOfflineBaseState] = useState<OfflineBaseState>({
+    entrada_ready: false,
+    barras_ready: false,
+    stale: true,
+    entrada_rows: 0,
+    barras_rows: 0,
+    entrada_updated_at: null,
+    barras_updated_at: null
+  });
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingErrors, setPendingErrors] = useState(0);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -640,8 +697,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [multiploInput, setMultiploInput] = useState("1");
 
   const [activeVolume, setActiveVolume] = useState<EntradaNotasLocalVolume | null>(null);
-  const [expandedCoddv, setExpandedCoddv] = useState<number | null>(null);
-  const [editingCoddv, setEditingCoddv] = useState<number | null>(null);
+  const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
+  const [editingItemKey, setEditingItemKey] = useState<string | null>(null);
   const [editQtdInput, setEditQtdInput] = useState("0");
 
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -662,6 +719,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [busyFinalize, setBusyFinalize] = useState(false);
   const [busyCancel, setBusyCancel] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
+  const [pendingAvulsaScan, setPendingAvulsaScan] = useState<AvulsaPendingScan | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
@@ -713,6 +771,21 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       correto: groupedItems.correto.length
     };
   }, [activeVolume, groupedItems]);
+
+  const offlineBaseBadge = useMemo(() => {
+    const overall = offlineBaseState.entrada_ready && offlineBaseState.barras_ready
+      ? (offlineBaseState.stale ? "desatualizado" : "completo")
+      : (offlineBaseState.entrada_ready || offlineBaseState.barras_ready ? "parcial" : "parcial");
+    return {
+      overall,
+      overallLabel:
+        overall === "completo"
+          ? "Completo"
+          : overall === "desatualizado"
+            ? "Desatualizado"
+            : "Parcial"
+    } as const;
+  }, [offlineBaseState]);
 
   const routeGroups = useMemo<EntradaNotasRouteGroup[]>(() => {
     if (routeRows.length === 0) return [];
@@ -987,6 +1060,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             hasEntradaNotasBase: true
           })
         );
+        setOfflineBaseState(
+          buildOfflineBaseState({
+            entradaRows: localMeta.row_count,
+            barrasRows: localBarrasMeta.row_count,
+            entradaUpdatedAt: localMeta.cached_at ?? localMeta.generated_at,
+            barrasUpdatedAt: localBarrasMeta.last_sync_at
+          })
+        );
         return;
       }
 
@@ -1008,7 +1089,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             return;
           }
           if (progress.step === "routes") {
-            setProgressMessage(`Atualizando rotas/filiais... ${progress.percent}% (${progress.rows} rota(s))`);
+            setProgressMessage(`Atualizando transportadoras/fornecedores... ${progress.percent}% (${progress.rows} grupo(s))`);
           }
         }, { includeBarras: false });
 
@@ -1058,7 +1139,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         })
       );
 
-      setManifestReady(true);
+      const nextBaseState = buildOfflineBaseState({
+        entradaRows: metaAfterSync?.row_count ?? termoRowCount,
+        barrasRows: barrasMetaAfterSync.row_count || barrasTotal,
+        entradaUpdatedAt: metaAfterSync?.cached_at ?? metaAfterSync?.generated_at ?? remoteMeta.generated_at,
+        barrasUpdatedAt: barrasMetaAfterSync.last_sync_at
+      });
+      setOfflineBaseState(nextBaseState);
+      setManifestReady(nextBaseState.entrada_ready && nextBaseState.barras_ready);
       if (!background) {
         setStatusMessage("Base de Entrada de Notas pronta para trabalho offline.");
       }
@@ -1095,6 +1183,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       ? await fetchAvulsaItems(remoteActive.conf_id)
       : await fetchVolumeItems(remoteActive.conf_id);
     const localVolume = createLocalVolumeFromRemote(profile, remoteActive, remoteItems);
+    if (remoteActive.conference_kind === "avulsa") {
+      localVolume.avulsa_targets = await fetchAvulsaTargets(remoteActive.conf_id);
+    }
     await saveLocalVolume(localVolume);
     setActiveVolume(localVolume);
     setEtiquetaInput(localVolume.nr_volume);
@@ -1160,8 +1251,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               cancelLabel: "Cancelar",
               onConfirm: () => {
                 setActiveVolume(existingToday);
-                setExpandedCoddv(null);
-                setEditingCoddv(null);
+                setExpandedItemKey(null);
+                setEditingItemKey(null);
                 setEditQtdInput("0");
                 setStatusMessage("Conferência aberta em modo leitura.");
                 closeDialog();
@@ -1171,8 +1262,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           }
           setActiveVolume(existingToday);
           etiquetaFinal = existingToday.nr_volume;
-          setExpandedCoddv(null);
-          setEditingCoddv(null);
+          setExpandedItemKey(null);
+          setEditingItemKey(null);
           setEditQtdInput("0");
           setStatusMessage("Conferência retomada do cache local.");
           return;
@@ -1260,8 +1351,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       setErrorMessage(normalizeRpcErrorMessage(message));
     } finally {
       setBusyOpenVolume(false);
-      setExpandedCoddv(null);
-      setEditingCoddv(null);
+      setExpandedItemKey(null);
+      setEditingItemKey(null);
       setEditQtdInput("0");
       setEtiquetaInput(etiquetaFinal);
       focusBarras();
@@ -1281,6 +1372,24 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     resumeRemoteActiveVolume,
     showDialog
   ]);
+
+  const openAvulsaVolumeWithRemoteState = useCallback(async (cd: number) => {
+    const remoteVolume = await openAvulsaVolume(cd);
+    const [remoteItems, targets] = await Promise.all([
+      fetchAvulsaItems(remoteVolume.conf_id),
+      fetchAvulsaTargets(remoteVolume.conf_id)
+    ]);
+    const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+    localVolume.avulsa_targets = targets;
+    localVolume.avulsa_queue = [];
+    localVolume.pending_snapshot = false;
+    localVolume.pending_finalize = false;
+    localVolume.pending_cancel = false;
+    localVolume.sync_error = null;
+    localVolume.last_synced_at = new Date().toISOString();
+    await saveLocalVolume(localVolume);
+    return { remoteVolume, localVolume };
+  }, [profile]);
 
   const openAvulsaConference = useCallback(async () => {
     if (currentCd == null) {
@@ -1324,8 +1433,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               cancelLabel: "Cancelar",
               onConfirm: () => {
                 setActiveVolume(existingToday);
-                setExpandedCoddv(null);
-                setEditingCoddv(null);
+                setExpandedItemKey(null);
+                setEditingItemKey(null);
                 setEditQtdInput("0");
                 setStatusMessage("Conferência avulsa aberta em modo leitura.");
                 closeDialog();
@@ -1333,19 +1442,65 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             });
             return;
           }
+
+          if (isOnline && existingToday.remote_conf_id && existingToday.pending_snapshot) {
+            const conflict = await checkAvulsaConflict(existingToday.remote_conf_id);
+            const localDiscardItems = existingToday.items.filter((item) => item.qtd_conferida > 0);
+            if (conflict.has_remote_data && localDiscardItems.length > 0) {
+              const lines = localDiscardItems
+                .sort(itemSort)
+                .slice(0, 50)
+                .map((item) => {
+                  const seqLabel = item.seq_entrada != null && item.nf != null
+                    ? `Seq ${item.seq_entrada}/NF ${item.nf} - `
+                    : "";
+                  return `${seqLabel}${item.descricao}: ${item.qtd_conferida}`;
+                });
+              const moreCount = Math.max(localDiscardItems.length - lines.length, 0);
+              showDialog({
+                title: "Conflito com dados no banco",
+                message:
+                  `Já existe conferência salva no banco para esta avulsa.${conflict.seq_nf_list ? `\nSeq/NF no banco: ${conflict.seq_nf_list}` : ""}\n\n` +
+                  "Se continuar, o rascunho local abaixo será descartado:\n" +
+                  `${lines.join("\n")}${moreCount > 0 ? `\n... e mais ${moreCount} item(ns)` : ""}`,
+                confirmLabel: "Descartar rascunho local",
+                cancelLabel: "Não continuar",
+                onConfirm: () => {
+                  void (async () => {
+                    closeDialog();
+                    try {
+                      const { remoteVolume, localVolume } = await openAvulsaVolumeWithRemoteState(currentCd);
+                      setActiveVolume(localVolume);
+                      setEtiquetaInput(localVolume.nr_volume);
+                      etiquetaFinal = localVolume.nr_volume;
+                      setStatusMessage(
+                        remoteVolume.is_read_only
+                          ? "Conferência avulsa já finalizada. Aberta em leitura."
+                          : "Rascunho local descartado. Conferência carregada com dados do banco."
+                      );
+                    } catch (discardError) {
+                      const discardMessage = discardError instanceof Error
+                        ? discardError.message
+                        : "Falha ao recarregar conferência do banco.";
+                      setErrorMessage(normalizeRpcErrorMessage(discardMessage));
+                    }
+                  })();
+                }
+              });
+              return;
+            }
+          }
+
           setActiveVolume(existingToday);
-          setExpandedCoddv(null);
-          setEditingCoddv(null);
+          setExpandedItemKey(null);
+          setEditingItemKey(null);
           setEditQtdInput("0");
           setStatusMessage("Conferência avulsa retomada do cache local.");
           return;
         }
 
         if (isOnline) {
-          const remoteVolume = await openAvulsaVolume(currentCd);
-          const remoteItems = await fetchAvulsaItems(remoteVolume.conf_id);
-          const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
-          await saveLocalVolume(localVolume);
+          const { remoteVolume, localVolume } = await openAvulsaVolumeWithRemoteState(currentCd);
           setActiveVolume(localVolume);
           etiquetaFinal = localVolume.nr_volume;
           setStatusMessage(
@@ -1380,10 +1535,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         return;
       }
 
-      const remoteVolume = await openAvulsaVolume(currentCd);
-      const remoteItems = await fetchAvulsaItems(remoteVolume.conf_id);
-      const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
-      await saveLocalVolume(localVolume);
+      const { remoteVolume, localVolume } = await openAvulsaVolumeWithRemoteState(currentCd);
       etiquetaFinal = localVolume.nr_volume;
 
       if (remoteVolume.is_read_only) {
@@ -1423,8 +1575,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       setErrorMessage(normalizeRpcErrorMessage(message));
     } finally {
       setBusyOpenVolume(false);
-      setExpandedCoddv(null);
-      setEditingCoddv(null);
+      setExpandedItemKey(null);
+      setEditingItemKey(null);
       setEditQtdInput("0");
       setEtiquetaInput(etiquetaFinal);
       focusBarras();
@@ -1442,26 +1594,126 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     prepareOfflineManifest,
     profile,
     resumeRemoteActiveVolume,
-    showDialog
+    showDialog,
+    openAvulsaVolumeWithRemoteState
   ]);
 
-  const updateItemQtyLocal = useCallback(async (coddv: number, qtd: number, barras: string | null = null) => {
+  const updateItemQtyLocal = useCallback(async (itemKey: string, qtd: number, barras: string | null = null) => {
     if (!activeVolume) return;
     const nowIso = new Date().toISOString();
-    const nextItems = activeVolume.items.map((item) => (
-      item.coddv === coddv
-        ? {
-            ...item,
-            barras: barras ?? item.barras ?? null,
-            qtd_conferida: Math.max(0, Math.trunc(qtd)),
-            updated_at: nowIso
-          }
-        : item
-    ));
+    const nextQtd = Math.max(0, Math.trunc(qtd));
+    const nextItems = activeVolume.items
+      .map((item) => (
+        (item.item_key ?? String(item.coddv)) === itemKey
+          ? {
+              ...item,
+              barras: barras ?? item.barras ?? null,
+              qtd_conferida: nextQtd,
+              updated_at: nowIso
+            }
+          : item
+      ))
+      .filter((item) => (
+        activeVolume.conference_kind !== "avulsa"
+          || (item.item_key ?? String(item.coddv)) !== itemKey
+          || item.qtd_conferida > 0
+      ));
 
     const nextVolume: EntradaNotasLocalVolume = {
       ...activeVolume,
       items: nextItems.sort(itemSort),
+      pending_snapshot: true,
+      updated_at: nowIso,
+      sync_error: null
+    };
+    await applyVolumeUpdate(nextVolume);
+  }, [activeVolume, applyVolumeUpdate]);
+
+  const upsertAvulsaItemLocal = useCallback(async (params: {
+    target_conf_id: string | null;
+    seq_entrada: number;
+    nf: number;
+    coddv: number;
+    descricao: string;
+    barras: string;
+    qtd_esperada: number;
+    qtd_conferida: number;
+  }) => {
+    if (!activeVolume) return;
+    const nowIso = new Date().toISOString();
+    const itemKey = buildAvulsaItemKey(params.seq_entrada, params.nf, params.coddv);
+    let found = false;
+
+    const nextItems = activeVolume.items.map((item) => {
+      const currentKey = item.item_key ?? String(item.coddv);
+      if (currentKey !== itemKey) return item;
+      found = true;
+      return {
+        ...item,
+        barras: (params.barras || item.barras) ?? null,
+        descricao: params.descricao || item.descricao,
+        qtd_esperada: Math.max(params.qtd_esperada, 0),
+        qtd_conferida: Math.max(params.qtd_conferida, 0),
+        seq_entrada: params.seq_entrada,
+        nf: params.nf,
+        target_conf_id: params.target_conf_id,
+        item_key: itemKey,
+        updated_at: nowIso
+      } satisfies EntradaNotasLocalItem;
+    });
+
+    if (!found) {
+      nextItems.push({
+        coddv: params.coddv,
+        barras: params.barras || null,
+        descricao: params.descricao || `Produto ${params.coddv}`,
+        qtd_esperada: Math.max(params.qtd_esperada, 0),
+        qtd_conferida: Math.max(params.qtd_conferida, 0),
+        seq_entrada: params.seq_entrada,
+        nf: params.nf,
+        target_conf_id: params.target_conf_id,
+        item_key: itemKey,
+        updated_at: nowIso
+      });
+    }
+
+    const nextVolume: EntradaNotasLocalVolume = {
+      ...activeVolume,
+      items: nextItems.sort(itemSort),
+      pending_snapshot: true,
+      updated_at: nowIso,
+      sync_error: null
+    };
+    await applyVolumeUpdate(nextVolume);
+  }, [activeVolume, applyVolumeUpdate]);
+
+  const enqueueAvulsaEvent = useCallback(async (event: {
+    kind: "scan" | "set_qtd";
+    barras: string;
+    coddv: number;
+    qtd: number;
+    seq_entrada: number;
+    nf: number;
+    target_conf_id: string | null;
+  }) => {
+    if (!activeVolume) return;
+    const nowIso = new Date().toISOString();
+    const queue = [...(activeVolume.avulsa_queue ?? [])];
+    queue.push({
+      event_id: `${nowIso}:${Math.random().toString(16).slice(2)}`,
+      kind: event.kind,
+      barras: event.barras,
+      coddv: event.coddv,
+      qtd: Math.max(0, Math.trunc(event.qtd)),
+      seq_entrada: event.seq_entrada,
+      nf: event.nf,
+      target_conf_id: event.target_conf_id,
+      created_at: nowIso
+    });
+
+    const nextVolume: EntradaNotasLocalVolume = {
+      ...activeVolume,
+      avulsa_queue: queue,
       pending_snapshot: true,
       updated_at: nowIso,
       sync_error: null
@@ -1489,11 +1741,91 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
   }, [isOnline]);
 
+  const resolveAvulsaTargetsOffline = useCallback(async (
+    coddv: number,
+    barras: string,
+    descricaoFallback: string
+  ): Promise<EntradaNotasAvulsaTargetOption[]> => {
+    if (currentCd == null) return [];
+    const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+    const filtered = manifestItems.filter((row) => row.coddv === coddv);
+    if (!filtered.length) return [];
+
+    const grouped = new Map<string, {
+      seq_entrada: number;
+      nf: number;
+      transportadora: string;
+      fornecedor: string;
+      qtd_esperada: number;
+      descricao: string;
+    }>();
+
+    for (const row of filtered) {
+      const seq = Number.parseInt(String(row.seq_entrada ?? 0), 10);
+      const nf = Number.parseInt(String(row.nf ?? 0), 10);
+      if (!Number.isFinite(seq) || !Number.isFinite(nf) || seq <= 0 || nf <= 0) continue;
+      const key = `${seq}|${nf}`;
+      const current = grouped.get(key);
+      if (!current) {
+        grouped.set(key, {
+          seq_entrada: seq,
+          nf,
+          transportadora: row.transportadora ?? row.rota ?? "SEM TRANSPORTADORA",
+          fornecedor: row.fornecedor ?? row.filial_nome ?? "SEM FORNECEDOR",
+          qtd_esperada: Math.max(Number.parseInt(String(row.qtd_esperada ?? 0), 10) || 0, 0),
+          descricao: row.descricao || descricaoFallback || `Produto ${coddv}`
+        });
+      } else {
+        current.qtd_esperada += Math.max(Number.parseInt(String(row.qtd_esperada ?? 0), 10) || 0, 0);
+      }
+    }
+
+    const options: EntradaNotasAvulsaTargetOption[] = [];
+    for (const entry of grouped.values()) {
+      const itemKey = buildAvulsaItemKey(entry.seq_entrada, entry.nf, coddv);
+      const localConferida = activeVolume?.items.find((item) => (item.item_key ?? String(item.coddv)) === itemKey)?.qtd_conferida ?? 0;
+      const routeRow = routeRows.find((row) => row.seq_entrada === entry.seq_entrada && row.nf === entry.nf);
+      const routeStatus = normalizeStoreStatus(routeRow?.status);
+      const isConcluido = routeStatus === "concluido";
+      const routeMat = routeRow?.colaborador_mat?.trim() || "";
+      const currentMat = profile.mat?.trim() || "";
+      const isLockedByOther = routeStatus === "em_andamento" && routeMat !== "" && routeMat !== currentMat;
+      const qtdPendente = Math.max(entry.qtd_esperada - localConferida, 0);
+      options.push({
+        coddv,
+        descricao: entry.descricao,
+        barras,
+        seq_entrada: entry.seq_entrada,
+        nf: entry.nf,
+        transportadora: entry.transportadora,
+        fornecedor: entry.fornecedor,
+        qtd_esperada: entry.qtd_esperada,
+        qtd_conferida: localConferida,
+        qtd_pendente: qtdPendente,
+        target_conf_id: null,
+        target_status: isConcluido ? "finalizado_ok" : "em_conferencia",
+        started_by: null,
+        started_nome: routeRow?.colaborador_nome ?? null,
+        started_mat: routeMat || null,
+        is_locked: isLockedByOther,
+        is_available: qtdPendente > 0 && !isConcluido && !isLockedByOther
+      });
+    }
+
+    return options.sort((a, b) => {
+      const pendingDiff = Number(b.is_available) - Number(a.is_available);
+      if (pendingDiff !== 0) return pendingDiff;
+      if (a.seq_entrada !== b.seq_entrada) return a.seq_entrada - b.seq_entrada;
+      return a.nf - b.nf;
+    });
+  }, [activeVolume?.items, currentCd, profile.user_id, routeRows]);
+
   const clearConferenceScreen = useCallback(() => {
     setShowFinalizeModal(false);
     setFinalizeError(null);
-    setExpandedCoddv(null);
-    setEditingCoddv(null);
+    setPendingAvulsaScan(null);
+    setExpandedItemKey(null);
+    setEditingItemKey(null);
     setEditQtdInput("0");
     setBarcodeInput("");
     setActiveVolume(null);
@@ -1516,6 +1848,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           ? await fetchAvulsaItems(remoteVolume.conf_id)
           : await fetchVolumeItems(remoteVolume.conf_id);
         const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+        if (activeVolume.conference_kind === "avulsa") {
+          localVolume.avulsa_targets = await fetchAvulsaTargets(remoteVolume.conf_id);
+        }
         await saveLocalVolume(localVolume);
         setActiveVolume(localVolume);
         setEtiquetaInput(localVolume.nr_volume);
@@ -1549,6 +1884,116 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return true;
   }, [activeVolume, clearConferenceScreen, isOnline, profile, refreshPendingState]);
 
+  const applyAvulsaScanChoice = useCallback(async (
+    barras: string,
+    qtd: number,
+    chosen: EntradaNotasAvulsaTargetOption
+  ): Promise<{ produtoRegistrado: string; barrasRegistrada: string; registroRemoto: boolean }> => {
+    if (!activeVolume || activeVolume.conference_kind !== "avulsa") {
+      throw new Error("Conferência avulsa não está ativa.");
+    }
+
+    const chosenItemKey = buildAvulsaItemKey(chosen.seq_entrada, chosen.nf, chosen.coddv);
+    const onlineAvulsa = isOnline && !preferOfflineMode && Boolean(activeVolume.remote_conf_id);
+
+    if (onlineAvulsa && activeVolume.remote_conf_id) {
+      const updated = await applyAvulsaScan(
+        activeVolume.remote_conf_id,
+        barras,
+        qtd,
+        chosen.seq_entrada,
+        chosen.nf
+      );
+      const nowIso = new Date().toISOString();
+      const itemKey = updated.item_key ?? chosenItemKey;
+      let found = false;
+      const nextItems = activeVolume.items.map((item) => {
+        const key = item.item_key ?? String(item.coddv);
+        if (key !== itemKey) return item;
+        found = true;
+        return {
+          ...item,
+          barras: updated.barras ?? barras,
+          descricao: updated.descricao,
+          qtd_esperada: updated.qtd_esperada,
+          qtd_conferida: updated.qtd_conferida,
+          seq_entrada: updated.seq_entrada ?? chosen.seq_entrada,
+          nf: updated.nf ?? chosen.nf,
+          target_conf_id: updated.target_conf_id ?? updated.conf_id,
+          item_key: itemKey,
+          updated_at: updated.updated_at
+        } satisfies EntradaNotasLocalItem;
+      });
+      if (!found) {
+        nextItems.push({
+          coddv: updated.coddv,
+          barras: updated.barras ?? barras,
+          descricao: updated.descricao,
+          qtd_esperada: updated.qtd_esperada,
+          qtd_conferida: updated.qtd_conferida,
+          seq_entrada: updated.seq_entrada ?? chosen.seq_entrada,
+          nf: updated.nf ?? chosen.nf,
+          target_conf_id: updated.target_conf_id ?? updated.conf_id,
+          item_key: itemKey,
+          updated_at: updated.updated_at
+        });
+      }
+      const targets = await fetchAvulsaTargets(activeVolume.remote_conf_id);
+      const nextVolume: EntradaNotasLocalVolume = {
+        ...activeVolume,
+        items: nextItems.sort(itemSort),
+        avulsa_targets: targets,
+        pending_snapshot: false,
+        avulsa_queue: [],
+        sync_error: null,
+        updated_at: nowIso,
+        last_synced_at: nowIso
+      };
+      await applyVolumeUpdate(nextVolume);
+      return {
+        produtoRegistrado: `${updated.descricao} (Seq ${updated.seq_entrada ?? chosen.seq_entrada}/NF ${updated.nf ?? chosen.nf})`,
+        barrasRegistrada: updated.barras ?? barras,
+        registroRemoto: true
+      };
+    }
+
+    const current = activeVolume.items.find((item) => (item.item_key ?? String(item.coddv)) === chosenItemKey);
+    const nextQtd = (current?.qtd_conferida ?? 0) + qtd;
+    await upsertAvulsaItemLocal({
+      target_conf_id: current?.target_conf_id ?? chosen.target_conf_id,
+      seq_entrada: chosen.seq_entrada,
+      nf: chosen.nf,
+      coddv: chosen.coddv,
+      descricao: chosen.descricao,
+      barras,
+      qtd_esperada: chosen.qtd_esperada,
+      qtd_conferida: nextQtd
+    });
+    await enqueueAvulsaEvent({
+      kind: "scan",
+      barras,
+      coddv: chosen.coddv,
+      qtd,
+      seq_entrada: chosen.seq_entrada,
+      nf: chosen.nf,
+      target_conf_id: chosen.target_conf_id
+    });
+    if (isOnline) void runPendingSync(true);
+    return {
+      produtoRegistrado: `${chosen.descricao} (Seq ${chosen.seq_entrada}/NF ${chosen.nf})`,
+      barrasRegistrada: barras,
+      registroRemoto: false
+    };
+  }, [
+    activeVolume,
+    applyVolumeUpdate,
+    enqueueAvulsaEvent,
+    isOnline,
+    preferOfflineMode,
+    runPendingSync,
+    upsertAvulsaItemLocal
+  ]);
+
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
       setErrorMessage("Inicie uma conferência para começar a bipagem.");
@@ -1570,7 +2015,63 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setErrorMessage(null);
 
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      const isAvulsa = activeVolume.conference_kind === "avulsa";
+
+      if (!isAvulsa) {
+        if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+          const lookup = await resolveBarcodeProduct(barras);
+          if (!lookup) {
+            showDialog({
+              title: "Código não encontrado",
+              message: "Código de barras não encontrado na base local."
+            });
+            return;
+          }
+          const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
+          if (!target) {
+            const produtoNome = lookup.descricao?.trim() || `Produto ${lookup.coddv}`;
+            showDialog({
+              title: "Produto fora da entrada",
+              message: `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
+              confirmLabel: "OK"
+            });
+            return;
+          }
+          const itemKey = target.item_key ?? String(target.coddv);
+          produtoRegistrado = target.descricao;
+          barrasRegistrada = lookup.barras || barras;
+          await updateItemQtyLocal(itemKey, target.qtd_conferida + qtd, barrasRegistrada);
+          if (isOnline) {
+            void runPendingSync(true);
+          }
+        } else {
+          const updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd);
+          produtoRegistrado = updated.descricao;
+          barrasRegistrada = updated.barras ?? barras;
+          registroRemoto = true;
+          const nowIso = new Date().toISOString();
+          const nextItems = activeVolume.items.map((item) => (
+            item.coddv === updated.coddv
+              ? {
+                  ...item,
+                  barras: updated.barras ?? barras,
+                  qtd_conferida: updated.qtd_conferida,
+                  qtd_esperada: updated.qtd_esperada,
+                  updated_at: updated.updated_at
+                }
+              : item
+          ));
+          const nextVolume: EntradaNotasLocalVolume = {
+            ...activeVolume,
+            items: nextItems.sort(itemSort),
+            updated_at: nowIso,
+            pending_snapshot: false,
+            sync_error: null,
+            last_synced_at: nowIso
+          };
+          await applyVolumeUpdate(nextVolume);
+        }
+      } else {
         const lookup = await resolveBarcodeProduct(barras);
         if (!lookup) {
           showDialog({
@@ -1579,52 +2080,38 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           });
           return;
         }
-        const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
-        if (!target) {
-          const produtoNome = lookup.descricao?.trim() || `CODDV ${lookup.coddv}`;
+
+        const onlineAvulsa = isOnline && !preferOfflineMode && Boolean(activeVolume.remote_conf_id);
+        const candidateOptions = onlineAvulsa && activeVolume.remote_conf_id
+          ? await resolveAvulsaTargets(activeVolume.remote_conf_id, barras)
+          : await resolveAvulsaTargetsOffline(lookup.coddv, lookup.barras || barras, lookup.descricao ?? "");
+        const availableOptions = candidateOptions.filter((option) => option.is_available);
+
+        if (availableOptions.length === 0) {
           showDialog({
-            title: activeVolume.conference_kind === "avulsa" ? "Produto inválido" : "Produto fora da entrada",
-            message: activeVolume.conference_kind === "avulsa"
-              ? `Produto "${produtoNome}" não faz parte de nenhum recebimento.`
-              : `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
+            title: "Sem pendência disponível",
+            message: "Este produto não possui Seq/NF pendente disponível para conferência.",
             confirmLabel: "OK"
           });
           return;
         }
-        produtoRegistrado = target.descricao;
-        barrasRegistrada = lookup.barras || barras;
-        await updateItemQtyLocal(target.coddv, target.qtd_conferida + qtd, barrasRegistrada);
-        if (isOnline) {
-          void runPendingSync(true);
+
+        if (availableOptions.length > 1) {
+          setPendingAvulsaScan({
+            barras: lookup.barras || barras,
+            qtd,
+            coddv: lookup.coddv,
+            descricao: lookup.descricao || `Produto ${lookup.coddv}`,
+            options: availableOptions
+          });
+          return;
         }
-      } else {
-        const updated = activeVolume.conference_kind === "avulsa"
-          ? await scanBarcodeAvulsa(activeVolume.remote_conf_id, barras, qtd)
-          : await scanBarcode(activeVolume.remote_conf_id, barras, qtd);
-        produtoRegistrado = updated.descricao;
-        barrasRegistrada = updated.barras ?? barras;
-        registroRemoto = true;
-        const nowIso = new Date().toISOString();
-        const nextItems = activeVolume.items.map((item) => (
-          item.coddv === updated.coddv
-            ? {
-                ...item,
-                barras: updated.barras ?? barras,
-                qtd_conferida: updated.qtd_conferida,
-                qtd_esperada: updated.qtd_esperada,
-                updated_at: updated.updated_at
-              }
-            : item
-        ));
-        const nextVolume: EntradaNotasLocalVolume = {
-          ...activeVolume,
-          items: nextItems.sort(itemSort),
-          updated_at: nowIso,
-          pending_snapshot: false,
-          sync_error: null,
-          last_synced_at: nowIso
-        };
-        await applyVolumeUpdate(nextVolume);
+
+        const chosen = availableOptions[0];
+        const result = await applyAvulsaScanChoice(lookup.barras || barras, qtd, chosen);
+        produtoRegistrado = result.produtoRegistrado;
+        barrasRegistrada = result.barrasRegistrada;
+        registroRemoto = result.registroRemoto;
       }
 
       setBarcodeInput("");
@@ -1675,6 +2162,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
   }, [
     activeVolume,
+    applyAvulsaScanChoice,
     applyVolumeUpdate,
     canEditActiveVolume,
     focusBarras,
@@ -1682,6 +2170,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     multiploInput,
     persistPreferences,
     preferOfflineMode,
+    resolveAvulsaTargetsOffline,
     resolveBarcodeProduct,
     runPendingSync,
     showDialog,
@@ -1689,31 +2178,84 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     handleClosedConferenceError
   ]);
 
-  const handleSaveItemEdit = useCallback(async (coddv: number) => {
+  const handleSelectPendingAvulsaScan = useCallback(async (option: EntradaNotasAvulsaTargetOption) => {
+    if (!pendingAvulsaScan) return;
+    try {
+      const result = await applyAvulsaScanChoice(pendingAvulsaScan.barras, pendingAvulsaScan.qtd, option);
+      setPendingAvulsaScan(null);
+      setBarcodeInput("");
+      setMultiploInput("1");
+      await persistPreferences({ multiplo_padrao: 1 });
+      const baseMessage = `${result.produtoRegistrado} | Barras: ${result.barrasRegistrada} | +${pendingAvulsaScan.qtd}`;
+      setStatusMessage(
+        result.registroRemoto
+          ? `Produto registrado na conferência: ${baseMessage}`
+          : `Produto registrado localmente: ${baseMessage}`
+      );
+      focusBarras();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao registrar leitura avulsa.";
+      if (await handleClosedConferenceError(message)) return;
+      setErrorMessage(normalizeRpcErrorMessage(message));
+    }
+  }, [
+    applyAvulsaScanChoice,
+    focusBarras,
+    handleClosedConferenceError,
+    pendingAvulsaScan,
+    persistPreferences
+  ]);
+
+  const handleSaveItemEdit = useCallback(async (itemKey: string) => {
     if (!activeVolume) return;
     if (!canEditActiveVolume) return;
+    const item = activeVolume.items.find((row) => (row.item_key ?? String(row.coddv)) === itemKey);
+    if (!item) return;
     const qtd = parsePositiveInteger(editQtdInput, 0);
 
     try {
       if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
-        await updateItemQtyLocal(coddv, qtd);
+        await updateItemQtyLocal(itemKey, qtd, item.barras ?? null);
+        if (activeVolume.conference_kind === "avulsa" && item.seq_entrada != null && item.nf != null) {
+          await enqueueAvulsaEvent({
+            kind: "set_qtd",
+            barras: item.barras ?? "",
+            coddv: item.coddv,
+            qtd,
+            seq_entrada: item.seq_entrada,
+            nf: item.nf,
+            target_conf_id: item.target_conf_id ?? null
+          });
+        }
         if (isOnline) void runPendingSync(true);
       } else {
-        const updated = activeVolume.conference_kind === "avulsa"
-          ? await setItemQtdAvulsa(activeVolume.remote_conf_id, coddv, qtd)
-          : await setItemQtd(activeVolume.remote_conf_id, coddv, qtd);
+        let targetConfId: string | null = activeVolume.remote_conf_id;
+        if (activeVolume.conference_kind === "avulsa") {
+          targetConfId = item.target_conf_id ?? null;
+          if (!targetConfId && item.seq_entrada != null && item.nf != null) {
+            targetConfId = (await openVolume(`${item.seq_entrada}/${item.nf}`, activeVolume.cd)).conf_id;
+          }
+          if (!targetConfId) throw new Error("ALVO_SEQ_NF_INVALIDO");
+        }
+        if (!targetConfId) throw new Error("CONFERENCIA_NAO_ENCONTRADA");
+
+        const updated = await setItemQtd(targetConfId, item.coddv, qtd);
         const nowIso = new Date().toISOString();
-        const nextItems = activeVolume.items.map((item) => (
-          item.coddv === updated.coddv
-            ? {
-                ...item,
-                barras: updated.barras ?? item.barras ?? null,
-                qtd_conferida: updated.qtd_conferida,
-                qtd_esperada: updated.qtd_esperada,
-                updated_at: updated.updated_at
-              }
-            : item
-        ));
+        const nextItems = activeVolume.items
+          .map((row) => {
+            const rowKey = row.item_key ?? String(row.coddv);
+            if (rowKey !== itemKey) return row;
+            return {
+              ...row,
+              barras: updated.barras ?? row.barras ?? null,
+              qtd_conferida: updated.qtd_conferida,
+              qtd_esperada: updated.qtd_esperada,
+              target_conf_id: activeVolume.conference_kind === "avulsa" ? targetConfId : row.target_conf_id,
+              updated_at: updated.updated_at
+            };
+          })
+          .filter((row) => activeVolume.conference_kind !== "avulsa" || row.qtd_conferida > 0);
+
         const nextVolume: EntradaNotasLocalVolume = {
           ...activeVolume,
           items: nextItems.sort(itemSort),
@@ -1722,9 +2264,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           sync_error: null,
           last_synced_at: nowIso
         };
+
+        if (activeVolume.conference_kind === "avulsa" && activeVolume.remote_conf_id) {
+          nextVolume.avulsa_targets = await fetchAvulsaTargets(activeVolume.remote_conf_id);
+          nextVolume.avulsa_queue = [];
+        }
+
         await applyVolumeUpdate(nextVolume);
       }
-      setEditingCoddv(null);
+      setEditingItemKey(null);
       setEditQtdInput("0");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao salvar item.";
@@ -1736,6 +2284,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     applyVolumeUpdate,
     canEditActiveVolume,
     editQtdInput,
+    enqueueAvulsaEvent,
     isOnline,
     preferOfflineMode,
     runPendingSync,
@@ -1743,11 +2292,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     handleClosedConferenceError
   ]);
 
-  const requestResetItem = useCallback((coddv: number) => {
+  const requestResetItem = useCallback((itemKey: string) => {
     if (!activeVolume || !canEditActiveVolume) return;
-    const item = activeVolume.items.find((row) => row.coddv === coddv);
-    if (!item) return;
-    if (item.qtd_conferida <= 0) return;
+    const item = activeVolume.items.find((row) => (row.item_key ?? String(row.coddv)) === itemKey);
+    if (!item || item.qtd_conferida <= 0) return;
 
     showDialog({
       title: "Limpar conferência do item",
@@ -1758,24 +2306,44 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         void (async () => {
           try {
             if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
-              await updateItemQtyLocal(coddv, 0);
-              if (isOnline) void runPendingSync(true);
-            } else {
-              const updated = activeVolume.conference_kind === "avulsa"
-                ? await setItemQtdAvulsa(activeVolume.remote_conf_id, coddv, 0)
-                : await setItemQtd(activeVolume.remote_conf_id, coddv, 0);
+              await updateItemQtyLocal(itemKey, 0, item.barras ?? null);
+              if (activeVolume.conference_kind === "avulsa" && item.seq_entrada != null && item.nf != null) {
+                await enqueueAvulsaEvent({
+                  kind: "set_qtd",
+                  barras: item.barras ?? "",
+                  coddv: item.coddv,
+                  qtd: 0,
+                  seq_entrada: item.seq_entrada,
+                  nf: item.nf,
+                  target_conf_id: item.target_conf_id ?? null
+                });
+            }
+            if (isOnline) void runPendingSync(true);
+          } else {
+              let targetConfId: string | null = activeVolume.remote_conf_id;
+              if (activeVolume.conference_kind === "avulsa") {
+                targetConfId = item.target_conf_id ?? null;
+                if (!targetConfId && item.seq_entrada != null && item.nf != null) {
+                  targetConfId = (await openVolume(`${item.seq_entrada}/${item.nf}`, activeVolume.cd)).conf_id;
+                }
+                if (!targetConfId) throw new Error("ALVO_SEQ_NF_INVALIDO");
+              }
+              if (!targetConfId) throw new Error("CONFERENCIA_NAO_ENCONTRADA");
+
+              await setItemQtd(targetConfId, item.coddv, 0);
               const nowIso = new Date().toISOString();
-              const nextItems = activeVolume.items.map((row) => (
-                row.coddv === updated.coddv
-                  ? {
-                      ...row,
-                      barras: updated.barras ?? row.barras ?? null,
-                      qtd_conferida: updated.qtd_conferida,
-                      qtd_esperada: updated.qtd_esperada,
-                      updated_at: updated.updated_at
-                    }
-                  : row
-              ));
+              const nextItems = activeVolume.items
+                .map((row) => {
+                  const rowKey = row.item_key ?? String(row.coddv);
+                  if (rowKey !== itemKey) return row;
+                  return {
+                    ...row,
+                    qtd_conferida: 0,
+                    updated_at: nowIso
+                  };
+                })
+                .filter((row) => activeVolume.conference_kind !== "avulsa" || row.qtd_conferida > 0);
+
               const nextVolume: EntradaNotasLocalVolume = {
                 ...activeVolume,
                 items: nextItems.sort(itemSort),
@@ -1784,9 +2352,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 sync_error: null,
                 last_synced_at: nowIso
               };
+
+              if (activeVolume.conference_kind === "avulsa" && activeVolume.remote_conf_id) {
+                nextVolume.avulsa_targets = await fetchAvulsaTargets(activeVolume.remote_conf_id);
+                nextVolume.avulsa_queue = [];
+              }
+
               await applyVolumeUpdate(nextVolume);
             }
-            setEditingCoddv(null);
+            setEditingItemKey(null);
             setEditQtdInput("0");
           } catch (error) {
             const message = error instanceof Error ? error.message : "Falha ao limpar item.";
@@ -1803,6 +2377,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     applyVolumeUpdate,
     canEditActiveVolume,
     closeDialog,
+    enqueueAvulsaEvent,
     isOnline,
     preferOfflineMode,
     runPendingSync,
@@ -1984,6 +2559,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (currentCd == null) {
       setManifestReady(false);
       setManifestInfo("");
+      setOfflineBaseState({
+        entrada_ready: false,
+        barras_ready: false,
+        stale: true,
+        entrada_rows: 0,
+        barras_rows: 0,
+        entrada_updated_at: null,
+        barras_updated_at: null
+      });
       setRouteRows([]);
       setActiveVolume(null);
       return;
@@ -1999,7 +2583,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       ]);
       if (cancelled) return;
 
-      setManifestReady(Boolean(localMeta && localMeta.row_count > 0));
+      const nextBaseState = buildOfflineBaseState({
+        entradaRows: localMeta?.row_count ?? 0,
+        barrasRows: barrasMeta.row_count,
+        entradaUpdatedAt: localMeta?.cached_at ?? localMeta?.generated_at,
+        barrasUpdatedAt: barrasMeta.last_sync_at
+      });
+      setOfflineBaseState(nextBaseState);
+      setManifestReady(nextBaseState.entrada_ready && nextBaseState.barras_ready);
       setManifestInfo(
         buildManifestInfoLine({
           termoRows: localMeta?.row_count ?? 0,
@@ -2374,6 +2965,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           <h2>Olá, {displayUserName}</h2>
           <p>Para trabalhar offline, sincronize a base de Entrada de Notas.</p>
           {manifestInfo ? <p className="termo-meta-line">{manifestInfo}</p> : null}
+          <div className={`entrada-base-status is-${offlineBaseBadge.overall}`}>
+            <span className="entrada-base-status-title">Bases offline: {offlineBaseBadge.overallLabel}</span>
+            <span className={`entrada-base-chip${offlineBaseState.entrada_ready ? " is-ready" : ""}`}>
+              db_entrada_notas {offlineBaseState.entrada_ready ? "OK" : "pendente"}
+            </span>
+            <span className={`entrada-base-chip${offlineBaseState.barras_ready ? " is-ready" : ""}`}>
+              db_barras {offlineBaseState.barras_ready ? "OK" : "pendente"}
+            </span>
+          </div>
         </div>
 
         <div className="termo-actions-row">
@@ -2577,12 +3177,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               {groupedItems.falta.length === 0 ? (
                 <div className="coleta-empty">Sem itens com falta.</div>
               ) : (
-                groupedItems.falta.map(({ item, qtd_falta, qtd_sobra }) => (
-                  <article key={`falta-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}`}>
-                    <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
+                groupedItems.falta.map(({ item, qtd_falta, qtd_sobra }) => {
+                  const itemKey = item.item_key ?? String(item.coddv);
+                  return (
+                  <article key={`falta-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
+                    <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
-                        <p>CODDV: {item.coddv}</p>
+                        <p>Código: {item.coddv}</p>
+                        {item.seq_entrada != null && item.nf != null ? (
+                          <p>Seq/NF: {item.seq_entrada}/{item.nf}</p>
+                        ) : null}
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
@@ -2590,15 +3195,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       </div>
                       <div className="termo-item-side">
                         <span className="termo-divergencia falta">Falta {qtd_falta}</span>
-                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
+                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
                       </div>
                     </button>
-                    {expandedCoddv === item.coddv ? (
+                    {expandedItemKey === itemKey ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
+                            {editingItemKey === itemKey && item.qtd_conferida > 0 ? (
                               <>
                                 <input
                                   type="text"
@@ -2609,18 +3214,18 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                   onClick={(event) => event.currentTarget.select()}
                                   onChange={(event) => setEditQtdInput(event.target.value.replace(/\D/g, ""))}
                                 />
-                                <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(item.coddv)}>Salvar</button>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(null); setEditQtdInput("0"); }}>Cancelar</button>
+                                <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(itemKey)}>Salvar</button>
+                                <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(null); setEditQtdInput("0"); }}>Cancelar</button>
                               </>
                             ) : (
                               <>
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(itemKey); setEditQtdInput(String(item.qtd_conferida)); }}>
                                     Editar
                                   </button>
                                 ) : null}
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
+                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(itemKey)}>
                                     Limpar
                                   </button>
                                 ) : null}
@@ -2632,7 +3237,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       </div>
                     ) : null}
                   </article>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -2641,12 +3247,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               {groupedItems.sobra.length === 0 ? (
                 <div className="coleta-empty">Sem itens com sobra.</div>
               ) : (
-                groupedItems.sobra.map(({ item, qtd_sobra }) => (
-                  <article key={`sobra-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}`}>
-                    <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
+                groupedItems.sobra.map(({ item, qtd_sobra }) => {
+                  const itemKey = item.item_key ?? String(item.coddv);
+                  return (
+                  <article key={`sobra-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
+                    <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
-                        <p>CODDV: {item.coddv}</p>
+                        <p>Código: {item.coddv}</p>
+                        {item.seq_entrada != null && item.nf != null ? (
+                          <p>Seq/NF: {item.seq_entrada}/{item.nf}</p>
+                        ) : null}
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
@@ -2654,15 +3265,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       </div>
                       <div className="termo-item-side">
                         <span className="termo-divergencia sobra">Sobra {qtd_sobra}</span>
-                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
+                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
                       </div>
                     </button>
-                    {expandedCoddv === item.coddv ? (
+                    {expandedItemKey === itemKey ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
+                            {editingItemKey === itemKey && item.qtd_conferida > 0 ? (
                               <>
                                 <input
                                   type="text"
@@ -2673,18 +3284,18 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                   onClick={(event) => event.currentTarget.select()}
                                   onChange={(event) => setEditQtdInput(event.target.value.replace(/\D/g, ""))}
                                 />
-                                <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(item.coddv)}>Salvar</button>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(null); setEditQtdInput("0"); }}>Cancelar</button>
+                                <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(itemKey)}>Salvar</button>
+                                <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(null); setEditQtdInput("0"); }}>Cancelar</button>
                               </>
                             ) : (
                               <>
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(itemKey); setEditQtdInput(String(item.qtd_conferida)); }}>
                                     Editar
                                   </button>
                                 ) : null}
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
+                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(itemKey)}>
                                     Limpar
                                   </button>
                                 ) : null}
@@ -2695,7 +3306,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       </div>
                     ) : null}
                   </article>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -2704,12 +3316,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               {groupedItems.correto.length === 0 ? (
                 <div className="coleta-empty">Sem itens corretos ainda.</div>
               ) : (
-                groupedItems.correto.map(({ item }) => (
-                  <article key={`correto-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}`}>
-                    <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
+                groupedItems.correto.map(({ item }) => {
+                  const itemKey = item.item_key ?? String(item.coddv);
+                  return (
+                  <article key={`correto-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
+                    <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
-                        <p>CODDV: {item.coddv}</p>
+                        <p>Código: {item.coddv}</p>
+                        {item.seq_entrada != null && item.nf != null ? (
+                          <p>Seq/NF: {item.seq_entrada}/{item.nf}</p>
+                        ) : null}
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
@@ -2717,15 +3334,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       </div>
                       <div className="termo-item-side">
                         <span className="termo-divergencia correto">Correto</span>
-                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
+                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
                       </div>
                     </button>
-                    {expandedCoddv === item.coddv ? (
+                    {expandedItemKey === itemKey ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
+                            {editingItemKey === itemKey && item.qtd_conferida > 0 ? (
                               <>
                                 <input
                                   type="text"
@@ -2736,18 +3353,18 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                   onClick={(event) => event.currentTarget.select()}
                                   onChange={(event) => setEditQtdInput(event.target.value.replace(/\D/g, ""))}
                                 />
-                                <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(item.coddv)}>Salvar</button>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(null); setEditQtdInput("0"); }}>Cancelar</button>
+                                <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(itemKey)}>Salvar</button>
+                                <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(null); setEditQtdInput("0"); }}>Cancelar</button>
                               </>
                             ) : (
                               <>
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(itemKey); setEditQtdInput(String(item.qtd_conferida)); }}>
                                     Editar
                                   </button>
                                 ) : null}
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>
+                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(itemKey)}>
                                     Limpar
                                   </button>
                                 ) : null}
@@ -2758,7 +3375,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       </div>
                     ) : null}
                   </article>
-                ))
+                  );
+                })
               )}
             </div>
           </article>
@@ -2897,6 +3515,47 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           )
         : null}
 
+      {pendingAvulsaScan && typeof document !== "undefined"
+        ? createPortal(
+            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="entrada-avulsa-target-title" onClick={() => setPendingAvulsaScan(null)}>
+              <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="entrada-avulsa-target-title">Selecionar Seq/NF para conferência</h3>
+                <p>
+                  Produto: {pendingAvulsaScan.descricao} | Barras: {pendingAvulsaScan.barras} | Quantidade: {pendingAvulsaScan.qtd}
+                </p>
+                <div className="termo-routes-list">
+                  {pendingAvulsaScan.options.map((option) => (
+                    <div
+                      key={`${option.seq_entrada}-${option.nf}-${option.coddv}`}
+                      className="termo-route-store-row"
+                    >
+                      <div>
+                        <strong>Seq/NF {option.seq_entrada}/{option.nf}</strong>
+                        <p>Transportadora: {option.transportadora}</p>
+                        <p>Fornecedor: {option.fornecedor}</p>
+                        <p>Pendente: {option.qtd_pendente} | Esperada: {option.qtd_esperada} | Conferida: {option.qtd_conferida}</p>
+                      </div>
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        onClick={() => void handleSelectPendingAvulsaScan(option)}
+                      >
+                        Selecionar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setPendingAvulsaScan(null)}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
       {showFinalizeModal && activeVolume && typeof document !== "undefined"
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-finalizar-title" onClick={() => setShowFinalizeModal(false)}>
@@ -2906,12 +3565,18 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 {divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? (
                   <div className="termo-item-detail">
                     <p>Itens com divergência:</p>
-                    <div className="termo-routes-list">
+                    <div className="termo-routes-list termo-finalize-list">
                       {groupedItems.falta.map(({ item, qtd_falta }) => (
-                        <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>
+                        <p key={`fim-falta-${item.item_key ?? item.coddv}`}>
+                          {item.seq_entrada != null && item.nf != null ? `Seq ${item.seq_entrada}/NF ${item.nf} - ` : ""}
+                          {item.descricao || "Item sem descrição"}: Falta {qtd_falta}
+                        </p>
                       ))}
                       {groupedItems.sobra.map(({ item, qtd_sobra }) => (
-                        <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>
+                        <p key={`fim-sobra-${item.item_key ?? item.coddv}`}>
+                          {item.seq_entrada != null && item.nf != null ? `Seq ${item.seq_entrada}/NF ${item.nf} - ` : ""}
+                          {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}
+                        </p>
                       ))}
                     </div>
                   </div>
@@ -2936,7 +3601,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-generic-dialog" onClick={closeDialog}>
               <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="termo-generic-dialog">{dialogState.title}</h3>
-                <p>{dialogState.message}</p>
+                <p style={{ whiteSpace: "pre-line" }}>{dialogState.message}</p>
                 <div className="confirm-actions">
                   {dialogState.onConfirm ? (
                     <>
@@ -3005,5 +3670,6 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     </>
   );
 }
+
 
 
