@@ -1206,7 +1206,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           }
         } else {
           if (hasLocalBase) {
-            setErrorMessage("Código de barras não encontrado na base local.");
+            setErrorMessage(`O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`);
           } else {
             setErrorMessage("Sem internet para busca online. Ative Trabalhar offline para usar base local.");
           }
@@ -1216,7 +1216,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
 
       if (!product) {
-        setErrorMessage("Código de barras não encontrado na base de produtos.");
+        setErrorMessage(`O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`);
         focusBarcode();
         return;
       }
