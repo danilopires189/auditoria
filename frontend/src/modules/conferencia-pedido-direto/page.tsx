@@ -391,7 +391,7 @@ function chevronIcon(open: boolean) {
 }
 
 function normalizeRpcErrorMessage(value: string): string {
-  if (value.includes("ID_VOL_OBRIGATORIO")) return "Informe o ID_VOL para abrir o volume.";
+  if (value.includes("ID_VOL_OBRIGATORIO")) return "Informe o PedidoSeq para abrir o volume.";
   if (value.includes("ID_VOL_NAO_ENCONTRADO")) return "ID_VOL não encontrado na base do dia.";
   if (value.includes("ID_VOL_INVALIDO")) return "ID_VOL inválido. Use apenas números (pedido+seq).";
   if (value.includes("ID_VOL_AMBIGUO")) return "ID_VOL ambíguo na base. Valide pedido/seq com o suporte.";
@@ -980,7 +980,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const openVolumeFromEtiqueta = useCallback(async (rawEtiqueta: string) => {
     const etiqueta = normalizeIdVol(rawEtiqueta);
     if (!etiqueta) {
-      setErrorMessage("Informe o ID_VOL para abrir o volume.");
+      setErrorMessage("Informe o PedidoSeq para abrir o volume.");
       return;
     }
     if (currentCd == null) {
@@ -2109,7 +2109,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
-                  placeholder="Informe o ID_VOL do volume"
+                  placeholder="Informe o PedidoSeq do volume"
                   required
                 />
                 <button
@@ -2421,7 +2421,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           </article>
         ) : (
           <div className="coleta-empty">
-            Nenhum volume ativo. Informe um ID_VOL para iniciar a conferência.
+            Nenhum volume ativo. Informe um PedidoSeq para iniciar a conferência.
           </div>
         )}
       </section>
