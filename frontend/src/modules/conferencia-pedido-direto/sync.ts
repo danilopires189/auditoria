@@ -50,7 +50,7 @@ export function normalizeIdVol(value: string): string {
   const compact = value.replace(/\s+/g, "").trim();
   if (!compact) return "";
 
-  const matched = /^(\d+)&(\d+)$/.exec(compact);
+  const matched = /^(\d+)[&/](\d+)$/.exec(compact);
   if (matched) {
     try {
       const pedido = BigInt(matched[1]);
