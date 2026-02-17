@@ -32,6 +32,8 @@ import type { TermoModuleProfile } from "./modules/conferencia-termo/types";
 import { clearUserTermoSessionCache } from "./modules/conferencia-termo/storage";
 import type { VolumeAvulsoModuleProfile } from "./modules/conferencia-volume-avulso/types";
 import { clearUserVolumeAvulsoSessionCache } from "./modules/conferencia-volume-avulso/storage";
+import type { InventarioModuleProfile } from "./modules/zerados/types";
+import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const ADMIN_EMAIL_CANDIDATES = [
@@ -1048,6 +1050,11 @@ export default function App() {
         } catch {
           // Ignore local cleanup failures and proceed with logout.
         }
+        try {
+          await clearUserInventarioSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
       }
       await supabase!.auth.signOut();
       setAuthMode("login");
@@ -1120,6 +1127,18 @@ export default function App() {
   }, [effectiveProfile, session]);
 
   const entradaNotasProfile = useMemo<EntradaNotasModuleProfile | null>(() => {
+    if (!session || !effectiveProfile) return null;
+    return {
+      user_id: effectiveProfile.user_id || session.user.id,
+      nome: effectiveProfile.nome || "Usuário",
+      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfile.role || "auditor",
+      cd_default: effectiveProfile.cd_default,
+      cd_nome: effectiveProfile.cd_nome
+    };
+  }, [effectiveProfile, session]);
+
+  const inventarioProfile = useMemo<InventarioModuleProfile | null>(() => {
     if (!session || !effectiveProfile) return null;
     return {
       user_id: effectiveProfile.user_id || session.user.id,
@@ -1234,7 +1253,16 @@ export default function App() {
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/meta-mes" element={<MetaMesPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/produtividade" element={<ProdutividadePage isOnline={isOnline} userName={displayContext.nome} />} />
-          <Route path="/modulos/zerados" element={<ZeradosPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/zerados"
+            element={
+              inventarioProfile ? (
+                <ZeradosPage isOnline={isOnline} profile={inventarioProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Routes>
 
