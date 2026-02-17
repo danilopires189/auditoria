@@ -154,3 +154,15 @@ export interface VolumeAvulsoPendingSummary {
   pending_count: number;
   errors_count: number;
 }
+
+export interface VolumeAvulsoPartialReopenInfo {
+  conf_id: string;
+  nr_volume: string;
+  status: VolumeAvulsoConfStatus;
+  previous_started_by: string | null;
+  previous_started_mat: string | null;
+  previous_started_nome: string | null;
+  locked_items: number;
+  pending_items: number;
+  can_reopen: boolean;
+}
