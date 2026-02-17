@@ -1217,8 +1217,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const showCountReadOnlyDetails = Boolean(isConcludedCountFilter && activeStageCount && !countEditMode);
 
   const canResolveConciliation = useMemo(
-    () => canEdit && tab === "conciliation" && active?.review?.status === "pendente",
-    [active?.review?.status, canEdit, tab]
+    () => tab === "conciliation" && active?.review?.status === "pendente",
+    [active?.review?.status, tab]
   );
 
   const qtyParsed = Number.parseInt(qtd, 10);
@@ -1326,7 +1326,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const resolveReview = useCallback(async () => {
     if (!active || !active.review || cd == null) return;
     if (!canResolveConciliation) {
-      setPopupErr("Conciliação já resolvida ou sem permissão de edição.");
+      setPopupErr("Conciliação já resolvida.");
       return;
     }
     setPopupErr(null);
