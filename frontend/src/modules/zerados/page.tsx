@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
@@ -311,8 +311,20 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [reportOpen, setReportOpen] = useState(false);
 
   const syncRef = useRef(false);
+  const qtdInputRef = useRef<HTMLInputElement | null>(null);
+  const finalQtdInputRef = useRef<HTMLInputElement | null>(null);
+  const reportDtIniInputRef = useRef<HTMLInputElement | null>(null);
+  const popupWasOpenRef = useRef(false);
+  const popupReturnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => { lockRef.current = lock; }, [lock]);
+
+  const keepFocusedControlVisible = useCallback((event: FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const target = event.currentTarget;
+    window.setTimeout(() => {
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    }, 120);
+  }, []);
 
   const refreshPending = useCallback(async () => {
     if (cd == null) return setPendingCount(0);
@@ -457,6 +469,57 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   useEffect(() => {
     if (!isDesktop) setReportOpen(false);
   }, [isDesktop]);
+  useEffect(() => {
+    const popupOpen = editorOpen || reportOpen;
+    if (popupOpen && !popupWasOpenRef.current) {
+      popupReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    if (!popupOpen && popupWasOpenRef.current) {
+      const target = popupReturnFocusRef.current;
+      if (target && document.contains(target)) target.focus();
+      popupReturnFocusRef.current = null;
+    }
+    popupWasOpenRef.current = popupOpen;
+  }, [editorOpen, reportOpen]);
+  useEffect(() => {
+    if (!(editorOpen || reportOpen)) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [editorOpen, reportOpen]);
+  useEffect(() => {
+    if (!editorOpen) return;
+    const id = window.setTimeout(() => {
+      const target = tab === "conciliation" ? finalQtdInputRef.current : qtdInputRef.current;
+      if (!target || target.disabled) return;
+      target.focus();
+      target.select();
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [editorOpen, selectedItem, tab]);
+  useEffect(() => {
+    if (!reportOpen) return;
+    const id = window.setTimeout(() => {
+      const target = reportDtIniInputRef.current;
+      if (!target) return;
+      target.focus();
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [reportOpen]);
+  useEffect(() => {
+    if (!(editorOpen || reportOpen)) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (reportOpen) setReportOpen(false);
+      else setEditorOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editorOpen, reportOpen]);
 
   useEffect(() => {
     const needsLock = (tab === "s1" || tab === "s2") && isOnline && cd != null && zone && canEdit;
@@ -892,8 +955,33 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <p className="inventario-editor-text">{active.descricao}</p>
                 {(tab === "s1" || tab === "s2") ? (
                   <>
-                    <label>Quantidade<input value={qtd} onChange={(e) => setQtd(e.target.value)} disabled={!canEditCount(active) || busy} /></label>
-                    <label>Barras (obrigatório se sobra)<input value={barras} onChange={(e) => setBarras(e.target.value)} disabled={!canEditCount(active) || busy} /></label>
+                    <label>
+                      Quantidade
+                      <input
+                        ref={qtdInputRef}
+                        value={qtd}
+                        onChange={(e) => setQtd(e.target.value)}
+                        onFocus={keepFocusedControlVisible}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        enterKeyHint="next"
+                        disabled={!canEditCount(active) || busy}
+                      />
+                    </label>
+                    <label>
+                      Barras (obrigatório se sobra)
+                      <input
+                        value={barras}
+                        onChange={(e) => setBarras(e.target.value)}
+                        onFocus={keepFocusedControlVisible}
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        autoComplete="off"
+                        spellCheck={false}
+                        enterKeyHint="done"
+                        disabled={!canEditCount(active) || busy}
+                      />
+                    </label>
                     <div className="inventario-editor-actions">
                       <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>Salvar</button>
                       <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
@@ -916,8 +1004,33 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         <p>{`Usuário: ${active.c2?.counted_nome ?? "-"}`}</p>
                       </article>
                     </div>
-                    <label>Qtd final<input value={finalQtd} onChange={(e) => setFinalQtd(e.target.value)} disabled={!canResolveConciliation || busy} /></label>
-                    <label>Barras final (obrigatório se sobra)<input value={finalBarras} onChange={(e) => setFinalBarras(e.target.value)} disabled={!canResolveConciliation || busy} /></label>
+                    <label>
+                      Qtd final
+                      <input
+                        ref={finalQtdInputRef}
+                        value={finalQtd}
+                        onChange={(e) => setFinalQtd(e.target.value)}
+                        onFocus={keepFocusedControlVisible}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        enterKeyHint="next"
+                        disabled={!canResolveConciliation || busy}
+                      />
+                    </label>
+                    <label>
+                      Barras final (obrigatório se sobra)
+                      <input
+                        value={finalBarras}
+                        onChange={(e) => setFinalBarras(e.target.value)}
+                        onFocus={keepFocusedControlVisible}
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        autoComplete="off"
+                        spellCheck={false}
+                        enterKeyHint="done"
+                        disabled={!canResolveConciliation || busy}
+                      />
+                    </label>
                     <div className="inventario-editor-actions"><button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button></div>
                   </>
                 ) : null}
@@ -939,9 +1052,29 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               </div>
               <div className="inventario-popup-body">
                 <div className="inventario-report-filters">
-                  <label>Data inicial<input type="date" value={dtIni} onChange={(e) => setDtIni(e.target.value)} /></label>
-                  <label>Data final<input type="date" value={dtFim} onChange={(e) => setDtFim(e.target.value)} /></label>
-                  <label>CD<input disabled value={cd ?? ""} /></label>
+                  <label>
+                    Data inicial
+                    <input
+                      ref={reportDtIniInputRef}
+                      type="date"
+                      value={dtIni}
+                      onChange={(e) => setDtIni(e.target.value)}
+                      onFocus={keepFocusedControlVisible}
+                    />
+                  </label>
+                  <label>
+                    Data final
+                    <input
+                      type="date"
+                      value={dtFim}
+                      onChange={(e) => setDtFim(e.target.value)}
+                      onFocus={keepFocusedControlVisible}
+                    />
+                  </label>
+                  <label>
+                    CD
+                    <input disabled value={cd ?? ""} onFocus={keepFocusedControlVisible} />
+                  </label>
                 </div>
                 <div className="inventario-report-actions">
                   <button className="btn btn-muted" type="button" onClick={() => void countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd: cd ?? -1 }).then(setReportCount).catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Contar</button>
