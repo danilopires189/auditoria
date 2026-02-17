@@ -858,13 +858,34 @@ async function syncAvulsaEventByAbsoluteQty(
   const desiredQtd = localItem
     ? Math.max(0, Math.trunc(localItem.qtd_conferida))
     : Math.max(0, Math.trunc(event.qtd));
-  const targetConfId = await resolveAvulsaTargetConfId(row, event);
-  await setItemQtd(targetConfId, event.coddv, desiredQtd);
+  let targetConfId = await resolveAvulsaTargetConfId(row, event);
+  try {
+    await setItemQtd(targetConfId, event.coddv, desiredQtd);
+  } catch (setQtdError) {
+    const setQtdMessage = toErrorMessage(setQtdError);
+    if (
+      setQtdMessage.includes("CONFERENCIA_NAO_ENCONTRADA")
+      || setQtdMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")
+    ) {
+      const reopened = await openVolume(`${event.seq_entrada}/${event.nf}`, row.cd);
+      if (reopened.conf_id !== targetConfId) {
+        targetConfId = reopened.conf_id;
+        await setItemQtd(targetConfId, event.coddv, desiredQtd);
+        return;
+      }
+    }
+    if (shouldCheckAlreadyAppliedSetQtd(setQtdMessage)) {
+      const alreadyApplied = await isAvulsaQtdAlreadyApplied(row, event, targetConfId, desiredQtd);
+      if (alreadyApplied) return;
+    }
+    throw setQtdError;
+  }
 }
 
 function shouldCheckAlreadyAppliedSetQtd(message: string): boolean {
   return (
     message.includes("CONFERENCIA_JA_FINALIZADA")
+    || message.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")
     || message.includes("ITEM_BLOQUEADO_OUTRO_USUARIO")
     || message.includes("CONFERENCIA_EM_USO")
     || message.includes("ALVO_SEQ_NF_NAO_PENDENTE")
@@ -900,6 +921,51 @@ async function isAvulsaQtdAlreadyApplied(
     }
   }
   return false;
+}
+
+async function isAvulsaQueueStateAlreadyApplied(row: EntradaNotasLocalVolume): Promise<boolean> {
+  const queue = [...(row.avulsa_queue ?? [])];
+  if (queue.length === 0) return true;
+
+  const latestByItem = new Map<string, {
+    seq_entrada: number;
+    nf: number;
+    coddv: number;
+    target_conf_id: string | null;
+    desired_qtd: number;
+  }>();
+
+  for (const event of queue) {
+    const localItem = findAvulsaLocalItemForEvent(row, event);
+    const desiredQtd = localItem
+      ? Math.max(0, Math.trunc(localItem.qtd_conferida))
+      : Math.max(0, Math.trunc(event.qtd));
+    const key = `${event.seq_entrada}/${event.nf}:${event.coddv}`;
+    latestByItem.set(key, {
+      seq_entrada: event.seq_entrada,
+      nf: event.nf,
+      coddv: event.coddv,
+      target_conf_id: event.target_conf_id ?? null,
+      desired_qtd: desiredQtd
+    });
+  }
+
+  const remoteItemsCache = new Map<string, EntradaNotasItemRow[]>();
+  for (const payload of latestByItem.values()) {
+    const targetConfId = await resolveAvulsaTargetConfId(row, payload);
+    let remoteItems = remoteItemsCache.get(targetConfId);
+    if (!remoteItems) {
+      remoteItems = await fetchVolumeItems(targetConfId);
+      remoteItemsCache.set(targetConfId, remoteItems);
+    }
+    const remoteItem = remoteItems.find((item) => item.coddv === payload.coddv);
+    const remoteQtd = Math.max(0, Math.trunc(remoteItem?.qtd_conferida ?? 0));
+    if (remoteQtd !== payload.desired_qtd) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
@@ -983,13 +1049,19 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
                 await syncAvulsaEventByAbsoluteQty(row, event);
               }
             } else {
-              const desiredQtd = Math.max(0, Math.trunc(event.qtd));
+              const localItem = findAvulsaLocalItemForEvent(row, event);
+              const desiredQtd = localItem
+                ? Math.max(0, Math.trunc(localItem.qtd_conferida))
+                : Math.max(0, Math.trunc(event.qtd));
               let targetConfId = await resolveAvulsaTargetConfId(row, event);
               try {
                 await setItemQtd(targetConfId, event.coddv, desiredQtd);
               } catch (setQtdError) {
                 const setQtdMessage = toErrorMessage(setQtdError);
-                if (setQtdMessage.includes("CONFERENCIA_NAO_ENCONTRADA")) {
+                if (
+                  setQtdMessage.includes("CONFERENCIA_NAO_ENCONTRADA")
+                  || setQtdMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")
+                ) {
                   const reopened = await openVolume(`${event.seq_entrada}/${event.nf}`, row.cd);
                   if (reopened.conf_id !== targetConfId) {
                     targetConfId = reopened.conf_id;
@@ -1062,6 +1134,34 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         await removeLocalVolume(row.local_key);
         synced += 1;
         continue;
+      }
+      const isAvulsa = row.conference_kind === "avulsa" || row.nr_volume === "AVULSA";
+      if (isAvulsa && row.pending_snapshot) {
+        try {
+          const alreadyApplied = await isAvulsaQueueStateAlreadyApplied(row);
+          if (alreadyApplied) {
+            row.avulsa_queue = [];
+            row.pending_snapshot = false;
+            row.sync_error = null;
+            row.updated_at = new Date().toISOString();
+            row.last_synced_at = row.updated_at;
+            if (row.remote_conf_id) {
+              try {
+                row.avulsa_targets = await fetchAvulsaTargets(row.remote_conf_id);
+                row.items = await fetchAvulsaItems(row.remote_conf_id);
+              } catch {
+                // Mantém dados locais se leitura remota falhar.
+              }
+            }
+            await saveLocalVolume(row);
+            if (!row.pending_finalize && !row.pending_cancel) {
+              synced += 1;
+            }
+            continue;
+          }
+        } catch {
+          // Se não conseguir validar, mantém o erro original para próxima tentativa.
+        }
       }
       row.sync_error = message;
       row.updated_at = new Date().toISOString();
