@@ -3020,6 +3020,10 @@ small {
   scrollbar-gutter: stable;
 }
 
+.inventario-address-list > * {
+  min-width: 0;
+}
+
 .inventario-address-card {
   width: 100%;
   max-width: 100%;
@@ -3027,9 +3031,12 @@ small {
   border: 1px solid #d4deef;
   border-radius: 12px;
   background: #fff;
+  min-height: 68px;
+  height: auto !important;
   padding: 10px 11px;
   text-align: left;
-  display: grid;
+  display: flex;
+  align-items: flex-start;
   overflow: hidden;
   appearance: none;
   -webkit-appearance: none;
@@ -3038,17 +3045,16 @@ small {
 }
 
 .inventario-address-main {
+  flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 3px;
+  gap: 2px;
 }
 
 .inventario-address-head {
   min-width: 0;
   width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
   gap: 8px;
 }
@@ -3065,7 +3071,8 @@ small {
 }
 
 .inventario-address-status {
-  justify-self: end;
+  margin-left: auto;
+  flex-shrink: 0;
   align-self: center;
 }
 
@@ -3076,7 +3083,7 @@ small {
 }
 
 .inventario-address-meta {
-  display: inline-block;
+  display: block;
   max-width: 100%;
   margin: 0;
   color: #4b5e81;
