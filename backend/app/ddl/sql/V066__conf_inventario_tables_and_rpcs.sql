@@ -1515,10 +1515,15 @@ begin
             raise exception 'ETAPA1_BLOQUEADA_SEGUNDA_EXISTE';
         end if;
 
+        if v_etapa = 1 and v_c1.count_id is not null and v_c1.counted_by <> v_uid then
+            raise exception 'ETAPA1_APENAS_AUTOR';
+        end if;
+
         if v_etapa = 2 then
             if v_c1.count_id is null then raise exception 'ETAPA1_OBRIGATORIA'; end if;
             if v_c1.resultado <> 'sobra' then raise exception 'ETAPA2_APENAS_QUANDO_SOBRA'; end if;
-            if v_c1.counted_by = v_uid then raise exception 'SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE'; end if;
+            if v_c2.count_id is null and v_c1.counted_by = v_uid then raise exception 'SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE'; end if;
+            if v_c2.count_id is not null and v_c2.counted_by <> v_uid then raise exception 'ETAPA2_APENAS_AUTOR'; end if;
         end if;
 
         v_barras := null;
