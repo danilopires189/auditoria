@@ -3109,6 +3109,12 @@ small {
   color: #8a5d10;
 }
 
+.inventario-popup-note.ok {
+  border-color: #b8e6c7;
+  background: #ecfbf1;
+  color: #1f7a45;
+}
+
 .inventario-popup-note.error {
   border-color: #efb6b3;
   background: #fff1f0;
@@ -3272,10 +3278,36 @@ small {
 
 .inventario-popup-input-action-wrap {
   position: relative;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d4deef;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.inventario-popup-input-action-wrap:focus-within {
+  outline: 2px solid #2f67bf;
+  outline-offset: 1px;
+  border-color: #84a7dc;
+  box-shadow: 0 0 0 3px rgba(47, 103, 191, 0.18);
 }
 
 .inventario-popup-input-action-wrap input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  height: 50px;
+  padding-left: 13px;
   padding-right: 50px;
+  outline: none;
+}
+
+.inventario-popup-input-action-wrap input:focus {
+  outline: none;
 }
 
 .inventario-popup-scan-btn {
