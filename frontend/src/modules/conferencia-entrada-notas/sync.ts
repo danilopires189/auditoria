@@ -5,11 +5,13 @@ import type {
   EntradaNotasAvulsaTargetOption,
   EntradaNotasAvulsaTargetSummary,
   CdOption,
+  EntradaNotasContributor,
   EntradaNotasItemRow,
   EntradaNotasLocalVolume,
   EntradaNotasManifestBarrasRow,
   EntradaNotasManifestItemRow,
   EntradaNotasManifestMeta,
+  EntradaNotasPartialReopenInfo,
   EntradaNotasRouteOverviewRow,
   EntradaNotasVolumeRow
 } from "./types";
@@ -189,7 +191,8 @@ function mapVolume(raw: Record<string, unknown>): EntradaNotasVolumeRow {
     filial: parseIntegerOrNull(raw.nf),
     filial_nome: fornecedor,
     rota: transportadora,
-    falta_motivo: null
+    falta_motivo: null,
+    contributors: []
   };
 }
 
@@ -222,7 +225,8 @@ function mapAvulsaVolume(raw: Record<string, unknown>): EntradaNotasVolumeRow {
     filial: null,
     filial_nome: fornecedor,
     rota: transportadora,
-    falta_motivo: null
+    falta_motivo: null,
+    contributors: []
   };
 }
 
@@ -245,7 +249,11 @@ function mapItem(raw: Record<string, unknown>): EntradaNotasItemRow {
     seq_entrada: parseIntegerOrNull(raw.seq_entrada),
     nf: parseIntegerOrNull(raw.nf),
     target_conf_id: parseNullableString(raw.target_conf_id),
-    item_key: parseNullableString(raw.item_key)
+    item_key: parseNullableString(raw.item_key),
+    is_locked: raw.is_locked === true,
+    locked_by: parseNullableString(raw.locked_by),
+    locked_mat: parseNullableString(raw.locked_mat),
+    locked_nome: parseNullableString(raw.locked_nome)
   };
 }
 
@@ -297,6 +305,31 @@ function mapAvulsaConflict(raw: Record<string, unknown>): EntradaNotasAvulsaConf
     remote_targets: Math.max(parseInteger(raw.remote_targets), 0),
     remote_items_conferidos: Math.max(parseInteger(raw.remote_items_conferidos), 0),
     seq_nf_list: String(raw.seq_nf_list ?? "")
+  };
+}
+
+function mapContributor(raw: Record<string, unknown>): EntradaNotasContributor {
+  return {
+    user_id: String(raw.user_id ?? ""),
+    mat: String(raw.mat ?? "").trim(),
+    nome: String(raw.nome ?? "").trim(),
+    first_action_at: String(raw.first_action_at ?? new Date().toISOString()),
+    last_action_at: String(raw.last_action_at ?? new Date().toISOString())
+  };
+}
+
+function mapPartialReopenInfo(raw: Record<string, unknown>): EntradaNotasPartialReopenInfo {
+  return {
+    conf_id: String(raw.conf_id ?? ""),
+    seq_entrada: parseInteger(raw.seq_entrada),
+    nf: parseInteger(raw.nf),
+    status: normalizeConferenceStatus(raw.status),
+    previous_started_by: parseNullableString(raw.previous_started_by),
+    previous_started_mat: parseNullableString(raw.previous_started_mat),
+    previous_started_nome: parseNullableString(raw.previous_started_nome),
+    locked_items: Math.max(parseInteger(raw.locked_items), 0),
+    pending_items: Math.max(parseInteger(raw.pending_items), 0),
+    can_reopen: raw.can_reopen === true
   };
 }
 
@@ -460,6 +493,60 @@ export async function fetchActiveVolume(): Promise<EntradaNotasVolumeRow | null>
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) return null;
   return mapVolume(first);
+}
+
+export async function fetchPartialReopenInfo(
+  nrVolume: string,
+  cd: number
+): Promise<EntradaNotasPartialReopenInfo> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const parsed = parseVolumeLabel(nrVolume);
+  if (!parsed) throw new Error("SEQ_NF_INVALIDO");
+
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_get_partial_reopen_info", {
+    p_seq_entrada: parsed.seqEntrada,
+    p_nf: parsed.nf,
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao validar reabertura parcial.");
+  return mapPartialReopenInfo(first);
+}
+
+export async function reopenPartialConference(
+  nrVolume: string,
+  cd: number
+): Promise<EntradaNotasVolumeRow> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const parsed = parseVolumeLabel(nrVolume);
+  if (!parsed) throw new Error("SEQ_NF_INVALIDO");
+
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_reopen_partial_conference", {
+    p_seq_entrada: parsed.seqEntrada,
+    p_nf: parsed.nf,
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao reabrir conferência parcial.");
+  return mapVolume(first);
+}
+
+export async function fetchVolumeContributors(confId: string): Promise<EntradaNotasContributor[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_get_contributors", {
+    p_conf_id: confId
+  });
+  if (error) {
+    const message = toErrorMessage(error);
+    if (/rpc_conf_entrada_notas_get_contributors/i.test(message)) {
+      return [];
+    }
+    throw new Error(message);
+  }
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapContributor(row as Record<string, unknown>));
 }
 
 export async function openAvulsaVolume(cd: number): Promise<EntradaNotasVolumeRow> {
@@ -742,7 +829,7 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         continue;
       }
 
-      if (row.is_read_only) {
+      if (row.is_read_only && !row.pending_snapshot && !row.pending_finalize) {
         row.pending_snapshot = false;
         row.pending_finalize = false;
         row.pending_cancel = false;
@@ -753,8 +840,9 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         continue;
       }
 
+      const needsRemoteConf = row.pending_snapshot || row.pending_finalize;
       let remoteConfId = row.remote_conf_id;
-      if (!remoteConfId) {
+      if (needsRemoteConf && !remoteConfId) {
         const remoteOpen = isAvulsa
           ? await openAvulsaVolume(row.cd)
           : await openVolume(row.nr_volume, row.cd);
@@ -768,11 +856,11 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         row.sync_error = null;
       }
 
-      if (!remoteConfId) {
+      if (needsRemoteConf && !remoteConfId) {
         throw new Error("Não foi possível resolver a conferência remota.");
       }
 
-      if (!row.is_read_only && row.pending_snapshot) {
+      if (row.pending_snapshot && remoteConfId) {
         if (isAvulsa) {
           const queue = [...(row.avulsa_queue ?? [])]
             .sort((a, b) => Date.parse(a.created_at || "") - Date.parse(b.created_at || ""));
@@ -818,7 +906,7 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         }
       }
 
-      if (!row.is_read_only && row.pending_finalize) {
+      if (row.pending_finalize && remoteConfId) {
         const finalized = isAvulsa
           ? await finalizeAvulsaVolume(remoteConfId)
           : await finalizeVolume(remoteConfId, row.pending_finalize_reason);

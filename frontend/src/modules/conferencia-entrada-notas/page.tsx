@@ -39,13 +39,16 @@ import {
   fetchAvulsaItems,
   fetchManifestBundle,
   fetchManifestMeta,
+  fetchPartialReopenInfo,
   fetchRouteOverview,
+  fetchVolumeContributors,
   fetchVolumeItems,
   finalizeAvulsaVolume,
   finalizeVolume,
   normalizeBarcode,
   openAvulsaVolume,
   openVolume,
+  reopenPartialConference,
   scanBarcode,
   setItemQtd,
   resolveAvulsaTargets,
@@ -64,6 +67,7 @@ import type {
   EntradaNotasAvulsaTargetOption,
   EntradaNotasAvulsaTargetSummary,
   CdOption,
+  EntradaNotasContributor,
   EntradaNotasDivergenciaTipo,
   EntradaNotasItemRow,
   EntradaNotasLocalItem,
@@ -283,10 +287,30 @@ function parseSeqNfFromVolumeLabel(value: string): { seq_entrada: number; nf: nu
   };
 }
 
+function formatCollaboratorName(value: {
+  nome?: string | null;
+  mat?: string | null;
+}): string {
+  const nome = value.nome?.trim() ?? "";
+  const mat = value.mat?.trim() ?? "";
+  if (nome && mat) return `${nome} (${mat})`;
+  if (nome) return nome;
+  if (mat) return `Matrícula ${mat}`;
+  return "outro usuário";
+}
+
+function formatLockedItemOwner(item: Pick<EntradaNotasLocalItem, "locked_nome" | "locked_mat">): string {
+  return formatCollaboratorName({
+    nome: item.locked_nome ?? null,
+    mat: item.locked_mat ?? null
+  });
+}
+
 function createLocalVolumeFromRemote(
   profile: EntradaNotasModuleProfile,
   volume: EntradaNotasVolumeRow,
-  items: EntradaNotasItemRow[]
+  items: EntradaNotasItemRow[],
+  contributors: EntradaNotasVolumeRow["contributors"] = []
 ): EntradaNotasLocalVolume {
   const confDate = volume.conf_date || todayIsoBrasilia();
   const localKey = buildEntradaNotasVolumeKey(profile.user_id, volume.cd, confDate, volume.nr_volume);
@@ -310,7 +334,11 @@ function createLocalVolumeFromRemote(
         (volume.conference_kind === "avulsa" && item.seq_entrada != null && item.nf != null)
           ? buildAvulsaItemKey(item.seq_entrada, item.nf, item.coddv)
           : String(item.coddv)
-      )
+      ),
+    is_locked: item.is_locked === true,
+    locked_by: item.locked_by ?? null,
+    locked_mat: item.locked_mat ?? null,
+    locked_nome: item.locked_nome ?? null
   }));
 
   return {
@@ -342,6 +370,7 @@ function createLocalVolumeFromRemote(
     items: localItems.sort(itemSort),
     avulsa_targets: [],
     avulsa_queue: [],
+    contributors: [...(contributors ?? [])],
     pending_snapshot: false,
     pending_finalize: false,
     pending_finalize_reason: null,
@@ -402,6 +431,15 @@ function createLocalVolumeFromManifest(
     updated_at: nowIso,
     is_read_only: false,
     items: items.sort(itemSort),
+    contributors: [
+      {
+        user_id: profile.user_id,
+        mat: profile.mat || "",
+        nome: profile.nome || "Usuário",
+        first_action_at: nowIso,
+        last_action_at: nowIso
+      }
+    ],
     pending_snapshot: true,
     pending_finalize: false,
     pending_finalize_reason: null,
@@ -448,6 +486,7 @@ function createLocalAvulsaFromManifest(
     items: [],
     avulsa_targets: [],
     avulsa_queue: [],
+    contributors: [],
     pending_snapshot: false,
     pending_finalize: false,
     pending_finalize_reason: null,
@@ -556,9 +595,15 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("CONFERENCIA_JA_FINALIZADA_OUTRO_USUARIO")) {
     return "Esta conferência já foi finalizada por outro usuário.";
   }
+  if (value.includes("CONFERENCIA_FINALIZADA_SEM_PENDENCIA")) {
+    return "Esta Seq/NF já foi finalizada e não possui itens pendentes para retomada.";
+  }
   if (value.includes("CONFERENCIA_AVULSA_EM_USO")) return "A conferência avulsa está em uso por outro usuário.";
   if (value.includes("CONFERENCIA_AVULSA_JA_FINALIZADA_OUTRO_USUARIO")) {
     return "A conferência avulsa de hoje já foi finalizada por outro usuário.";
+  }
+  if (value.includes("ITEM_BLOQUEADO_OUTRO_USUARIO")) {
+    return "Item bloqueado: este produto já foi conferido por outro usuário.";
   }
   if (value.includes("PRODUTO_FORA_DA_ENTRADA")) return "Produto fora da entrada selecionada.";
   if (value.includes("PRODUTO_FORA_BASE_AVULSA")) return "Produto fora da base de recebimento deste CD.";
@@ -781,6 +826,24 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
   ), [activeVolume]);
 
+  const activeContributorsLabel = useMemo(() => {
+    const contributors = activeVolume?.contributors ?? [];
+    if (!contributors.length) return "";
+    const labels: string[] = [];
+    const seen = new Set<string>();
+    for (const contributor of contributors) {
+      const label = formatCollaboratorName({
+        nome: contributor.nome,
+        mat: contributor.mat
+      });
+      const normalized = label.toLocaleLowerCase("pt-BR");
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      labels.push(label);
+    }
+    return labels.join(", ");
+  }, [activeVolume?.contributors]);
+
   const offlineBaseBadge = useMemo(() => {
     const overall = offlineBaseState.entrada_ready && offlineBaseState.barras_ready
       ? (offlineBaseState.stale ? "desatualizado" : "completo")
@@ -897,6 +960,19 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const closeDialog = useCallback(() => {
     setDialogState(null);
+  }, []);
+
+  const fetchSeqNfContributors = useCallback(async (volume: EntradaNotasVolumeRow): Promise<EntradaNotasContributor[]> => {
+    if (volume.conference_kind === "avulsa") return [];
+    try {
+      return await fetchVolumeContributors(volume.conf_id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? "");
+      if (message.includes("rpc_conf_entrada_notas_get_contributors")) {
+        return [];
+      }
+      throw error;
+    }
   }, []);
 
   const refreshPendingState = useCallback(async () => {
@@ -1189,10 +1265,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       setCdAtivo(remoteActive.cd);
     }
 
-    const remoteItems = remoteActive.conference_kind === "avulsa"
-      ? await fetchAvulsaItems(remoteActive.conf_id)
-      : await fetchVolumeItems(remoteActive.conf_id);
-    const localVolume = createLocalVolumeFromRemote(profile, remoteActive, remoteItems);
+    const [remoteItems, contributors] = await Promise.all([
+      remoteActive.conference_kind === "avulsa"
+        ? fetchAvulsaItems(remoteActive.conf_id)
+        : fetchVolumeItems(remoteActive.conf_id),
+      fetchSeqNfContributors(remoteActive)
+    ]);
+    const localVolume = createLocalVolumeFromRemote(profile, remoteActive, remoteItems, contributors);
     if (remoteActive.conference_kind === "avulsa") {
       localVolume.avulsa_targets = await fetchAvulsaTargets(remoteActive.conf_id);
     }
@@ -1208,7 +1287,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     return localVolume;
-  }, [cdAtivo, isGlobalAdmin, isOnline, profile]);
+  }, [cdAtivo, fetchSeqNfContributors, isGlobalAdmin, isOnline, profile]);
 
   const openVolumeFromEtiqueta = useCallback(async (rawEtiqueta: string) => {
     const etiqueta = rawEtiqueta.trim();
@@ -1220,6 +1299,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       setErrorMessage("CD não definido para esta conferência.");
       return;
     }
+    const selectedCd = currentCd;
     if (hasOpenConference && activeVolume && activeVolume.nr_volume !== etiqueta) {
       const activeLabel = activeVolume.conference_kind === "avulsa"
         ? "Conferência Avulsa"
@@ -1251,7 +1331,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           }
         }
 
-        const existingToday = await getLocalVolume(profile.user_id, currentCd, today, etiqueta);
+        const existingToday = await getLocalVolume(profile.user_id, selectedCd, today, etiqueta);
         if (existingToday) {
           if (existingToday.status !== "em_conferencia") {
             showDialog({
@@ -1280,9 +1360,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         }
 
         if (isOnline) {
-          const remoteVolume = await openVolume(etiqueta, currentCd);
-          const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
-          const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+          const remoteVolume = await openVolume(etiqueta, selectedCd);
+          const [remoteItems, contributors] = await Promise.all([
+            fetchVolumeItems(remoteVolume.conf_id),
+            fetchSeqNfContributors(remoteVolume)
+          ]);
+          const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems, contributors);
           await saveLocalVolume(localVolume);
           setActiveVolume(localVolume);
           etiquetaFinal = localVolume.nr_volume;
@@ -1296,7 +1379,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           return;
         }
 
-        const manifestItems = await getManifestItemsByEtiqueta(profile.user_id, currentCd, etiqueta);
+        const manifestItems = await getManifestItemsByEtiqueta(profile.user_id, selectedCd, etiqueta);
         if (!manifestItems.length) {
           showDialog({
             title: "Seq/NF inválido",
@@ -1305,7 +1388,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           return;
         }
 
-        const offlineVolume = createLocalVolumeFromManifest(profile, currentCd, etiqueta, manifestItems);
+        const offlineVolume = createLocalVolumeFromManifest(profile, selectedCd, etiqueta, manifestItems);
         await saveLocalVolume(offlineVolume);
         setActiveVolume(offlineVolume);
         etiquetaFinal = offlineVolume.nr_volume;
@@ -1318,9 +1401,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         return;
       }
 
-      const remoteVolume = await openVolume(etiqueta, currentCd);
-      const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
-      const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+      const remoteVolume = await openVolume(etiqueta, selectedCd);
+      const [remoteItems, contributors] = await Promise.all([
+        fetchVolumeItems(remoteVolume.conf_id),
+        fetchSeqNfContributors(remoteVolume)
+      ]);
+      const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems, contributors);
       await saveLocalVolume(localVolume);
       etiquetaFinal = localVolume.nr_volume;
 
@@ -1342,6 +1428,74 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       setStatusMessage("Conferência aberta para bipagem.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao Iniciar conferência.";
+      if (message.includes("CONFERENCIA_JA_FINALIZADA_OUTRO_USUARIO")) {
+        try {
+          const reopenInfo = await fetchPartialReopenInfo(etiqueta, selectedCd);
+          if (!reopenInfo.can_reopen) {
+            setErrorMessage(normalizeRpcErrorMessage("CONFERENCIA_FINALIZADA_SEM_PENDENCIA"));
+            return;
+          }
+
+          const previousCollaborator = formatCollaboratorName({
+            nome: reopenInfo.previous_started_nome,
+            mat: reopenInfo.previous_started_mat
+          });
+
+          showDialog({
+            title: "Conferência parcialmente finalizada",
+            message:
+              `A Seq/NF ${etiqueta} foi finalizada em parte por ${previousCollaborator}.\n\n`
+              + `Itens bloqueados: ${reopenInfo.locked_items}\n`
+              + `Itens pendentes: ${reopenInfo.pending_items}\n\n`
+              + "Os itens já conferidos não podem ser alterados. Deseja reabrir para concluir os pendentes?",
+            confirmLabel: "Reabrir conferência",
+            cancelLabel: "Cancelar",
+            onConfirm: () => {
+              void (async () => {
+                closeDialog();
+                setBusyOpenVolume(true);
+                setStatusMessage(null);
+                setErrorMessage(null);
+                try {
+                  const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd);
+                  const [reopenedItems, reopenedContributors] = await Promise.all([
+                    fetchVolumeItems(reopenedVolume.conf_id),
+                    fetchSeqNfContributors(reopenedVolume)
+                  ]);
+                  const reopenedLocalVolume = createLocalVolumeFromRemote(
+                    profile,
+                    reopenedVolume,
+                    reopenedItems,
+                    reopenedContributors
+                  );
+                  await saveLocalVolume(reopenedLocalVolume);
+                  setActiveVolume(reopenedLocalVolume);
+                  setEtiquetaInput(reopenedLocalVolume.nr_volume);
+                  setExpandedItemKey(null);
+                  setEditingItemKey(null);
+                  setEditQtdInput("0");
+                  setStatusMessage("Conferência retomada. Itens já conferidos por outro usuário permanecem bloqueados.");
+                  focusBarras();
+                } catch (reopenError) {
+                  const reopenMessage = reopenError instanceof Error
+                    ? reopenError.message
+                    : "Falha ao reabrir conferência parcial.";
+                  setErrorMessage(normalizeRpcErrorMessage(reopenMessage));
+                } finally {
+                  setBusyOpenVolume(false);
+                }
+              })();
+            }
+          });
+          return;
+        } catch (reopenInfoError) {
+          const reopenInfoMessage = reopenInfoError instanceof Error
+            ? reopenInfoError.message
+            : message;
+          setErrorMessage(normalizeRpcErrorMessage(reopenInfoMessage));
+          return;
+        }
+      }
       if (message.includes("CONFERENCIA_EM_ABERTO_OUTRO_VOLUME") || message.includes("CONFERENCIA_EM_ABERTO_OUTRA_ENTRADA")) {
         try {
           const resumed = await resumeRemoteActiveVolume(true);
@@ -1380,7 +1534,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     prepareOfflineManifest,
     profile,
     resumeRemoteActiveVolume,
-    showDialog
+    showDialog,
+    fetchSeqNfContributors
   ]);
 
   const openAvulsaVolumeWithRemoteState = useCallback(async (cd: number) => {
@@ -1858,10 +2013,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         const remoteVolume = activeVolume.conference_kind === "avulsa"
           ? await openAvulsaVolume(activeVolume.cd)
           : await openVolume(activeVolume.nr_volume, activeVolume.cd);
-        const remoteItems = activeVolume.conference_kind === "avulsa"
-          ? await fetchAvulsaItems(remoteVolume.conf_id)
-          : await fetchVolumeItems(remoteVolume.conf_id);
-        const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+        const [remoteItems, contributors] = await Promise.all([
+          activeVolume.conference_kind === "avulsa"
+            ? fetchAvulsaItems(remoteVolume.conf_id)
+            : fetchVolumeItems(remoteVolume.conf_id),
+          fetchSeqNfContributors(remoteVolume)
+        ]);
+        const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems, contributors);
         if (activeVolume.conference_kind === "avulsa") {
           localVolume.avulsa_targets = await fetchAvulsaTargets(remoteVolume.conf_id);
         }
@@ -1896,7 +2054,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setStatusMessage(null);
     setErrorMessage(normalizeRpcErrorMessage(rawMessage));
     return true;
-  }, [activeVolume, clearConferenceScreen, isOnline, profile, refreshPendingState]);
+  }, [activeVolume, clearConferenceScreen, isOnline, profile, refreshPendingState, fetchSeqNfContributors]);
 
   const applyAvulsaScanChoice = useCallback(async (
     barras: string,
@@ -2071,6 +2229,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   barras: updated.barras ?? barras,
                   qtd_conferida: updated.qtd_conferida,
                   qtd_esperada: updated.qtd_esperada,
+                  is_locked: updated.is_locked === true,
+                  locked_by: updated.locked_by ?? null,
+                  locked_mat: updated.locked_mat ?? null,
+                  locked_nome: updated.locked_nome ?? null,
                   updated_at: updated.updated_at
                 }
               : item
@@ -2241,6 +2403,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (!canEditActiveVolume) return;
     const item = activeVolume.items.find((row) => (row.item_key ?? String(row.coddv)) === itemKey);
     if (!item) return;
+    if (item.is_locked) {
+      setErrorMessage(normalizeRpcErrorMessage("ITEM_BLOQUEADO_OUTRO_USUARIO"));
+      setEditingItemKey(null);
+      setEditQtdInput("0");
+      return;
+    }
     const qtd = parsePositiveInteger(editQtdInput, 0);
 
     try {
@@ -2280,6 +2448,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               barras: updated.barras ?? row.barras ?? null,
               qtd_conferida: updated.qtd_conferida,
               qtd_esperada: updated.qtd_esperada,
+              is_locked: updated.is_locked === true,
+              locked_by: updated.locked_by ?? null,
+              locked_mat: updated.locked_mat ?? null,
+              locked_nome: updated.locked_nome ?? null,
               target_conf_id: activeVolume.conference_kind === "avulsa" ? targetConfId : row.target_conf_id,
               updated_at: updated.updated_at
             };
@@ -2326,6 +2498,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (!activeVolume || !canEditActiveVolume) return;
     const item = activeVolume.items.find((row) => (row.item_key ?? String(row.coddv)) === itemKey);
     if (!item || item.qtd_conferida <= 0) return;
+    if (item.is_locked) {
+      setErrorMessage(normalizeRpcErrorMessage("ITEM_BLOQUEADO_OUTRO_USUARIO"));
+      return;
+    }
 
     showDialog({
       title: "Limpar conferência do item",
@@ -2360,7 +2536,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               }
               if (!targetConfId) throw new Error("CONFERENCIA_NAO_ENCONTRADA");
 
-              await setItemQtd(targetConfId, item.coddv, 0);
+              const updated = await setItemQtd(targetConfId, item.coddv, 0);
               const nowIso = new Date().toISOString();
               const nextItems = activeVolume.items
                 .map((row) => {
@@ -2368,8 +2544,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   if (rowKey !== itemKey) return row;
                   return {
                     ...row,
-                    qtd_conferida: 0,
-                    updated_at: nowIso
+                    barras: updated.barras ?? row.barras ?? null,
+                    qtd_conferida: updated.qtd_conferida,
+                    qtd_esperada: updated.qtd_esperada,
+                    is_locked: updated.is_locked === true,
+                    locked_by: updated.locked_by ?? null,
+                    locked_mat: updated.locked_mat ?? null,
+                    locked_nome: updated.locked_nome ?? null,
+                    updated_at: updated.updated_at
                   };
                 })
                 .filter((row) => activeVolume.conference_kind !== "avulsa" || row.qtd_conferida > 0);
@@ -3115,6 +3297,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 <p>
                   Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com divergência"}
                 </p>
+                {activeVolume.conference_kind !== "avulsa" && activeContributorsLabel ? (
+                  <p className="entrada-notas-contributors">Colaboradores: {activeContributorsLabel}</p>
+                ) : null}
               </div>
               <div className="termo-volume-head-right">
                 <span
@@ -3214,6 +3399,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               ) : (
                 groupedItems.falta.map(({ item, qtd_falta, qtd_sobra }) => {
                   const itemKey = item.item_key ?? String(item.coddv);
+                  const isItemLocked = item.is_locked === true;
                   return (
                   <article key={`falta-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
@@ -3238,7 +3424,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingItemKey === itemKey && item.qtd_conferida > 0 ? (
+                            {editingItemKey === itemKey && item.qtd_conferida > 0 && !isItemLocked ? (
                               <>
                                 <input
                                   type="text"
@@ -3254,12 +3440,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                               </>
                             ) : (
                               <>
-                                {item.qtd_conferida > 0 ? (
+                                {item.qtd_conferida > 0 && !isItemLocked ? (
                                   <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(itemKey); setEditQtdInput(String(item.qtd_conferida)); }}>
                                     Editar
                                   </button>
                                 ) : null}
-                                {item.qtd_conferida > 0 ? (
+                                {item.qtd_conferida > 0 && !isItemLocked ? (
                                   <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(itemKey)}>
                                     Limpar
                                   </button>
@@ -3267,6 +3453,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                               </>
                             )}
                           </div>
+                        ) : null}
+                        {item.qtd_conferida > 0 && isItemLocked ? (
+                          <p className="entrada-notas-item-locked">
+                            Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
+                          </p>
                         ) : null}
                         {qtd_sobra > 0 ? <p className="termo-inline-note">Sobra detectada: {qtd_sobra}</p> : null}
                       </div>
@@ -3284,6 +3475,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               ) : (
                 groupedItems.sobra.map(({ item, qtd_sobra }) => {
                   const itemKey = item.item_key ?? String(item.coddv);
+                  const isItemLocked = item.is_locked === true;
                   return (
                   <article key={`sobra-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
@@ -3308,7 +3500,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingItemKey === itemKey && item.qtd_conferida > 0 ? (
+                            {editingItemKey === itemKey && item.qtd_conferida > 0 && !isItemLocked ? (
                               <>
                                 <input
                                   type="text"
@@ -3324,12 +3516,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                               </>
                             ) : (
                               <>
-                                {item.qtd_conferida > 0 ? (
+                                {item.qtd_conferida > 0 && !isItemLocked ? (
                                   <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(itemKey); setEditQtdInput(String(item.qtd_conferida)); }}>
                                     Editar
                                   </button>
                                 ) : null}
-                                {item.qtd_conferida > 0 ? (
+                                {item.qtd_conferida > 0 && !isItemLocked ? (
                                   <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(itemKey)}>
                                     Limpar
                                   </button>
@@ -3337,6 +3529,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                               </>
                             )}
                           </div>
+                        ) : null}
+                        {item.qtd_conferida > 0 && isItemLocked ? (
+                          <p className="entrada-notas-item-locked">
+                            Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
+                          </p>
                         ) : null}
                       </div>
                     ) : null}
@@ -3353,6 +3550,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               ) : (
                 groupedItems.correto.map(({ item }) => {
                   const itemKey = item.item_key ?? String(item.coddv);
+                  const isItemLocked = item.is_locked === true;
                   return (
                   <article key={`correto-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
@@ -3377,7 +3575,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
-                            {editingItemKey === itemKey && item.qtd_conferida > 0 ? (
+                            {editingItemKey === itemKey && item.qtd_conferida > 0 && !isItemLocked ? (
                               <>
                                 <input
                                   type="text"
@@ -3393,12 +3591,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                               </>
                             ) : (
                               <>
-                                {item.qtd_conferida > 0 ? (
+                                {item.qtd_conferida > 0 && !isItemLocked ? (
                                   <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(itemKey); setEditQtdInput(String(item.qtd_conferida)); }}>
                                     Editar
                                   </button>
                                 ) : null}
-                                {item.qtd_conferida > 0 ? (
+                                {item.qtd_conferida > 0 && !isItemLocked ? (
                                   <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(itemKey)}>
                                     Limpar
                                   </button>
@@ -3406,6 +3604,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                               </>
                             )}
                           </div>
+                        ) : null}
+                        {item.qtd_conferida > 0 && isItemLocked ? (
+                          <p className="entrada-notas-item-locked">
+                            Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
+                          </p>
                         ) : null}
                       </div>
                     ) : null}
