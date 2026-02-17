@@ -572,6 +572,31 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
   ), [activeVolume]);
 
+  const hasInformedItemsFromPreviousSession = useMemo(() => {
+    if (!activeVolume) return false;
+    const startedAtMs = Date.parse(activeVolume.started_at ?? "");
+    if (!Number.isFinite(startedAtMs)) return false;
+    return activeVolume.items.some((item) => {
+      if (item.qtd_conferida <= 0) return false;
+      const itemUpdatedMs = Date.parse(item.updated_at ?? "");
+      if (!Number.isFinite(itemUpdatedMs)) return false;
+      return itemUpdatedMs < startedAtMs;
+    });
+  }, [activeVolume]);
+
+  const shouldProtectPartialResumeOnCancel = useMemo(() => (
+    Boolean(
+      activeVolume
+      && activeVolume.status === "em_conferencia"
+      && hasAnyItemInformed
+      && hasInformedItemsFromPreviousSession
+    )
+  ), [
+    activeVolume,
+    hasAnyItemInformed,
+    hasInformedItemsFromPreviousSession
+  ]);
+
   const filteredModalVolumes = useMemo<VolumeAvulsoModalVolumeRow[]>(() => {
     if (currentCd == null || manifestVolumeRows.length === 0) return [];
 
@@ -1992,11 +2017,15 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
   const requestCancelConference = useCallback(() => {
     if (!activeVolume || !canEditActiveVolume) return;
+    const preserveAlreadyCountedData = shouldProtectPartialResumeOnCancel;
 
     showDialog({
       title: "Cancelar conferência",
-      message: `A conferência do NR Volume ${activeVolume.nr_volume} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
-      confirmLabel: "Cancelar conferência",
+      message: preserveAlreadyCountedData
+        ? `A conferência do NR Volume ${activeVolume.nr_volume} possui itens já conferidos em sessão anterior.\n\n`
+          + "Ao confirmar, esta retomada será encerrada mantendo tudo que já foi conferido (não haverá descarte)."
+        : `A conferência do NR Volume ${activeVolume.nr_volume} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
+      confirmLabel: preserveAlreadyCountedData ? "Encerrar mantendo dados" : "Cancelar conferência",
       cancelLabel: "Voltar",
       onConfirm: () => {
         void (async () => {
@@ -2006,6 +2035,46 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           setStatusMessage(null);
 
           try {
+            if (preserveAlreadyCountedData) {
+              const hasFalta = activeVolume.items.some((item) => item.qtd_conferida < item.qtd_esperada);
+              const preserveReason = hasFalta
+                ? (activeVolume.falta_motivo?.trim() || "Retomada cancelada mantendo itens já conferidos.")
+                : null;
+
+              if (activeVolume.remote_conf_id && isOnline) {
+                await finalizeVolume(activeVolume.remote_conf_id, preserveReason);
+                await removeLocalVolume(activeVolume.local_key);
+                await refreshPendingState();
+                clearConferenceScreen();
+                setStatusMessage("Retomada encerrada. Os dados já conferidos foram preservados.");
+                await syncRouteOverview();
+                return;
+              }
+
+              if (activeVolume.remote_conf_id && !isOnline) {
+                const nowIso = new Date().toISOString();
+                const nextStatus = hasFalta ? "finalizado_falta" : "finalizado_ok";
+                const nextVolume: VolumeAvulsoLocalVolume = {
+                  ...activeVolume,
+                  status: nextStatus,
+                  falta_motivo: preserveReason,
+                  finalized_at: nowIso,
+                  is_read_only: true,
+                  pending_snapshot: activeVolume.pending_snapshot,
+                  pending_finalize: true,
+                  pending_finalize_reason: preserveReason,
+                  pending_cancel: false,
+                  sync_error: null,
+                  updated_at: nowIso
+                };
+                await saveLocalVolume(nextVolume);
+                await refreshPendingState();
+                clearConferenceScreen();
+                setStatusMessage("Retomada encerrada localmente. A finalização será enviada ao reconectar.");
+                return;
+              }
+            }
+
             if (activeVolume.remote_conf_id && isOnline) {
               await cancelVolume(activeVolume.remote_conf_id);
               await removeLocalVolume(activeVolume.local_key);
@@ -2060,6 +2129,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     markStorePendingAfterCancel,
     refreshPendingState,
     showDialog,
+    shouldProtectPartialResumeOnCancel,
     syncRouteOverview,
     handleClosedConferenceError
   ]);
