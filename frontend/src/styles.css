@@ -3011,6 +3011,29 @@ small {
   box-shadow: 0 0 0 1px rgba(77, 116, 176, 0.24);
 }
 
+.inventario-zone-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.inventario-zone-total-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid #d7e4fa;
+  background: #eef4ff;
+  color: #35517a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .inventario-layout {
   display: grid;
   grid-template-columns: 1fr;

@@ -1677,8 +1677,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           >
                             <span className="termo-route-main">
                               <span className="termo-route-info">
-                                <span className="termo-route-title">{zoneBucket.zona}</span>
-                                <span className="termo-route-sub">{`Total (zona): ${labelByCount(zoneBucket.total_addresses, "endereço", "endereços")}`}</span>
+                                <span className="termo-route-title inventario-zone-title-row">
+                                  <span>{zoneBucket.zona}</span>
+                                  <span className="inventario-zone-total-chip" title={`Total de endereços: ${zoneBucket.total_addresses}`}>
+                                    {zoneBucket.total_addresses}
+                                  </span>
+                                </span>
                                 <span className="termo-route-sub">{`Concluído (endereço): ${zoneBucket.done_addresses} | Pendente (endereço): ${zoneBucket.pending_addresses}`}</span>
                               </span>
                               <span className="termo-route-actions-row">
