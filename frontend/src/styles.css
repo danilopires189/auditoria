@@ -3769,3 +3769,51 @@ small {
     gap: 10px;
   }
 }
+
+/* Editor/Conciliação: ocupar viewport inteira de forma estável em mobile e desktop */
+.inventario-popup-overlay-editor {
+  padding: 0;
+}
+
+.inventario-editor-popup-card {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  max-height: none;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.inventario-editor-popup-card .inventario-popup-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #fff;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px;
+}
+
+.inventario-editor-popup-card .inventario-popup-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #fff;
+  padding: 10px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.inventario-editor-popup-card .inventario-popup-body .inventario-editor-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: #fff;
+}
