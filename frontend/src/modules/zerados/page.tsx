@@ -789,6 +789,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const canShowStageSelector = mobileStep === "stage";
   const canShowZoneSelector = mobileStep === "zone";
   const canShowAddressList = mobileStep === "address";
+  const showTopContextBlocks = zone == null;
 
   const handleTabChange = useCallback((nextTab: InventarioStageView) => {
     setTab(nextTab);
@@ -1051,55 +1052,59 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       </header>
 
       <section className="modules-shell termo-shell inventario-shell">
-        <div className="termo-head">
-          <div className="inventario-head-row">
-            <h2>Olá, {userName}</h2>
-            {canExport && isDesktop ? (
+        {showTopContextBlocks ? (
+          <>
+            <div className="termo-head">
+              <div className="inventario-head-row">
+                <h2>Olá, {userName}</h2>
+                {canExport && isDesktop ? (
+                  <button
+                    type="button"
+                    className="btn btn-muted termo-route-btn inventario-report-inline-btn"
+                    onClick={() => setReportOpen(true)}
+                    title="Gerar Relatório"
+                    aria-label="Gerar Relatório"
+                  >
+                    <span aria-hidden="true">{reportIcon()}</span>
+                    Gerar Relatório
+                  </button>
+                ) : null}
+              </div>
+              <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE} | db_inventario: ${manifestItems.length}/${manifestMeta?.row_count ?? 0} | db_barras: ${dbBarrasCount}`}</p>
+              <div className="inventario-base-chips">
+                <span className={`inventario-base-chip ${manifestMeta && manifestItems.length >= manifestMeta.row_count ? "ok" : "warn"}`}>{`db_inventario ${manifestItems.length}/${manifestMeta?.row_count ?? 0}`}</span>
+                <span className={`inventario-base-chip ${dbBarrasCount > 0 ? "ok" : "warn"}`}>{`db_barras ${dbBarrasCount}`}</span>
+              </div>
+            </div>
+            {err ? <div className="alert error">{err}</div> : null}
+            {msg ? <div className="alert success">{msg}</div> : null}
+
+            <div className="termo-actions-row inventario-toolbar">
+              {isGlobalAdmin ? (
+                <select value={cd ?? ""} onChange={(e) => setCd(e.target.value ? Number.parseInt(e.target.value, 10) : null)}>
+                  <option value="">Selecione CD</option>
+                  {cdOptions.map((o) => <option key={o.cd} value={o.cd}>{`CD ${String(o.cd).padStart(2, "0")} - ${o.cd_nome}`}</option>)}
+                </select>
+              ) : null}
               <button
                 type="button"
-                className="btn btn-muted termo-route-btn inventario-report-inline-btn"
-                onClick={() => setReportOpen(true)}
-                title="Gerar Relatório"
-                aria-label="Gerar Relatório"
+                className="btn btn-muted termo-sync-btn"
+                onClick={() => void syncNow(true)}
+                disabled={!isOnline || busy || cd == null}
               >
-                <span aria-hidden="true">{reportIcon()}</span>
-                Gerar Relatório
+                <span aria-hidden="true">{refreshIcon()}</span>
+                {busy ? "Sincronizando..." : "Sincronizar agora"}
               </button>
-            ) : null}
-          </div>
-          <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE} | db_inventario: ${manifestItems.length}/${manifestMeta?.row_count ?? 0} | db_barras: ${dbBarrasCount}`}</p>
-          <div className="inventario-base-chips">
-            <span className={`inventario-base-chip ${manifestMeta && manifestItems.length >= manifestMeta.row_count ? "ok" : "warn"}`}>{`db_inventario ${manifestItems.length}/${manifestMeta?.row_count ?? 0}`}</span>
-            <span className={`inventario-base-chip ${dbBarrasCount > 0 ? "ok" : "warn"}`}>{`db_barras ${dbBarrasCount}`}</span>
-          </div>
-        </div>
-        {err ? <div className="alert error">{err}</div> : null}
-        {msg ? <div className="alert success">{msg}</div> : null}
-
-        <div className="termo-actions-row inventario-toolbar">
-          {isGlobalAdmin ? (
-            <select value={cd ?? ""} onChange={(e) => setCd(e.target.value ? Number.parseInt(e.target.value, 10) : null)}>
-              <option value="">Selecione CD</option>
-              {cdOptions.map((o) => <option key={o.cd} value={o.cd}>{`CD ${String(o.cd).padStart(2, "0")} - ${o.cd_nome}`}</option>)}
-            </select>
-          ) : null}
-          <button
-            type="button"
-            className="btn btn-muted termo-sync-btn"
-            onClick={() => void syncNow(true)}
-            disabled={!isOnline || busy || cd == null}
-          >
-            <span aria-hidden="true">{refreshIcon()}</span>
-            {busy ? "Sincronizando..." : "Sincronizar agora"}
-          </button>
-          <button
-            className={`btn btn-muted termo-offline-toggle${preferOffline ? " is-active" : ""}`}
-            type="button"
-            onClick={() => setPreferOffline((v) => !v)}
-          >
-            {preferOffline ? "📦 Offline ativo" : "📶 Trabalhar offline"}
-          </button>
-        </div>
+              <button
+                className={`btn btn-muted termo-offline-toggle${preferOffline ? " is-active" : ""}`}
+                type="button"
+                onClick={() => setPreferOffline((v) => !v)}
+              >
+                {preferOffline ? "📦 Offline ativo" : "📶 Trabalhar offline"}
+              </button>
+            </div>
+          </>
+        ) : null}
 
         {canShowStageSelector ? (
           <div className="termo-form inventario-mobile-stage-card">
