@@ -3041,7 +3041,7 @@ small {
 .inventario-zone-stats {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   margin-top: 1px;
 }
@@ -3049,12 +3049,12 @@ small {
 .inventario-zone-stat {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .inventario-zone-stat-count {
   color: #27456f;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -3063,30 +3063,30 @@ small {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
   border: 1px solid transparent;
-  font-size: 0.73rem;
-  font-weight: 800;
+  font-size: 0.5rem;
+  font-weight: 700;
   line-height: 1;
 }
 
 .inventario-zone-stat-icon.pending {
-  border-color: #f2b4b4;
-  background: #d93b3b;
-  color: #fff;
+  border-color: #d8c6c6;
+  background: #efe5e5;
+  color: #8c5a5a;
 }
 
 .inventario-zone-stat-icon.done {
-  border-color: #8edab4;
-  background: #1f9c64;
-  color: #fff;
+  border-color: #bfd2c5;
+  background: #e2ece5;
+  color: #4a6f5b;
 }
 
 .inventario-zone-stat-label {
-  color: #4b5e81;
-  font-size: 0.82rem;
+  color: #56698a;
+  font-size: 0.78rem;
   line-height: 1;
 }
 
@@ -3217,8 +3217,9 @@ small {
 .inventario-address-extra {
   margin: 1px 0 0;
   color: #3d5680;
-  font-size: 0.46rem;
+  font-size: 0.56rem;
   line-height: 1.14;
+  font-style: italic;
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
@@ -3229,8 +3230,9 @@ small {
 .inventario-address-user {
   margin: 1px 0 0;
   color: #6b7d99;
-  font-size: 0.38rem;
+  font-size: 0.56rem;
   line-height: 1.14;
+  font-style: italic;
   white-space: normal;
   overflow: visible;
   text-overflow: clip;

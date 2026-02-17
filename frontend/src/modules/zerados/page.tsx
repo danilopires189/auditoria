@@ -135,7 +135,7 @@ function parseErr(error: unknown): string {
   if (raw.includes("ETAPA1_APENAS_AUTOR")) return "Apenas o autor pode editar a 1ª verificação.";
   if (raw.includes("ETAPA2_APENAS_AUTOR")) return "Apenas o autor pode editar a 2ª verificação.";
   if (raw.includes("ETAPA1_BLOQUEADA_SEGUNDA_EXISTE")) return "A 1ª verificação não pode ser alterada após existir 2ª verificação.";
-  if (raw.includes("ITEM_JA_RESOLVIDO")) return "Item já resolvido na conciliação.";
+  if (raw.includes("ITEM_JA_RESOLVIDO")) return "Endereço já resolvido na conciliação.";
   return raw;
 }
 
@@ -308,13 +308,15 @@ function resolveCountedDisplayInfo(row: Row, stage: InventarioStageView): Counte
   return null;
 }
 
-function formatCountedByLine(mat: string | null, nome: string | null): string | null {
-  const matTrim = (mat ?? "").trim();
-  const nomeTrim = (nome ?? "").trim();
-  if (!matTrim && !nomeTrim) return null;
-  if (matTrim && nomeTrim) return `Mat ${matTrim} - ${nomeTrim}`;
-  if (matTrim) return `Mat ${matTrim}`;
-  return nomeTrim;
+function formatCountedByLine(nome: string | null): string | null {
+  const nomeTrim = (nome ?? "").trim().replace(/\s+/g, " ");
+  if (!nomeTrim) return null;
+
+  return nomeTrim
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((chunk) => chunk.charAt(0).toLocaleUpperCase("pt-BR") + chunk.slice(1))
+    .join(" ");
 }
 
 function derive(manifest: InventarioManifestItemRow[], remote: InventarioSyncPullState): Row[] {
@@ -1603,7 +1605,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <span>{`Endereços - ${stageLabel(tab)}`}</span>
                 {zone ? <span className="inventario-address-title-sep">|</span> : null}
                 {zone ? <span className="inventario-zone-name-chip">{zone}</span> : null}
-                <span className="inventario-zone-total-chip" title={`Total de endereços: ${addressBuckets.length}`}>
+                <span className="inventario-zone-total-chip" title={`Total: ${labelByCount(addressBuckets.length, "endereço", "endereços")}`}>
                   {addressBuckets.length}
                 </span>
               </h3>
@@ -1617,7 +1619,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     || tab === "done"
                   );
                   const countedInfo = singleItem ? resolveCountedDisplayInfo(singleItem, tab) : null;
-                  const countedByLine = countedInfo ? formatCountedByLine(countedInfo.mat, countedInfo.nome) : null;
+                  const countedByLine = countedInfo ? formatCountedByLine(countedInfo.nome) : null;
                   const addressMeta = singleItem
                     ? `${singleItem.coddv} - ${singleItem.descricao}`
                     : labelByCount(bucket.total_items, "endereço", "endereços");
@@ -1689,7 +1691,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                 <span className="termo-route-info">
                                   <span className="termo-route-title inventario-zone-title-row">
                                     <span className="inventario-zone-name-chip">{zoneBucket.zona}</span>
-                                    <span className="inventario-zone-total-chip" title={`Total de endereços: ${zoneBucket.total_addresses}`}>
+                                    <span className="inventario-zone-total-chip" title={`Total: ${labelByCount(zoneBucket.total_addresses, "endereço", "endereços")}`}>
                                       {zoneBucket.total_addresses}
                                     </span>
                                   </span>
@@ -1898,7 +1900,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     <div className="inventario-editor-actions"><button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button></div>
                   </>
                 ) : null}
-                {tab === "done" ? <p className="inventario-editor-text">Item concluído e  não pode ser alterado.</p> : null}
+                {tab === "done" ? <p className="inventario-editor-text">Endereço concluído e não pode ser alterado.</p> : null}
               </div>
             </div>
           </div>
