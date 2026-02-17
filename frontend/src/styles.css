@@ -3240,6 +3240,19 @@ small {
   word-break: break-word;
 }
 
+.inventario-address-blocked-note {
+  margin: 1px 0 0;
+  color: #7a87a0;
+  font-size: 0.54rem;
+  line-height: 1.12;
+  font-style: italic;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .inventario-address-card.active {
   border-color: #89a7d3;
   box-shadow: 0 0 0 1px rgba(77, 116, 176, 0.24);
@@ -3426,6 +3439,12 @@ small {
   color: #4b5e80;
   font-size: 0.88rem;
   line-height: 1.34;
+}
+
+.inventario-popup-head-product {
+  color: #5b6f93;
+  font-size: 0.78rem;
+  font-style: italic;
 }
 
 .inventario-popup-edit {
