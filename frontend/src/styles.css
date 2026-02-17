@@ -3018,20 +3018,24 @@ small {
   min-width: 0;
 }
 
-.inventario-zone-total-chip {
+.inventario-zone-total-chip,
+.inventario-zone-name-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 20px;
-  padding: 0 8px;
+  min-height: 24px;
+  padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid #d7e4fa;
-  background: #eef4ff;
-  color: #35517a;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 700;
   line-height: 1;
+}
+
+.inventario-zone-total-chip {
+  min-width: 24px;
+  border: 1px solid #d2ddef;
+  background: #eef2f9;
+  color: #3b567d;
 }
 
 .inventario-zone-stats {
@@ -3117,18 +3121,9 @@ small {
 }
 
 .inventario-zone-name-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid #c9d8f2;
-  background: #edf4ff;
+  border: 1px solid #c8d8f1;
+  background: #e8f1ff;
   color: #204777;
-  font-size: 0.82rem;
-  font-weight: 700;
-  line-height: 1;
 }
 
 .inventario-address-list {
