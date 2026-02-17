@@ -9,6 +9,15 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import {
+  getDbBarrasByBarcode,
+  getDbBarrasMeta,
+  upsertDbBarrasCacheRow
+} from "../../shared/db-barras/storage";
+import {
+  fetchDbBarrasByBarcodeOnline,
+  refreshDbBarrasCacheSmart
+} from "../../shared/db-barras/sync";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   buildVolumeAvulsoVolumeKey,
@@ -45,15 +54,6 @@ import {
   setItemQtd,
   syncPendingVolumeAvulsoVolumes
 } from "./sync";
-import {
-  getDbBarrasByBarcode,
-  getDbBarrasMeta,
-  upsertDbBarrasCacheRow
-} from "../coleta-mercadoria/storage";
-import {
-  fetchDbBarrasByBarcodeOnline,
-  refreshDbBarrasCacheSmart
-} from "../coleta-mercadoria/sync";
 import type {
   CdOption,
   VolumeAvulsoDivergenciaTipo,
