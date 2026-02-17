@@ -63,7 +63,8 @@ export default function HomePage({ displayContext, isOnline, onRequestLogout }: 
                 || moduleDef.key === "conferencia-termo"
                 || moduleDef.key === "conferencia-volume-avulso"
                 || moduleDef.key === "conferencia-pedido-direto"
-                || moduleDef.key === "conferencia-entrada-notas" ? (
+                || moduleDef.key === "conferencia-entrada-notas"
+                || moduleDef.key === "zerados" ? (
                   <span className="module-available-pill">Disponível</span>
                 ) : null}
               </div>
