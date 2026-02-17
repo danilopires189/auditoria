@@ -2792,6 +2792,16 @@ small {
   min-width: 140px;
 }
 
+.inventario-subfilters .btn.is-active {
+  color: #fff;
+  border-color: #2f67bf;
+  background: linear-gradient(130deg, #2f67bf, #2859a8);
+}
+
+.inventario-subfilters .btn.is-active:hover:not(:disabled) {
+  background: linear-gradient(130deg, #2756a2, #214a8f);
+}
+
 .inventario-tabs {
   display: flex;
   flex-wrap: wrap;
