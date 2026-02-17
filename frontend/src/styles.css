@@ -3112,6 +3112,23 @@ small {
   text-overflow: ellipsis;
 }
 
+.inventario-address-extra {
+  margin: 1px 0 0;
+  color: #3d5680;
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.inventario-address-user {
+  margin: 1px 0 0;
+  color: #6b7d99;
+  font-size: 0.4rem;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .inventario-address-card.active {
   border-color: #89a7d3;
   box-shadow: 0 0 0 1px rgba(77, 116, 176, 0.24);
