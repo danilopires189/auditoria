@@ -1456,16 +1456,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (focusInput) focusBarras();
   }, [focusBarras, refreshPendingState]);
 
-  const resumeRemoteActiveVolume = useCallback(async (silent = false): Promise<EntradaNotasLocalVolume | null> => {
+  const resumeRemoteActiveVolume = useCallback(async (
+    silent = false,
+    options?: { includeAvulsa?: boolean }
+  ): Promise<EntradaNotasLocalVolume | null> => {
     if (!isOnline) return null;
+    const includeAvulsa = options?.includeAvulsa ?? true;
 
     const [remoteSeqNf, remoteAvulsa] = await Promise.all([
       fetchActiveVolume(),
-      fetchActiveAvulsaVolume()
+      includeAvulsa ? fetchActiveAvulsaVolume() : Promise.resolve(null)
     ]);
     const remoteActive =
       (remoteSeqNf && remoteSeqNf.status === "em_conferencia" ? remoteSeqNf : null)
-      ?? (remoteAvulsa && remoteAvulsa.status === "em_conferencia" ? remoteAvulsa : null);
+      ?? (includeAvulsa && remoteAvulsa && remoteAvulsa.status === "em_conferencia" ? remoteAvulsa : null);
     if (!remoteActive) return null;
 
     if (isGlobalAdmin && cdAtivo !== remoteActive.cd) {
@@ -3023,7 +3027,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       );
       setRouteRows(localRoutes);
 
-      const latestOpen = volumes.find((row) => row.status === "em_conferencia" && !row.is_read_only) ?? null;
+      const latestOpen = volumes.find((row) => (
+        row.status === "em_conferencia"
+          && !row.is_read_only
+          && row.conference_kind !== "avulsa"
+      )) ?? null;
       if (latestOpen) {
         if (isGlobalAdmin && latestOpen.cd !== currentCd) {
           setCdAtivo(latestOpen.cd);
@@ -3040,6 +3048,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       const latestToday = volumes.find(
         (row) => row.cd === currentCd
           && row.conf_date === today
+          && row.conference_kind !== "avulsa"
           && (row.status === "em_conferencia" || row.pending_snapshot || row.pending_finalize || row.pending_cancel)
       );
       if (latestToday) {
@@ -3067,7 +3076,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       if (!isOnline) return;
 
       try {
-        const resumed = await resumeRemoteActiveVolume(true);
+        const resumed = await resumeRemoteActiveVolume(true, { includeAvulsa: false });
         if (cancelled || !resumed) return;
         if (isGlobalAdmin && resumed.cd !== currentCd) {
           setCdAtivo(resumed.cd);
