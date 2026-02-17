@@ -3044,7 +3044,7 @@ small {
 }
 
 .inventario-popup-head {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid #dce5f4;
   display: flex;
   align-items: flex-start;
@@ -3055,13 +3055,15 @@ small {
 .inventario-popup-head h3 {
   margin: 0;
   color: #12305e;
-  font-size: 0.98rem;
+  font-size: 1.02rem;
+  line-height: 1.28;
 }
 
 .inventario-popup-head p {
   margin: 3px 0 0;
   color: #4b5e80;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
+  line-height: 1.34;
 }
 
 .inventario-popup-close {
@@ -3069,23 +3071,29 @@ small {
   border-radius: 10px;
   background: #f6f9ff;
   color: #284877;
-  padding: 7px 10px;
-  font-size: 0.78rem;
+  padding: 8px 12px;
+  min-height: 40px;
+  font-size: 0.84rem;
   font-weight: 700;
   cursor: pointer;
 }
 
 .inventario-popup-body {
-  padding: 12px;
+  padding: 14px;
   display: grid;
-  gap: 9px;
+  gap: 10px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding-bottom: 32vh;
+  -webkit-overflow-scrolling: touch;
 }
 
 .inventario-popup-body label {
   display: grid;
-  gap: 4px;
-  font-size: 0.86rem;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #12305e;
+  font-weight: 600;
 }
 
 .inventario-popup-body input,
@@ -3094,8 +3102,26 @@ small {
   border-radius: 10px;
   background: #fff;
   color: #12305e;
-  padding: 10px 11px;
+  padding: 11px 12px;
+  min-height: 46px;
+  font-size: 0.95rem;
   font: inherit;
+}
+
+.inventario-editor-actions .btn,
+.inventario-report-actions .btn {
+  min-height: 44px;
+}
+
+.inventario-popup-close:focus-visible,
+.inventario-popup-body input:focus-visible,
+.inventario-popup-body select:focus-visible,
+.inventario-editor-actions .btn:focus-visible,
+.inventario-report-actions .btn:focus-visible {
+  outline: 2px solid #2f67bf;
+  outline-offset: 1px;
+  border-color: #84a7dc;
+  box-shadow: 0 0 0 3px rgba(47, 103, 191, 0.18);
 }
 
 .inventario-report-popup {
@@ -3126,10 +3152,69 @@ small {
 
   .inventario-popup-card {
     width: 100%;
-    max-height: 90vh;
+    max-height: 92vh;
     border-radius: 16px 16px 0 0;
     border-left: 0;
     border-right: 0;
     border-bottom: 0;
+  }
+
+  .inventario-popup-head {
+    padding: 14px 14px 10px;
+  }
+
+  .inventario-popup-head h3 {
+    font-size: 1.08rem;
+  }
+
+  .inventario-popup-head p {
+    font-size: 0.88rem;
+  }
+
+  .inventario-popup-close {
+    min-height: 42px;
+    min-width: 76px;
+    font-size: 0.9rem;
+  }
+
+  .inventario-popup-body {
+    padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+    gap: 12px;
+  }
+
+  .inventario-popup-body label {
+    font-size: 0.95rem;
+    gap: 7px;
+  }
+
+  .inventario-popup-body input,
+  .inventario-popup-body select {
+    min-height: 50px;
+    border-radius: 12px;
+    padding: 12px 13px;
+    font-size: 16px;
+  }
+
+  .inventario-editor-actions,
+  .inventario-report-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .inventario-editor-actions .btn,
+  .inventario-report-actions .btn {
+    width: 100%;
+    min-height: 52px;
+    font-size: 0.98rem;
+    padding: 12px;
+  }
+
+  .inventario-report-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+    gap: 10px;
   }
 }
