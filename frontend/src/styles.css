@@ -3395,12 +3395,15 @@ small {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: env(safe-area-inset-top) 0 0;
+  padding: env(safe-area-inset-top, 0px) 0 0;
 }
 
 .inventario-popup-card {
   width: 100%;
-  max-height: calc(100dvh - env(safe-area-inset-top));
+  max-height: 92vh;
+  max-height: calc(100vh - env(safe-area-inset-top, 0px));
+  max-height: calc(100svh - env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px));
   border: 1px solid #c8d6ef;
   border-radius: 16px 16px 0 0;
   border-left: 0;
@@ -3645,12 +3648,15 @@ small {
 
   .inventario-popup-overlay {
     align-items: flex-end;
-    padding: env(safe-area-inset-top) 0 0;
+    padding: env(safe-area-inset-top, 0px) 0 0;
   }
 
   .inventario-popup-card {
     width: 100%;
-    max-height: calc(100dvh - env(safe-area-inset-top));
+    max-height: 92vh;
+    max-height: calc(100vh - env(safe-area-inset-top, 0px));
+    max-height: calc(100svh - env(safe-area-inset-top, 0px));
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
     border-radius: 16px 16px 0 0;
     border-left: 0;
     border-right: 0;

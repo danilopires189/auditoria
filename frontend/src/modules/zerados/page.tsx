@@ -878,9 +878,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   useEffect(() => {
     if (!editorOpen) return;
     const id = window.setTimeout(() => {
-      const target = tab === "conciliation" ? finalQtdInputRef.current : qtdInputRef.current;
-      if (!target || target.disabled) return;
       popupBodyRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      if (tab === "conciliation") return;
+
+      const target = qtdInputRef.current;
+      if (!target || target.disabled) return;
       try {
         target.focus({ preventScroll: true });
       } catch {
@@ -2002,7 +2004,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       Qtd final
                       <input
                         ref={finalQtdInputRef}
-                        autoFocus
                         value={finalQtd}
                         onChange={(e) => setFinalQtd(e.target.value)}
                         onFocus={focusAndSelectNumericInput}
