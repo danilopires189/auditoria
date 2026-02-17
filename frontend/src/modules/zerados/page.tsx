@@ -316,8 +316,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     return window.innerWidth >= 1024;
   });
   const [mobileStep, setMobileStep] = useState<MobileFlowStep>(() => {
-    if (typeof window === "undefined") return "stage";
-    return window.innerWidth >= 1024 ? "address" : "stage";
+    return "stage";
   });
   const [editorOpen, setEditorOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -484,10 +483,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     return () => window.removeEventListener("resize", onResize);
   }, []);
   useEffect(() => {
-    if (!isDesktop) return;
-    setMobileStep("address");
-  }, [isDesktop]);
-  useEffect(() => {
     if (!isDesktop) setReportOpen(false);
   }, [isDesktop]);
   useEffect(() => {
@@ -587,20 +582,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   );
 
   useEffect(() => {
-    if (!isDesktop) {
-      if (zone && !zones.includes(zone)) setZone(null);
-      return;
-    }
-
-    if (!zone && zones.length) {
-      setZone(zones[0]);
-      return;
-    }
-
-    if (zone && !zones.includes(zone)) {
-      setZone(zones[0] ?? null);
-    }
-  }, [isDesktop, zone, zones]);
+    if (zone && !zones.includes(zone)) setZone(null);
+  }, [zone, zones]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLocaleLowerCase("pt-BR");
@@ -682,14 +665,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   }, [tab, visible]);
 
   useEffect(() => {
-    if (!isDesktop && (mobileStep !== "address" || !zone)) {
+    if (mobileStep !== "address" || !zone) {
       if (selectedAddress != null) setSelectedAddress(null);
       return;
     }
     if (!selectedAddress || !addressBuckets.some((b) => b.key === selectedAddress)) {
       setSelectedAddress(addressBuckets[0]?.key ?? null);
     }
-  }, [addressBuckets, isDesktop, mobileStep, selectedAddress, zone]);
+  }, [addressBuckets, mobileStep, selectedAddress, zone]);
 
   const activeAddress = useMemo(
     () => addressBuckets.find((b) => b.key === selectedAddress) ?? null,
@@ -743,9 +726,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setPopupErr(null);
   }, [active?.key, editorOpen, tab]);
 
-  const canShowStageSelector = !isDesktop && mobileStep === "stage";
-  const canShowZoneSelector = !isDesktop && mobileStep === "zone";
-  const canShowAddressList = isDesktop || mobileStep === "address";
+  const canShowStageSelector = mobileStep === "stage";
+  const canShowZoneSelector = mobileStep === "zone";
+  const canShowAddressList = mobileStep === "address";
 
   const handleTabChange = useCallback((nextTab: InventarioStageView) => {
     setTab(nextTab);
@@ -756,16 +739,16 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setSearch("");
     if (nextTab === "s1" || nextTab === "s2") setStatusFilter("pendente");
     if (nextTab === "conciliation") setReviewFilter("pendente");
-    if (!isDesktop) setMobileStep("zone");
-  }, [closeEditorPopup, isDesktop]);
+    setMobileStep("zone");
+  }, [closeEditorPopup]);
 
   const handleZoneSelect = useCallback((value: string) => {
     setZone(value);
     setSelectedAddress(null);
     setSelectedItem(null);
     setSearch("");
-    if (!isDesktop) setMobileStep("address");
-  }, [isDesktop]);
+    setMobileStep("address");
+  }, []);
 
   const openAddressEditor = useCallback((bucket: AddressBucketView) => {
     setSelectedAddress(bucket.key);
@@ -782,7 +765,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const addressIndex = addressBuckets.findIndex((bucket) => bucket.key === addressKey);
     if (addressIndex < 0) {
       closeEditorPopup();
-      if (!isDesktop) setMobileStep("zone");
+      setMobileStep("zone");
       return;
     }
 
@@ -807,13 +790,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     closeEditorPopup();
     setSelectedAddress(null);
     setSelectedItem(null);
-    if (!isDesktop) {
-      setZone(null);
-      setSearch("");
-      setMobileStep("zone");
-      setMsg("Zona concluída. Selecione a próxima zona.");
-    }
-  }, [addressBuckets, closeEditorPopup, isDesktop]);
+    setZone(null);
+    setSearch("");
+    setMobileStep("zone");
+    setMsg("Zona concluída. Selecione a próxima zona.");
+  }, [addressBuckets, closeEditorPopup]);
 
   const canEditCount = useCallback((row: Row | null): boolean => {
     if (!row || !canEdit) return false;
@@ -1044,15 +1025,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           ) : null}
         </div>
 
-        {isDesktop ? (
-          <div className="termo-actions-row inventario-tabs">
-            <button type="button" className={`inventario-tab-btn${tab === "s1" ? " active" : ""}`} onClick={() => handleTabChange("s1")}>1ª Verificação</button>
-            <button type="button" className={`inventario-tab-btn${tab === "s2" ? " active" : ""}`} onClick={() => handleTabChange("s2")}>2ª Verificação</button>
-            <button type="button" className={`inventario-tab-btn${tab === "conciliation" ? " active" : ""}`} onClick={() => handleTabChange("conciliation")}>Conciliação</button>
-            <button type="button" className={`inventario-tab-btn${tab === "done" ? " active" : ""}`} onClick={() => handleTabChange("done")}>Concluídos</button>
-          </div>
-        ) : null}
-
         {canShowStageSelector ? (
           <div className="termo-form inventario-mobile-stage-card">
             <h3>Selecione a etapa</h3>
@@ -1072,7 +1044,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           </div>
         ) : null}
 
-        {!isDesktop && !canShowStageSelector ? (
+        {!canShowStageSelector ? (
           <div className="inventario-mobile-nav">
             <button
               type="button"
@@ -1099,7 +1071,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           </div>
         ) : null}
 
-        {(isDesktop || !canShowStageSelector) ? (
+        {!canShowStageSelector ? (
           <div className="termo-actions-row inventario-subfilters">
             {(tab === "s1" || tab === "s2") ? (
               <>
@@ -1113,19 +1085,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <button type="button" className={`btn btn-muted${reviewFilter === "resolvido" ? " is-active" : ""}`} onClick={() => setReviewFilter("resolvido")}>Resolvidos</button>
               </>
             ) : null}
-            {(isDesktop || canShowAddressList) ? (
+            {canShowAddressList ? (
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar endereço, CODDV ou descrição" />
             ) : null}
-          </div>
-        ) : null}
-
-        {isDesktop ? (
-          <div className="inventario-zones">
-            {zones.map((z) => (
-              <button type="button" key={z} className={`inventario-zone-chip${zone === z ? " active" : ""}`} onClick={() => handleZoneSelect(z)}>
-                {z}
-              </button>
-            ))}
           </div>
         ) : null}
 
@@ -1179,14 +1141,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 ) : null}
               </div>
             </div>
-
-            {isDesktop ? (
-              <div className="termo-form inventario-editor-hint">
-                <h3>Edição em Popup</h3>
-                <p className="inventario-editor-text">Toque no endereço para abrir o popup de conferência.</p>
-                <p className="inventario-editor-text">Fluxo otimizado para uso no navegador do celular.</p>
-              </div>
-            ) : null}
           </div>
         ) : null}
 
