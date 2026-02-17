@@ -3746,6 +3746,14 @@ small {
     font-size: 16px;
   }
 
+  .inventario-popup-body .inventario-popup-input-action-wrap input {
+    min-height: 50px;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: 44px;
+    padding-right: 50px;
+  }
+
   .inventario-editor-actions,
   .inventario-report-actions {
     width: 100%;
