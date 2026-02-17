@@ -37,6 +37,17 @@ export interface VolumeAvulsoManifestItemRow {
   qtd_esperada: number;
 }
 
+export interface VolumeAvulsoManifestVolumeRow {
+  nr_volume: string;
+  caixa: string | null;
+  pedido: number | null;
+  filial: number | null;
+  filial_nome: string | null;
+  rota: string | null;
+  itens_total: number;
+  qtd_esperada_total: number;
+}
+
 export interface VolumeAvulsoManifestBarrasRow {
   barras: string;
   coddv: number;
