@@ -373,6 +373,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [qtd, setQtd] = useState("0");
   const [barras, setBarras] = useState("");
+  const [validatedBarras, setValidatedBarras] = useState<string | null>(null);
   const [finalQtd, setFinalQtd] = useState("0");
   const [finalBarras, setFinalBarras] = useState("");
 
@@ -423,6 +424,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const closeEditorPopup = useCallback(() => {
     setPopupErr(null);
+    setValidatedBarras(null);
     setScannerOpen(false);
     setScannerError(null);
     setTorchEnabled(false);
@@ -918,6 +920,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!active) {
       setQtd("0");
       setBarras("");
+      setValidatedBarras(null);
       setFinalQtd("0");
       setFinalBarras("");
       return;
@@ -926,6 +929,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const currentCount = tab === "s2" ? active.c2 : active.c1;
     setQtd(String(currentCount?.qtd_contada ?? 0));
     setBarras(currentCount?.barras ?? "");
+    setValidatedBarras(currentCount?.barras ?? null);
 
     const suggestedFinal = active.review?.final_qtd
       ?? active.c2?.qtd_contada
@@ -1057,6 +1061,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     && Number.isFinite(qtyParsed)
     && qtyParsed > active.estoque
   );
+  const normalizedBarras = normalizeBarcode(barras);
+  const barrasValidatedForCurrentInput = Boolean(
+    requiresBarras
+    && normalizedBarras
+    && validatedBarras === normalizedBarras
+  );
+  const saveCountLabel = requiresBarras && !barrasValidatedForCurrentInput ? "Validar barras" : "Salvar";
   const requiresFinalBarras = Boolean(
     active
     && tab === "conciliation"
@@ -1105,7 +1116,24 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       const qty = discarded ? 0 : Number.parseInt(qtd, 10);
       if (!discarded && (!Number.isFinite(qty) || qty < 0)) return setPopupErr("Quantidade inválida.");
       let b: string | null = null;
-      if (!discarded && qty > active.estoque) b = await validateBarras(active.coddv, barras);
+      const needsBarrasValidation = !discarded && qty > active.estoque;
+      if (needsBarrasValidation) {
+        const normalized = normalizeBarcode(barras);
+        if (!normalized) {
+          setValidatedBarras(null);
+          setPopupErr("Sobra detectada. Informe o código de barras ou descarte.");
+          return;
+        }
+
+        if (validatedBarras !== normalized) {
+          const validated = await validateBarras(active.coddv, normalized);
+          setBarras(validated);
+          setValidatedBarras(validated);
+          setPopupErr(null);
+          return;
+        }
+        b = normalized;
+      }
       await send("count_upsert", {
         cycle_date: CYCLE_DATE,
         cd,
@@ -1119,11 +1147,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         barras: b,
         discarded
       });
+      setValidatedBarras(null);
       advanceAfterAction(currentAddressKey, currentItemKey);
     } catch (error) {
+      setValidatedBarras(null);
       setPopupErr(parseErr(error));
     }
-  }, [active, advanceAfterAction, barras, canEditCount, cd, qtd, selectedAddress, send, tab, validateBarras]);
+  }, [active, advanceAfterAction, barras, canEditCount, cd, qtd, selectedAddress, send, tab, validateBarras, validatedBarras]);
 
   const resolveReview = useCallback(async () => {
     if (!active || !active.review || cd == null) return;
@@ -1193,8 +1223,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               const scanned = normalizeBarcode(result.getText() ?? "");
               if (!scanned) return;
 
-              if (scannerTarget === "final_barras") setFinalBarras(scanned);
-              else setBarras(scanned);
+              if (scannerTarget === "final_barras") {
+                setFinalBarras(scanned);
+              } else {
+                setBarras(scanned);
+                setValidatedBarras(null);
+              }
 
               closeCameraScanner();
               return;
@@ -1583,15 +1617,22 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       />
                     </label>
                     {requiresBarras ? (
-                      <p className="inventario-popup-note warn">Sobra detectada. Informe barras válido do mesmo CODDV para salvar, ou descarte.</p>
+                      <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
+                        {barrasValidatedForCurrentInput
+                          ? "Código de barras validado. Toque em Salvar para concluir."
+                          : "Sobra detectada. Informe barras válido do mesmo CODDV e valide antes de salvar, ou descarte."}
+                      </p>
                     ) : null}
                     {requiresBarras ? (
                       <label>
                         Barras (obrigatório na sobra)
-                        <div className="inventario-popup-input-action-wrap">
+                        <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
                           <input
                             value={barras}
-                            onChange={(e) => setBarras(e.target.value)}
+                            onChange={(e) => {
+                              setBarras(e.target.value);
+                              setValidatedBarras(null);
+                            }}
                             onFocus={keepFocusedControlVisible}
                             inputMode="numeric"
                             pattern="[0-9]*"
@@ -1616,7 +1657,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       </label>
                     ) : null}
                     <div className="inventario-editor-actions">
-                      <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>Salvar</button>
+                      <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
                       <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
                     </div>
                   </>
@@ -1657,7 +1698,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     {requiresFinalBarras ? (
                       <label>
                         Barras final (obrigatório na sobra)
-                        <div className="inventario-popup-input-action-wrap">
+                        <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
                           <input
                             value={finalBarras}
                             onChange={(e) => setFinalBarras(e.target.value)}
