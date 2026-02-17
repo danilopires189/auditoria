@@ -726,6 +726,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const etiquetaRef = useRef<HTMLInputElement | null>(null);
   const barrasRef = useRef<HTMLInputElement | null>(null);
   const activeVolumeRef = useRef<EntradaNotasLocalVolume | null>(null);
+  const routeContributorsInFlightRef = useRef<Set<string>>(new Set());
 
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -1047,13 +1048,16 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     const seqNfKey = buildSeqNfLabelKey(row.seq_entrada, row.nf);
     if (!seqNfKey) return;
 
-    let shouldFetch = false;
+    const inFlight = routeContributorsInFlightRef.current;
+    if (inFlight.has(seqNfKey)) return;
+
+    let shouldFetch = true;
     setRouteContributorsMap((current) => {
       const existing = current[seqNfKey];
       if (existing && (existing.status === "loading" || existing.status === "loaded")) {
+        shouldFetch = false;
         return current;
       }
-      shouldFetch = true;
       return {
         ...current,
         [seqNfKey]: {
@@ -1064,6 +1068,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     });
 
     if (!shouldFetch) return;
+    inFlight.add(seqNfKey);
 
     try {
       const partialInfo = await fetchPartialReopenInfo(seqNfKey, currentCd);
@@ -1083,6 +1088,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           contributors: current[seqNfKey]?.contributors ?? []
         }
       }));
+    } finally {
+      inFlight.delete(seqNfKey);
     }
   }, [currentCd, isOnline]);
 
@@ -2955,6 +2962,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   useEffect(() => {
     setRouteContributorsMap({});
+    routeContributorsInFlightRef.current.clear();
   }, [currentCd]);
 
   useEffect(() => {
