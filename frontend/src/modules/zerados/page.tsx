@@ -1142,7 +1142,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const canShowStageSelector = mobileStep === "stage";
   const canShowZoneSelector = mobileStep === "zone";
   const canShowAddressList = mobileStep === "address";
-  const showTopContextBlocks = zone == null;
+  const showTopContextBlocks = canShowStageSelector;
 
   const handleTabChange = useCallback((nextTab: InventarioStageView) => {
     setTab(nextTab);
