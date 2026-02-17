@@ -292,6 +292,25 @@ input:focus {
   stroke-linejoin: round;
 }
 
+.field-icon.validation-status {
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.field-icon.validation-status.is-validating {
+  color: #2f67bf;
+  background: rgba(47, 103, 191, 0.18);
+}
+
+.field-icon.validation-status.is-valid {
+  color: #1f8f55;
+  background: rgba(31, 143, 85, 0.16);
+}
+
+.field-icon.validation-status.is-invalid {
+  color: #b83a3a;
+  background: rgba(184, 58, 58, 0.16);
+}
+
 .input-icon-wrap input {
   display: block;
   width: 100%;
@@ -3605,6 +3624,11 @@ small {
 .inventario-barras-icon.is-valid {
   color: #1f8f55;
   background: rgba(31, 143, 85, 0.16);
+}
+
+.inventario-barras-icon.is-validating {
+  color: #2f67bf;
+  background: rgba(47, 103, 191, 0.18);
 }
 
 .inventario-barras-icon.is-invalid {

@@ -66,6 +66,7 @@ type StageStatusFilter = "pendente" | "concluido";
 type ReviewStatusFilter = "pendente" | "resolvido";
 type MobileFlowStep = "stage" | "zone" | "address";
 type ScannerTarget = "barras" | "final_barras";
+type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 
 type Row = InventarioManifestItemRow & {
   key: string;
@@ -547,6 +548,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [barras, setBarras] = useState("");
   const [validatedBarras, setValidatedBarras] = useState<string | null>(null);
   const [validatedFinalBarras, setValidatedFinalBarras] = useState<string | null>(null);
+  const [barrasValidationState, setBarrasValidationState] = useState<BarcodeValidationState>("idle");
+  const [finalBarrasValidationState, setFinalBarrasValidationState] = useState<BarcodeValidationState>("idle");
   const [countEditMode, setCountEditMode] = useState(true);
   const [finalQtd, setFinalQtd] = useState("0");
   const [finalBarras, setFinalBarras] = useState("");
@@ -604,6 +607,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setCountEditMode(true);
     setValidatedBarras(null);
     setValidatedFinalBarras(null);
+    setBarrasValidationState("idle");
+    setFinalBarrasValidationState("idle");
     setScannerOpen(false);
     setScannerError(null);
     setTorchEnabled(false);
@@ -1137,9 +1142,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setQtd("0");
       setBarras("");
       setValidatedBarras(null);
+      setBarrasValidationState("idle");
       setFinalQtd("0");
       setFinalBarras("");
       setValidatedFinalBarras(null);
+      setFinalBarrasValidationState("idle");
       return;
     }
 
@@ -1148,6 +1155,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const currentBarras = normalizeBarcode(currentCount?.barras ?? "");
     setBarras(currentBarras);
     setValidatedBarras(currentBarras || null);
+    setBarrasValidationState(currentBarras ? "valid" : "idle");
 
     const suggestedFinal = active.review?.final_qtd
       ?? active.c2?.qtd_contada
@@ -1157,6 +1165,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const currentFinalBarras = normalizeBarcode(active.review?.final_barras ?? "");
     setFinalBarras(currentFinalBarras);
     setValidatedFinalBarras(currentFinalBarras || null);
+    setFinalBarrasValidationState(currentFinalBarras ? "valid" : "idle");
   }, [active?.key, active?.c1?.updated_at, active?.c2?.updated_at, active?.review?.updated_at, tab]);
 
   useEffect(() => {
@@ -1321,8 +1330,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     && normalizedFinalBarras
     && validatedFinalBarras === normalizedFinalBarras
   );
-  const barrasIconClassName = `field-icon inventario-barras-icon${requiresBarras && !barrasValidatedForCurrentInput ? " is-invalid" : ""}${barrasValidatedForCurrentInput ? " is-valid" : ""}`;
-  const finalBarrasIconClassName = `field-icon inventario-barras-icon${requiresFinalBarras && !finalBarrasValidatedForCurrentInput ? " is-invalid" : ""}${finalBarrasValidatedForCurrentInput ? " is-valid" : ""}`;
+  const barrasIconClassName = `field-icon validation-status inventario-barras-icon${requiresBarras && barrasValidationState === "validating" ? " is-validating" : ""}${requiresBarras && barrasValidatedForCurrentInput && barrasValidationState === "valid" ? " is-valid" : ""}${requiresBarras && barrasValidationState === "invalid" ? " is-invalid" : ""}`;
+  const finalBarrasIconClassName = `field-icon validation-status inventario-barras-icon${requiresFinalBarras && finalBarrasValidationState === "validating" ? " is-validating" : ""}${requiresFinalBarras && finalBarrasValidatedForCurrentInput && finalBarrasValidationState === "valid" ? " is-valid" : ""}${requiresFinalBarras && finalBarrasValidationState === "invalid" ? " is-invalid" : ""}`;
   const mobileStageMenu = useMemo(
     () => ([
       { view: "s1" as const, label: "1ª Verificação" },
@@ -1355,18 +1364,22 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const normalized = normalizeBarcode(value);
     if (!normalized) {
       setValidatedBarras(null);
+      setBarrasValidationState("invalid");
       return false;
     }
+    setBarrasValidationState("validating");
     try {
       const validated = await validateBarras(active.coddv, normalized);
       if (normalizeBarcode(barrasValueRef.current) !== normalized) return false;
       setBarras(validated);
       setValidatedBarras(validated);
+      setBarrasValidationState("valid");
       setPopupErr(null);
       return true;
     } catch (error) {
       if (normalizeBarcode(barrasValueRef.current) !== normalized) return false;
       setValidatedBarras(null);
+      setBarrasValidationState("invalid");
       setPopupErr(parseErr(error));
       return false;
     }
@@ -1378,18 +1391,22 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const normalized = normalizeBarcode(value);
     if (!normalized) {
       setValidatedFinalBarras(null);
+      setFinalBarrasValidationState("invalid");
       return false;
     }
+    setFinalBarrasValidationState("validating");
     try {
       const validated = await validateBarras(active.coddv, normalized);
       if (normalizeBarcode(finalBarrasValueRef.current) !== normalized) return false;
       setFinalBarras(validated);
       setValidatedFinalBarras(validated);
+      setFinalBarrasValidationState("valid");
       setPopupErr(null);
       return true;
     } catch (error) {
       if (normalizeBarcode(finalBarrasValueRef.current) !== normalized) return false;
       setValidatedFinalBarras(null);
+      setFinalBarrasValidationState("invalid");
       setPopupErr(parseErr(error));
       return false;
     }
@@ -2028,6 +2045,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                     onChange={(e) => {
                                       setBarras(e.target.value);
                                       setValidatedBarras(null);
+                                      setBarrasValidationState("idle");
                                     }}
                                     onKeyDown={(event) => {
                                       if (event.key !== "Enter") return;
@@ -2142,6 +2160,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                 onChange={(e) => {
                                   setFinalBarras(e.target.value);
                                   setValidatedFinalBarras(null);
+                                  setFinalBarrasValidationState("idle");
                                 }}
                                 onKeyDown={(event) => {
                                   if (event.key !== "Enter") return;

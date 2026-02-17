@@ -73,6 +73,7 @@ interface ConferenciaVolumeAvulsoPageProps {
 }
 
 type VolumeAvulsoStoreStatus = "pendente" | "em_andamento" | "concluido";
+type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 
 interface VolumeAvulsoModalVolumeRow extends VolumeAvulsoManifestVolumeRow {
   status: VolumeAvulsoStoreStatus;
@@ -531,6 +532,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
   const [etiquetaInput, setEtiquetaInput] = useState("");
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [multiploInput, setMultiploInput] = useState("1");
 
   const [activeVolume, setActiveVolume] = useState<VolumeAvulsoLocalVolume | null>(null);
@@ -573,6 +575,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
   }, []);
+  const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
 
   const groupedItems = useMemo(() => {
     const empty = {
@@ -1369,15 +1372,20 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
       setErrorMessage("Abra um volume para iniciar a conferência.");
+      setBarcodeValidationState("invalid");
       return;
     }
     if (activeVolume.is_read_only || !canEditActiveVolume) {
       setErrorMessage("Volume em modo leitura. Não é possível alterar.");
+      setBarcodeValidationState("invalid");
       return;
     }
 
     const barras = normalizeBarcode(value);
-    if (!barras) return;
+    if (!barras) {
+      setBarcodeValidationState("invalid");
+      return;
+    }
 
     const qtd = parsePositiveInteger(multiploInput, 1);
     let produtoRegistrado = "";
@@ -1385,6 +1393,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     let registroRemoto = false;
     setStatusMessage(null);
     setErrorMessage(null);
+    setBarcodeValidationState("validating");
 
     try {
       if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
@@ -1394,6 +1403,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             title: "Código de barras inválido",
             message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
           });
+          setBarcodeValidationState("invalid");
           return;
         }
         const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
@@ -1404,6 +1414,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
             confirmLabel: "OK"
           });
+          setBarcodeValidationState("invalid");
           return;
         }
         produtoRegistrado = target.descricao;
@@ -1450,8 +1461,10 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           ? `Produto registrado na conferência: ${baseMessage}`
           : `Produto registrado localmente: ${baseMessage}`
       );
+      setBarcodeValidationState("valid");
       focusBarras();
     } catch (error) {
+      setBarcodeValidationState("invalid");
       const message = error instanceof Error ? error.message : "Falha ao registrar leitura.";
       if (await handleClosedConferenceError(message)) return;
       if (message.includes("BARRAS_NAO_ENCONTRADA")) {
@@ -2380,12 +2393,15 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                 <label>
                   Código de barras
                   <div className="input-icon-wrap with-action">
-                    <span className="field-icon" aria-hidden="true">{barcodeIcon()}</span>
+                    <span className={barcodeIconClassName} aria-hidden="true">{barcodeIcon()}</span>
                     <input
                       ref={barrasRef}
                       type="text"
                       value={barcodeInput}
-                      onChange={(event) => setBarcodeInput(event.target.value)}
+                      onChange={(event) => {
+                        setBarcodeInput(event.target.value);
+                        setBarcodeValidationState("idle");
+                      }}
                       onKeyDown={onBarcodeKeyDown}
                       autoComplete="off"
                       autoCapitalize="none"

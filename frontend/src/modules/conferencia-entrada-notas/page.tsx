@@ -87,6 +87,7 @@ interface ConferenciaEntradaNotasPageProps {
 
 type EntradaNotasStoreStatus = "pendente" | "em_andamento" | "concluido";
 type EntradaNotasRouteStatus = "pendente" | "iniciado" | "concluido";
+type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 
 interface EntradaNotasRouteGroup {
   rota: string;
@@ -780,6 +781,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const [etiquetaInput, setEtiquetaInput] = useState("");
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [multiploInput, setMultiploInput] = useState("1");
 
   const [activeVolume, setActiveVolume] = useState<EntradaNotasLocalVolume | null>(null);
@@ -828,6 +830,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
   }, []);
+  const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
 
   const groupedItems = useMemo(() => {
     const empty = {
@@ -2591,15 +2594,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
       setErrorMessage("Inicie uma conferência para começar a bipagem.");
+      setBarcodeValidationState("invalid");
       return;
     }
     if (activeVolume.is_read_only || !canEditActiveVolume) {
       setErrorMessage("Conferência em modo leitura. Não é possível alterar.");
+      setBarcodeValidationState("invalid");
       return;
     }
 
     const barras = normalizeBarcode(value);
-    if (!barras) return;
+    if (!barras) {
+      setBarcodeValidationState("invalid");
+      return;
+    }
 
     const qtd = parsePositiveInteger(multiploInput, 1);
     let produtoRegistrado = "";
@@ -2607,6 +2615,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     let registroRemoto = false;
     setStatusMessage(null);
     setErrorMessage(null);
+    setBarcodeValidationState("validating");
 
     try {
       const isAvulsa = activeVolume.conference_kind === "avulsa";
@@ -2619,6 +2628,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               title: "Código de barras inválido",
               message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
             });
+            setBarcodeValidationState("invalid");
             return;
           }
           const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
@@ -2629,6 +2639,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               message: `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
               confirmLabel: "OK"
             });
+            setBarcodeValidationState("invalid");
             return;
           }
           const itemKey = target.item_key ?? String(target.coddv);
@@ -2676,6 +2687,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             title: "Código de barras inválido",
             message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
           });
+          setBarcodeValidationState("invalid");
           return;
         }
 
@@ -2691,10 +2703,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             message: "Este produto não possui Seq/NF pendente disponível para conferência.",
             confirmLabel: "OK"
           });
+          setBarcodeValidationState("invalid");
           return;
         }
 
         if (availableOptions.length > 1) {
+          setBarcodeValidationState("valid");
           setPendingAvulsaScan({
             barras: lookup.barras || barras,
             qtd,
@@ -2722,8 +2736,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           ? `Produto registrado na conferência: ${baseMessage}`
           : `Produto registrado localmente: ${baseMessage}`
       );
+      setBarcodeValidationState("valid");
       focusBarras();
     } catch (error) {
+      setBarcodeValidationState("invalid");
       const message = error instanceof Error ? error.message : "Falha ao registrar leitura.";
       if (await handleClosedConferenceError(message)) return;
       if (message.includes("BARRAS_NAO_ENCONTRADA")) {
@@ -3840,12 +3856,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 <label>
                   Código de barras
                   <div className="input-icon-wrap with-action">
-                    <span className="field-icon" aria-hidden="true">{barcodeIcon()}</span>
+                    <span className={barcodeIconClassName} aria-hidden="true">{barcodeIcon()}</span>
                     <input
                       ref={barrasRef}
                       type="text"
                       value={barcodeInput}
-                      onChange={(event) => setBarcodeInput(event.target.value)}
+                      onChange={(event) => {
+                        setBarcodeInput(event.target.value);
+                        setBarcodeValidationState("idle");
+                      }}
                       onKeyDown={onBarcodeKeyDown}
                       autoComplete="off"
                       autoCapitalize="none"
@@ -4500,5 +4519,4 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     </>
   );
 }
-
 

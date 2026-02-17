@@ -71,6 +71,7 @@ type BlockingAlertState = {
   title: string;
   message: string;
 };
+type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 
 function cdCodeLabel(cd: number | null): string {
   if (cd == null) return "CD não definido";
@@ -370,6 +371,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [dbBarrasLastSyncAt, setDbBarrasLastSyncAt] = useState<string | null>(null);
 
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [multiploInput, setMultiploInput] = useState("1");
   const [etiquetaFixa, setEtiquetaFixa] = useState("");
   const [ocorrenciaInput, setOcorrenciaInput] = useState<"" | "Avariado" | "Vencido">("");
@@ -422,6 +424,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
   }, []);
+  const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
 
   const visibleRows = useMemo(() => {
     if (currentCd == null) return [];
@@ -1192,19 +1195,23 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     try {
       const barras = normalizeBarcode(barcodeOverride ?? barcodeInput);
       if (!barras) {
+        setBarcodeValidationState("invalid");
         openBlockingAlert("Código de barras obrigatório", "Informe o código de barras para continuar.");
         focusBarcode();
         return;
       }
       if (currentCd == null) {
+        setBarcodeValidationState("invalid");
         setErrorMessage("CD não definido para a coleta atual.");
         return;
       }
+      setBarcodeValidationState("validating");
       const qtd = parseMultiplo(multiploInput);
       let valMmaa: string | null = null;
       try {
         valMmaa = normalizeValidadeInput(validadeInput);
       } catch (error) {
+        setBarcodeValidationState("invalid");
         setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
         return;
       }
@@ -1227,6 +1234,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             setDbBarrasLastSyncAt(new Date().toISOString());
           }
         } else {
+          setBarcodeValidationState("invalid");
           if (hasLocalBase) {
             openBlockingAlert(
               "Código de barras inválido",
@@ -1244,6 +1252,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
 
       if (!product) {
+        setBarcodeValidationState("invalid");
         openBlockingAlert(
           "Código de barras inválido",
           `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
@@ -1295,8 +1304,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       } else {
         setStatusMessage("Item coletado localmente. Pendência será sincronizada quando houver internet.");
       }
+      setBarcodeValidationState("valid");
       focusBarcode();
     } catch (error) {
+      setBarcodeValidationState("invalid");
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar coleta.");
       focusBarcode();
     } finally {
@@ -1652,14 +1663,17 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
             <label>
               Código de barras
               <div className="input-icon-wrap with-action">
-                <span className="field-icon" aria-hidden="true">
+                <span className={barcodeIconClassName} aria-hidden="true">
                   <BarcodeIcon />
                 </span>
                 <input
                   ref={barcodeRef}
                   type="text"
                   value={barcodeInput}
-                  onChange={(event) => setBarcodeInput(event.target.value)}
+                  onChange={(event) => {
+                    setBarcodeInput(event.target.value);
+                    setBarcodeValidationState("idle");
+                  }}
                   autoComplete="off"
                   autoCapitalize="none"
                   autoCorrect="off"
