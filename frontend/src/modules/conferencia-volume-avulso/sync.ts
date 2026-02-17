@@ -7,6 +7,7 @@ import type {
   VolumeAvulsoManifestBarrasRow,
   VolumeAvulsoManifestItemRow,
   VolumeAvulsoManifestMeta,
+  VolumeAvulsoPartialReopenInfo,
   VolumeAvulsoRouteOverviewRow,
   VolumeAvulsoVolumeRow
 } from "./types";
@@ -161,6 +162,25 @@ function mapItem(raw: Record<string, unknown>): VolumeAvulsoItemRow {
     lotes: parseNullableString(raw.lotes ?? raw.lote),
     validades: parseNullableString(raw.validades ?? raw.val),
     updated_at: String(raw.updated_at ?? new Date().toISOString())
+  };
+}
+
+function mapPartialReopenInfo(raw: Record<string, unknown>): VolumeAvulsoPartialReopenInfo {
+  const statusRaw = String(raw.status ?? "em_conferencia");
+  const status = statusRaw === "finalizado_ok" || statusRaw === "finalizado_falta"
+    ? statusRaw
+    : "em_conferencia";
+
+  return {
+    conf_id: String(raw.conf_id ?? ""),
+    nr_volume: String(raw.nr_volume ?? "").trim(),
+    status,
+    previous_started_by: parseNullableString(raw.previous_started_by),
+    previous_started_mat: parseNullableString(raw.previous_started_mat),
+    previous_started_nome: parseNullableString(raw.previous_started_nome),
+    locked_items: Math.max(parseInteger(raw.locked_items), 0),
+    pending_items: Math.max(parseInteger(raw.pending_items), 0),
+    can_reopen: raw.can_reopen === true
   };
 }
 
@@ -328,6 +348,36 @@ export async function fetchActiveVolume(): Promise<VolumeAvulsoVolumeRow | null>
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) return null;
+  return mapVolume(first);
+}
+
+export async function fetchPartialReopenInfo(
+  nrVolume: string,
+  cd: number
+): Promise<VolumeAvulsoPartialReopenInfo> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_volume_avulso_get_partial_reopen_info", {
+    p_nr_volume: nrVolume.trim(),
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao validar reabertura parcial.");
+  return mapPartialReopenInfo(first);
+}
+
+export async function reopenPartialConference(
+  nrVolume: string,
+  cd: number
+): Promise<VolumeAvulsoVolumeRow> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_volume_avulso_reopen_partial_conference", {
+    p_nr_volume: nrVolume.trim(),
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao reabrir conferência parcial.");
   return mapVolume(first);
 }
 
