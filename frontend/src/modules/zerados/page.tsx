@@ -255,7 +255,12 @@ function normalizeApplicableReview(
   }
 
   if (review.reason_code === "conflito_lock") {
-    if (c2 != null) return review;
+    if (c2 != null) {
+      if (!c1) return review;
+      if (c1.resultado === "descartado" || c2.resultado === "descartado") return null;
+      if (c1.qtd_contada === c2.qtd_contada) return null;
+      return review;
+    }
     if (c1 != null && c1.resultado === "sobra") return review;
     return null;
   }
@@ -324,7 +329,8 @@ function parseSnapshotCountInfo(value: unknown): SnapshotCountInfo | null {
   const qtdRaw = raw.qtd_contada;
   const qtdParsed = qtdRaw == null ? null : Number.parseInt(String(qtdRaw), 10);
   const barras = raw.barras == null ? null : String(raw.barras).trim() || null;
-  const nome = raw.counted_nome == null ? null : String(raw.counted_nome).trim() || null;
+  const nomeSource = raw.counted_nome ?? raw.nome ?? raw.locked_nome ?? null;
+  const nome = nomeSource == null ? null : String(nomeSource).trim() || null;
 
   return {
     qtd: Number.isFinite(qtdParsed ?? NaN) ? Math.max(qtdParsed as number, 0) : null,
@@ -342,7 +348,11 @@ function extractReviewSnapshotCount(review: InventarioReviewRow | null, stage: 1
   }
 
   if (review.reason_code === "conflito_lock" && stage === 2) {
-    return parseSnapshotCountInfo(snapshot.event_payload);
+    const eventInfo = parseSnapshotCountInfo(snapshot.event_payload);
+    if (!eventInfo) return null;
+    if (eventInfo.nome) return eventInfo;
+    const lockedNome = snapshot.locked_nome == null ? null : String(snapshot.locked_nome).trim() || null;
+    return { ...eventInfo, nome: lockedNome };
   }
 
   return null;
@@ -549,6 +559,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
   const popupWasOpenRef = useRef(false);
   const popupReturnFocusRef = useRef<HTMLElement | null>(null);
+  const popupBodyRef = useRef<HTMLDivElement | null>(null);
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -855,9 +866,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const id = window.setTimeout(() => {
       const target = tab === "conciliation" ? finalQtdInputRef.current : qtdInputRef.current;
       if (!target || target.disabled) return;
-      target.focus();
+      popupBodyRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      try {
+        target.focus({ preventScroll: true });
+      } catch {
+        target.focus();
+      }
       target.select();
-      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
     }, 80);
     return () => window.clearTimeout(id);
   }, [editorOpen, selectedItem, tab]);
@@ -1843,7 +1858,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   <button type="button" className="inventario-popup-close" onClick={closeEditorPopup} aria-label="Fechar popup">Fechar</button>
                 </div>
               </div>
-              <div className="inventario-popup-body">
+              <div ref={popupBodyRef} className="inventario-popup-body">
                 {popupErr ? <p className="inventario-popup-note error">{popupErr}</p> : null}
                 {(tab === "s1" || tab === "s2") ? (
                   <>
@@ -1922,6 +1937,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 ) : null}
                 {tab === "conciliation" ? (
                   <>
+                    <p className="inventario-editor-text">{`Endereço: ${active.endereco} | CODDV: ${active.coddv}`}</p>
                     {(() => {
                       const c1Fallback = extractReviewSnapshotCount(active.review, 1);
                       const c2Fallback = extractReviewSnapshotCount(active.review, 2);
@@ -2005,7 +2021,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         </div>
                       </label>
                     ) : null}
-                    <div className="inventario-editor-actions"><button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button></div>
+                    <div className="inventario-editor-actions">
+                      <button className="btn btn-muted" type="button" onClick={closeEditorPopup}>Fechar</button>
+                      <button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button>
+                    </div>
                   </>
                 ) : null}
                 {tab === "done" ? <p className="inventario-editor-text">Endereço concluído e não pode ser alterado.</p> : null}
