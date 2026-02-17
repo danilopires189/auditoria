@@ -3756,7 +3756,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
-                  placeholder="Informe Seq/NF (123/456) ou código de barras"
+                  placeholder="Informe Seq/NF ou barras"
                   required
                 />
                 <button

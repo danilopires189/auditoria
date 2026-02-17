@@ -33,6 +33,7 @@ import {
   fetchActiveVolume,
   fetchManifestBundle,
   fetchManifestMeta,
+  fetchManifestVolumes,
   fetchPartialReopenInfo,
   fetchRouteOverview,
   fetchVolumeItems,
@@ -1647,9 +1648,19 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       listManifestVolumes(profile.user_id, currentCd),
       listUserLocalVolumes(profile.user_id)
     ]);
-    setManifestVolumeRows(localManifestVolumes);
     setModalVolumeHistory(localVolumeHistory);
-  }, [currentCd, profile.user_id]);
+    if (!isOnline) {
+      setManifestVolumeRows(localManifestVolumes);
+      return;
+    }
+
+    try {
+      const remoteManifestVolumes = await fetchManifestVolumes(currentCd);
+      setManifestVolumeRows(remoteManifestVolumes);
+    } catch {
+      setManifestVolumeRows(localManifestVolumes);
+    }
+  }, [currentCd, isOnline, profile.user_id]);
 
   const markStorePendingAfterCancel = useCallback(async (volume: VolumeAvulsoLocalVolume) => {
     if (volume.filial == null) return;
