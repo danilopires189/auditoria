@@ -3582,8 +3582,11 @@ small {
   border-radius: 0;
   background: transparent;
   height: 50px;
+  padding-top: 0;
+  padding-bottom: 0;
   padding-left: 44px;
   padding-right: 50px;
+  line-height: 1.2;
   outline: none;
 }
 
