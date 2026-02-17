@@ -15,6 +15,7 @@ import {
   cleanupExpiredVolumeAvulsoVolumes,
   getLocalVolume,
   getManifestItemsByEtiqueta,
+  listManifestVolumes,
   getManifestMetaLocal,
   getPendingSummary,
   getRouteOverviewLocal,
@@ -57,6 +58,7 @@ import type {
   VolumeAvulsoLocalItem,
   VolumeAvulsoLocalVolume,
   VolumeAvulsoManifestItemRow,
+  VolumeAvulsoManifestVolumeRow,
   VolumeAvulsoRouteOverviewRow,
   VolumeAvulsoVolumeRow,
   VolumeAvulsoModuleProfile
@@ -68,23 +70,10 @@ interface ConferenciaVolumeAvulsoPageProps {
 }
 
 type VolumeAvulsoStoreStatus = "pendente" | "em_andamento" | "concluido";
-type VolumeAvulsoRouteStatus = "pendente" | "iniciado" | "concluido";
 
-interface VolumeAvulsoRouteGroup {
-  rota: string;
-  lojas_total: number;
-  lojas_conferidas: number;
-  etiquetas_total: number;
-  etiquetas_conferidas: number;
-  status: VolumeAvulsoRouteStatus;
-  filiais: VolumeAvulsoRouteOverviewRow[];
-  route_blob: string;
+interface VolumeAvulsoModalVolumeRow extends VolumeAvulsoManifestVolumeRow {
+  status: VolumeAvulsoStoreStatus;
   search_blob: string;
-}
-
-interface VolumeAvulsoRouteGroupView extends VolumeAvulsoRouteGroup {
-  visible_filiais: VolumeAvulsoRouteOverviewRow[];
-  force_open: boolean;
 }
 
 type DialogState = {
@@ -417,65 +406,28 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
-function buildRouteSearchBlob(group: {
-  rota: string;
-  status: VolumeAvulsoRouteStatus;
-  lojas_conferidas: number;
-  lojas_total: number;
-  etiquetas_conferidas: number;
-  etiquetas_total: number;
-}): string {
+function buildVolumeSearchBlob(row: VolumeAvulsoModalVolumeRow): string {
   return normalizeSearchText([
-    group.rota,
-    routeStatusLabel(group.status),
-    `${group.lojas_conferidas}/${group.lojas_total}`,
-    `${group.etiquetas_conferidas}/${group.etiquetas_total}`
+    row.nr_volume,
+    row.rota ?? "",
+    row.filial_nome ?? "",
+    row.filial != null ? String(row.filial) : "",
+    row.caixa ?? "",
+    row.pedido != null ? String(row.pedido) : "",
+    `${row.itens_total}`,
+    routeStatusLabel(row.status)
   ].join(" "));
 }
 
-function buildStoreSearchBlob(item: VolumeAvulsoRouteOverviewRow): string {
-  return normalizeSearchText([
-    item.filial_nome ?? "",
-    item.filial != null ? String(item.filial) : "",
-    `${item.conferidas}/${item.total_etiquetas}`,
-    routeStatusLabel(item.status),
-    item.tem_falta ? "falta" : "",
-    item.colaborador_nome ?? "",
-    item.colaborador_mat ?? ""
-  ].join(" "));
-}
-
-function normalizeStoreStatus(value: string | null | undefined): VolumeAvulsoStoreStatus {
-  const normalized = String(value ?? "").toLowerCase();
-  if (
-    normalized === "concluido"
-    || normalized === "conferido"
-    || normalized === "finalizado_ok"
-    || normalized === "finalizado_falta"
-  ) return "concluido";
-  if (normalized === "em_andamento" || normalized === "em_conferencia" || normalized === "iniciado") return "em_andamento";
-  return "pendente";
-}
-
-function resolveRouteGroupStatus(filiais: VolumeAvulsoRouteOverviewRow[]): VolumeAvulsoRouteStatus {
-  if (filiais.length === 0) return "pendente";
-  const allPendente = filiais.every((item) => normalizeStoreStatus(item.status) === "pendente");
-  if (allPendente) return "pendente";
-  const allConcluido = filiais.every((item) => normalizeStoreStatus(item.status) === "concluido");
-  if (allConcluido) return "concluido";
-  return "iniciado";
-}
-
-function routeStatusLabel(status: VolumeAvulsoRouteStatus | VolumeAvulsoStoreStatus | string): string {
+function routeStatusLabel(status: VolumeAvulsoStoreStatus | string): string {
   if (status === "concluido" || status === "conferido") return "Concluído";
   if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
-  if (status === "iniciado") return "Iniciado";
   return "Pendente";
 }
 
-function routeStatusClass(status: VolumeAvulsoRouteStatus | VolumeAvulsoStoreStatus | string): "correto" | "andamento" | "falta" {
+function routeStatusClass(status: VolumeAvulsoStoreStatus | string): "correto" | "andamento" | "falta" {
   if (status === "concluido" || status === "conferido") return "correto";
-  if (status === "em_andamento" || status === "em_conferencia" || status === "iniciado") return "andamento";
+  if (status === "em_andamento" || status === "em_conferencia") return "andamento";
   return "falta";
 }
 
@@ -511,6 +463,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [routeRows, setRouteRows] = useState<VolumeAvulsoRouteOverviewRow[]>([]);
+  const [manifestVolumeRows, setManifestVolumeRows] = useState<VolumeAvulsoManifestVolumeRow[]>([]);
 
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
   const [cdAtivo, setCdAtivo] = useState<number | null>(null);
@@ -532,7 +485,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
   const [showRoutesModal, setShowRoutesModal] = useState(false);
   const [routeSearchInput, setRouteSearchInput] = useState("");
-  const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
+  const [modalVolumeHistory, setModalVolumeHistory] = useState<VolumeAvulsoLocalVolume[]>([]);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeMotivo, setFinalizeMotivo] = useState("");
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
@@ -599,94 +552,59 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
   ), [activeVolume]);
 
-  const routeGroups = useMemo<VolumeAvulsoRouteGroup[]>(() => {
-    if (routeRows.length === 0) return [];
+  const filteredModalVolumes = useMemo<VolumeAvulsoModalVolumeRow[]>(() => {
+    if (currentCd == null || manifestVolumeRows.length === 0) return [];
 
-    const grouped = new Map<string, Omit<VolumeAvulsoRouteGroup, "search_blob" | "route_blob">>();
+    const today = todayIsoBrasilia();
+    const latestByNrVolume = new Map<string, VolumeAvulsoLocalVolume>();
+    for (const row of modalVolumeHistory) {
+      if (row.cd !== currentCd) continue;
+      if (row.conf_date !== today) continue;
+      if (!latestByNrVolume.has(row.nr_volume)) {
+        latestByNrVolume.set(row.nr_volume, row);
+      }
+    }
 
-    for (const row of routeRows) {
-      const rota = (row.rota || "SEM ROTA").trim() || "SEM ROTA";
-      const lojaStatus = normalizeStoreStatus(row.status);
-      const current = grouped.get(rota);
+    const withStatus = manifestVolumeRows.map((row) => {
+      let status: VolumeAvulsoStoreStatus = "pendente";
 
-      if (!current) {
-        grouped.set(rota, {
-          rota,
-          lojas_total: 1,
-          lojas_conferidas: lojaStatus === "concluido" ? 1 : 0,
-          etiquetas_total: row.total_etiquetas,
-          etiquetas_conferidas: row.conferidas,
-          status: lojaStatus === "concluido" ? "concluido" : lojaStatus === "pendente" ? "pendente" : "iniciado",
-          filiais: [row]
-        });
-        continue;
+      if (
+        activeVolume
+        && activeVolume.cd === currentCd
+        && activeVolume.nr_volume === row.nr_volume
+        && activeVolume.status === "em_conferencia"
+        && !activeVolume.is_read_only
+      ) {
+        status = "em_andamento";
+      } else {
+        const latestLocal = latestByNrVolume.get(row.nr_volume);
+        if (latestLocal) {
+          if (latestLocal.status === "em_conferencia" && !latestLocal.is_read_only) status = "em_andamento";
+          else if (latestLocal.status === "finalizado_ok" || latestLocal.status === "finalizado_falta" || latestLocal.is_read_only) status = "concluido";
+        }
       }
 
-      current.lojas_total += 1;
-      current.lojas_conferidas += lojaStatus === "concluido" ? 1 : 0;
-      current.etiquetas_total += row.total_etiquetas;
-      current.etiquetas_conferidas += row.conferidas;
-      current.filiais.push(row);
-    }
-
-    return Array.from(grouped.values())
-      .map((group) => {
-        const filiaisOrdenadas = [...group.filiais].sort((a, b) => {
-          const byFilial = (a.filial ?? Number.MAX_SAFE_INTEGER) - (b.filial ?? Number.MAX_SAFE_INTEGER);
-          if (byFilial !== 0) return byFilial;
-          return (a.filial_nome ?? "").localeCompare(b.filial_nome ?? "", "pt-BR");
-        });
-
-        const routeStatus = resolveRouteGroupStatus(filiaisOrdenadas);
-        const routeBlob = buildRouteSearchBlob({
-          rota: group.rota,
-          status: routeStatus,
-          lojas_conferidas: group.lojas_conferidas,
-          lojas_total: group.lojas_total,
-          etiquetas_conferidas: group.etiquetas_conferidas,
-          etiquetas_total: group.etiquetas_total
-        });
-
-        const searchBlob = normalizeSearchText([
-          routeBlob,
-          ...filiaisOrdenadas.map((item) => buildStoreSearchBlob(item))
-        ].join(" "));
-
-        return {
-          ...group,
-          status: routeStatus,
-          filiais: filiaisOrdenadas,
-          route_blob: routeBlob,
-          search_blob: searchBlob
-        };
-      })
-      .sort((a, b) => a.rota.localeCompare(b.rota, "pt-BR"));
-  }, [routeRows]);
-
-  const filteredRouteGroups = useMemo<VolumeAvulsoRouteGroupView[]>(() => {
-    const query = normalizeSearchText(routeSearchInput);
-    if (!query) {
-      return routeGroups.map((group) => ({
-        ...group,
-        visible_filiais: group.filiais,
-        force_open: false
-      }));
-    }
-
-    const mapped: Array<VolumeAvulsoRouteGroupView | null> = routeGroups.map((group) => {
-      const routeMatches = group.route_blob.includes(query);
-      const matchedFiliais = group.filiais.filter((item) => buildStoreSearchBlob(item).includes(query));
-      if (!routeMatches && matchedFiliais.length === 0) return null;
+      const base: VolumeAvulsoModalVolumeRow = {
+        ...row,
+        status,
+        search_blob: ""
+      };
 
       return {
-        ...group,
-        visible_filiais: routeMatches ? group.filiais : matchedFiliais,
-        force_open: true
+        ...base,
+        search_blob: buildVolumeSearchBlob(base)
       };
     });
 
-    return mapped.filter((group): group is VolumeAvulsoRouteGroupView => group !== null);
-  }, [routeGroups, routeSearchInput]);
+    const query = normalizeSearchText(routeSearchInput);
+    const filtered = query
+      ? withStatus.filter((row) => row.search_blob.includes(query))
+      : withStatus;
+
+    return filtered.sort((a, b) => (
+      a.nr_volume.localeCompare(b.nr_volume, "pt-BR", { numeric: true, sensitivity: "base" })
+    ));
+  }, [activeVolume, currentCd, manifestVolumeRows, modalVolumeHistory, routeSearchInput]);
 
   const focusBarras = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -861,7 +779,9 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           throw new Error("Sem base local de barras. Conecte-se e ative o modo offline para sincronizar.");
         }
         const localRoutes = await getRouteOverviewLocal(profile.user_id, currentCd);
+        const localManifestVolumes = await listManifestVolumes(profile.user_id, currentCd);
         setRouteRows(localRoutes);
+        setManifestVolumeRows(localManifestVolumes);
         setManifestReady(true);
         setManifestInfo(
           buildManifestInfoLine({
@@ -913,6 +833,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         await saveRouteOverviewLocal(profile.user_id, currentCd, routes);
         setRouteRows(routes);
       }
+      const nextManifestVolumes = await listManifestVolumes(profile.user_id, currentCd);
+      setManifestVolumeRows(nextManifestVolumes);
 
       let barrasTotal = localBarrasMeta.row_count;
       if (forceRefresh || localBarrasMeta.row_count <= 0) {
@@ -1584,10 +1506,20 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
   const openRoutesModal = useCallback(async () => {
     setRouteSearchInput("");
-    setExpandedRoute(null);
     setShowRoutesModal(true);
-    await syncRouteOverview();
-  }, [syncRouteOverview]);
+    if (currentCd == null) {
+      setManifestVolumeRows([]);
+      setModalVolumeHistory([]);
+      return;
+    }
+
+    const [localManifestVolumes, localVolumeHistory] = await Promise.all([
+      listManifestVolumes(profile.user_id, currentCd),
+      listUserLocalVolumes(profile.user_id)
+    ]);
+    setManifestVolumeRows(localManifestVolumes);
+    setModalVolumeHistory(localVolumeHistory);
+  }, [currentCd, profile.user_id]);
 
   const markStorePendingAfterCancel = useCallback(async (volume: VolumeAvulsoLocalVolume) => {
     if (volume.filial == null) return;
@@ -1678,15 +1610,18 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       setManifestReady(false);
       setManifestInfo("");
       setRouteRows([]);
+      setManifestVolumeRows([]);
+      setModalVolumeHistory([]);
       setActiveVolume(null);
       return;
     }
 
     let cancelled = false;
     const loadLocalContext = async () => {
-      const [localMeta, localRoutes, volumes, barrasMeta] = await Promise.all([
+      const [localMeta, localRoutes, localManifestVolumes, volumes, barrasMeta] = await Promise.all([
         getManifestMetaLocal(profile.user_id, currentCd),
         getRouteOverviewLocal(profile.user_id, currentCd),
+        listManifestVolumes(profile.user_id, currentCd),
         listUserLocalVolumes(profile.user_id),
         getDbBarrasMeta()
       ]);
@@ -1703,6 +1638,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         })
       );
       setRouteRows(localRoutes);
+      setManifestVolumeRows(localManifestVolumes);
+      setModalVolumeHistory(volumes);
 
       const latestOpen = volumes.find((row) => row.status === "em_conferencia" && !row.is_read_only) ?? null;
       if (latestOpen) {
@@ -2083,7 +2020,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
           <button type="button" className="btn btn-muted termo-route-btn" onClick={() => void openRoutesModal()}>
             <span aria-hidden="true">{listIcon()}</span>
-            Rota/Filial
+            Volumes
           </button>
         </div>
 
@@ -2455,107 +2392,60 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-rotas-title" onClick={() => setShowRoutesModal(false)}>
               <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                <h3 id="termo-rotas-title">Rota/Filial do dia</h3>
+                <h3 id="termo-rotas-title">Volumes do dia</h3>
                 <div className="input-icon-wrap termo-routes-search">
                   <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
                   <input
                     type="text"
                     value={routeSearchInput}
                     onChange={(event) => setRouteSearchInput(event.target.value)}
-                    placeholder="Buscar rota, filial, loja, status..."
+                    placeholder="Buscar NR Volume, rota, filial, pedido..."
                   />
                 </div>
-                {filteredRouteGroups.length === 0 ? (
-                  <p>Sem dados de rota/filial disponíveis para este CD.</p>
+                {filteredModalVolumes.length === 0 ? (
+                  <p>Sem volumes disponíveis para este CD.</p>
                 ) : (
                   <div className="termo-routes-list">
-                    {filteredRouteGroups.map((group, index) => {
-                      const routeKey = `${group.rota}::${index}`;
-                      const isOpen = group.force_open || expandedRoute === routeKey;
-                      const groupStatus = group.status;
-                      const canToggle = !group.force_open;
-                      const toggleRoute = () => {
-                        if (!canToggle) return;
-                        setExpandedRoute((current) => current === routeKey ? null : routeKey);
-                      };
+                    {filteredModalVolumes.map((row) => {
+                      const filialLabel = row.filial_nome?.trim()
+                        ? `${row.filial_nome}${row.filial != null ? ` (${row.filial})` : ""}`
+                        : row.filial != null
+                          ? `Filial ${row.filial}`
+                          : "Filial não informada";
+                      const rotaLabel = row.rota?.trim() ? row.rota : "SEM ROTA";
                       return (
-                        <div key={routeKey} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
-                          <div
-                            role="button"
-                            tabIndex={canToggle ? 0 : -1}
+                        <div key={row.nr_volume} className="termo-route-group">
+                          <button
+                            type="button"
                             className="termo-route-row-button"
-                            onPointerUp={(event) => {
-                              if (!canToggle) return;
-                              event.stopPropagation();
-                              toggleRoute();
+                            onClick={() => {
+                              setShowRoutesModal(false);
+                              void openVolumeFromEtiqueta(row.nr_volume);
                             }}
-                            onKeyDown={(event) => {
-                              if (!canToggle) return;
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                toggleRoute();
-                              }
-                            }}
-                            aria-expanded={isOpen}
+                            disabled={busyOpenVolume}
                           >
                             <span className="termo-route-main">
-                              <span className="termo-route-title">{group.rota}</span>
+                              <span className="termo-route-title">NR Volume {row.nr_volume}</span>
                               <span className="termo-route-sub">
-                                Lojas: {group.lojas_conferidas}/{group.lojas_total} conferidas
+                                Rota: {rotaLabel}
                                 {" | "}
-                                Volumes: {group.etiquetas_conferidas}/{group.etiquetas_total}
+                                {filialLabel}
                               </span>
-                              <span className="termo-route-sub">Status da rota: {routeStatusLabel(groupStatus)}</span>
+                              <span className="termo-route-sub">
+                                Caixa: {row.caixa ?? "-"}
+                                {" | "}
+                                Pedido: {row.pedido ?? "-"}
+                                {" | "}
+                                Qtd. esperada: {row.qtd_esperada_total}
+                              </span>
                             </span>
                             <span className="termo-route-metrics">
-                              <span>{group.lojas_conferidas}/{group.lojas_total}</span>
-                              <span className={`termo-divergencia ${routeStatusClass(groupStatus)}`}>
-                                {routeStatusLabel(groupStatus)}
+                              <span>{row.itens_total} item(ns)</span>
+                              <span className={`termo-divergencia ${routeStatusClass(row.status)}`}>
+                                {routeStatusLabel(row.status)}
                               </span>
-                              {canToggle ? (
-                                <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
-                              ) : null}
                             </span>
-                          </div>
-                          {isOpen ? (
-                            <div className="termo-route-stores">
-                              {group.visible_filiais.map((row) => {
-                                const lojaStatus = normalizeStoreStatus(row.status);
-                                const lojaConcluidaComFalta = lojaStatus === "concluido" && row.tem_falta;
-                                const colaboradorNome = row.colaborador_nome?.trim() || "";
-                                const colaboradorMat = row.colaborador_mat?.trim() || "";
-                                return (
-                                  <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
-                                    <div>
-                                      <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
-                                      <p>Volumes: {row.conferidas}/{row.total_etiquetas}</p>
-                                      <p>Status da loja: {routeStatusLabel(lojaStatus)}</p>
-                                      {lojaStatus === "em_andamento" && colaboradorNome ? (
-                                        <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
-                                      ) : null}
-                                      {lojaStatus === "concluido" && colaboradorNome ? (
-                                        <p>Concluído por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
-                                      ) : null}
-                                      {lojaStatus === "em_andamento" && row.status_at ? (
-                                        <p>Iniciado em: {formatDateTime(row.status_at)}</p>
-                                      ) : null}
-                                      {lojaStatus === "concluido" && row.status_at ? (
-                                        <p>Concluído em: {formatDateTime(row.status_at)}</p>
-                                      ) : null}
-                                    </div>
-                                    <div className="termo-route-store-status">
-                                      <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
-                                        {routeStatusLabel(lojaStatus)}
-                                      </span>
-                                      {lojaConcluidaComFalta ? (
-                                        <span className="termo-route-store-note-falta">Falta</span>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : null}
+                          </button>
                         </div>
                       );
                     })}

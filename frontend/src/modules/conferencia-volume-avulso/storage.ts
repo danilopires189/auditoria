@@ -3,6 +3,7 @@ import type {
   VolumeAvulsoManifestBarrasRow,
   VolumeAvulsoManifestItemRow,
   VolumeAvulsoManifestMeta,
+  VolumeAvulsoManifestVolumeRow,
   VolumeAvulsoPendingSummary,
   VolumeAvulsoPreferences,
   VolumeAvulsoRouteOverviewRow
@@ -403,6 +404,53 @@ export async function getManifestItemsByEtiqueta(
       qtd_esperada: row.qtd_esperada
     }))
     .sort((a, b) => a.coddv - b.coddv);
+}
+
+export async function listManifestVolumes(
+  userId: string,
+  cd: number
+): Promise<VolumeAvulsoManifestVolumeRow[]> {
+  const db = await getDb();
+  const transaction = db.transaction(STORE_MANIFEST_ITEMS, "readonly");
+  const store = transaction.objectStore(STORE_MANIFEST_ITEMS);
+  const index = store.index(INDEX_ITEMS_BY_USER_CD);
+  const rows = (await requestToPromise(
+    index.getAll(IDBKeyRange.only([userId, cd]))
+  )) as ManifestItemStoreRow[];
+  await transactionDone(transaction);
+
+  const grouped = new Map<string, VolumeAvulsoManifestVolumeRow>();
+  for (const row of rows) {
+    const nrVolume = String(row.nr_volume ?? "").trim();
+    if (!nrVolume) continue;
+
+    const current = grouped.get(nrVolume);
+    if (!current) {
+      grouped.set(nrVolume, {
+        nr_volume: nrVolume,
+        caixa: row.caixa ?? null,
+        pedido: row.pedido ?? null,
+        filial: row.filial ?? null,
+        filial_nome: row.filial_nome ?? null,
+        rota: row.rota ?? null,
+        itens_total: 1,
+        qtd_esperada_total: Math.max(Number(row.qtd_esperada ?? 0), 0)
+      });
+      continue;
+    }
+
+    current.itens_total += 1;
+    current.qtd_esperada_total += Math.max(Number(row.qtd_esperada ?? 0), 0);
+    if (!current.caixa && row.caixa) current.caixa = row.caixa;
+    if (current.pedido == null && row.pedido != null) current.pedido = row.pedido;
+    if (current.filial == null && row.filial != null) current.filial = row.filial;
+    if (!current.filial_nome && row.filial_nome) current.filial_nome = row.filial_nome;
+    if (!current.rota && row.rota) current.rota = row.rota;
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => (
+    a.nr_volume.localeCompare(b.nr_volume, "pt-BR", { numeric: true, sensitivity: "base" })
+  ));
 }
 
 export async function findManifestBarras(
