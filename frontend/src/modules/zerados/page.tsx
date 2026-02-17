@@ -1668,7 +1668,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         </div>
                         <p className="inventario-address-meta">{addressMeta}</p>
                         {showConcludedDetails && countedInfo?.qtd != null ? (
-                          <p className="inventario-address-extra">{`Qtd informada: ${countedInfo.qtd}`}</p>
+                          <p className="inventario-address-extra">{`Estoque: ${singleItem?.estoque ?? "-"} Conferido: ${countedInfo.qtd}`}</p>
                         ) : null}
                         {showConcludedDetails && countedByLine ? (
                           <p className="inventario-address-user">{countedByLine}</p>
