@@ -73,7 +73,9 @@ function mapManifestItem(raw: Record<string, unknown>): VolumeAvulsoManifestItem
     rota: parseNullableString(raw.rota),
     coddv: parseInteger(raw.coddv),
     descricao: String(raw.descricao ?? "").trim(),
-    qtd_esperada: Math.max(parseInteger(raw.qtd_esperada, 1), 1)
+    qtd_esperada: Math.max(parseInteger(raw.qtd_esperada, 1), 1),
+    lotes: parseNullableString(raw.lotes ?? raw.lote),
+    validades: parseNullableString(raw.validades ?? raw.val)
   };
 }
 
@@ -156,6 +158,8 @@ function mapItem(raw: Record<string, unknown>): VolumeAvulsoItemRow {
     qtd_falta: parseInteger(raw.qtd_falta),
     qtd_sobra: parseInteger(raw.qtd_sobra),
     divergencia_tipo,
+    lotes: parseNullableString(raw.lotes ?? raw.lote),
+    validades: parseNullableString(raw.validades ?? raw.val),
     updated_at: String(raw.updated_at ?? new Date().toISOString())
   };
 }

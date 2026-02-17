@@ -204,6 +204,8 @@ function createLocalVolumeFromRemote(
     descricao: item.descricao,
     qtd_esperada: item.qtd_esperada,
     qtd_conferida: item.qtd_conferida,
+    lotes: item.lotes ?? null,
+    validades: item.validades ?? null,
     updated_at: item.updated_at
   }));
 
@@ -254,6 +256,8 @@ function createLocalVolumeFromManifest(
     descricao: row.descricao,
     qtd_esperada: row.qtd_esperada,
     qtd_conferida: 0,
+    lotes: row.lotes ?? null,
+    validades: row.validades ?? null,
     updated_at: nowIso
   }));
 
@@ -409,12 +413,8 @@ function normalizeSearchText(value: string): string {
 function buildVolumeSearchBlob(row: VolumeAvulsoModalVolumeRow): string {
   return normalizeSearchText([
     row.nr_volume,
-    row.rota ?? "",
-    row.filial_nome ?? "",
-    row.filial != null ? String(row.filial) : "",
-    row.caixa ?? "",
-    row.pedido != null ? String(row.pedido) : "",
     `${row.itens_total}`,
+    `${row.qtd_esperada_total}`,
     routeStatusLabel(row.status)
   ].join(" "));
 }
@@ -813,7 +813,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             return;
           }
           if (progress.step === "routes") {
-            setProgressMessage(`Atualizando rotas/filiais... ${progress.percent}% (${progress.rows} rota(s))`);
+            setProgressMessage(`Atualizando status dos volumes... ${progress.percent}% (${progress.rows})`);
           }
         }, { includeBarras: false });
 
@@ -2089,16 +2089,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             <div className="termo-volume-head">
               <div>
                 <h3>Volume {activeVolume.nr_volume}</h3>
-                <p>
-                  Rota: {activeVolume.rota ?? "SEM ROTA"} | Filial: {activeVolume.filial_nome ?? "-"}
-                  {activeVolume.filial != null ? (
-                    <>
-                      {" "}(
-                      <strong>{activeVolume.filial}</strong>
-                      )
-                    </>
-                  ) : null}
-                </p>
+                <p>Conferência em andamento para este NR Volume.</p>
                 <p>
                   Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com falta"}
                 </p>
@@ -2215,6 +2206,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
+                        <p>Lote(s): {item.lotes ?? "-"}</p>
+                        <p>Validade(s): {item.validades ?? "-"}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
@@ -2279,6 +2272,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
+                        <p>Lote(s): {item.lotes ?? "-"}</p>
+                        <p>Validade(s): {item.validades ?? "-"}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
@@ -2342,6 +2337,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
+                        <p>Lote(s): {item.lotes ?? "-"}</p>
+                        <p>Validade(s): {item.validades ?? "-"}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
@@ -2390,16 +2387,16 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
       {showRoutesModal && typeof document !== "undefined"
         ? createPortal(
-            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-rotas-title" onClick={() => setShowRoutesModal(false)}>
+            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-volumes-title" onClick={() => setShowRoutesModal(false)}>
               <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                <h3 id="termo-rotas-title">Volumes do dia</h3>
+                <h3 id="termo-volumes-title">Volumes do dia</h3>
                 <div className="input-icon-wrap termo-routes-search">
                   <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
                   <input
                     type="text"
                     value={routeSearchInput}
                     onChange={(event) => setRouteSearchInput(event.target.value)}
-                    placeholder="Buscar NR Volume, rota, filial, pedido..."
+                    placeholder="Buscar NR Volume, status ou quantidade..."
                   />
                 </div>
                 {filteredModalVolumes.length === 0 ? (
@@ -2407,12 +2404,6 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                 ) : (
                   <div className="termo-routes-list">
                     {filteredModalVolumes.map((row) => {
-                      const filialLabel = row.filial_nome?.trim()
-                        ? `${row.filial_nome}${row.filial != null ? ` (${row.filial})` : ""}`
-                        : row.filial != null
-                          ? `Filial ${row.filial}`
-                          : "Filial não informada";
-                      const rotaLabel = row.rota?.trim() ? row.rota : "SEM ROTA";
                       return (
                         <div key={row.nr_volume} className="termo-route-group">
                           <button
@@ -2427,14 +2418,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                             <span className="termo-route-main">
                               <span className="termo-route-title">NR Volume {row.nr_volume}</span>
                               <span className="termo-route-sub">
-                                Rota: {rotaLabel}
-                                {" | "}
-                                {filialLabel}
-                              </span>
-                              <span className="termo-route-sub">
-                                Caixa: {row.caixa ?? "-"}
-                                {" | "}
-                                Pedido: {row.pedido ?? "-"}
+                                Itens: {row.itens_total}
                                 {" | "}
                                 Qtd. esperada: {row.qtd_esperada_total}
                               </span>
