@@ -196,6 +196,21 @@ function cameraIcon() {
   );
 }
 
+function barcodeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 6v12" />
+      <path d="M7 6v12" />
+      <path d="M10 6v12" />
+      <path d="M14 6v12" />
+      <path d="M18 6v12" />
+      <path d="M20 6v12" />
+      <path d="M3 4h18" />
+      <path d="M3 20h18" />
+    </svg>
+  );
+}
+
 function closeIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1923,6 +1938,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                               <label>
                                 Barras (obrigatório)
                                 <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
+                                  <span className="field-icon" aria-hidden="true">
+                                    {barcodeIcon()}
+                                  </span>
                                   <input
                                     value={barras}
                                     onChange={(e) => {
@@ -2029,6 +2047,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           <label>
                             Barras final (obrigatório na sobra)
                             <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
+                              <span className="field-icon" aria-hidden="true">
+                                {barcodeIcon()}
+                              </span>
                               <input
                                 value={finalBarras}
                                 onChange={(e) => setFinalBarras(e.target.value)}
