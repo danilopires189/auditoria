@@ -3034,6 +3034,58 @@ small {
   line-height: 1;
 }
 
+.inventario-zone-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 1px;
+}
+
+.inventario-zone-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inventario-zone-stat-count {
+  color: #27456f;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.inventario-zone-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.73rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.inventario-zone-stat-icon.pending {
+  border-color: #f2b4b4;
+  background: #d93b3b;
+  color: #fff;
+}
+
+.inventario-zone-stat-icon.done {
+  border-color: #8edab4;
+  background: #1f9c64;
+  color: #fff;
+}
+
+.inventario-zone-stat-label {
+  color: #4b5e81;
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
 .inventario-layout {
   display: grid;
   grid-template-columns: 1fr;
