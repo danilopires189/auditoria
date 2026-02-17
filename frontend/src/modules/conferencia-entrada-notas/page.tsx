@@ -4399,13 +4399,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       {groupedItems.falta.map(({ item, qtd_falta }) => (
                         <p key={`fim-falta-${item.item_key ?? item.coddv}`}>
                           {item.seq_entrada != null && item.nf != null ? `Seq ${item.seq_entrada}/NF ${item.nf} - ` : ""}
-                          COD {item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}
+                          {item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}
                         </p>
                       ))}
                       {groupedItems.sobra.map(({ item, qtd_sobra }) => (
                         <p key={`fim-sobra-${item.item_key ?? item.coddv}`}>
                           {item.seq_entrada != null && item.nf != null ? `Seq ${item.seq_entrada}/NF ${item.nf} - ` : ""}
-                          COD {item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}
+                          {item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}
                         </p>
                       ))}
                     </div>
