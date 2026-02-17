@@ -78,6 +78,21 @@ tables:
       descricao: "text"
       barras: "text"
 
+  db_inventario:
+    file: "DB_INVENTARIO.xlsx"
+    sheet: "DB_INVENTARIO"
+    mode: "full_replace"
+    unique_keys: ["cd", "endereco", "coddv"]
+    required_columns: ["cd", "rua", "endereco", "coddv", "estoque"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      endereco: "text"
+      descricao: "text"
+      rua: "text"
+      coddv: "integer"
+      estoque: "integer"
+
   db_devolucao:
     file: "DB_DEVOLUCAO.xlsx"
     sheet: "DB_DEVOLUCAO"

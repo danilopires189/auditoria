@@ -42,8 +42,14 @@ Artefato gerado em `dist\sync_backend.exe`.
 2. Manter `data` no mesmo diretório do `.exe`.
 3. Executar `run_bootstrap.bat` (primeira vez) e depois `run_sync.bat`.
 
+Arquivos esperados no fluxo padrão (`data\`):
+- `DB_BARRAS.xlsx`
+- `DB_INVENTARIO.xlsx`
+- demais arquivos já configurados em `config.yml`
+
 ## 5. Observações de segurança
 
 - Nunca salvar senha real em `config.yml`.
 - O frontend depende de RLS no banco para controle de acesso.
 - `db_barras` é dimensão global (sem `cd`) e leitura autenticada via profile.
+- `db_inventario` é base por CD usada no módulo `Inventário (zerados)` e sincroniza pelo mesmo pipeline Excel -> staging -> app.

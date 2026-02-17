@@ -1,14 +1,16 @@
 import { supabase } from "../../lib/supabase";
 import {
   countPendingRows,
-  getDbBarrasMeta,
   getPendingRows,
-  mergeDbBarrasCache,
   removeColetaRow,
-  replaceDbBarrasCache,
-  touchDbBarrasMeta,
   upsertColetaRow
 } from "./storage";
+import {
+  getDbBarrasMeta,
+  mergeDbBarrasCache,
+  replaceDbBarrasCache,
+  touchDbBarrasMeta
+} from "../../shared/db-barras/storage";
 import type {
   CdOption,
   ColetaReportFilters,

@@ -100,6 +100,26 @@ TABLE_SPECS: dict[str, TableSpec] = {
         },
         has_cd=False,
     ),
+    "db_inventario": TableSpec(
+        name="db_inventario",
+        business_columns=[
+            "cd",
+            "endereco",
+            "descricao",
+            "rua",
+            "coddv",
+            "estoque",
+        ],
+        sql_types={
+            "cd": "integer",
+            "endereco": "text",
+            "descricao": "text",
+            "rua": "text",
+            "coddv": "integer",
+            "estoque": "integer",
+        },
+        has_cd=True,
+    ),
     "db_devolucao": TableSpec(
         name="db_devolucao",
         business_columns=[

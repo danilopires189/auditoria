@@ -12,29 +12,33 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import {
+  getDbBarrasByBarcode,
+  getDbBarrasMeta,
+  upsertDbBarrasCacheRow
+} from "../../shared/db-barras/storage";
+import {
+  fetchDbBarrasByBarcodeOnline,
+  normalizeBarcode,
+  refreshDbBarrasCacheSmart
+} from "../../shared/db-barras/sync";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   cleanupExpiredColetaRows,
   countPendingRows,
   getColetaPreferences,
-  getDbBarrasByBarcode,
-  getDbBarrasMeta,
   getUserColetaRows,
   removeColetaRow,
   saveColetaPreferences,
-  upsertDbBarrasCacheRow,
   upsertColetaRow
 } from "./storage";
 import {
   countColetaReportRows,
-  fetchDbBarrasByBarcodeOnline,
   fetchCdOptions,
   fetchColetaReportRows,
   fetchTodaySharedColetaRows,
   formatValidade,
-  normalizeBarcode,
   normalizeValidadeInput,
-  refreshDbBarrasCacheSmart,
   syncPendingColetaRows
 } from "./sync";
 import type {
