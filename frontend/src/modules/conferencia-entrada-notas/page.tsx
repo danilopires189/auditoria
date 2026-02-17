@@ -1788,6 +1788,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         const existingToday = await getLocalVolume(profile.user_id, currentCd, today, "AVULSA");
         if (existingToday) {
           if (existingToday.status !== "em_conferencia") {
+            if (isOnline) {
+              const { remoteVolume, localVolume } = await openAvulsaVolumeWithRemoteState(currentCd);
+              setActiveVolume(localVolume);
+              setEtiquetaInput(localVolume.nr_volume);
+              etiquetaFinal = localVolume.nr_volume;
+              setStatusMessage(
+                remoteVolume.is_read_only
+                  ? "Conferência avulsa já finalizada. Aberta em leitura."
+                  : waitingOfflineBase
+                    ? "Nova conferência avulsa aberta enquanto a base offline sincroniza em segundo plano."
+                    : "Nova conferência avulsa aberta para bipagem."
+              );
+              return;
+            }
             showDialog({
               title: "Conferência avulsa já finalizada",
               message: "A conferência avulsa já foi finalizada por você hoje. Deseja abrir em modo leitura?",
