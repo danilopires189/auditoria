@@ -433,7 +433,11 @@ export async function listManifestVolumes(
       grouped.set(nrVolume, {
         nr_volume: nrVolume,
         itens_total: 1,
-        qtd_esperada_total: Math.max(Number(row.qtd_esperada ?? 0), 0)
+        qtd_esperada_total: Math.max(Number(row.qtd_esperada ?? 0), 0),
+        status: null,
+        colaborador_nome: null,
+        colaborador_mat: null,
+        status_at: null
       });
       continue;
     }

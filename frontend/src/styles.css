@@ -2204,6 +2204,52 @@ small {
   font-weight: 700;
 }
 
+.termo-route-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid #cad8ef;
+  background: #f4f8ff;
+  color: #254a86;
+}
+
+.termo-route-action.is-start {
+  border-color: #c8dbf7;
+  color: #1f4e93;
+  background: #eef5ff;
+}
+
+.termo-route-action.is-resume {
+  border-color: #bfd8f2;
+  color: #0f4b7d;
+  background: #ebf7ff;
+}
+
+.termo-route-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.termo-route-action-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.termo-route-action-icon svg path,
+.termo-route-action-icon svg circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .termo-route-stores {
   border-top: 1px solid #e2e9f4;
   background: #fbfdff;

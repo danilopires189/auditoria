@@ -82,10 +82,27 @@ function mapManifestItem(raw: Record<string, unknown>): VolumeAvulsoManifestItem
 }
 
 function mapManifestVolume(raw: Record<string, unknown>): VolumeAvulsoManifestVolumeRow {
+  const statusRaw = String(raw.status ?? "").toLowerCase();
+  const status =
+    statusRaw === "concluido"
+    || statusRaw === "conferido"
+    || statusRaw === "finalizado_ok"
+    || statusRaw === "finalizado_falta"
+      ? "concluido"
+      : statusRaw === "em_andamento" || statusRaw === "em_conferencia" || statusRaw === "iniciado"
+        ? "em_andamento"
+        : statusRaw === "pendente"
+          ? "pendente"
+          : null;
+
   return {
     nr_volume: String(raw.nr_volume ?? "").trim(),
     itens_total: Math.max(parseInteger(raw.itens_total), 0),
-    qtd_esperada_total: Math.max(parseInteger(raw.qtd_esperada_total), 0)
+    qtd_esperada_total: Math.max(parseInteger(raw.qtd_esperada_total), 0),
+    status,
+    colaborador_nome: parseNullableString(raw.colaborador_nome),
+    colaborador_mat: parseNullableString(raw.colaborador_mat),
+    status_at: parseNullableString(raw.status_at)
   };
 }
 
