@@ -375,6 +375,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
     }, 120);
   }, []);
+  const focusAndSelectNumericInput = useCallback((event: FocusEvent<HTMLInputElement>) => {
+    event.currentTarget.select();
+    keepFocusedControlVisible(event);
+  }, [keepFocusedControlVisible]);
 
   const refreshPending = useCallback(async () => {
     if (cd == null) return setPendingCount(0);
@@ -1281,9 +1285,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       Quantidade
                       <input
                         ref={qtdInputRef}
+                        autoFocus
                         value={qtd}
                         onChange={(e) => setQtd(e.target.value)}
-                        onFocus={keepFocusedControlVisible}
+                        onFocus={focusAndSelectNumericInput}
                         inputMode="numeric"
                         pattern="[0-9]*"
                         enterKeyHint="next"
@@ -1300,6 +1305,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           value={barras}
                           onChange={(e) => setBarras(e.target.value)}
                           onFocus={keepFocusedControlVisible}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           autoCapitalize="off"
                           autoCorrect="off"
                           autoComplete="off"
@@ -1335,9 +1342,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       Qtd final
                       <input
                         ref={finalQtdInputRef}
+                        autoFocus
                         value={finalQtd}
                         onChange={(e) => setFinalQtd(e.target.value)}
-                        onFocus={keepFocusedControlVisible}
+                        onFocus={focusAndSelectNumericInput}
                         inputMode="numeric"
                         pattern="[0-9]*"
                         enterKeyHint="next"
@@ -1354,6 +1362,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           value={finalBarras}
                           onChange={(e) => setFinalBarras(e.target.value)}
                           onFocus={keepFocusedControlVisible}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           autoCapitalize="off"
                           autoCorrect="off"
                           autoComplete="off"
