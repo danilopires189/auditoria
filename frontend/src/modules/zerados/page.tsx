@@ -232,7 +232,11 @@ function isS2Eligible(row: Row): boolean {
 }
 
 function isS2Pending(row: Row): boolean {
-  return isS2Eligible(row) && row.c2 == null;
+  return isS2Eligible(row) && row.c2 == null && row.review == null;
+}
+
+function isS2BlockedBySameUser(row: Row, userId: string): boolean {
+  return isS2Eligible(row) && row.c2 == null && row.review == null && row.c1?.counted_by === userId;
 }
 
 function normalizeApplicableReview(
@@ -265,7 +269,7 @@ function isConciliationPending(row: Row): boolean {
 
 function rowMatchesStageUniverse(row: Row, stage: InventarioStageView): boolean {
   if (stage === "s1") return true;
-  if (stage === "s2") return isS2Eligible(row);
+  if (stage === "s2") return isS2Eligible(row) && row.review == null;
   if (stage === "conciliation") return row.review != null;
   return row.final;
 }
@@ -307,6 +311,42 @@ type CountedDisplayInfo = {
   mat: string | null;
   nome: string | null;
 };
+
+type SnapshotCountInfo = {
+  qtd: number | null;
+  barras: string | null;
+  nome: string | null;
+};
+
+function parseSnapshotCountInfo(value: unknown): SnapshotCountInfo | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const qtdRaw = raw.qtd_contada;
+  const qtdParsed = qtdRaw == null ? null : Number.parseInt(String(qtdRaw), 10);
+  const barras = raw.barras == null ? null : String(raw.barras).trim() || null;
+  const nome = raw.counted_nome == null ? null : String(raw.counted_nome).trim() || null;
+
+  return {
+    qtd: Number.isFinite(qtdParsed ?? NaN) ? Math.max(qtdParsed as number, 0) : null,
+    barras,
+    nome
+  };
+}
+
+function extractReviewSnapshotCount(review: InventarioReviewRow | null, stage: 1 | 2): SnapshotCountInfo | null {
+  if (!review?.snapshot || typeof review.snapshot !== "object") return null;
+  const snapshot = review.snapshot as Record<string, unknown>;
+
+  if (review.reason_code === "sem_consenso") {
+    return parseSnapshotCountInfo(stage === 1 ? snapshot.primeira : snapshot.segunda);
+  }
+
+  if (review.reason_code === "conflito_lock" && stage === 2) {
+    return parseSnapshotCountInfo(snapshot.event_payload);
+  }
+
+  return null;
+}
 
 function resolveCountedDisplayInfo(row: Row, stage: InventarioStageView): CountedDisplayInfo | null {
   if (stage === "s1") {
@@ -1645,6 +1685,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     || (tab === "conciliation" && reviewFilter === "resolvido")
                     || tab === "done"
                   );
+                  const blockedForCurrentUser = tab === "s2"
+                    && statusFilter === "pendente"
+                    && bucket.items.some((row) => isS2BlockedBySameUser(row, profile.user_id));
                   const countedInfo = singleItem ? resolveCountedDisplayInfo(singleItem, tab) : null;
                   const countedByLine = countedInfo ? formatCountedByLine(countedInfo.nome) : null;
                   const addressMeta = singleItem
@@ -1672,6 +1715,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         ) : null}
                         {showConcludedDetails && countedByLine ? (
                           <p className="inventario-address-user">{countedByLine}</p>
+                        ) : null}
+                        {blockedForCurrentUser ? (
+                          <p className="inventario-address-blocked-note">Verificação não disponível para você.</p>
                         ) : null}
                       </div>
                     </button>
@@ -1763,6 +1809,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <div>
                   <h3>{active.endereco}</h3>
                   <p>{`${stageLabel(tab)} | CODDV ${active.coddv}`}</p>
+                  <p className="inventario-popup-head-product">{active.descricao}</p>
                 </div>
                 <div className="inventario-popup-head-actions">
                   {canEditConcludedCount ? (
@@ -1785,7 +1832,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               </div>
               <div className="inventario-popup-body">
                 {popupErr ? <p className="inventario-popup-note error">{popupErr}</p> : null}
-                <p className="inventario-editor-text">{active.descricao}</p>
                 {(tab === "s1" || tab === "s2") ? (
                   <>
                     {showCountReadOnlyDetails ? (
@@ -1863,20 +1909,42 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 ) : null}
                 {tab === "conciliation" ? (
                   <>
-                    <div className="inventario-conciliation-grid">
-                      <article className="inventario-conciliation-card">
-                        <h4>1ª Verificação</h4>
-                        <p>{`Qtd: ${active.c1?.qtd_contada ?? "-"}`}</p>
-                        <p>{`Barras: ${active.c1?.barras ?? "-"}`}</p>
-                        <p>{`Usuário: ${active.c1?.counted_nome ?? "-"}`}</p>
-                      </article>
-                      <article className="inventario-conciliation-card">
-                        <h4>2ª Verificação</h4>
-                        <p>{`Qtd: ${active.c2?.qtd_contada ?? "-"}`}</p>
-                        <p>{`Barras: ${active.c2?.barras ?? "-"}`}</p>
-                        <p>{`Usuário: ${active.c2?.counted_nome ?? "-"}`}</p>
-                      </article>
-                    </div>
+                    {(() => {
+                      const c1Fallback = extractReviewSnapshotCount(active.review, 1);
+                      const c2Fallback = extractReviewSnapshotCount(active.review, 2);
+
+                      const c1Qtd = active.c1?.qtd_contada ?? c1Fallback?.qtd ?? "-";
+                      const c1Barras = active.c1?.barras ?? c1Fallback?.barras ?? "-";
+                      const c1Nome = active.c1?.counted_nome ?? c1Fallback?.nome ?? "-";
+
+                      const c2Qtd = active.c2?.qtd_contada ?? c2Fallback?.qtd ?? "-";
+                      const c2Barras = active.c2?.barras ?? c2Fallback?.barras ?? "-";
+                      const c2Nome = active.c2?.counted_nome ?? c2Fallback?.nome ?? "-";
+
+                      return (
+                        <>
+                          {active.review?.reason_code === "conflito_lock" && active.c2 == null ? (
+                            <p className="inventario-popup-note warn">
+                              2ª verificação não registrada por conflito de lock. Resolve pela conciliação.
+                            </p>
+                          ) : null}
+                          <div className="inventario-conciliation-grid">
+                            <article className="inventario-conciliation-card">
+                              <h4>1ª Verificação</h4>
+                              <p>{`Qtd: ${c1Qtd}`}</p>
+                              <p>{`Barras: ${c1Barras}`}</p>
+                              <p>{`Usuário: ${c1Nome}`}</p>
+                            </article>
+                            <article className="inventario-conciliation-card">
+                              <h4>2ª Verificação</h4>
+                              <p>{`Qtd: ${c2Qtd}`}</p>
+                              <p>{`Barras: ${c2Barras}`}</p>
+                              <p>{`Usuário: ${c2Nome}`}</p>
+                            </article>
+                          </div>
+                        </>
+                      );
+                    })()}
                     <label>
                       Qtd final
                       <input
