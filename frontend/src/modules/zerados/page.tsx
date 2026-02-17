@@ -81,8 +81,9 @@ type AddressBucketView = InventarioAddressBucket & {
 
 type ZoneBucketView = {
   zona: string;
-  address_count: number;
-  item_count: number;
+  total_addresses: number;
+  done_addresses: number;
+  pending_addresses: number;
 };
 
 const MODULE_DEF = getModuleByKeyOrThrow("zerados");
@@ -207,6 +208,15 @@ function flashIcon({ on }: { on: boolean }) {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       {on ? <path d="M7 2h10l-4 7h5l-9 13 2-9H6z" /> : <path d="M7 2h10l-4 7h5l-9 13 2-9H6z" />}
       {!on ? <path d="M4 4l16 16" /> : null}
+    </svg>
+  );
+}
+
+function editIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 20l4.6-1 9.8-9.8a1.8 1.8 0 0 0 0-2.5L16.4 5a1.8 1.8 0 0 0-2.5 0L4 14.8z" />
+      <path d="M12.6 6.8l4.6 4.6" />
     </svg>
   );
 }
@@ -415,6 +425,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [qtd, setQtd] = useState("0");
   const [barras, setBarras] = useState("");
   const [validatedBarras, setValidatedBarras] = useState<string | null>(null);
+  const [countEditMode, setCountEditMode] = useState(true);
   const [finalQtd, setFinalQtd] = useState("0");
   const [finalBarras, setFinalBarras] = useState("");
 
@@ -465,6 +476,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const closeEditorPopup = useCallback(() => {
     setPopupErr(null);
+    setCountEditMode(true);
     setValidatedBarras(null);
     setScannerOpen(false);
     setScannerError(null);
@@ -857,30 +869,55 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   );
 
   const zoneBuckets = useMemo<ZoneBucketView[]>(() => {
-    const map = new Map<string, ZoneBucketView & { addresses: Set<string> }>();
-    for (const row of filteredRows) {
-      const existing = map.get(row.zona);
-      if (existing) {
-        existing.item_count += 1;
-        existing.addresses.add(row.endereco);
-      } else {
-        map.set(row.zona, {
-          zona: row.zona,
-          address_count: 1,
-          item_count: 1,
-          addresses: new Set([row.endereco])
-        });
+    const zonesInCurrentFilter = new Set(filteredRows.map((row) => row.zona));
+    const zoneMap = new Map<string, Map<string, { has_pending: boolean; has_done: boolean }>>();
+
+    for (const row of stageUniverse) {
+      if (!zonesInCurrentFilter.has(row.zona)) continue;
+      const isPending = tab === "s1"
+        ? isS1Pending(row)
+        : tab === "s2"
+          ? isS2Pending(row)
+          : tab === "conciliation"
+            ? isConciliationPending(row)
+            : false;
+
+      let addressMap = zoneMap.get(row.zona);
+      if (!addressMap) {
+        addressMap = new Map<string, { has_pending: boolean; has_done: boolean }>();
+        zoneMap.set(row.zona, addressMap);
       }
+
+      const addressState = addressMap.get(row.endereco) ?? { has_pending: false, has_done: false };
+      if (isPending) addressState.has_pending = true;
+      else addressState.has_done = true;
+      addressMap.set(row.endereco, addressState);
     }
-    return Array.from(map.values())
-      .map((entry) => ({ zona: entry.zona, address_count: entry.addresses.size, item_count: entry.item_count }))
+
+    return Array.from(zoneMap.entries())
+      .map(([zona, addressMap]) => {
+        let pending_addresses = 0;
+        let done_addresses = 0;
+
+        for (const state of addressMap.values()) {
+          if (state.has_pending) pending_addresses += 1;
+          else if (state.has_done) done_addresses += 1;
+        }
+
+        return {
+          zona,
+          total_addresses: addressMap.size,
+          done_addresses,
+          pending_addresses
+        };
+      })
       .sort((a, b) => a.zona.localeCompare(b.zona));
-  }, [filteredRows]);
+  }, [filteredRows, stageUniverse, tab]);
   const filteredZoneBuckets = useMemo(() => {
     const query = zoneSearchInput.trim().toLocaleLowerCase("pt-BR");
     if (!query) return zoneBuckets;
     return zoneBuckets.filter((bucket) => {
-      return `${bucket.zona} ${bucket.address_count} ${bucket.item_count}`.toLocaleLowerCase("pt-BR").includes(query);
+      return `${bucket.zona} ${bucket.total_addresses} ${bucket.done_addresses} ${bucket.pending_addresses}`.toLocaleLowerCase("pt-BR").includes(query);
     });
   }, [zoneBuckets, zoneSearchInput]);
 
@@ -991,6 +1028,19 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
     setPopupErr(null);
   }, [active?.key, editorOpen, tab]);
+  useEffect(() => {
+    if (!editorOpen) {
+      setCountEditMode(true);
+      return;
+    }
+
+    if ((tab === "s1" || tab === "s2") && statusFilter === "concluido") {
+      setCountEditMode(false);
+      return;
+    }
+
+    setCountEditMode(true);
+  }, [active?.key, editorOpen, statusFilter, tab]);
 
   const canShowStageSelector = mobileStep === "stage";
   const canShowZoneSelector = mobileStep === "zone";
@@ -1088,6 +1138,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
     return false;
   }, [canEdit, profile.user_id, tab]);
+
+  const activeStageCount = useMemo(() => {
+    if (!active || !(tab === "s1" || tab === "s2")) return null;
+    return tab === "s2" ? active.c2 : active.c1;
+  }, [active, tab]);
+  const isConcludedCountFilter = (tab === "s1" || tab === "s2") && statusFilter === "concluido";
+  const canEditConcludedCount = Boolean(isConcludedCountFilter && activeStageCount && canEditCount(active));
+  const showCountReadOnlyDetails = Boolean(isConcludedCountFilter && activeStageCount && !countEditMode);
 
   const canResolveConciliation = useMemo(
     () => canEdit && tab === "conciliation" && active?.review?.status === "pendente",
@@ -1620,10 +1678,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             <span className="termo-route-main">
                               <span className="termo-route-info">
                                 <span className="termo-route-title">{zoneBucket.zona}</span>
-                                <span className="termo-route-sub">{`${labelByCount(zoneBucket.address_count, "endereço", "endereços")} | ${labelByCount(zoneBucket.item_count, "item", "itens")}`}</span>
+                                <span className="termo-route-sub">{`Total (zona): ${labelByCount(zoneBucket.total_addresses, "endereço", "endereços")}`}</span>
+                                <span className="termo-route-sub">{`Concluído (endereço): ${zoneBucket.done_addresses} | Pendente (endereço): ${zoneBucket.pending_addresses}`}</span>
                               </span>
                               <span className="termo-route-actions-row">
-                                <span className="termo-route-items-count">{labelByCount(zoneBucket.item_count, "item", "itens")}</span>
                                 <span className={`termo-divergencia ${zone === zoneBucket.zona ? "correto" : "andamento"}`}>
                                   {zone === zoneBucket.zona ? "Selecionada" : "Disponível"}
                                 </span>
@@ -1651,74 +1709,101 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   <h3>{active.endereco}</h3>
                   <p>{`${stageLabel(tab)} | CODDV ${active.coddv}`}</p>
                 </div>
-                <button type="button" className="inventario-popup-close" onClick={closeEditorPopup} aria-label="Fechar popup">Fechar</button>
+                <div className="inventario-popup-head-actions">
+                  {canEditConcludedCount ? (
+                    <button
+                      type="button"
+                      className="inventario-popup-edit"
+                      onClick={() => {
+                        setPopupErr(null);
+                        setCountEditMode(true);
+                      }}
+                      aria-label="Editar contagem"
+                      title="Editar contagem"
+                    >
+                      {editIcon()}
+                      <span>Editar</span>
+                    </button>
+                  ) : null}
+                  <button type="button" className="inventario-popup-close" onClick={closeEditorPopup} aria-label="Fechar popup">Fechar</button>
+                </div>
               </div>
               <div className="inventario-popup-body">
                 {popupErr ? <p className="inventario-popup-note error">{popupErr}</p> : null}
                 <p className="inventario-editor-text">{active.descricao}</p>
                 {(tab === "s1" || tab === "s2") ? (
                   <>
-                    <label>
-                      Quantidade
-                      <input
-                        ref={qtdInputRef}
-                        autoFocus
-                        value={qtd}
-                        onChange={(e) => {
-                          setQtd(e.target.value);
-                          setValidatedBarras(null);
-                        }}
-                        onFocus={focusAndSelectNumericInput}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        enterKeyHint="next"
-                        disabled={!canEditCount(active) || busy}
-                      />
-                    </label>
-                    {requiresBarras ? (
-                      <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
-                        {barrasValidatedForCurrentInput
-                          ? "Código de barras validado. Toque em Salvar para concluir."
-                          : "Sobra detectada. Informe barras válido do mesmo CODDV e valide antes de salvar, ou descarte."}
-                      </p>
-                    ) : null}
-                    {requiresBarras ? (
-                      <label>
-                        Barras (obrigatório)
-                        <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
+                    {showCountReadOnlyDetails ? (
+                      <div className="inventario-count-readonly">
+                        <p>{`Quantidade informada: ${activeStageCount?.qtd_contada ?? "-"}`}</p>
+                        <p>{`Barras: ${activeStageCount?.barras ?? "-"}`}</p>
+                        <p>{`Usuário: ${activeStageCount?.counted_nome ?? "-"} (${activeStageCount?.counted_mat ?? "-"})`}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <label>
+                          Quantidade
                           <input
-                            value={barras}
+                            ref={qtdInputRef}
+                            autoFocus
+                            value={qtd}
                             onChange={(e) => {
-                              setBarras(e.target.value);
+                              setQtd(e.target.value);
                               setValidatedBarras(null);
                             }}
-                            onFocus={keepFocusedControlVisible}
+                            onFocus={focusAndSelectNumericInput}
                             inputMode="numeric"
                             pattern="[0-9]*"
-                            autoCapitalize="off"
-                            autoCorrect="off"
-                            autoComplete="off"
-                            spellCheck={false}
-                            enterKeyHint="done"
+                            enterKeyHint="next"
                             disabled={!canEditCount(active) || busy}
                           />
-                          <button
-                            type="button"
-                            className="input-action-btn inventario-popup-scan-btn"
-                            onClick={() => openCameraScanner("barras")}
-                            title="Ler código pela câmera"
-                            aria-label="Ler código pela câmera"
-                            disabled={!canEditCount(active) || busy || !cameraSupported}
-                          >
-                            {cameraIcon()}
-                          </button>
+                        </label>
+                        {requiresBarras ? (
+                          <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
+                            {barrasValidatedForCurrentInput
+                              ? "Código de barras validado. Toque em Salvar para concluir."
+                              : "Sobra detectada. Informe barras válido do mesmo CODDV e valide antes de salvar, ou descarte."}
+                          </p>
+                        ) : null}
+                        {requiresBarras ? (
+                          <label>
+                            Barras (obrigatório)
+                            <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
+                              <input
+                                value={barras}
+                                onChange={(e) => {
+                                  setBarras(e.target.value);
+                                  setValidatedBarras(null);
+                                }}
+                                onFocus={keepFocusedControlVisible}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                                autoComplete="off"
+                                spellCheck={false}
+                                enterKeyHint="done"
+                                disabled={!canEditCount(active) || busy}
+                              />
+                              <button
+                                type="button"
+                                className="input-action-btn inventario-popup-scan-btn"
+                                onClick={() => openCameraScanner("barras")}
+                                title="Ler código pela câmera"
+                                aria-label="Ler código pela câmera"
+                                disabled={!canEditCount(active) || busy || !cameraSupported}
+                              >
+                                {cameraIcon()}
+                              </button>
+                            </div>
+                          </label>
+                        ) : null}
+                        <div className="inventario-editor-actions">
+                          <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
+                          <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
                         </div>
-                      </label>
-                    ) : null}
-                    <div className="inventario-editor-actions">
-                      <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
-                      <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
-                    </div>
+                      </>
+                    )}
                   </>
                 ) : null}
                 {tab === "conciliation" ? (
