@@ -1,5 +1,6 @@
 export type InventarioRole = "admin" | "auditor" | "viewer";
 export type InventarioStage = 1 | 2;
+export type InventarioStageView = "s1" | "s2" | "conciliation" | "done";
 export type InventarioResultado = "correto" | "falta" | "sobra" | "descartado";
 export type InventarioReviewReason = "sem_consenso" | "conflito_lock";
 export type InventarioReviewStatus = "pendente" | "resolvido";
@@ -36,6 +37,15 @@ export interface InventarioManifestItemRow {
   coddv: number;
   descricao: string;
   estoque: number;
+}
+
+export interface InventarioAddressBucket {
+  key: string;
+  zona: string;
+  endereco: string;
+  total_items: number;
+  pending_items: number;
+  done_items: number;
 }
 
 export interface InventarioCountRow {
