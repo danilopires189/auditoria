@@ -3049,9 +3049,9 @@ small {
   border: 1px solid #d4deef;
   border-radius: 12px;
   background: #fff;
-  min-height: 68px;
+  min-height: 74px;
   height: auto !important;
-  padding: 10px 11px;
+  padding: 9px 11px;
   text-align: left;
   display: flex;
   align-items: flex-start;
@@ -3066,7 +3066,7 @@ small {
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 1px;
 }
 
 .inventario-address-head {
@@ -3092,6 +3092,8 @@ small {
   margin-left: auto;
   flex-shrink: 0;
   align-self: center;
+  font-size: 0.68rem;
+  padding: 2px 7px;
 }
 
 .inventario-address-card p {
@@ -3105,7 +3107,7 @@ small {
   max-width: 100%;
   margin: 0;
   color: #4b5e81;
-  font-size: 0.79rem;
+  font-size: 0.76rem;
   line-height: 1.24;
   white-space: nowrap;
   overflow: hidden;
@@ -3115,15 +3117,15 @@ small {
 .inventario-address-extra {
   margin: 1px 0 0;
   color: #3d5680;
-  font-size: 0.75rem;
-  line-height: 1.2;
+  font-size: 0.68rem;
+  line-height: 1.12;
 }
 
 .inventario-address-user {
   margin: 1px 0 0;
   color: #6b7d99;
-  font-size: 0.4rem;
-  line-height: 1.15;
+  font-size: 0.56rem;
+  line-height: 1.05;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
