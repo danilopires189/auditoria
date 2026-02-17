@@ -103,6 +103,11 @@ interface EntradaNotasRouteGroupView extends EntradaNotasRouteGroup {
   force_open: boolean;
 }
 
+type RouteContributorsState = {
+  status: "loading" | "loaded" | "error";
+  contributors: EntradaNotasContributor[];
+};
+
 type DialogState = {
   title: string;
   message: string;
@@ -285,6 +290,13 @@ function parseSeqNfFromVolumeLabel(value: string): { seq_entrada: number; nf: nu
     seq_entrada: Number.isFinite(seqEntrada) ? Math.max(seqEntrada, 0) : 0,
     nf: Number.isFinite(nf) ? Math.max(nf, 0) : 0
   };
+}
+
+function buildSeqNfLabelKey(seqEntrada: number | null | undefined, nf: number | null | undefined): string | null {
+  if (seqEntrada == null || nf == null) return null;
+  if (!Number.isFinite(seqEntrada) || !Number.isFinite(nf)) return null;
+  if (seqEntrada <= 0 || nf <= 0) return null;
+  return `${seqEntrada}/${nf}`;
 }
 
 function formatCollaboratorName(value: {
@@ -756,6 +768,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [showRoutesModal, setShowRoutesModal] = useState(false);
   const [routeSearchInput, setRouteSearchInput] = useState("");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
+  const [routeContributorsMap, setRouteContributorsMap] = useState<Record<string, RouteContributorsState>>({});
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
@@ -888,6 +901,16 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return labels.join(", ");
   }, [activeVolume?.contributors]);
 
+  const hasMultipleActiveContributors = useMemo(() => {
+    const contributors = activeVolume?.contributors ?? [];
+    const unique = new Set<string>();
+    for (const contributor of contributors) {
+      const key = contributor.user_id || `${contributor.mat}|${contributor.nome}`;
+      if (key) unique.add(key);
+    }
+    return unique.size > 1;
+  }, [activeVolume?.contributors]);
+
   const offlineBaseBadge = useMemo(() => {
     const overall = offlineBaseState.entrada_ready && offlineBaseState.barras_ready
       ? (offlineBaseState.stale ? "desatualizado" : "completo")
@@ -1018,6 +1041,50 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       throw error;
     }
   }, []);
+
+  const ensureRouteRowContributors = useCallback(async (row: EntradaNotasRouteOverviewRow) => {
+    if (!isOnline || currentCd == null) return;
+    const seqNfKey = buildSeqNfLabelKey(row.seq_entrada, row.nf);
+    if (!seqNfKey) return;
+
+    let shouldFetch = false;
+    setRouteContributorsMap((current) => {
+      const existing = current[seqNfKey];
+      if (existing && (existing.status === "loading" || existing.status === "loaded")) {
+        return current;
+      }
+      shouldFetch = true;
+      return {
+        ...current,
+        [seqNfKey]: {
+          status: "loading",
+          contributors: existing?.contributors ?? []
+        }
+      };
+    });
+
+    if (!shouldFetch) return;
+
+    try {
+      const partialInfo = await fetchPartialReopenInfo(seqNfKey, currentCd);
+      const contributors = await fetchVolumeContributors(partialInfo.conf_id);
+      setRouteContributorsMap((current) => ({
+        ...current,
+        [seqNfKey]: {
+          status: "loaded",
+          contributors
+        }
+      }));
+    } catch {
+      setRouteContributorsMap((current) => ({
+        ...current,
+        [seqNfKey]: {
+          status: "error",
+          contributors: current[seqNfKey]?.contributors ?? []
+        }
+      }));
+    }
+  }, [currentCd, isOnline]);
 
   const fetchSeqNfVolumeSnapshot = useCallback(async (
     nrVolume: string,
@@ -2887,6 +2954,21 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, [currentCd, persistPreferences]);
 
   useEffect(() => {
+    setRouteContributorsMap({});
+  }, [currentCd]);
+
+  useEffect(() => {
+    if (!showRoutesModal || !isOnline || currentCd == null) return;
+    const targetRows = routeRows.filter((row) => {
+      const status = normalizeStoreStatus(row.status);
+      return status === "concluido" || status === "em_andamento";
+    });
+    for (const row of targetRows) {
+      void ensureRouteRowContributors(row);
+    }
+  }, [currentCd, ensureRouteRowContributors, isOnline, routeRows, showRoutesModal]);
+
+  useEffect(() => {
     if (currentCd == null) {
       setManifestReady(false);
       setManifestInfo("");
@@ -3636,6 +3718,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             )}
                           </div>
                         ) : null}
+                        {hasMultipleActiveContributors && item.qtd_conferida > 0 && (item.locked_nome || item.locked_mat) ? (
+                          <p className="entrada-notas-item-owner">
+                            Conferido por: {formatLockedItemOwner(item)}
+                          </p>
+                        ) : null}
                         {item.qtd_conferida > 0 && isItemLocked ? (
                           <p className="entrada-notas-item-locked">
                             Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
@@ -3712,6 +3799,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             )}
                           </div>
                         ) : null}
+                        {hasMultipleActiveContributors && item.qtd_conferida > 0 && (item.locked_nome || item.locked_mat) ? (
+                          <p className="entrada-notas-item-owner">
+                            Conferido por: {formatLockedItemOwner(item)}
+                          </p>
+                        ) : null}
                         {item.qtd_conferida > 0 && isItemLocked ? (
                           <p className="entrada-notas-item-locked">
                             Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
@@ -3786,6 +3878,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                               </>
                             )}
                           </div>
+                        ) : null}
+                        {hasMultipleActiveContributors && item.qtd_conferida > 0 && (item.locked_nome || item.locked_mat) ? (
+                          <p className="entrada-notas-item-owner">
+                            Conferido por: {formatLockedItemOwner(item)}
+                          </p>
                         ) : null}
                         {item.qtd_conferida > 0 && isItemLocked ? (
                           <p className="entrada-notas-item-locked">
@@ -3880,6 +3977,19 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
                                 const colaboradorMat = row.colaborador_mat?.trim() || "";
                                 const seqLabel = row.pedidos_seq ?? `Seq ${row.seq_entrada ?? "-"} / NF ${row.nf ?? "-"}`;
+                                const seqNfKey = buildSeqNfLabelKey(row.seq_entrada, row.nf);
+                                const contributorsState = seqNfKey ? routeContributorsMap[seqNfKey] : undefined;
+                                const contributors = contributorsState?.contributors ?? [];
+                                const contributorNames = contributors.length > 0
+                                  ? contributors
+                                    .map((contributor) => formatCollaboratorName({
+                                      nome: contributor.nome,
+                                      mat: contributor.mat
+                                    }))
+                                    .join(", ")
+                                  : colaboradorNome
+                                    ? `${colaboradorNome}${colaboradorMat ? ` (${colaboradorMat})` : ""}`
+                                    : "";
                                 return (
                                   <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
                                     <div>
@@ -3900,11 +4010,28 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                       >
                                         {lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
                                       </button>
-                                      {lojaStatus === "em_andamento" && colaboradorNome ? (
-                                        <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
+                                      {lojaStatus === "em_andamento" && contributorNames ? (
+                                        <p>Em andamento por: {contributorNames}</p>
                                       ) : null}
-                                      {lojaStatus === "concluido" && colaboradorNome ? (
-                                        <p>Concluído por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
+                                      {lojaStatus === "concluido" && contributorNames ? (
+                                        <p>Concluído por: {contributorNames}</p>
+                                      ) : null}
+                                      {contributors.length > 1 ? (
+                                        <div className="entrada-notas-route-contributors">
+                                          {contributors.map((contributor) => (
+                                            <p key={`${seqNfKey ?? "seq"}:${contributor.user_id || contributor.mat || contributor.nome}`}>
+                                              {formatCollaboratorName({
+                                                nome: contributor.nome,
+                                                mat: contributor.mat
+                                              })}
+                                              {" | Última ação: "}
+                                              {formatDateTime(contributor.last_action_at)}
+                                            </p>
+                                          ))}
+                                        </div>
+                                      ) : null}
+                                      {contributorsState?.status === "loading" ? (
+                                        <p className="entrada-notas-route-contributors-loading">Carregando conferentes...</p>
                                       ) : null}
                                       {lojaStatus === "em_andamento" && row.status_at ? (
                                         <p>Iniciado em: {formatDateTime(row.status_at)}</p>
