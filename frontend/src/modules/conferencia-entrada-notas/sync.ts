@@ -803,6 +803,105 @@ export async function cancelAvulsaVolume(confId: string): Promise<boolean> {
   return first?.cancelled === true;
 }
 
+function findAvulsaLocalItemForEvent(
+  row: EntradaNotasLocalVolume,
+  event: { coddv: number; seq_entrada: number; nf: number }
+): EntradaNotasLocalVolume["items"][number] | null {
+  return row.items.find((item) => (
+    item.coddv === event.coddv
+      && Number(item.seq_entrada ?? 0) === event.seq_entrada
+      && Number(item.nf ?? 0) === event.nf
+  )) ?? null;
+}
+
+function findAvulsaTargetConfIdFromCache(
+  row: EntradaNotasLocalVolume,
+  event: { seq_entrada: number; nf: number }
+): string | null {
+  const cached = row.avulsa_targets?.find((target) => (
+    target.seq_entrada === event.seq_entrada
+      && target.nf === event.nf
+  ));
+  return cached?.target_conf_id ?? null;
+}
+
+async function resolveAvulsaTargetConfId(
+  row: EntradaNotasLocalVolume,
+  event: { seq_entrada: number; nf: number; target_conf_id: string | null; coddv: number }
+): Promise<string> {
+  const eventTarget = String(event.target_conf_id ?? "").trim();
+  if (eventTarget) return eventTarget;
+
+  const localItem = findAvulsaLocalItemForEvent(row, event);
+  const localTarget = String(localItem?.target_conf_id ?? "").trim();
+  if (localTarget) return localTarget;
+
+  const cachedTarget = findAvulsaTargetConfIdFromCache(row, event);
+  if (cachedTarget) return cachedTarget;
+
+  return (await openVolume(`${event.seq_entrada}/${event.nf}`, row.cd)).conf_id;
+}
+
+function shouldTryAvulsaAbsoluteFallback(message: string): boolean {
+  return (
+    message.includes("BARRAS_NAO_ENCONTRADA")
+    || message.includes("ALVO_SEQ_NF_NAO_PENDENTE")
+    || message.includes("SEM_ALVO_PENDENTE")
+  );
+}
+
+async function syncAvulsaEventByAbsoluteQty(
+  row: EntradaNotasLocalVolume,
+  event: { seq_entrada: number; nf: number; target_conf_id: string | null; coddv: number; qtd: number }
+): Promise<void> {
+  const localItem = findAvulsaLocalItemForEvent(row, event);
+  const desiredQtd = localItem
+    ? Math.max(0, Math.trunc(localItem.qtd_conferida))
+    : Math.max(0, Math.trunc(event.qtd));
+  const targetConfId = await resolveAvulsaTargetConfId(row, event);
+  await setItemQtd(targetConfId, event.coddv, desiredQtd);
+}
+
+function shouldCheckAlreadyAppliedSetQtd(message: string): boolean {
+  return (
+    message.includes("CONFERENCIA_JA_FINALIZADA")
+    || message.includes("ITEM_BLOQUEADO_OUTRO_USUARIO")
+    || message.includes("CONFERENCIA_EM_USO")
+    || message.includes("ALVO_SEQ_NF_NAO_PENDENTE")
+    || message.includes("SEM_ALVO_PENDENTE")
+  );
+}
+
+async function isAvulsaQtdAlreadyApplied(
+  row: EntradaNotasLocalVolume,
+  event: { seq_entrada: number; nf: number; target_conf_id: string | null; coddv: number },
+  targetConfId: string,
+  expectedQtd: number
+): Promise<boolean> {
+  const candidateConfIds: string[] = [targetConfId];
+  try {
+    const resolvedConfId = await resolveAvulsaTargetConfId(row, event);
+    if (resolvedConfId && !candidateConfIds.includes(resolvedConfId)) {
+      candidateConfIds.push(resolvedConfId);
+    }
+  } catch {
+    // Fallback apenas para conferência já resolvida.
+  }
+
+  for (const confId of candidateConfIds) {
+    try {
+      const remoteItems = await fetchVolumeItems(confId);
+      const remoteItem = remoteItems.find((item) => item.coddv === event.coddv);
+      if (remoteItem && Math.max(0, Math.trunc(remoteItem.qtd_conferida)) === expectedQtd) {
+        return true;
+      }
+    } catch {
+      // Tentará próximo confId candidato.
+    }
+  }
+  return false;
+}
+
 export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
   processed: number;
   synced: number;
@@ -868,17 +967,46 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
           for (let index = 0; index < queue.length; index += 1) {
             const event = queue[index];
             if (event.kind === "scan") {
-              await applyAvulsaScan(
-                remoteConfId,
-                event.barras,
-                Math.max(1, Math.trunc(event.qtd)),
-                event.seq_entrada,
-                event.nf
-              );
+              try {
+                await applyAvulsaScan(
+                  remoteConfId,
+                  event.barras,
+                  Math.max(1, Math.trunc(event.qtd)),
+                  event.seq_entrada,
+                  event.nf
+                );
+              } catch (scanError) {
+                const scanMessage = toErrorMessage(scanError);
+                if (!shouldTryAvulsaAbsoluteFallback(scanMessage)) {
+                  throw scanError;
+                }
+                await syncAvulsaEventByAbsoluteQty(row, event);
+              }
             } else {
-              const targetConfId = event.target_conf_id
-                ?? (await openVolume(`${event.seq_entrada}/${event.nf}`, row.cd)).conf_id;
-              await setItemQtd(targetConfId, event.coddv, Math.max(0, Math.trunc(event.qtd)));
+              const desiredQtd = Math.max(0, Math.trunc(event.qtd));
+              let targetConfId = await resolveAvulsaTargetConfId(row, event);
+              try {
+                await setItemQtd(targetConfId, event.coddv, desiredQtd);
+              } catch (setQtdError) {
+                const setQtdMessage = toErrorMessage(setQtdError);
+                if (setQtdMessage.includes("CONFERENCIA_NAO_ENCONTRADA")) {
+                  const reopened = await openVolume(`${event.seq_entrada}/${event.nf}`, row.cd);
+                  if (reopened.conf_id !== targetConfId) {
+                    targetConfId = reopened.conf_id;
+                    await setItemQtd(targetConfId, event.coddv, desiredQtd);
+                  } else if (
+                    !shouldCheckAlreadyAppliedSetQtd(setQtdMessage)
+                    || !(await isAvulsaQtdAlreadyApplied(row, event, targetConfId, desiredQtd))
+                  ) {
+                    throw setQtdError;
+                  }
+                } else if (
+                  !shouldCheckAlreadyAppliedSetQtd(setQtdMessage)
+                  || !(await isAvulsaQtdAlreadyApplied(row, event, targetConfId, desiredQtd))
+                ) {
+                  throw setQtdError;
+                }
+              }
             }
 
             // Evita reprocessamento duplicado quando um erro ocorre após parte da fila.
