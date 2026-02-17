@@ -361,10 +361,11 @@ function resolveCountedDisplayInfo(row: Row, stage: InventarioStageView): Counte
 
   if (stage === "conciliation" || stage === "done") {
     if (row.review?.status === "resolvido") {
+      const fallbackSource = row.c2 ?? row.c1 ?? null;
       return {
         qtd: row.review.final_qtd,
-        mat: row.review.resolved_mat,
-        nome: row.review.resolved_nome
+        mat: row.review.resolved_mat ?? fallbackSource?.counted_mat ?? null,
+        nome: row.review.resolved_nome ?? fallbackSource?.counted_nome ?? null
       };
     }
     if (row.c2) return { qtd: row.c2.qtd_contada, mat: row.c2.counted_mat, nome: row.c2.counted_nome };
@@ -383,6 +384,18 @@ function formatCountedByLine(nome: string | null): string | null {
     .split(" ")
     .map((chunk) => chunk.charAt(0).toLocaleUpperCase("pt-BR") + chunk.slice(1))
     .join(" ");
+}
+
+function formatConcludedByLine(info: CountedDisplayInfo | null): string {
+  if (!info) return "Concluído por: Usuário não informado";
+
+  const formattedName = formatCountedByLine(info.nome);
+  if (formattedName) return `Concluído por: ${formattedName}`;
+
+  const mat = (info.mat ?? "").trim();
+  if (mat) return `Concluído por: Mat ${mat}`;
+
+  return "Concluído por: Usuário não informado";
 }
 
 function derive(manifest: InventarioManifestItemRow[], remote: InventarioSyncPullState): Row[] {
@@ -1689,7 +1702,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     && statusFilter === "pendente"
                     && bucket.items.some((row) => isS2BlockedBySameUser(row, profile.user_id));
                   const countedInfo = singleItem ? resolveCountedDisplayInfo(singleItem, tab) : null;
-                  const countedByLine = countedInfo ? formatCountedByLine(countedInfo.nome) : null;
+                  const countedByLine = showConcludedDetails ? formatConcludedByLine(countedInfo) : null;
                   const addressMeta = singleItem
                     ? `${singleItem.coddv} - ${singleItem.descricao}`
                     : labelByCount(bucket.total_items, "endereço", "endereços");
@@ -1713,7 +1726,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         {showConcludedDetails && countedInfo?.qtd != null ? (
                           <p className="inventario-address-extra">{`Estoque: ${singleItem?.estoque ?? "-"} Conferido: ${countedInfo.qtd}`}</p>
                         ) : null}
-                        {showConcludedDetails && countedByLine ? (
+                        {showConcludedDetails ? (
                           <p className="inventario-address-user">{countedByLine}</p>
                         ) : null}
                         {blockedForCurrentUser ? (
