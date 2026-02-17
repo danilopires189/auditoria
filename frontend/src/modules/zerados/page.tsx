@@ -542,32 +542,35 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         </div>
       </header>
 
-      <section className="modules-shell inventario-shell">
-        <div className="inventario-head"><h2>Olá, {userName}</h2><p>{`Ciclo ${CYCLE_DATE} | db_inventario: ${manifestItems.length} | db_barras: ${dbBarrasCount}`}</p></div>
+      <section className="modules-shell termo-shell inventario-shell">
+        <div className="termo-head">
+          <h2>Olá, {userName}</h2>
+          <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE} | db_inventario: ${manifestItems.length} | db_barras: ${dbBarrasCount}`}</p>
+        </div>
         {err ? <div className="alert error">{err}</div> : null}
         {msg ? <div className="alert success">{msg}</div> : null}
 
-        <div className="inventario-toolbar">
+        <div className="termo-actions-row inventario-toolbar">
           {fixed != null ? <input disabled value={`CD ${String(fixed).padStart(2, "0")}`} /> : (
             <select value={cd ?? ""} onChange={(e) => setCd(e.target.value ? Number.parseInt(e.target.value, 10) : null)}>
               <option value="">Selecione CD</option>
               {cdOptions.map((o) => <option key={o.cd} value={o.cd}>{`CD ${String(o.cd).padStart(2, "0")} - ${o.cd_nome}`}</option>)}
             </select>
           )}
-          <button className={`btn btn-muted${preferOffline ? " is-active" : ""}`} type="button" onClick={() => setPreferOffline((v) => !v)}>
+          <button className={`btn btn-muted termo-offline-toggle${preferOffline ? " is-active" : ""}`} type="button" onClick={() => setPreferOffline((v) => !v)}>
             {preferOffline ? "Offline local" : "Online"}
           </button>
           <button className="btn btn-muted" type="button" onClick={() => void syncNow(true)} disabled={!isOnline || busy || cd == null}>{busy ? "Sincronizando..." : "Sincronizar"}</button>
         </div>
 
-        <div className="inventario-tabs">
+        <div className="termo-actions-row inventario-tabs">
           <button type="button" className={`inventario-tab-btn${tab === "s1" ? " active" : ""}`} onClick={() => setTab("s1")}>1ª Verificação</button>
           <button type="button" className={`inventario-tab-btn${tab === "s2" ? " active" : ""}`} onClick={() => setTab("s2")}>2ª Verificação</button>
           <button type="button" className={`inventario-tab-btn${tab === "rev" ? " active" : ""}`} onClick={() => setTab("rev")}>Revisão</button>
           <button type="button" className={`inventario-tab-btn${tab === "done" ? " active" : ""}`} onClick={() => setTab("done")}>Concluídos</button>
         </div>
 
-        <div className="inventario-subfilters">
+        <div className="termo-actions-row inventario-subfilters">
           {(tab === "s1" || tab === "s2") ? (
             <>
               <button type="button" className={`btn btn-muted${statusFilter === "pendente" ? " is-active" : ""}`} onClick={() => setStatusFilter("pendente")}>Pendentes</button>
@@ -586,22 +589,37 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         <div className="inventario-zones">{zones.map((z) => <button type="button" key={z} className={`inventario-zone-chip${zone === z ? " active" : ""}`} onClick={() => setZone(z)}>{z}</button>)}</div>
 
         <div className="inventario-layout">
-          <div className="inventario-list">
+          <div className="termo-list-block inventario-list">
             {visible.map((r) => (
-              <button key={r.key} type="button" className={`inventario-item-card${selected === r.key ? " active" : ""}${r.final ? " done" : ""}`} onClick={() => setSelected(r.key)}>
-                <div className="inventario-item-top"><strong>{r.endereco}</strong><span>{`CODDV ${r.coddv}`}</span></div>
-                <p>{r.descricao}</p>
-                <div className="inventario-item-meta"><span>{`Estoque: ${r.estoque}`}</span>{r.c1 ? <span>{`1ª: ${r.c1.qtd_contada}`}</span> : <span>1ª pendente</span>}{r.c2 ? <span>{`2ª: ${r.c2.qtd_contada}`}</span> : null}{r.review ? <span>{`Revisão: ${r.review.status}`}</span> : null}</div>
-              </button>
+              <article key={r.key} className={`termo-item-card${selected === r.key ? " is-expanded" : ""}${r.final ? " inventario-item-card-done" : ""}`}>
+                <button type="button" className="termo-item-line" onClick={() => setSelected(r.key)}>
+                  <div className="termo-item-main">
+                    <strong>{`${r.endereco} | CODDV ${r.coddv}`}</strong>
+                    <p>{r.descricao}</p>
+                    <p>{`Estoque ${r.estoque}`}</p>
+                  </div>
+                  <div className="termo-item-side">
+                    {r.final ? (
+                      <span className="termo-divergencia correto">Final</span>
+                    ) : r.review?.status === "pendente" ? (
+                      <span className="termo-divergencia falta">Revisão</span>
+                    ) : r.c1?.resultado === "sobra" && r.c2 == null ? (
+                      <span className="termo-divergencia sobra">2ª pendente</span>
+                    ) : (
+                      <span className="termo-divergencia andamento">Pendente</span>
+                    )}
+                  </div>
+                </button>
+              </article>
             ))}
           </div>
 
-          <div className="inventario-editor">
+          <div className="termo-form inventario-editor">
             {active ? (
               <>
                 <h3>{active.endereco}</h3>
-                <p>{active.descricao}</p>
-                <p>{`Zona ${active.zona} | Estoque ${active.estoque}`}</p>
+                <p className="inventario-editor-text">{active.descricao}</p>
+                <p className="inventario-editor-text">{`Zona ${active.zona} | Estoque ${active.estoque}`}</p>
                 {(tab === "s1" || tab === "s2") ? (
                   <>
                     <label>Quantidade<input value={qtd} onChange={(e) => setQtd(e.target.value)} disabled={!canEdit || busy} /></label>
@@ -619,14 +637,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     <div className="inventario-editor-actions"><button className="btn btn-primary" type="button" disabled={!canEdit || busy} onClick={() => void resolveReview()}>Resolver revisão</button></div>
                   </>
                 ) : null}
-                {tab === "done" ? <p>Item finalizado (imutável).</p> : null}
+                {tab === "done" ? <p className="inventario-editor-text">Item finalizado (imutável).</p> : null}
               </>
             ) : <div className="inventario-empty-card"><p>Selecione um item.</p></div>}
           </div>
         </div>
 
         {canExport ? (
-          <section className="inventario-report">
+          <section className="coleta-report-panel inventario-report">
             <h3>Relatório XLSX (Admin)</h3>
             <div className="inventario-report-filters">
               <label>Data inicial<input type="date" value={dtIni} onChange={(e) => setDtIni(e.target.value)} /></label>
