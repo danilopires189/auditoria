@@ -1044,7 +1044,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       ?? 0;
     setFinalQtd(String(suggestedFinal));
     setFinalBarras(active.review?.final_barras ?? "");
-  }, [active, tab]);
+  }, [active?.key, active?.c1?.updated_at, active?.c2?.updated_at, active?.review?.updated_at, tab]);
 
   useEffect(() => {
     if (!editorOpen) return;
