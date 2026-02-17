@@ -310,7 +310,9 @@ export async function saveManifestSnapshot(params: {
         rota: row.rota ?? null,
         coddv,
         descricao: row.descricao,
-        qtd_esperada: parsePositiveInt(row.qtd_esperada, 1)
+        qtd_esperada: parsePositiveInt(row.qtd_esperada, 1),
+        lotes: row.lotes ?? null,
+        validades: row.validades ?? null
       };
       itemsStore.put(payload);
     }
@@ -401,7 +403,9 @@ export async function getManifestItemsByEtiqueta(
       rota: row.rota,
       coddv: row.coddv,
       descricao: row.descricao,
-      qtd_esperada: row.qtd_esperada
+      qtd_esperada: row.qtd_esperada,
+      lotes: row.lotes ?? null,
+      validades: row.validades ?? null
     }))
     .sort((a, b) => a.coddv - b.coddv);
 }
@@ -428,11 +432,6 @@ export async function listManifestVolumes(
     if (!current) {
       grouped.set(nrVolume, {
         nr_volume: nrVolume,
-        caixa: row.caixa ?? null,
-        pedido: row.pedido ?? null,
-        filial: row.filial ?? null,
-        filial_nome: row.filial_nome ?? null,
-        rota: row.rota ?? null,
         itens_total: 1,
         qtd_esperada_total: Math.max(Number(row.qtd_esperada ?? 0), 0)
       });
@@ -441,11 +440,6 @@ export async function listManifestVolumes(
 
     current.itens_total += 1;
     current.qtd_esperada_total += Math.max(Number(row.qtd_esperada ?? 0), 0);
-    if (!current.caixa && row.caixa) current.caixa = row.caixa;
-    if (current.pedido == null && row.pedido != null) current.pedido = row.pedido;
-    if (current.filial == null && row.filial != null) current.filial = row.filial;
-    if (!current.filial_nome && row.filial_nome) current.filial_nome = row.filial_nome;
-    if (!current.rota && row.rota) current.rota = row.rota;
   }
 
   return Array.from(grouped.values()).sort((a, b) => (

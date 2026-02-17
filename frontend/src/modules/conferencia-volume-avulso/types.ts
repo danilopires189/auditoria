@@ -35,15 +35,12 @@ export interface VolumeAvulsoManifestItemRow {
   coddv: number;
   descricao: string;
   qtd_esperada: number;
+  lotes: string | null;
+  validades: string | null;
 }
 
 export interface VolumeAvulsoManifestVolumeRow {
   nr_volume: string;
-  caixa: string | null;
-  pedido: number | null;
-  filial: number | null;
-  filial_nome: string | null;
-  rota: string | null;
   itens_total: number;
   qtd_esperada_total: number;
 }
@@ -80,6 +77,8 @@ export interface VolumeAvulsoItemRow {
   qtd_falta: number;
   qtd_sobra: number;
   divergencia_tipo: VolumeAvulsoDivergenciaTipo;
+  lotes: string | null;
+  validades: string | null;
   updated_at: string;
 }
 
@@ -110,6 +109,8 @@ export interface VolumeAvulsoLocalItem {
   descricao: string;
   qtd_esperada: number;
   qtd_conferida: number;
+  lotes: string | null;
+  validades: string | null;
   updated_at: string;
 }
 
