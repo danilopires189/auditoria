@@ -2844,13 +2844,15 @@ small {
 
 .inventario-mobile-nav {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-direction: column;
   gap: 10px;
 }
 
 .inventario-mobile-back-btn {
   min-height: 40px;
+  min-width: 90px;
 }
 
 .inventario-tab-btn {
@@ -2959,7 +2961,7 @@ small {
 
 .inventario-layout {
   display: grid;
-  grid-template-columns: minmax(290px, 1fr) minmax(260px, 0.8fr);
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -2977,7 +2979,7 @@ small {
 .inventario-address-list {
   display: grid;
   gap: 8px;
-  max-height: 62vh;
+  max-height: 42vh;
   overflow: auto;
   padding-right: 3px;
 }
@@ -3075,7 +3077,7 @@ small {
 
 .inventario-conciliation-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
@@ -3142,16 +3144,19 @@ small {
   z-index: 1200;
   background: rgba(12, 26, 52, 0.46);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 10px;
+  padding: 0;
 }
 
 .inventario-popup-card {
-  width: min(560px, 96vw);
+  width: 100%;
   max-height: 92vh;
   border: 1px solid #c8d6ef;
-  border-radius: 14px;
+  border-radius: 16px 16px 0 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
   background: #fff;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -3159,7 +3164,7 @@ small {
 }
 
 .inventario-popup-head {
-  padding: 12px 14px;
+  padding: 14px 14px 10px;
   border-bottom: 1px solid #dce5f4;
   display: flex;
   align-items: flex-start;
@@ -3170,14 +3175,14 @@ small {
 .inventario-popup-head h3 {
   margin: 0;
   color: #12305e;
-  font-size: 1.02rem;
+  font-size: 1.08rem;
   line-height: 1.28;
 }
 
 .inventario-popup-head p {
   margin: 3px 0 0;
   color: #4b5e80;
-  font-size: 0.84rem;
+  font-size: 0.88rem;
   line-height: 1.34;
 }
 
@@ -3187,16 +3192,17 @@ small {
   background: #f6f9ff;
   color: #284877;
   padding: 8px 12px;
-  min-height: 40px;
-  font-size: 0.84rem;
+  min-height: 42px;
+  min-width: 76px;
+  font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
 }
 
 .inventario-popup-body {
-  padding: 14px;
+  padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
   display: grid;
-  gap: 10px;
+  gap: 12px;
   overflow: auto;
   overscroll-behavior: contain;
   scroll-padding-bottom: 32vh;
@@ -3205,8 +3211,8 @@ small {
 
 .inventario-popup-body label {
   display: grid;
-  gap: 6px;
-  font-size: 0.9rem;
+  gap: 7px;
+  font-size: 0.95rem;
   color: #12305e;
   font-weight: 600;
 }
@@ -3217,15 +3223,34 @@ small {
   border-radius: 10px;
   background: #fff;
   color: #12305e;
-  padding: 11px 12px;
-  min-height: 46px;
-  font-size: 0.95rem;
+  border-radius: 12px;
+  padding: 12px 13px;
+  min-height: 50px;
+  font-size: 16px;
   font: inherit;
+}
+
+.inventario-editor-actions,
+.inventario-report-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .inventario-editor-actions .btn,
 .inventario-report-actions .btn {
-  min-height: 44px;
+  width: 100%;
+  min-height: 52px;
+  font-size: 0.98rem;
+  padding: 12px;
+}
+
+.inventario-report-filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+  gap: 10px;
 }
 
 .inventario-popup-close:focus-visible,
