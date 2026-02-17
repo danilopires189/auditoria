@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -137,6 +138,37 @@ function parseErr(error: unknown): string {
 
 function defaultState(): InventarioSyncPullState {
   return { counts: [], reviews: [], locks: [], server_time: null };
+}
+
+function refreshIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-3-6.7" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
+
+function listIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 6h13" />
+      <path d="M8 12h13" />
+      <path d="M8 18h13" />
+      <circle cx="4" cy="6" r="1.2" />
+      <circle cx="4" cy="12" r="1.2" />
+      <circle cx="4" cy="18" r="1.2" />
+    </svg>
+  );
+}
+
+function searchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.7-3.7" />
+    </svg>
+  );
 }
 
 function isS1Pending(row: Row): boolean {
@@ -318,6 +350,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [mobileStep, setMobileStep] = useState<MobileFlowStep>(() => {
     return "stage";
   });
+  const [showZonePicker, setShowZonePicker] = useState(false);
+  const [zoneSearchInput, setZoneSearchInput] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
 
@@ -619,6 +653,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       .map((entry) => ({ zona: entry.zona, address_count: entry.addresses.size, item_count: entry.item_count }))
       .sort((a, b) => a.zona.localeCompare(b.zona));
   }, [filteredRows]);
+  const filteredZoneBuckets = useMemo(() => {
+    const query = zoneSearchInput.trim().toLocaleLowerCase("pt-BR");
+    if (!query) return zoneBuckets;
+    return zoneBuckets.filter((bucket) => {
+      return `${bucket.zona} ${bucket.address_count} ${bucket.item_count}`.toLocaleLowerCase("pt-BR").includes(query);
+    });
+  }, [zoneBuckets, zoneSearchInput]);
 
   const addressBuckets = useMemo<AddressBucketView[]>(() => {
     const map = new Map<string, AddressBucketView>();
@@ -733,6 +774,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const handleTabChange = useCallback((nextTab: InventarioStageView) => {
     setTab(nextTab);
     closeEditorPopup();
+    setShowZonePicker(false);
+    setZoneSearchInput("");
     setZone(null);
     setSelectedAddress(null);
     setSelectedItem(null);
@@ -743,6 +786,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   }, [closeEditorPopup]);
 
   const handleZoneSelect = useCallback((value: string) => {
+    setShowZonePicker(false);
+    setZoneSearchInput("");
     setZone(value);
     setSelectedAddress(null);
     setSelectedItem(null);
@@ -790,6 +835,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     closeEditorPopup();
     setSelectedAddress(null);
     setSelectedItem(null);
+    setShowZonePicker(false);
+    setZoneSearchInput("");
     setZone(null);
     setSearch("");
     setMobileStep("zone");
@@ -1003,10 +1050,33 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               {cdOptions.map((o) => <option key={o.cd} value={o.cd}>{`CD ${String(o.cd).padStart(2, "0")} - ${o.cd_nome}`}</option>)}
             </select>
           ) : null}
-          <button className={`btn btn-muted termo-offline-toggle${preferOffline ? " is-active" : ""}`} type="button" onClick={() => setPreferOffline((v) => !v)}>
-            {preferOffline ? "Offline local" : "Online"}
+          <button
+            type="button"
+            className="btn btn-muted termo-sync-btn"
+            onClick={() => void syncNow(true)}
+            disabled={!isOnline || busy || cd == null}
+          >
+            <span aria-hidden="true">{refreshIcon()}</span>
+            {busy ? "Sincronizando..." : "Sincronizar agora"}
           </button>
-          <button className="btn btn-muted" type="button" onClick={() => void syncNow(true)} disabled={!isOnline || busy || cd == null}>{busy ? "Sincronizando..." : "Sincronizar"}</button>
+          <button
+            className={`btn btn-muted termo-offline-toggle${preferOffline ? " is-active" : ""}`}
+            type="button"
+            onClick={() => setPreferOffline((v) => !v)}
+          >
+            {preferOffline ? "📦 Offline ativo" : "📶 Trabalhar offline"}
+          </button>
+          {!canShowStageSelector ? (
+            <button
+              type="button"
+              className="btn btn-muted termo-route-btn"
+              onClick={() => setShowZonePicker(true)}
+              disabled={zoneBuckets.length === 0}
+            >
+              <span aria-hidden="true">{listIcon()}</span>
+              Zonas
+            </button>
+          ) : null}
           {canExport && isDesktop ? (
             <button
               type="button"
@@ -1054,10 +1124,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 if (mobileStep === "address") {
                   setSelectedAddress(null);
                   setSelectedItem(null);
+                  setShowZonePicker(false);
+                  setZoneSearchInput("");
                   setSearch("");
                   setMobileStep("zone");
                   return;
                 }
+                setShowZonePicker(false);
+                setZoneSearchInput("");
                 setZone(null);
                 setSearch("");
                 setMobileStep("stage");
@@ -1094,22 +1168,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         {canShowZoneSelector ? (
           <div className="termo-form inventario-zone-list-mobile">
             <h3>{`Zonas - ${stageLabel(tab)}`}</h3>
-            <div className="inventario-zone-mobile-list">
-              {zoneBuckets.map((zoneBucket) => (
-                <button
-                  type="button"
-                  key={zoneBucket.zona}
-                  className="inventario-zone-mobile-card"
-                  onClick={() => handleZoneSelect(zoneBucket.zona)}
-                >
-                  <strong>{zoneBucket.zona}</strong>
-                  <p>{`${zoneBucket.address_count} endereço(s) | ${zoneBucket.item_count} item(ns)`}</p>
-                </button>
-              ))}
-              {zoneBuckets.length === 0 ? (
-                <div className="inventario-empty-card"><p>Nenhuma zona para os filtros selecionados.</p></div>
-              ) : null}
-            </div>
+            <p className="inventario-editor-text">Use o botão `Zonas` acima para escolher entre as zonas disponíveis.</p>
+            <button type="button" className="btn btn-muted termo-route-btn inventario-zone-picker-btn" onClick={() => setShowZonePicker(true)} disabled={zoneBuckets.length === 0}>
+              <span aria-hidden="true">{listIcon()}</span>
+              Escolher zona
+            </button>
+            {zone ? <p className="inventario-editor-text">{`Zona atual: ${zone}`}</p> : null}
+            {zoneBuckets.length === 0 ? (
+              <div className="inventario-empty-card"><p>Nenhuma zona para os filtros selecionados.</p></div>
+            ) : null}
           </div>
         ) : null}
 
@@ -1143,6 +1210,57 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             </div>
           </div>
         ) : null}
+
+        {showZonePicker && typeof document !== "undefined"
+          ? createPortal(
+              <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-zonas-title" onClick={() => setShowZonePicker(false)}>
+                <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <h3 id="inventario-zonas-title">{`Zonas - ${stageLabel(tab)}`}</h3>
+                  <div className="input-icon-wrap termo-routes-search">
+                    <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
+                    <input
+                      type="text"
+                      value={zoneSearchInput}
+                      onChange={(event) => setZoneSearchInput(event.target.value)}
+                      placeholder="Buscar zona..."
+                    />
+                  </div>
+                  {filteredZoneBuckets.length === 0 ? (
+                    <p>Sem zonas disponíveis para este filtro.</p>
+                  ) : (
+                    <div className="termo-routes-list">
+                      {filteredZoneBuckets.map((zoneBucket) => (
+                        <div key={zoneBucket.zona} className={`termo-route-group${zone === zoneBucket.zona ? " is-open" : ""}`}>
+                          <button
+                            type="button"
+                            className="termo-route-row-button termo-route-row-button-volume"
+                            onClick={() => handleZoneSelect(zoneBucket.zona)}
+                          >
+                            <span className="termo-route-main">
+                              <span className="termo-route-info">
+                                <span className="termo-route-title">{zoneBucket.zona}</span>
+                                <span className="termo-route-sub">{`${zoneBucket.address_count} endereço(s) | ${zoneBucket.item_count} item(ns)`}</span>
+                              </span>
+                              <span className="termo-route-actions-row">
+                                <span className="termo-route-items-count">{`${zoneBucket.item_count} item(ns)`}</span>
+                                <span className={`termo-divergencia ${zone === zoneBucket.zona ? "correto" : "andamento"}`}>
+                                  {zone === zoneBucket.zona ? "Selecionada" : "Disponível"}
+                                </span>
+                              </span>
+                            </span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="confirm-actions">
+                    <button className="btn btn-muted" type="button" onClick={() => setShowZonePicker(false)}>Fechar</button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
 
         {editorOpen && active ? (
           <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeEditorPopup}>
