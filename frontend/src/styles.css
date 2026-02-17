@@ -3015,27 +3015,50 @@ small {
   gap: 8px;
   max-height: 42vh;
   overflow: auto;
+  overflow-x: hidden;
   padding-right: 3px;
 }
 
 .inventario-address-card {
   width: 100%;
+  min-width: 0;
   border: 1px solid #d4deef;
   border-radius: 12px;
   background: #fff;
   padding: 10px;
   text-align: left;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  display: block;
+  overflow: hidden;
   cursor: pointer;
   transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 
+.inventario-address-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.inventario-address-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .inventario-address-card strong {
+  flex: 1;
+  min-width: 0;
   color: #142d58;
   font-size: 0.91rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inventario-address-status {
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .inventario-address-card p {
@@ -3045,6 +3068,8 @@ small {
 }
 
 .inventario-address-meta {
+  display: block;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
