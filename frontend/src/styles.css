@@ -2877,6 +2877,18 @@ small {
   min-width: 90px;
 }
 
+.inventario-zone-current-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inventario-change-zone-btn,
+.inventario-zone-picker-btn {
+  min-height: 40px;
+}
+
 .inventario-tab-btn {
   border: 1px solid #c8d6ef;
   background: #f7faff;
