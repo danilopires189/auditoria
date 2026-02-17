@@ -122,6 +122,19 @@ export interface EntradaNotasPartialReopenInfo {
   can_reopen: boolean;
 }
 
+export interface EntradaNotasBarcodeSeqNfOption {
+  coddv: number;
+  descricao: string;
+  barras: string;
+  seq_entrada: number;
+  nf: number;
+  transportadora: string;
+  fornecedor: string;
+  qtd_esperada: number;
+  qtd_conferida: number;
+  qtd_pendente: number;
+}
+
 export interface EntradaNotasAvulsaTargetOption {
   coddv: number;
   descricao: string;
