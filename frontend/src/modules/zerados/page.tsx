@@ -929,7 +929,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const currentCount = tab === "s2" ? active.c2 : active.c1;
     setQtd(String(currentCount?.qtd_contada ?? 0));
     setBarras(currentCount?.barras ?? "");
-    setValidatedBarras(currentCount?.barras ?? null);
+    setValidatedBarras(null);
 
     const suggestedFinal = active.review?.final_qtd
       ?? active.c2?.qtd_contada
@@ -1608,7 +1608,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         ref={qtdInputRef}
                         autoFocus
                         value={qtd}
-                        onChange={(e) => setQtd(e.target.value)}
+                        onChange={(e) => {
+                          setQtd(e.target.value);
+                          setValidatedBarras(null);
+                        }}
                         onFocus={focusAndSelectNumericInput}
                         inputMode="numeric"
                         pattern="[0-9]*"
