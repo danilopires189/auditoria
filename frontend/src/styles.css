@@ -3051,6 +3051,14 @@ small {
   font-size: 0.97rem;
 }
 
+.inventario-address-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .inventario-address-list {
   display: grid;
   gap: 8px;

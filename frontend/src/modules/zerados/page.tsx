@@ -1599,8 +1599,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         {canShowAddressList ? (
           <div className="inventario-layout">
             <div className="termo-form inventario-address-panel">
-              <h3>{`Endereços - ${stageLabel(tab)}${zone ? ` | ${zone}` : ""}`}</h3>
-              <p className="inventario-editor-text">{labelByCount(addressBuckets.length, "endereço", "endereços")}</p>
+              <h3 className="inventario-address-title-row">
+                <span>{`Endereços - ${stageLabel(tab)}${zone ? ` | ${zone}` : ""}`}</span>
+                <span className="inventario-zone-total-chip" title={`Total de endereços: ${addressBuckets.length}`}>
+                  {addressBuckets.length}
+                </span>
+              </h3>
 
               <div className="inventario-address-list">
                 {addressBuckets.map((bucket) => {
