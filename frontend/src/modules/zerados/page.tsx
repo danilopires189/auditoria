@@ -129,6 +129,8 @@ function parseErr(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "Erro inesperado");
   if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este CODDV.";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
+  if (raw.includes("ETAPA2_APENAS_QUANDO_SOBRA")) return "2ª verificação só é permitida quando houver sobra na 1ª verificação.";
+  if (raw.includes("ETAPA1_OBRIGATORIA")) return "A 1ª verificação precisa ser concluída antes da 2ª.";
   if (raw.includes("ZONA_TRAVADA_OUTRO_USUARIO")) return "Zona/etapa bloqueada por outro usuário.";
   if (raw.includes("APENAS_ADMIN")) return "Apenas admin pode exportar relatório.";
   if (raw.includes("MANIFESTO_INCOMPLETO")) return "Base local incompleta. Sincronize novamente para baixar todos os endereços.";
@@ -233,6 +235,30 @@ function isS2Pending(row: Row): boolean {
   return isS2Eligible(row) && row.c2 == null;
 }
 
+function normalizeApplicableReview(
+  review: InventarioReviewRow | null,
+  c1: InventarioCountRow | null,
+  c2: InventarioCountRow | null
+): InventarioReviewRow | null {
+  if (!review) return null;
+  if (review.status === "resolvido") return review;
+
+  if (review.reason_code === "sem_consenso") {
+    if (!c1 || !c2) return null;
+    if (c1.resultado === "descartado" || c2.resultado === "descartado") return null;
+    if (c1.qtd_contada === c2.qtd_contada) return null;
+    return review;
+  }
+
+  if (review.reason_code === "conflito_lock") {
+    if (c2 != null) return review;
+    if (c1 != null && c1.resultado === "sobra") return review;
+    return null;
+  }
+
+  return null;
+}
+
 function isConciliationPending(row: Row): boolean {
   return row.review?.status === "pendente";
 }
@@ -333,7 +359,8 @@ function derive(manifest: InventarioManifestItemRow[], remote: InventarioSyncPul
   return manifest.map((m) => {
     const k = keyOf(m.zona, m.endereco, m.coddv);
     const c = counts.get(k) ?? { c1: null, c2: null };
-    const review = reviews.get(k) ?? null;
+    const rawReview = reviews.get(k) ?? null;
+    const review = normalizeApplicableReview(rawReview, c.c1, c.c2);
     const final = review?.status === "resolvido"
       || c.c1?.resultado === "descartado"
       || c.c2?.resultado === "descartado"
