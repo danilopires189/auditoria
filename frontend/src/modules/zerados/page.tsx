@@ -1688,7 +1688,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                               <span className="termo-route-main">
                                 <span className="termo-route-info">
                                   <span className="termo-route-title inventario-zone-title-row">
-                                    <span>{zoneBucket.zona}</span>
+                                    <span className="inventario-zone-name-chip">{zoneBucket.zona}</span>
                                     <span className="inventario-zone-total-chip" title={`Total de endereços: ${zoneBucket.total_addresses}`}>
                                       {zoneBucket.total_addresses}
                                     </span>
