@@ -95,6 +95,31 @@ export interface EntradaNotasItemRow {
   nf?: number | null;
   target_conf_id?: string | null;
   item_key?: string | null;
+  is_locked?: boolean;
+  locked_by?: string | null;
+  locked_mat?: string | null;
+  locked_nome?: string | null;
+}
+
+export interface EntradaNotasContributor {
+  user_id: string;
+  mat: string;
+  nome: string;
+  first_action_at: string;
+  last_action_at: string;
+}
+
+export interface EntradaNotasPartialReopenInfo {
+  conf_id: string;
+  seq_entrada: number;
+  nf: number;
+  status: EntradaNotasConfStatus;
+  previous_started_by: string | null;
+  previous_started_mat: string | null;
+  previous_started_nome: string | null;
+  locked_items: number;
+  pending_items: number;
+  can_reopen: boolean;
 }
 
 export interface EntradaNotasAvulsaTargetOption {
@@ -180,6 +205,7 @@ export interface EntradaNotasVolumeRow {
   filial_nome: string | null;
   rota: string | null;
   falta_motivo: string | null;
+  contributors?: EntradaNotasContributor[];
 }
 
 export interface EntradaNotasLocalItem {
@@ -193,6 +219,10 @@ export interface EntradaNotasLocalItem {
   nf?: number | null;
   target_conf_id?: string | null;
   item_key?: string | null;
+  is_locked?: boolean;
+  locked_by?: string | null;
+  locked_mat?: string | null;
+  locked_nome?: string | null;
 }
 
 export interface EntradaNotasLocalVolume {
@@ -217,6 +247,7 @@ export interface EntradaNotasLocalVolume {
   items: EntradaNotasLocalItem[];
   avulsa_targets?: EntradaNotasAvulsaTargetSummary[];
   avulsa_queue?: EntradaNotasAvulsaQueueEvent[];
+  contributors?: EntradaNotasContributor[];
   pending_snapshot: boolean;
   pending_finalize: boolean;
   pending_cancel: boolean;

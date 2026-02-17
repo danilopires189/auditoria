@@ -1881,6 +1881,11 @@ small {
   font-size: 0.82rem;
 }
 
+.entrada-notas-contributors {
+  color: #596987;
+  font-size: 0.76rem;
+}
+
 .termo-volume-head-right {
   display: inline-flex;
   align-items: center;
@@ -2062,6 +2067,14 @@ small {
 .termo-inline-note {
   color: #8a6014;
   font-weight: 700;
+}
+
+.entrada-notas-item-locked {
+  color: #87622d;
+  background: #fff9eb;
+  border: 1px solid #f2e3bc;
+  border-radius: 8px;
+  padding: 5px 8px;
 }
 
 .termo-routes-dialog,
