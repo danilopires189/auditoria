@@ -2804,6 +2804,11 @@ small {
   min-width: 140px;
 }
 
+.inventario-subfilters input {
+  height: 38px;
+  font-size: 0.88rem;
+}
+
 .inventario-subfilters .btn.is-active {
   color: #fff;
   border-color: #2f67bf;
@@ -2873,8 +2878,12 @@ small {
 }
 
 .inventario-mobile-back-btn {
+  height: 40px;
   min-height: 40px;
   min-width: 90px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .inventario-zone-current-row {
@@ -2886,7 +2895,16 @@ small {
 
 .inventario-change-zone-btn,
 .inventario-zone-picker-btn {
+  height: 40px;
   min-height: 40px;
+}
+
+.inventario-change-zone-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .inventario-tab-btn {
