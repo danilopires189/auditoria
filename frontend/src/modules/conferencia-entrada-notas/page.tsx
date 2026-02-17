@@ -826,6 +826,33 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
   ), [activeVolume]);
 
+  const hasOtherUserContributors = useMemo(() => (
+    Boolean(activeVolume?.contributors?.some((contributor) => contributor.user_id !== profile.user_id))
+  ), [activeVolume?.contributors, profile.user_id]);
+
+  const hasItemsLockedByOtherUser = useMemo(() => (
+    Boolean(activeVolume?.items.some((item) => (
+      item.qtd_conferida > 0
+      && item.locked_by != null
+      && item.locked_by !== profile.user_id
+    )))
+  ), [activeVolume?.items, profile.user_id]);
+
+  const shouldProtectPartialResumeOnCancel = useMemo(() => (
+    Boolean(
+      activeVolume
+      && activeVolume.conference_kind === "seq_nf"
+      && activeVolume.status === "em_conferencia"
+      && hasAnyItemInformed
+      && (hasItemsLockedByOtherUser || hasOtherUserContributors)
+    )
+  ), [
+    activeVolume,
+    hasAnyItemInformed,
+    hasItemsLockedByOtherUser,
+    hasOtherUserContributors
+  ]);
+
   const activeContributorsLabel = useMemo(() => {
     const contributors = activeVolume?.contributors ?? [];
     if (!contributors.length) return "";
@@ -3107,13 +3134,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const requestCancelConference = useCallback(() => {
     if (!activeVolume || !canEditActiveVolume) return;
+    const preserveAlreadyCountedData = shouldProtectPartialResumeOnCancel;
 
     showDialog({
       title: "Cancelar conferência",
-      message: activeVolume.conference_kind === "avulsa"
-        ? "A conferência avulsa será cancelada e todos os dados lançados serão perdidos. Deseja continuar?"
-        : `A conferência do Seq/NF ${activeVolume.nr_volume} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
-      confirmLabel: "Cancelar conferência",
+      message: preserveAlreadyCountedData
+        ? `A conferência do Seq/NF ${activeVolume.nr_volume} possui itens já conferidos por outro usuário.\n\n`
+          + "Ao confirmar, esta retomada será encerrada mantendo tudo que já foi conferido (não haverá descarte)."
+        : activeVolume.conference_kind === "avulsa"
+          ? "A conferência avulsa será cancelada e todos os dados lançados serão perdidos. Deseja continuar?"
+          : `A conferência do Seq/NF ${activeVolume.nr_volume} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
+      confirmLabel: preserveAlreadyCountedData ? "Encerrar mantendo dados" : "Cancelar conferência",
       cancelLabel: "Voltar",
       onConfirm: () => {
         void (async () => {
@@ -3123,6 +3154,41 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           setStatusMessage(null);
 
           try {
+            if (preserveAlreadyCountedData) {
+              if (activeVolume.remote_conf_id && isOnline) {
+                await finalizeVolume(activeVolume.remote_conf_id, null);
+                await removeLocalVolume(activeVolume.local_key);
+                await refreshPendingState();
+                clearConferenceScreen();
+                setStatusMessage("Retomada encerrada. Os dados já conferidos foram preservados.");
+                await syncRouteOverview();
+                return;
+              }
+
+              if (activeVolume.remote_conf_id && !isOnline) {
+                const nowIso = new Date().toISOString();
+                const hasDivergencia = activeVolume.items.some((item) => item.qtd_conferida !== item.qtd_esperada);
+                const nextStatus = hasDivergencia ? "finalizado_divergencia" : "finalizado_ok";
+                const nextVolume: EntradaNotasLocalVolume = {
+                  ...activeVolume,
+                  status: nextStatus,
+                  finalized_at: nowIso,
+                  is_read_only: true,
+                  pending_snapshot: activeVolume.pending_snapshot,
+                  pending_finalize: true,
+                  pending_cancel: false,
+                  pending_finalize_reason: null,
+                  sync_error: null,
+                  updated_at: nowIso
+                };
+                await saveLocalVolume(nextVolume);
+                await refreshPendingState();
+                clearConferenceScreen();
+                setStatusMessage("Retomada encerrada localmente. A finalização será enviada ao reconectar.");
+                return;
+              }
+            }
+
             if (activeVolume.remote_conf_id && isOnline) {
               if (activeVolume.conference_kind === "avulsa") {
                 await cancelAvulsaVolume(activeVolume.remote_conf_id);
@@ -3181,6 +3247,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     markStorePendingAfterCancel,
     refreshPendingState,
     showDialog,
+    shouldProtectPartialResumeOnCancel,
     syncRouteOverview,
     handleClosedConferenceError
   ]);
