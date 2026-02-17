@@ -266,6 +266,47 @@ function labelByCount(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+type CountedDisplayInfo = {
+  qtd: number | null;
+  mat: string | null;
+  nome: string | null;
+};
+
+function resolveCountedDisplayInfo(row: Row, stage: InventarioStageView): CountedDisplayInfo | null {
+  if (stage === "s1") {
+    if (!row.c1) return null;
+    return { qtd: row.c1.qtd_contada, mat: row.c1.counted_mat, nome: row.c1.counted_nome };
+  }
+
+  if (stage === "s2") {
+    if (!row.c2) return null;
+    return { qtd: row.c2.qtd_contada, mat: row.c2.counted_mat, nome: row.c2.counted_nome };
+  }
+
+  if (stage === "conciliation" || stage === "done") {
+    if (row.review?.status === "resolvido") {
+      return {
+        qtd: row.review.final_qtd,
+        mat: row.review.resolved_mat,
+        nome: row.review.resolved_nome
+      };
+    }
+    if (row.c2) return { qtd: row.c2.qtd_contada, mat: row.c2.counted_mat, nome: row.c2.counted_nome };
+    if (row.c1) return { qtd: row.c1.qtd_contada, mat: row.c1.counted_mat, nome: row.c1.counted_nome };
+  }
+
+  return null;
+}
+
+function formatCountedByLine(mat: string | null, nome: string | null): string | null {
+  const matTrim = (mat ?? "").trim();
+  const nomeTrim = (nome ?? "").trim();
+  if (!matTrim && !nomeTrim) return null;
+  if (matTrim && nomeTrim) return `Mat ${matTrim} - ${nomeTrim}`;
+  if (matTrim) return `Mat ${matTrim}`;
+  return nomeTrim;
+}
+
 function derive(manifest: InventarioManifestItemRow[], remote: InventarioSyncPullState): Row[] {
   const counts = new Map<string, { c1: InventarioCountRow | null; c2: InventarioCountRow | null }>();
   for (const c of remote.counts) {
@@ -1506,6 +1547,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               <div className="inventario-address-list">
                 {addressBuckets.map((bucket) => {
                   const singleItem = bucket.total_items === 1 ? bucket.items[0] : null;
+                  const showConcludedDetails = (
+                    ((tab === "s1" || tab === "s2") && statusFilter === "concluido")
+                    || (tab === "conciliation" && reviewFilter === "resolvido")
+                    || tab === "done"
+                  );
+                  const countedInfo = singleItem ? resolveCountedDisplayInfo(singleItem, tab) : null;
+                  const countedByLine = countedInfo ? formatCountedByLine(countedInfo.mat, countedInfo.nome) : null;
                   const addressMeta = singleItem
                     ? `${singleItem.coddv} - ${singleItem.descricao}`
                     : labelByCount(bucket.total_items, "item", "itens");
@@ -1526,6 +1574,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           </span>
                         </div>
                         <p className="inventario-address-meta">{addressMeta}</p>
+                        {showConcludedDetails && countedInfo?.qtd != null ? (
+                          <p className="inventario-address-extra">{`Qtd informada: ${countedInfo.qtd}`}</p>
+                        ) : null}
+                        {showConcludedDetails && countedByLine ? (
+                          <p className="inventario-address-user">{countedByLine}</p>
+                        ) : null}
                       </div>
                     </button>
                   );
