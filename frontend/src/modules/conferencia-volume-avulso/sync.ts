@@ -509,7 +509,7 @@ export async function syncPendingVolumeAvulsoVolumes(userId: string): Promise<{
         continue;
       }
 
-      if (row.is_read_only) {
+      if (row.is_read_only && !row.pending_snapshot && !row.pending_finalize) {
         row.pending_snapshot = false;
         row.pending_finalize = false;
         row.pending_cancel = false;
@@ -520,9 +520,10 @@ export async function syncPendingVolumeAvulsoVolumes(userId: string): Promise<{
         continue;
       }
 
+      const needsRemoteConf = row.pending_snapshot || row.pending_finalize;
       let remoteConfId = row.remote_conf_id;
 
-      if (!remoteConfId) {
+      if (needsRemoteConf && !remoteConfId) {
         const remoteOpen = await openVolume(row.nr_volume, row.cd);
         remoteConfId = remoteOpen.conf_id;
         row.remote_conf_id = remoteConfId;
@@ -532,11 +533,11 @@ export async function syncPendingVolumeAvulsoVolumes(userId: string): Promise<{
         row.sync_error = null;
       }
 
-      if (!remoteConfId) {
+      if (needsRemoteConf && !remoteConfId) {
         throw new Error("Não foi possível resolver o volume remoto.");
       }
 
-      if (!row.is_read_only && row.pending_snapshot) {
+      if (row.pending_snapshot && remoteConfId) {
         await syncSnapshot(
           remoteConfId,
           row.items.map((item) => ({
@@ -548,7 +549,7 @@ export async function syncPendingVolumeAvulsoVolumes(userId: string): Promise<{
         row.pending_snapshot = false;
       }
 
-      if (!row.is_read_only && row.pending_finalize) {
+      if (row.pending_finalize && remoteConfId) {
         const finalized = await finalizeVolume(remoteConfId, row.pending_finalize_reason);
         const status =
           finalized.status === "finalizado_ok" || finalized.status === "finalizado_falta"
