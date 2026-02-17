@@ -3395,12 +3395,12 @@ small {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0;
+  padding: env(safe-area-inset-top) 0 0;
 }
 
 .inventario-popup-card {
   width: 100%;
-  max-height: 92vh;
+  max-height: calc(100dvh - env(safe-area-inset-top));
   border: 1px solid #c8d6ef;
   border-radius: 16px 16px 0 0;
   border-left: 0;
@@ -3507,7 +3507,7 @@ small {
   gap: 12px;
   overflow: auto;
   overscroll-behavior: contain;
-  scroll-padding-bottom: 32vh;
+  scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;
 }
 
@@ -3578,6 +3578,14 @@ small {
   gap: 10px;
 }
 
+.inventario-popup-body .inventario-editor-actions {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #ffffff 22%);
+  padding-top: 8px;
+  z-index: 1;
+}
+
 .inventario-editor-actions .btn,
 .inventario-report-actions .btn {
   width: 100%;
@@ -3637,12 +3645,12 @@ small {
 
   .inventario-popup-overlay {
     align-items: flex-end;
-    padding: 0;
+    padding: env(safe-area-inset-top) 0 0;
   }
 
   .inventario-popup-card {
     width: 100%;
-    max-height: 92vh;
+    max-height: calc(100dvh - env(safe-area-inset-top));
     border-radius: 16px 16px 0 0;
     border-left: 0;
     border-right: 0;

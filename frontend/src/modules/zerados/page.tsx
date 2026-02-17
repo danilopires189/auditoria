@@ -321,6 +321,7 @@ type SnapshotCountInfo = {
   qtd: number | null;
   barras: string | null;
   nome: string | null;
+  mat: string | null;
 };
 
 function parseSnapshotCountInfo(value: unknown): SnapshotCountInfo | null {
@@ -331,11 +332,14 @@ function parseSnapshotCountInfo(value: unknown): SnapshotCountInfo | null {
   const barras = raw.barras == null ? null : String(raw.barras).trim() || null;
   const nomeSource = raw.counted_nome ?? raw.nome ?? raw.locked_nome ?? null;
   const nome = nomeSource == null ? null : String(nomeSource).trim() || null;
+  const matSource = raw.counted_mat ?? raw.mat ?? raw.locked_mat ?? null;
+  const mat = matSource == null ? null : String(matSource).trim() || null;
 
   return {
     qtd: Number.isFinite(qtdParsed ?? NaN) ? Math.max(qtdParsed as number, 0) : null,
     barras,
-    nome
+    nome,
+    mat
   };
 }
 
@@ -350,11 +354,21 @@ function extractReviewSnapshotCount(review: InventarioReviewRow | null, stage: 1
   if (review.reason_code === "conflito_lock" && stage === 2) {
     const eventInfo = parseSnapshotCountInfo(snapshot.event_payload);
     if (!eventInfo) return null;
-    if (eventInfo.nome) return eventInfo;
+    if (eventInfo.nome || eventInfo.mat) return eventInfo;
     const lockedNome = snapshot.locked_nome == null ? null : String(snapshot.locked_nome).trim() || null;
-    return { ...eventInfo, nome: lockedNome };
+    const lockedMat = snapshot.locked_mat == null ? null : String(snapshot.locked_mat).trim() || null;
+    return { ...eventInfo, nome: lockedNome, mat: lockedMat };
   }
 
+  return null;
+}
+
+function pickText(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const compact = value.trim();
+    if (compact) return compact;
+  }
   return null;
 }
 
@@ -1944,11 +1958,21 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
                       const c1Qtd = active.c1?.qtd_contada ?? c1Fallback?.qtd ?? "-";
                       const c1Barras = active.c1?.barras ?? c1Fallback?.barras ?? "-";
-                      const c1Nome = active.c1?.counted_nome ?? c1Fallback?.nome ?? "-";
+                      const c1Nome = pickText(
+                        active.c1?.counted_nome,
+                        c1Fallback?.nome,
+                        active.c1?.counted_mat ? `Mat ${active.c1.counted_mat}` : null,
+                        c1Fallback?.mat ? `Mat ${c1Fallback.mat}` : null
+                      ) ?? "-";
 
                       const c2Qtd = active.c2?.qtd_contada ?? c2Fallback?.qtd ?? "-";
                       const c2Barras = active.c2?.barras ?? c2Fallback?.barras ?? "-";
-                      const c2Nome = active.c2?.counted_nome ?? c2Fallback?.nome ?? "-";
+                      const c2Nome = pickText(
+                        active.c2?.counted_nome,
+                        c2Fallback?.nome,
+                        active.c2?.counted_mat ? `Mat ${active.c2.counted_mat}` : null,
+                        c2Fallback?.mat ? `Mat ${c2Fallback.mat}` : null
+                      ) ?? "-";
 
                       return (
                         <>
