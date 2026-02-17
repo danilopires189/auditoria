@@ -1674,32 +1674,48 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     <p>Sem zonas disponíveis para este filtro.</p>
                   ) : (
                     <div className="termo-routes-list">
-                      {filteredZoneBuckets.map((zoneBucket) => (
-                        <div key={zoneBucket.zona} className={`termo-route-group${zone === zoneBucket.zona ? " is-open" : ""}`}>
-                          <button
-                            type="button"
-                            className="termo-route-row-button termo-route-row-button-volume"
-                            onClick={() => handleZoneSelect(zoneBucket.zona)}
-                          >
-                            <span className="termo-route-main">
-                              <span className="termo-route-info">
-                                <span className="termo-route-title inventario-zone-title-row">
-                                  <span>{zoneBucket.zona}</span>
-                                  <span className="inventario-zone-total-chip" title={`Total de endereços: ${zoneBucket.total_addresses}`}>
-                                    {zoneBucket.total_addresses}
+                      {filteredZoneBuckets.map((zoneBucket) => {
+                        const pendingWord = zoneBucket.pending_addresses === 1 ? "pendente" : "pendentes";
+                        const doneWord = zoneBucket.done_addresses === 1 ? "concluído" : "concluídos";
+
+                        return (
+                          <div key={zoneBucket.zona} className={`termo-route-group${zone === zoneBucket.zona ? " is-open" : ""}`}>
+                            <button
+                              type="button"
+                              className="termo-route-row-button termo-route-row-button-volume"
+                              onClick={() => handleZoneSelect(zoneBucket.zona)}
+                            >
+                              <span className="termo-route-main">
+                                <span className="termo-route-info">
+                                  <span className="termo-route-title inventario-zone-title-row">
+                                    <span>{zoneBucket.zona}</span>
+                                    <span className="inventario-zone-total-chip" title={`Total de endereços: ${zoneBucket.total_addresses}`}>
+                                      {zoneBucket.total_addresses}
+                                    </span>
+                                  </span>
+                                  <span className="inventario-zone-stats">
+                                    <span className="inventario-zone-stat pending">
+                                      <span className="inventario-zone-stat-count">{zoneBucket.pending_addresses}</span>
+                                      <span className="inventario-zone-stat-icon pending">X</span>
+                                      <span className="inventario-zone-stat-label">{pendingWord}</span>
+                                    </span>
+                                    <span className="inventario-zone-stat done">
+                                      <span className="inventario-zone-stat-count">{zoneBucket.done_addresses}</span>
+                                      <span className="inventario-zone-stat-icon done">✓</span>
+                                      <span className="inventario-zone-stat-label">{doneWord}</span>
+                                    </span>
                                   </span>
                                 </span>
-                                <span className="termo-route-sub">{`Concluído (endereço): ${zoneBucket.done_addresses} | Pendente (endereço): ${zoneBucket.pending_addresses}`}</span>
-                              </span>
-                              <span className="termo-route-actions-row">
-                                <span className={`termo-divergencia ${zone === zoneBucket.zona ? "correto" : "andamento"}`}>
-                                  {zone === zoneBucket.zona ? "Selecionada" : "Disponível"}
+                                <span className="termo-route-actions-row">
+                                  <span className={`termo-divergencia ${zone === zoneBucket.zona ? "correto" : "andamento"}`}>
+                                    {zone === zoneBucket.zona ? "Selecionada" : "Disponível"}
+                                  </span>
                                 </span>
                               </span>
-                            </span>
-                          </button>
-                        </div>
-                      ))}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   <div className="confirm-actions">
