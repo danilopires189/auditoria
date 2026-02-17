@@ -306,6 +306,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [popupErr, setPopupErr] = useState<string | null>(null);
 
   const [dtIni, setDtIni] = useState(CYCLE_DATE);
   const [dtFim, setDtFim] = useState(CYCLE_DATE);
@@ -329,6 +330,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const popupReturnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => { lockRef.current = lock; }, [lock]);
+
+  const closeEditorPopup = useCallback(() => {
+    setPopupErr(null);
+    setEditorOpen(false);
+  }, []);
 
   const keepFocusedControlVisible = useCallback((event: FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = event.currentTarget;
@@ -530,11 +536,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (reportOpen) setReportOpen(false);
-      else setEditorOpen(false);
+      else closeEditorPopup();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [editorOpen, reportOpen]);
+  }, [closeEditorPopup, editorOpen, reportOpen]);
 
   useEffect(() => {
     const needsLock = (tab === "s1" || tab === "s2") && isOnline && cd != null && zone && canEdit;
@@ -727,8 +733,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   useEffect(() => {
     if (!editorOpen) return;
-    if (!active) setEditorOpen(false);
-  }, [active, editorOpen]);
+    if (!active) closeEditorPopup();
+  }, [active, closeEditorPopup, editorOpen]);
+  useEffect(() => {
+    if (!editorOpen) {
+      setPopupErr(null);
+      return;
+    }
+    setPopupErr(null);
+  }, [active?.key, editorOpen, tab]);
 
   const canShowStageSelector = !isDesktop && mobileStep === "stage";
   const canShowZoneSelector = !isDesktop && mobileStep === "zone";
@@ -736,7 +749,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const handleTabChange = useCallback((nextTab: InventarioStageView) => {
     setTab(nextTab);
-    setEditorOpen(false);
+    closeEditorPopup();
     setZone(null);
     setSelectedAddress(null);
     setSelectedItem(null);
@@ -744,7 +757,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (nextTab === "s1" || nextTab === "s2") setStatusFilter("pendente");
     if (nextTab === "conciliation") setReviewFilter("pendente");
     if (!isDesktop) setMobileStep("zone");
-  }, [isDesktop]);
+  }, [closeEditorPopup, isDesktop]);
 
   const handleZoneSelect = useCallback((value: string) => {
     setZone(value);
@@ -762,13 +775,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const advanceAfterAction = useCallback((addressKey: string | null, itemKey: string | null) => {
     if (!addressKey || !itemKey) {
-      setEditorOpen(false);
+      closeEditorPopup();
       return;
     }
 
     const addressIndex = addressBuckets.findIndex((bucket) => bucket.key === addressKey);
     if (addressIndex < 0) {
-      setEditorOpen(false);
+      closeEditorPopup();
       if (!isDesktop) setMobileStep("zone");
       return;
     }
@@ -791,7 +804,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       return;
     }
 
-    setEditorOpen(false);
+    closeEditorPopup();
     setSelectedAddress(null);
     setSelectedItem(null);
     if (!isDesktop) {
@@ -800,7 +813,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setMobileStep("zone");
       setMsg("Zona concluída. Selecione a próxima zona.");
     }
-  }, [addressBuckets, isDesktop]);
+  }, [addressBuckets, closeEditorPopup, isDesktop]);
 
   const canEditCount = useCallback((row: Row | null): boolean => {
     if (!row || !canEdit) return false;
@@ -871,17 +884,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!active || cd == null) return;
     if (!(tab === "s1" || tab === "s2")) return;
     if (!canEditCount(active)) {
-      setErr("Você não pode editar este item nesta etapa.");
+      setPopupErr("Você não pode editar este item nesta etapa.");
       return;
     }
 
-    setErr(null);
+    setPopupErr(null);
     try {
       const currentAddressKey = selectedAddress;
       const currentItemKey = active.key;
       const etapa = tab === "s2" ? 2 : 1;
       const qty = discarded ? 0 : Number.parseInt(qtd, 10);
-      if (!discarded && (!Number.isFinite(qty) || qty < 0)) return setErr("Quantidade inválida.");
+      if (!discarded && (!Number.isFinite(qty) || qty < 0)) return setPopupErr("Quantidade inválida.");
       let b: string | null = null;
       if (!discarded && qty > active.estoque) b = await validateBarras(active.coddv, barras);
       await send("count_upsert", {
@@ -899,22 +912,22 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       });
       advanceAfterAction(currentAddressKey, currentItemKey);
     } catch (error) {
-      setErr(parseErr(error));
+      setPopupErr(parseErr(error));
     }
   }, [active, advanceAfterAction, barras, canEditCount, cd, qtd, selectedAddress, send, tab, validateBarras]);
 
   const resolveReview = useCallback(async () => {
     if (!active || !active.review || cd == null) return;
     if (!canResolveConciliation) {
-      setErr("Conciliação já resolvida ou sem permissão de edição.");
+      setPopupErr("Conciliação já resolvida ou sem permissão de edição.");
       return;
     }
-    setErr(null);
+    setPopupErr(null);
     try {
       const currentAddressKey = selectedAddress;
       const currentItemKey = active.key;
       const qty = Number.parseInt(finalQtd, 10);
-      if (!Number.isFinite(qty) || qty < 0) return setErr("Quantidade final inválida.");
+      if (!Number.isFinite(qty) || qty < 0) return setPopupErr("Quantidade final inválida.");
       let b: string | null = null;
       if (qty > active.estoque) b = await validateBarras(active.coddv, finalBarras);
       await send("review_resolve", {
@@ -929,7 +942,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       });
       advanceAfterAction(currentAddressKey, currentItemKey);
     } catch (error) {
-      setErr(parseErr(error));
+      setPopupErr(parseErr(error));
     }
   }, [active, advanceAfterAction, canResolveConciliation, cd, finalBarras, finalQtd, selectedAddress, send, validateBarras]);
 
@@ -1003,12 +1016,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         {msg ? <div className="alert success">{msg}</div> : null}
 
         <div className="termo-actions-row inventario-toolbar">
-          {fixed != null ? <input disabled value={`CD ${String(fixed).padStart(2, "0")}`} /> : (
+          {isGlobalAdmin ? (
             <select value={cd ?? ""} onChange={(e) => setCd(e.target.value ? Number.parseInt(e.target.value, 10) : null)}>
               <option value="">Selecione CD</option>
               {cdOptions.map((o) => <option key={o.cd} value={o.cd}>{`CD ${String(o.cd).padStart(2, "0")} - ${o.cd_nome}`}</option>)}
             </select>
-          )}
+          ) : null}
           <button className={`btn btn-muted termo-offline-toggle${preferOffline ? " is-active" : ""}`} type="button" onClick={() => setPreferOffline((v) => !v)}>
             {preferOffline ? "Offline local" : "Online"}
           </button>
@@ -1065,7 +1078,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               type="button"
               className="btn btn-muted inventario-mobile-back-btn"
               onClick={() => {
-                setEditorOpen(false);
+                closeEditorPopup();
                 if (mobileStep === "address") {
                   setSelectedAddress(null);
                   setSelectedItem(null);
@@ -1178,16 +1191,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         ) : null}
 
         {editorOpen && active ? (
-          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setEditorOpen(false)}>
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeEditorPopup}>
             <div className="inventario-popup-card" onClick={(event) => event.stopPropagation()}>
               <div className="inventario-popup-head">
                 <div>
                   <h3>{active.endereco}</h3>
                   <p>{`${stageLabel(tab)} | CODDV ${active.coddv}`}</p>
                 </div>
-                <button type="button" className="inventario-popup-close" onClick={() => setEditorOpen(false)} aria-label="Fechar popup">Fechar</button>
+                <button type="button" className="inventario-popup-close" onClick={closeEditorPopup} aria-label="Fechar popup">Fechar</button>
               </div>
               <div className="inventario-popup-body">
+                {popupErr ? <p className="inventario-popup-note error">{popupErr}</p> : null}
                 <p className="inventario-editor-text">{active.descricao}</p>
                 {(tab === "s1" || tab === "s2") ? (
                   <>
@@ -1316,10 +1330,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       onChange={(e) => setDtFim(e.target.value)}
                       onFocus={keepFocusedControlVisible}
                     />
-                  </label>
-                  <label>
-                    CD
-                    <input disabled value={cd ?? ""} onFocus={keepFocusedControlVisible} />
                   </label>
                 </div>
                 <div className="inventario-report-actions">

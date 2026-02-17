@@ -3067,6 +3067,12 @@ small {
   color: #8a5d10;
 }
 
+.inventario-popup-note.error {
+  border-color: #efb6b3;
+  background: #fff1f0;
+  color: #b53a35;
+}
+
 .inventario-conciliation-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
