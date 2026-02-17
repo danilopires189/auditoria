@@ -1846,88 +1846,192 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             )
           : null}
 
-        {editorOpen && active ? (
-          <div
-            className={`inventario-popup-overlay${tab === "conciliation" ? " inventario-popup-overlay-editor" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            onClick={closeEditorPopup}
-          >
-            <div
-              className={`inventario-popup-card${tab === "conciliation" ? " inventario-editor-popup-card" : ""}`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="inventario-popup-head">
-                <div>
-                  <h3>{active.endereco}</h3>
-                  <p>{`${stageLabel(tab)} | CODDV ${active.coddv}`}</p>
-                  <p className="inventario-popup-head-product">{active.descricao}</p>
-                </div>
-                <div className="inventario-popup-head-actions">
-                  {canEditConcludedCount ? (
-                    <button
-                      type="button"
-                      className="inventario-popup-edit"
-                      onClick={() => {
-                        setPopupErr(null);
-                        setCountEditMode(true);
-                      }}
-                      aria-label="Editar contagem"
-                      title="Editar contagem"
-                    >
-                      {editIcon()}
-                      <span>Editar</span>
-                    </button>
-                  ) : null}
-                  <button type="button" className="inventario-popup-close" onClick={closeEditorPopup} aria-label="Fechar popup">Fechar</button>
-                </div>
-              </div>
-              <div ref={popupBodyRef} className="inventario-popup-body">
-                {popupErr ? <p className="inventario-popup-note error">{popupErr}</p> : null}
-                {(tab === "s1" || tab === "s2") ? (
-                  <>
-                    {showCountReadOnlyDetails ? (
-                      <div className="inventario-count-readonly">
-                        <p>{`Quantidade informada: ${activeStageCount?.qtd_contada ?? "-"}`}</p>
-                        <p>{`Barras: ${activeStageCount?.barras ?? "-"}`}</p>
-                        <p>{`Usuário: ${activeStageCount?.counted_nome ?? "-"} (${activeStageCount?.counted_mat ?? "-"})`}</p>
-                      </div>
-                    ) : (
+        {editorOpen && active && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className={`inventario-popup-overlay${tab === "conciliation" ? " inventario-popup-overlay-editor" : ""}`}
+                role="dialog"
+                aria-modal="true"
+                onClick={closeEditorPopup}
+              >
+                <div
+                  className={`inventario-popup-card${tab === "conciliation" ? " inventario-editor-popup-card" : ""}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="inventario-popup-head">
+                    <div>
+                      <h3>{active.endereco}</h3>
+                      <p>{`${stageLabel(tab)} | CODDV ${active.coddv}`}</p>
+                      <p className="inventario-popup-head-product">{active.descricao}</p>
+                    </div>
+                    <div className="inventario-popup-head-actions">
+                      {canEditConcludedCount ? (
+                        <button
+                          type="button"
+                          className="inventario-popup-edit"
+                          onClick={() => {
+                            setPopupErr(null);
+                            setCountEditMode(true);
+                          }}
+                          aria-label="Editar contagem"
+                          title="Editar contagem"
+                        >
+                          {editIcon()}
+                          <span>Editar</span>
+                        </button>
+                      ) : null}
+                      <button type="button" className="inventario-popup-close" onClick={closeEditorPopup} aria-label="Fechar popup">Fechar</button>
+                    </div>
+                  </div>
+                  <div ref={popupBodyRef} className="inventario-popup-body">
+                    {popupErr ? <p className="inventario-popup-note error">{popupErr}</p> : null}
+                    {(tab === "s1" || tab === "s2") ? (
                       <>
+                        {showCountReadOnlyDetails ? (
+                          <div className="inventario-count-readonly">
+                            <p>{`Quantidade informada: ${activeStageCount?.qtd_contada ?? "-"}`}</p>
+                            <p>{`Barras: ${activeStageCount?.barras ?? "-"}`}</p>
+                            <p>{`Usuário: ${activeStageCount?.counted_nome ?? "-"} (${activeStageCount?.counted_mat ?? "-"})`}</p>
+                          </div>
+                        ) : (
+                          <>
+                            <label>
+                              Quantidade
+                              <input
+                                ref={qtdInputRef}
+                                autoFocus
+                                value={qtd}
+                                onChange={(e) => {
+                                  setQtd(e.target.value);
+                                  setValidatedBarras(null);
+                                }}
+                                onFocus={focusAndSelectNumericInput}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                enterKeyHint="next"
+                                disabled={!canEditCount(active) || busy}
+                              />
+                            </label>
+                            {requiresBarras ? (
+                              <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
+                                {barrasValidatedForCurrentInput
+                                  ? "Código de barras validado. Toque em Salvar para concluir."
+                                  : "Sobra detectada. Informe barras válido do mesmo CODDV e valide antes de salvar, ou descarte."}
+                              </p>
+                            ) : null}
+                            {requiresBarras ? (
+                              <label>
+                                Barras (obrigatório)
+                                <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
+                                  <input
+                                    value={barras}
+                                    onChange={(e) => {
+                                      setBarras(e.target.value);
+                                      setValidatedBarras(null);
+                                    }}
+                                    onFocus={keepFocusedControlVisible}
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    autoCapitalize="off"
+                                    autoCorrect="off"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    enterKeyHint="done"
+                                    disabled={!canEditCount(active) || busy}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="input-action-btn inventario-popup-scan-btn"
+                                    onClick={() => openCameraScanner("barras")}
+                                    title="Ler código pela câmera"
+                                    aria-label="Ler código pela câmera"
+                                    disabled={!canEditCount(active) || busy || !cameraSupported}
+                                  >
+                                    {cameraIcon()}
+                                  </button>
+                                </div>
+                              </label>
+                            ) : null}
+                            <div className="inventario-editor-actions">
+                              <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
+                              <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
+                            </div>
+                          </>
+                        )}
+                      </>
+                    ) : null}
+                    {tab === "conciliation" ? (
+                      <>
+                        <p className="inventario-editor-text">{`Endereço: ${active.endereco} | CODDV: ${active.coddv}`}</p>
+                        {(() => {
+                          const c1Fallback = extractReviewSnapshotCount(active.review, 1);
+                          const c2Fallback = extractReviewSnapshotCount(active.review, 2);
+
+                          const c1Qtd = active.c1?.qtd_contada ?? c1Fallback?.qtd ?? "-";
+                          const c1Barras = active.c1?.barras ?? c1Fallback?.barras ?? "-";
+                          const c1Nome = pickText(
+                            active.c1?.counted_nome,
+                            c1Fallback?.nome,
+                            active.c1?.counted_mat ? `Mat ${active.c1.counted_mat}` : null,
+                            c1Fallback?.mat ? `Mat ${c1Fallback.mat}` : null
+                          ) ?? "-";
+
+                          const c2Qtd = active.c2?.qtd_contada ?? c2Fallback?.qtd ?? "-";
+                          const c2Barras = active.c2?.barras ?? c2Fallback?.barras ?? "-";
+                          const c2Nome = pickText(
+                            active.c2?.counted_nome,
+                            c2Fallback?.nome,
+                            active.c2?.counted_mat ? `Mat ${active.c2.counted_mat}` : null,
+                            c2Fallback?.mat ? `Mat ${c2Fallback.mat}` : null
+                          ) ?? "-";
+
+                          return (
+                            <>
+                              {active.review?.reason_code === "conflito_lock" && active.c2 == null ? (
+                                <p className="inventario-popup-note warn">
+                                  2ª verificação não registrada por conflito de lock. Resolve pela conciliação.
+                                </p>
+                              ) : null}
+                              <div className="inventario-conciliation-grid">
+                                <article className="inventario-conciliation-card">
+                                  <h4>1ª Verificação</h4>
+                                  <p>{`Qtd: ${c1Qtd}`}</p>
+                                  <p>{`Barras: ${c1Barras}`}</p>
+                                  <p>{`Usuário: ${c1Nome}`}</p>
+                                </article>
+                                <article className="inventario-conciliation-card">
+                                  <h4>2ª Verificação</h4>
+                                  <p>{`Qtd: ${c2Qtd}`}</p>
+                                  <p>{`Barras: ${c2Barras}`}</p>
+                                  <p>{`Usuário: ${c2Nome}`}</p>
+                                </article>
+                              </div>
+                            </>
+                          );
+                        })()}
                         <label>
-                          Quantidade
+                          Qtd final
                           <input
-                            ref={qtdInputRef}
-                            autoFocus
-                            value={qtd}
-                            onChange={(e) => {
-                              setQtd(e.target.value);
-                              setValidatedBarras(null);
-                            }}
+                            ref={finalQtdInputRef}
+                            value={finalQtd}
+                            onChange={(e) => setFinalQtd(e.target.value)}
                             onFocus={focusAndSelectNumericInput}
                             inputMode="numeric"
                             pattern="[0-9]*"
                             enterKeyHint="next"
-                            disabled={!canEditCount(active) || busy}
+                            disabled={!canResolveConciliation || busy}
                           />
                         </label>
-                        {requiresBarras ? (
-                          <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
-                            {barrasValidatedForCurrentInput
-                              ? "Código de barras validado. Toque em Salvar para concluir."
-                              : "Sobra detectada. Informe barras válido do mesmo CODDV e valide antes de salvar, ou descarte."}
-                          </p>
+                        {requiresFinalBarras ? (
+                          <p className="inventario-popup-note warn">Quantidade final acima do esperado. Informe barras válido do mesmo CODDV.</p>
                         ) : null}
-                        {requiresBarras ? (
+                        {requiresFinalBarras ? (
                           <label>
-                            Barras (obrigatório)
+                            Barras final (obrigatório na sobra)
                             <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
                               <input
-                                value={barras}
-                                onChange={(e) => {
-                                  setBarras(e.target.value);
-                                  setValidatedBarras(null);
-                                }}
+                                value={finalBarras}
+                                onChange={(e) => setFinalBarras(e.target.value)}
                                 onFocus={keepFocusedControlVisible}
                                 inputMode="numeric"
                                 pattern="[0-9]*"
@@ -1936,15 +2040,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                 autoComplete="off"
                                 spellCheck={false}
                                 enterKeyHint="done"
-                                disabled={!canEditCount(active) || busy}
+                                disabled={!canResolveConciliation || busy}
                               />
                               <button
                                 type="button"
                                 className="input-action-btn inventario-popup-scan-btn"
-                                onClick={() => openCameraScanner("barras")}
+                                onClick={() => openCameraScanner("final_barras")}
                                 title="Ler código pela câmera"
                                 aria-label="Ler código pela câmera"
-                                disabled={!canEditCount(active) || busy || !cameraSupported}
+                                disabled={!canResolveConciliation || busy || !cameraSupported}
                               >
                                 {cameraIcon()}
                               </button>
@@ -1952,119 +2056,18 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           </label>
                         ) : null}
                         <div className="inventario-editor-actions">
-                          <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
-                          <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
+                          <button className="btn btn-muted" type="button" onClick={closeEditorPopup}>Fechar</button>
+                          <button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button>
                         </div>
                       </>
-                    )}
-                  </>
-                ) : null}
-                {tab === "conciliation" ? (
-                  <>
-                    <p className="inventario-editor-text">{`Endereço: ${active.endereco} | CODDV: ${active.coddv}`}</p>
-                    {(() => {
-                      const c1Fallback = extractReviewSnapshotCount(active.review, 1);
-                      const c2Fallback = extractReviewSnapshotCount(active.review, 2);
-
-                      const c1Qtd = active.c1?.qtd_contada ?? c1Fallback?.qtd ?? "-";
-                      const c1Barras = active.c1?.barras ?? c1Fallback?.barras ?? "-";
-                      const c1Nome = pickText(
-                        active.c1?.counted_nome,
-                        c1Fallback?.nome,
-                        active.c1?.counted_mat ? `Mat ${active.c1.counted_mat}` : null,
-                        c1Fallback?.mat ? `Mat ${c1Fallback.mat}` : null
-                      ) ?? "-";
-
-                      const c2Qtd = active.c2?.qtd_contada ?? c2Fallback?.qtd ?? "-";
-                      const c2Barras = active.c2?.barras ?? c2Fallback?.barras ?? "-";
-                      const c2Nome = pickText(
-                        active.c2?.counted_nome,
-                        c2Fallback?.nome,
-                        active.c2?.counted_mat ? `Mat ${active.c2.counted_mat}` : null,
-                        c2Fallback?.mat ? `Mat ${c2Fallback.mat}` : null
-                      ) ?? "-";
-
-                      return (
-                        <>
-                          {active.review?.reason_code === "conflito_lock" && active.c2 == null ? (
-                            <p className="inventario-popup-note warn">
-                              2ª verificação não registrada por conflito de lock. Resolve pela conciliação.
-                            </p>
-                          ) : null}
-                          <div className="inventario-conciliation-grid">
-                            <article className="inventario-conciliation-card">
-                              <h4>1ª Verificação</h4>
-                              <p>{`Qtd: ${c1Qtd}`}</p>
-                              <p>{`Barras: ${c1Barras}`}</p>
-                              <p>{`Usuário: ${c1Nome}`}</p>
-                            </article>
-                            <article className="inventario-conciliation-card">
-                              <h4>2ª Verificação</h4>
-                              <p>{`Qtd: ${c2Qtd}`}</p>
-                              <p>{`Barras: ${c2Barras}`}</p>
-                              <p>{`Usuário: ${c2Nome}`}</p>
-                            </article>
-                          </div>
-                        </>
-                      );
-                    })()}
-                    <label>
-                      Qtd final
-                      <input
-                        ref={finalQtdInputRef}
-                        value={finalQtd}
-                        onChange={(e) => setFinalQtd(e.target.value)}
-                        onFocus={focusAndSelectNumericInput}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        enterKeyHint="next"
-                        disabled={!canResolveConciliation || busy}
-                      />
-                    </label>
-                    {requiresFinalBarras ? (
-                      <p className="inventario-popup-note warn">Quantidade final acima do esperado. Informe barras válido do mesmo CODDV.</p>
                     ) : null}
-                    {requiresFinalBarras ? (
-                      <label>
-                        Barras final (obrigatório na sobra)
-                        <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
-                          <input
-                            value={finalBarras}
-                            onChange={(e) => setFinalBarras(e.target.value)}
-                            onFocus={keepFocusedControlVisible}
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            autoCapitalize="off"
-                            autoCorrect="off"
-                            autoComplete="off"
-                            spellCheck={false}
-                            enterKeyHint="done"
-                            disabled={!canResolveConciliation || busy}
-                          />
-                          <button
-                            type="button"
-                            className="input-action-btn inventario-popup-scan-btn"
-                            onClick={() => openCameraScanner("final_barras")}
-                            title="Ler código pela câmera"
-                            aria-label="Ler código pela câmera"
-                            disabled={!canResolveConciliation || busy || !cameraSupported}
-                          >
-                            {cameraIcon()}
-                          </button>
-                        </div>
-                      </label>
-                    ) : null}
-                    <div className="inventario-editor-actions">
-                      <button className="btn btn-muted" type="button" onClick={closeEditorPopup}>Fechar</button>
-                      <button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button>
-                    </div>
-                  </>
-                ) : null}
-                {tab === "done" ? <p className="inventario-editor-text">Endereço concluído e não pode ser alterado.</p> : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
+                    {tab === "done" ? <p className="inventario-editor-text">Endereço concluído e não pode ser alterado.</p> : null}
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
 
         {canExport && isDesktop && reportOpen ? (
           <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setReportOpen(false)}>
