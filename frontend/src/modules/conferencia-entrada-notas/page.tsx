@@ -45,6 +45,7 @@ import {
   fetchVolumeItems,
   finalizeAvulsaVolume,
   finalizeVolume,
+  lookupSeqNfByBarcode,
   normalizeBarcode,
   openAvulsaVolume,
   openVolume,
@@ -64,6 +65,7 @@ import {
   refreshDbBarrasCacheSmart
 } from "../coleta-mercadoria/sync";
 import type {
+  EntradaNotasBarcodeSeqNfOption,
   EntradaNotasAvulsaTargetOption,
   EntradaNotasAvulsaTargetSummary,
   CdOption,
@@ -132,6 +134,12 @@ type AvulsaPendingScan = {
   coddv: number;
   descricao: string;
   options: EntradaNotasAvulsaTargetOption[];
+};
+
+type BarcodeOpenSelection = {
+  barras: string;
+  descricao: string;
+  options: EntradaNotasBarcodeSeqNfOption[];
 };
 
 const MODULE_DEF = getModuleByKeyOrThrow("conferencia-entrada-notas");
@@ -289,6 +297,23 @@ function parseSeqNfFromVolumeLabel(value: string): { seq_entrada: number; nf: nu
   return {
     seq_entrada: Number.isFinite(seqEntrada) ? Math.max(seqEntrada, 0) : 0,
     nf: Number.isFinite(nf) ? Math.max(nf, 0) : 0
+  };
+}
+
+function parseStrictSeqNfInput(value: string): { seq_entrada: number; nf: number; label: string } | null {
+  const compact = String(value ?? "").replace(/\s+/g, "");
+  if (!compact) return null;
+  const matched = /^(\d+)\/(\d+)$/.exec(compact);
+  if (!matched) return null;
+  const seqEntrada = Number.parseInt(matched[1], 10);
+  const nf = Number.parseInt(matched[2], 10);
+  if (!Number.isFinite(seqEntrada) || !Number.isFinite(nf) || seqEntrada <= 0 || nf <= 0) {
+    return null;
+  }
+  return {
+    seq_entrada: seqEntrada,
+    nf,
+    label: `${seqEntrada}/${nf}`
   };
 }
 
@@ -602,6 +627,7 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("SEQ_NF_INVALIDO") || value.includes("SEQ_OU_NF_OBRIGATORIO")) {
     return "Seq/NF inválido. Use o formato 123/456.";
   }
+  if (value.includes("BARRAS_OBRIGATORIA")) return "Informe o código de barras.";
   if (value.includes("ENTRADA_NAO_ENCONTRADA")) return "Seq/NF não encontrado na base da entrada.";
   if (value.includes("CONFERENCIA_EM_USO")) return "Conferência em uso por outro usuário.";
   if (value.includes("CONFERENCIA_JA_FINALIZADA_OUTRO_USUARIO")) {
@@ -620,8 +646,9 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("PRODUTO_FORA_DA_ENTRADA")) return "Produto fora da entrada selecionada.";
   if (value.includes("PRODUTO_FORA_BASE_AVULSA")) return "Produto fora da base de recebimento deste CD.";
   if (value.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")) {
-    return "Produto não faz parte de nenhum recebimento. Revise o código.";
+    return "Produto sem recebimento disponível neste CD.";
   }
+  if (value.includes("SEM_SEQ_NF_DISPONIVEL")) return "Produto sem recebimento disponível neste CD.";
   if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
@@ -779,6 +806,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [busyFinalize, setBusyFinalize] = useState(false);
   const [busyCancel, setBusyCancel] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
+  const [pendingBarcodeOpenSelection, setPendingBarcodeOpenSelection] = useState<BarcodeOpenSelection | null>(null);
   const [pendingAvulsaScan, setPendingAvulsaScan] = useState<AvulsaPendingScan | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
@@ -1613,7 +1641,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               ? "Conferência já finalizada. Aberta em leitura."
               : waitingOfflineBase
                 ? "Conferência aberta online enquanto a base offline é sincronizada em segundo plano."
-                : "Conferência aberta para bipagem."
+                : `Conferência Seq/NF ${etiquetaFinal} aberta para bipagem.`
           );
           return;
         }
@@ -1672,7 +1700,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       }
 
       setActiveVolume(localVolume);
-      setStatusMessage("Conferência aberta para bipagem.");
+      setStatusMessage(`Conferência Seq/NF ${etiquetaFinal} aberta para bipagem.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao Iniciar conferência.";
       if (message.includes("CONFERENCIA_JA_FINALIZADA_OUTRO_USUARIO")) {
@@ -2120,6 +2148,188 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
   }, [isOnline]);
 
+  const lookupSeqNfOptionsByBarcodeOffline = useCallback(async (
+    rawBarras: string
+  ): Promise<EntradaNotasBarcodeSeqNfOption[]> => {
+    if (currentCd == null) {
+      throw new Error("CD_SEM_ACESSO");
+    }
+    const barras = normalizeBarcode(rawBarras);
+    if (!barras) {
+      throw new Error("BARRAS_OBRIGATORIA");
+    }
+
+    const lookup = await resolveBarcodeProduct(barras);
+    if (!lookup) {
+      throw new Error("BARRAS_NAO_ENCONTRADA");
+    }
+
+    const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+    const filtered = manifestItems.filter((row) => row.coddv === lookup.coddv);
+    if (!filtered.length) {
+      throw new Error("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO");
+    }
+
+    const grouped = new Map<string, EntradaNotasBarcodeSeqNfOption>();
+    for (const row of filtered) {
+      const seqEntrada = Number.parseInt(String(row.seq_entrada ?? 0), 10);
+      const nf = Number.parseInt(String(row.nf ?? 0), 10);
+      if (!Number.isFinite(seqEntrada) || !Number.isFinite(nf) || seqEntrada <= 0 || nf <= 0) {
+        continue;
+      }
+
+      const key = `${seqEntrada}/${nf}`;
+      const qtdEsperada = Math.max(Number.parseInt(String(row.qtd_esperada ?? 0), 10) || 0, 0);
+      const current = grouped.get(key);
+      if (!current) {
+        grouped.set(key, {
+          coddv: lookup.coddv,
+          descricao: row.descricao?.trim() || lookup.descricao?.trim() || `Produto ${lookup.coddv}`,
+          barras: lookup.barras?.trim() || barras,
+          seq_entrada: seqEntrada,
+          nf,
+          transportadora: row.transportadora ?? row.rota ?? "SEM TRANSPORTADORA",
+          fornecedor: row.fornecedor ?? row.filial_nome ?? "SEM FORNECEDOR",
+          qtd_esperada: qtdEsperada,
+          qtd_conferida: 0,
+          qtd_pendente: qtdEsperada
+        });
+      } else {
+        current.qtd_esperada += qtdEsperada;
+        current.qtd_pendente += qtdEsperada;
+      }
+    }
+
+    const currentMat = profile.mat?.trim() || "";
+    const editableOptions = [...grouped.values()]
+      .map((option) => {
+        const routeRow = routeRows.find((row) => (
+          row.seq_entrada === option.seq_entrada
+          && row.nf === option.nf
+        ));
+        const routeStatus = normalizeStoreStatus(routeRow?.status);
+        const routeMat = routeRow?.colaborador_mat?.trim() || "";
+        const isLockedByOther = routeStatus === "em_andamento" && routeMat !== "" && routeMat !== currentMat;
+        const isConcluido = routeStatus === "concluido";
+        const qtdConferida = isConcluido ? option.qtd_esperada : 0;
+        const qtdPendente = isConcluido || isLockedByOther ? 0 : Math.max(option.qtd_esperada - qtdConferida, 0);
+        return {
+          ...option,
+          qtd_conferida: qtdConferida,
+          qtd_pendente: qtdPendente
+        };
+      })
+      .filter((option) => option.qtd_pendente > 0);
+
+    if (!editableOptions.length) {
+      throw new Error("SEM_SEQ_NF_DISPONIVEL");
+    }
+
+    return editableOptions.sort((a, b) => (
+      a.seq_entrada !== b.seq_entrada
+        ? a.seq_entrada - b.seq_entrada
+        : a.nf - b.nf
+    ));
+  }, [currentCd, profile.user_id, profile.mat, resolveBarcodeProduct, routeRows]);
+
+  const resolveOpenOptionsByBarcode = useCallback(async (
+    rawBarras: string
+  ): Promise<EntradaNotasBarcodeSeqNfOption[]> => {
+    if (currentCd == null) {
+      throw new Error("CD_SEM_ACESSO");
+    }
+
+    const barras = normalizeBarcode(rawBarras);
+    if (!barras) {
+      throw new Error("BARRAS_OBRIGATORIA");
+    }
+
+    if (isOnline) {
+      try {
+        const onlineOptions = await lookupSeqNfByBarcode(barras, currentCd);
+        const editableOnline = onlineOptions.filter((option) => option.qtd_pendente > 0);
+        if (editableOnline.length > 0) {
+          return editableOnline.sort((a, b) => (
+            a.seq_entrada !== b.seq_entrada
+              ? a.seq_entrada - b.seq_entrada
+              : a.nf - b.nf
+          ));
+        }
+        throw new Error("SEM_SEQ_NF_DISPONIVEL");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? "");
+        const isBusinessError = (
+          message.includes("BARRAS_OBRIGATORIA")
+          || message.includes("BARRAS_NAO_ENCONTRADA")
+          || message.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")
+          || message.includes("SEM_SEQ_NF_DISPONIVEL")
+        );
+        if (isBusinessError) {
+          throw new Error(message);
+        }
+      }
+    }
+
+    return lookupSeqNfOptionsByBarcodeOffline(barras);
+  }, [currentCd, isOnline, lookupSeqNfOptionsByBarcodeOffline]);
+
+  const openConferenceFromInput = useCallback(async (rawInput: string) => {
+    const value = String(rawInput ?? "").trim();
+    if (!value) {
+      setErrorMessage("Informe Seq/NF ou código de barras para iniciar a conferência.");
+      return;
+    }
+    if (currentCd == null) {
+      setErrorMessage("CD não definido para esta conferência.");
+      return;
+    }
+
+    const parsedSeqNf = parseStrictSeqNfInput(value);
+    if (parsedSeqNf) {
+      await openVolumeFromEtiqueta(parsedSeqNf.label);
+      return;
+    }
+    if (value.includes("/")) {
+      setErrorMessage(normalizeRpcErrorMessage("SEQ_NF_INVALIDO"));
+      return;
+    }
+
+    setBusyOpenVolume(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    try {
+      const options = await resolveOpenOptionsByBarcode(value);
+      if (options.length === 1) {
+        const only = options[0];
+        const seqNfLabel = `${only.seq_entrada}/${only.nf}`;
+        setStatusMessage(`Código encontrado. Seq/NF ${seqNfLabel} será iniciada.`);
+        await openVolumeFromEtiqueta(seqNfLabel);
+        return;
+      }
+
+      setPendingBarcodeOpenSelection({
+        barras: normalizeBarcode(value),
+        descricao: options[0]?.descricao || "Produto",
+        options
+      });
+      setStatusMessage("Produto encontrado em mais de uma Seq/NF. Selecione qual iniciar.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao localizar Seq/NF por barras.";
+      setErrorMessage(normalizeRpcErrorMessage(message));
+    } finally {
+      setBusyOpenVolume(false);
+    }
+  }, [currentCd, openVolumeFromEtiqueta, resolveOpenOptionsByBarcode]);
+
+  const handleSelectPendingBarcodeOpen = useCallback(async (option: EntradaNotasBarcodeSeqNfOption) => {
+    const seqNfLabel = `${option.seq_entrada}/${option.nf}`;
+    setPendingBarcodeOpenSelection(null);
+    setEtiquetaInput(seqNfLabel);
+    setStatusMessage(`Código encontrado. Seq/NF ${seqNfLabel} será iniciada.`);
+    setErrorMessage(null);
+    await openVolumeFromEtiqueta(seqNfLabel);
+  }, [openVolumeFromEtiqueta]);
+
   const resolveAvulsaTargetsOffline = useCallback(async (
     coddv: number,
     barras: string,
@@ -2202,6 +2412,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const clearConferenceScreen = useCallback(() => {
     setShowFinalizeModal(false);
     setFinalizeError(null);
+    setPendingBarcodeOpenSelection(null);
     setPendingAvulsaScan(null);
     setExpandedItemKey(null);
     setEditingItemKey(null);
@@ -3162,7 +3373,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               setScannerError(null);
               if (scannerTarget === "etiqueta") {
                 setEtiquetaInput(scanned);
-                void openVolumeFromEtiqueta(scanned);
+                void openConferenceFromInput(scanned);
               } else {
                 setBarcodeInput(scanned);
                 void handleCollectBarcode(scanned);
@@ -3219,7 +3430,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       if (torchProbeTimer != null) window.clearTimeout(torchProbeTimer);
       stopScanner();
     };
-  }, [handleCollectBarcode, openVolumeFromEtiqueta, resolveScannerTrack, scannerOpen, scannerTarget, stopScanner, supportsTrackTorch]);
+  }, [handleCollectBarcode, openConferenceFromInput, resolveScannerTrack, scannerOpen, scannerTarget, stopScanner, supportsTrackTorch]);
 
   const toggleTorch = async () => {
     const controls = scannerControlsRef.current;
@@ -3250,7 +3461,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const onSubmitEtiqueta = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await openVolumeFromEtiqueta(etiquetaInput);
+    await openConferenceFromInput(etiquetaInput);
   };
 
   const onSubmitBarras = async (event: FormEvent<HTMLFormElement>) => {
@@ -3533,7 +3744,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           <form className="termo-form termo-open-form" onSubmit={onSubmitEtiqueta}>
             <h3>Abertura de conferência</h3>
             <label>
-              Seq/NF
+              Seq/NF ou código de barras
               <div className="input-icon-wrap with-action">
                 <span className="field-icon" aria-hidden="true">{barcodeIcon()}</span>
                 <input
@@ -3545,15 +3756,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
-                  placeholder="Informe o Seq/NF"
+                  placeholder="Informe Seq/NF (123/456) ou código de barras"
                   required
                 />
                 <button
                   type="button"
                   className="input-action-btn"
                   onClick={() => openScannerFor("etiqueta")}
-                  title="Ler Seq/NF pela câmera"
-                  aria-label="Ler Seq/NF pela câmera"
+                  title="Ler código de abertura pela câmera"
+                  aria-label="Ler código de abertura pela câmera"
                   disabled={!cameraSupported}
                 >
                   {cameraIcon()}
@@ -3562,15 +3773,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             </label>
             <div className="confirm-actions">
               <button className="btn btn-primary" type="submit" disabled={busyOpenVolume || currentCd == null}>
-                {busyOpenVolume ? "Abrindo..." : "Iniciar por Seq/NF"}
-              </button>
-              <button
-                className="btn btn-muted"
-                type="button"
-                disabled={busyOpenVolume || currentCd == null}
-                onClick={() => void openAvulsaConference()}
-              >
-                {busyOpenVolume ? "Abrindo..." : "Iniciar Conferência Avulsa"}
+                {busyOpenVolume ? "Abrindo..." : "Iniciar conferência"}
               </button>
             </div>
           </form>
@@ -3930,7 +4133,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           </article>
         ) : (
           <div className="coleta-empty">
-            Nenhuma conferência ativa. Informe um Seq/NF para iniciar a conferência.
+            Nenhuma conferência ativa. Informe um Seq/NF ou código de barras para iniciar a conferência.
           </div>
         )}
       </section>
@@ -4093,6 +4296,55 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           )
         : null}
 
+      {pendingBarcodeOpenSelection && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="entrada-barcode-open-title"
+              onClick={() => setPendingBarcodeOpenSelection(null)}
+            >
+              <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="entrada-barcode-open-title">Selecionar Seq/NF para conferência</h3>
+                <p>
+                  Produto: {pendingBarcodeOpenSelection.descricao}
+                  {" | "}
+                  Barras: {pendingBarcodeOpenSelection.barras}
+                </p>
+                <div className="termo-routes-list">
+                  {pendingBarcodeOpenSelection.options.map((option) => (
+                    <div
+                      key={`${option.seq_entrada}-${option.nf}-${option.coddv}`}
+                      className="termo-route-store-row"
+                    >
+                      <div>
+                        <strong>Seq/NF {option.seq_entrada}/{option.nf}</strong>
+                        <p>Transportadora: {option.transportadora}</p>
+                        <p>Fornecedor: {option.fornecedor}</p>
+                        <p>Pendente: {option.qtd_pendente} | Esperada: {option.qtd_esperada} | Conferida: {option.qtd_conferida}</p>
+                      </div>
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        onClick={() => void handleSelectPendingBarcodeOpen(option)}
+                      >
+                        Iniciar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setPendingBarcodeOpenSelection(null)}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
       {pendingAvulsaScan && typeof document !== "undefined"
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="entrada-avulsa-target-title" onClick={() => setPendingAvulsaScan(null)}>
@@ -4208,7 +4460,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <div className="scanner-head">
                   <h3 id="termo-scanner-title">
-                    {scannerTarget === "etiqueta" ? "Scanner de Seq/NF" : "Scanner de barras"}
+                    {scannerTarget === "etiqueta" ? "Scanner de abertura" : "Scanner de barras"}
                   </h3>
                   <div className="scanner-head-actions">
                     {!isDesktop ? (
