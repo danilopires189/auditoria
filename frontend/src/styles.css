@@ -2269,6 +2269,11 @@ small {
   border-radius: 10px;
   padding: 8px 10px;
   background: #fff;
+  max-height: min(44vh, 320px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding-right: 6px;
 }
 
 .module-screen {
