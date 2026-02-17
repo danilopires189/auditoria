@@ -2204,6 +2204,58 @@ small {
   font-weight: 700;
 }
 
+.termo-route-row-button-volume {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.termo-route-row-button-volume .termo-route-main {
+  gap: 5px;
+}
+
+.termo-route-actions-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.termo-route-items-count {
+  color: #2c436f;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.termo-route-open-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.84rem;
+  line-height: 1;
+}
+
+.termo-route-open-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.termo-route-open-chip-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.termo-route-open-chip-icon svg path,
+.termo-route-open-chip-icon svg circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .termo-route-action {
   display: inline-flex;
   align-items: center;

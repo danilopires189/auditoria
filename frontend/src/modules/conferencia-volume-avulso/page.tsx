@@ -2660,7 +2660,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                         <div key={row.nr_volume} className="termo-route-group">
                           <button
                             type="button"
-                            className="termo-route-row-button"
+                            className="termo-route-row-button termo-route-row-button-volume"
                             onClick={() => {
                               setShowRoutesModal(false);
                               void openVolumeFromEtiqueta(row.nr_volume);
@@ -2686,17 +2686,17 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                               {row.status === "concluido" && row.status_at ? (
                                 <span className="termo-route-sub">Concluído em: {formatDateTime(row.status_at)}</span>
                               ) : null}
-                            </span>
-                            <span className="termo-route-metrics">
-                              <span>{row.itens_total} item(ns)</span>
-                              <span className={`termo-divergencia ${routeStatusClass(row.status)}`}>
-                                {routeStatusLabel(row.status)}
-                              </span>
-                              <span className={`termo-route-action ${row.status === "pendente" ? "is-start" : "is-resume"}`}>
-                                <span className="termo-route-action-icon" aria-hidden="true">
-                                  {conferenceActionIcon(row.status)}
+                              <span className="termo-route-actions-row">
+                                <span className="termo-route-items-count">{row.itens_total} item(ns)</span>
+                                <span className={`termo-divergencia ${routeStatusClass(row.status)}`}>
+                                  {routeStatusLabel(row.status)}
                                 </span>
-                                {conferenceActionLabel(row.status)}
+                                <span className="btn btn-primary termo-route-open-chip">
+                                  <span className="termo-route-open-chip-icon" aria-hidden="true">
+                                    {conferenceActionIcon(row.status)}
+                                  </span>
+                                  {conferenceActionLabel(row.status)}
+                                </span>
                               </span>
                             </span>
                           </button>
