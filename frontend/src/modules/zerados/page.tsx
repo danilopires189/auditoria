@@ -1184,7 +1184,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               </>
             ) : null}
             {canShowAddressList ? (
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar endereço, CODDV ou descrição" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar" />
             ) : null}
           </div>
         ) : null}
@@ -1210,24 +1210,30 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               <p className="inventario-editor-text">{labelByCount(addressBuckets.length, "endereço", "endereços")}</p>
 
               <div className="inventario-address-list">
-                {addressBuckets.map((bucket) => (
-                  <button
-                    type="button"
-                    key={bucket.key}
-                    className={`inventario-address-card${selectedAddress === bucket.key ? " active" : ""}`}
-                    onClick={() => openAddressEditor(bucket)}
-                  >
-                    <div>
-                      <strong>{bucket.endereco}</strong>
-                      <p>{labelByCount(bucket.total_items, "item", "itens")}</p>
-                    </div>
-                    <span className={`termo-divergencia ${bucket.pending_items > 0 ? "andamento" : "correto"}`}>
-                      {bucket.pending_items > 0
-                        ? labelByCount(bucket.pending_items, "pendente", "pendentes")
-                        : labelByCount(bucket.done_items, "concluído", "concluídos")}
-                    </span>
-                  </button>
-                ))}
+                {addressBuckets.map((bucket) => {
+                  const singleItem = bucket.total_items === 1 ? bucket.items[0] : null;
+                  const addressMeta = singleItem
+                    ? `${singleItem.coddv} - ${singleItem.descricao}`
+                    : labelByCount(bucket.total_items, "item", "itens");
+                  return (
+                    <button
+                      type="button"
+                      key={bucket.key}
+                      className={`inventario-address-card${selectedAddress === bucket.key ? " active" : ""}`}
+                      onClick={() => openAddressEditor(bucket)}
+                    >
+                      <div>
+                        <strong>{bucket.endereco}</strong>
+                        <p className="inventario-address-meta">{addressMeta}</p>
+                      </div>
+                      <span className={`termo-divergencia ${bucket.pending_items > 0 ? "andamento" : "correto"}`}>
+                        {bucket.pending_items > 0
+                          ? (bucket.pending_items === 1 ? "pendente" : labelByCount(bucket.pending_items, "pendente", "pendentes"))
+                          : (bucket.done_items === 1 ? "concluído" : labelByCount(bucket.done_items, "concluído", "concluídos"))}
+                      </span>
+                    </button>
+                  );
+                })}
                 {addressBuckets.length === 0 ? (
                   <div className="inventario-empty-card"><p>Nenhum endereço para os filtros selecionados.</p></div>
                 ) : null}

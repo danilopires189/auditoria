@@ -3044,6 +3044,12 @@ small {
   font-size: 0.79rem;
 }
 
+.inventario-address-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .inventario-address-card.active {
   border-color: #89a7d3;
   box-shadow: 0 0 0 1px rgba(77, 116, 176, 0.24);
