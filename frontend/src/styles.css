@@ -3645,6 +3645,39 @@ small {
   width: min(520px, 94vw);
 }
 
+@media (min-width: 981px) {
+  .inventario-popup-overlay {
+    align-items: center;
+    padding: 20px;
+  }
+
+  .inventario-popup-card {
+    width: min(1120px, calc(100vw - 40px));
+    max-height: calc(100dvh - 40px);
+    border: 1px solid #c8d6ef;
+    border-radius: 16px;
+  }
+
+  .inventario-report-popup {
+    width: min(520px, 94vw);
+  }
+
+  .inventario-popup-overlay-editor {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .inventario-editor-popup-card {
+    width: 100vw;
+    width: 100dvw;
+    max-height: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+  }
+}
+
 @media (max-width: 980px) {
   .inventario-layout {
     grid-template-columns: 1fr;
