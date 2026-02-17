@@ -2206,18 +2206,25 @@ small {
 
 .termo-route-row-button-volume {
   grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
 }
 
 .termo-route-row-button-volume .termo-route-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 5px;
+  min-height: 100%;
 }
 
 .termo-route-actions-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  width: 100%;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: auto;
+  padding-top: 2px;
 }
 
 .termo-route-items-count {
