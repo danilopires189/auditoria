@@ -3723,7 +3723,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             Conferido por: {formatLockedItemOwner(item)}
                           </p>
                         ) : null}
-                        {item.qtd_conferida > 0 && isItemLocked ? (
+                        {canEditActiveVolume && item.qtd_conferida > 0 && isItemLocked ? (
                           <p className="entrada-notas-item-locked">
                             Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
                           </p>
@@ -3804,7 +3804,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             Conferido por: {formatLockedItemOwner(item)}
                           </p>
                         ) : null}
-                        {item.qtd_conferida > 0 && isItemLocked ? (
+                        {canEditActiveVolume && item.qtd_conferida > 0 && isItemLocked ? (
                           <p className="entrada-notas-item-locked">
                             Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
                           </p>
@@ -3884,7 +3884,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             Conferido por: {formatLockedItemOwner(item)}
                           </p>
                         ) : null}
-                        {item.qtd_conferida > 0 && isItemLocked ? (
+                        {canEditActiveVolume && item.qtd_conferida > 0 && isItemLocked ? (
                           <p className="entrada-notas-item-locked">
                             Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
                           </p>
