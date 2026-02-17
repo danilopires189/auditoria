@@ -546,6 +546,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [qtd, setQtd] = useState("0");
   const [barras, setBarras] = useState("");
   const [validatedBarras, setValidatedBarras] = useState<string | null>(null);
+  const [validatedFinalBarras, setValidatedFinalBarras] = useState<string | null>(null);
   const [countEditMode, setCountEditMode] = useState(true);
   const [finalQtd, setFinalQtd] = useState("0");
   const [finalBarras, setFinalBarras] = useState("");
@@ -586,6 +587,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
+  const barrasValueRef = useRef("");
+  const finalBarrasValueRef = useRef("");
   const popupWasOpenRef = useRef(false);
   const popupReturnFocusRef = useRef<HTMLElement | null>(null);
   const popupBodyRef = useRef<HTMLDivElement | null>(null);
@@ -600,6 +603,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setPopupErr(null);
     setCountEditMode(true);
     setValidatedBarras(null);
+    setValidatedFinalBarras(null);
     setScannerOpen(false);
     setScannerError(null);
     setTorchEnabled(false);
@@ -619,6 +623,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     event.currentTarget.select();
     keepFocusedControlVisible(event);
   }, [keepFocusedControlVisible]);
+  useEffect(() => {
+    barrasValueRef.current = barras;
+  }, [barras]);
+  useEffect(() => {
+    finalBarrasValueRef.current = finalBarras;
+  }, [finalBarras]);
 
   const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
     const videoEl = scannerVideoRef.current;
@@ -1129,20 +1139,24 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setValidatedBarras(null);
       setFinalQtd("0");
       setFinalBarras("");
+      setValidatedFinalBarras(null);
       return;
     }
 
     const currentCount = tab === "s2" ? active.c2 : active.c1;
     setQtd(String(currentCount?.qtd_contada ?? 0));
-    setBarras(currentCount?.barras ?? "");
-    setValidatedBarras(null);
+    const currentBarras = normalizeBarcode(currentCount?.barras ?? "");
+    setBarras(currentBarras);
+    setValidatedBarras(currentBarras || null);
 
     const suggestedFinal = active.review?.final_qtd
       ?? active.c2?.qtd_contada
       ?? active.c1?.qtd_contada
       ?? 0;
     setFinalQtd(String(suggestedFinal));
-    setFinalBarras(active.review?.final_barras ?? "");
+    const currentFinalBarras = normalizeBarcode(active.review?.final_barras ?? "");
+    setFinalBarras(currentFinalBarras);
+    setValidatedFinalBarras(currentFinalBarras || null);
   }, [active?.key, active?.c1?.updated_at, active?.c2?.updated_at, active?.review?.updated_at, tab]);
 
   useEffect(() => {
@@ -1301,6 +1315,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     && Number.isFinite(finalQtyParsed)
     && finalQtyParsed > active.estoque
   );
+  const normalizedFinalBarras = normalizeBarcode(finalBarras);
+  const finalBarrasValidatedForCurrentInput = Boolean(
+    requiresFinalBarras
+    && normalizedFinalBarras
+    && validatedFinalBarras === normalizedFinalBarras
+  );
+  const barrasIconClassName = `field-icon inventario-barras-icon${requiresBarras && !barrasValidatedForCurrentInput ? " is-invalid" : ""}${barrasValidatedForCurrentInput ? " is-valid" : ""}`;
+  const finalBarrasIconClassName = `field-icon inventario-barras-icon${requiresFinalBarras && !finalBarrasValidatedForCurrentInput ? " is-invalid" : ""}${finalBarrasValidatedForCurrentInput ? " is-valid" : ""}`;
   const mobileStageMenu = useMemo(
     () => ([
       { view: "s1" as const, label: "1ª Verificação" },
@@ -1326,6 +1348,52 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (found.coddv !== coddv) throw new Error("Código de barras inválido para este CODDV.");
     return found.barras;
   }, [isOnline]);
+
+  const autoValidateStageBarras = useCallback(async (value: string): Promise<boolean> => {
+    if (!active || !(tab === "s1" || tab === "s2")) return false;
+    if (!requiresBarras) return true;
+    const normalized = normalizeBarcode(value);
+    if (!normalized) {
+      setValidatedBarras(null);
+      return false;
+    }
+    try {
+      const validated = await validateBarras(active.coddv, normalized);
+      if (normalizeBarcode(barrasValueRef.current) !== normalized) return false;
+      setBarras(validated);
+      setValidatedBarras(validated);
+      setPopupErr(null);
+      return true;
+    } catch (error) {
+      if (normalizeBarcode(barrasValueRef.current) !== normalized) return false;
+      setValidatedBarras(null);
+      setPopupErr(parseErr(error));
+      return false;
+    }
+  }, [active, requiresBarras, tab, validateBarras]);
+
+  const autoValidateFinalBarras = useCallback(async (value: string): Promise<boolean> => {
+    if (!active || tab !== "conciliation") return false;
+    if (!requiresFinalBarras) return true;
+    const normalized = normalizeBarcode(value);
+    if (!normalized) {
+      setValidatedFinalBarras(null);
+      return false;
+    }
+    try {
+      const validated = await validateBarras(active.coddv, normalized);
+      if (normalizeBarcode(finalBarrasValueRef.current) !== normalized) return false;
+      setFinalBarras(validated);
+      setValidatedFinalBarras(validated);
+      setPopupErr(null);
+      return true;
+    } catch (error) {
+      if (normalizeBarcode(finalBarrasValueRef.current) !== normalized) return false;
+      setValidatedFinalBarras(null);
+      setPopupErr(parseErr(error));
+      return false;
+    }
+  }, [active, requiresFinalBarras, tab, validateBarras]);
 
   const saveCount = useCallback(async (discarded: boolean) => {
     if (!active || cd == null) return;
@@ -1353,13 +1421,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         }
 
         if (validatedBarras !== normalized) {
-          const validated = await validateBarras(active.coddv, normalized);
-          setBarras(validated);
-          setValidatedBarras(validated);
-          setPopupErr(null);
+          const validatedNow = await autoValidateStageBarras(normalized);
+          if (!validatedNow) return;
+        }
+        b = normalizeBarcode(barrasValueRef.current);
+        if (!b) {
+          setValidatedBarras(null);
+          setPopupErr("Sobra detectada. Informe o código de barras ou descarte.");
           return;
         }
-        b = normalized;
       }
       await send("count_upsert", {
         cycle_date: CYCLE_DATE,
@@ -1380,7 +1450,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setValidatedBarras(null);
       setPopupErr(parseErr(error));
     }
-  }, [active, advanceAfterAction, barras, canEditCount, cd, qtd, selectedAddress, send, tab, validateBarras, validatedBarras]);
+  }, [active, advanceAfterAction, autoValidateStageBarras, barras, canEditCount, cd, qtd, selectedAddress, send, tab, validatedBarras]);
 
   const resolveReview = useCallback(async () => {
     if (!active || !active.review || cd == null) return;
@@ -1395,7 +1465,16 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       const qty = Number.parseInt(finalQtd, 10);
       if (!Number.isFinite(qty) || qty < 0) return setPopupErr("Quantidade final inválida.");
       let b: string | null = null;
-      if (qty > active.estoque) b = await validateBarras(active.coddv, finalBarras);
+      if (qty > active.estoque) {
+        const normalized = normalizeBarcode(finalBarras);
+        if (!normalized) return setPopupErr("Informe código de barras válido do mesmo CODDV.");
+        if (validatedFinalBarras !== normalized) {
+          const validatedNow = await autoValidateFinalBarras(normalized);
+          if (!validatedNow) return;
+        }
+        b = normalizeBarcode(finalBarrasValueRef.current);
+        if (!b) return setPopupErr("Informe código de barras válido do mesmo CODDV.");
+      }
       await send("review_resolve", {
         cycle_date: CYCLE_DATE,
         cd,
@@ -1410,7 +1489,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     } catch (error) {
       setPopupErr(parseErr(error));
     }
-  }, [active, advanceAfterAction, canResolveConciliation, cd, finalBarras, finalQtd, selectedAddress, send, validateBarras]);
+  }, [active, advanceAfterAction, autoValidateFinalBarras, canResolveConciliation, cd, finalBarras, finalQtd, selectedAddress, send, validatedFinalBarras]);
 
   useEffect(() => {
     if (!scannerOpen) return;
@@ -1452,9 +1531,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
               if (scannerTarget === "final_barras") {
                 setFinalBarras(scanned);
+                setValidatedFinalBarras(null);
+                void autoValidateFinalBarras(scanned);
               } else {
                 setBarras(scanned);
                 setValidatedBarras(null);
+                void autoValidateStageBarras(scanned);
               }
 
               closeCameraScanner();
@@ -1513,7 +1595,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       }
       stopCameraScanner();
     };
-  }, [closeCameraScanner, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch]);
+  }, [autoValidateFinalBarras, autoValidateStageBarras, closeCameraScanner, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch]);
 
   const exportReport = useCallback(async () => {
     if (!canExport || cd == null) return;
@@ -1938,7 +2020,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                               <label>
                                 Barras (obrigatório)
                                 <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
-                                  <span className="field-icon" aria-hidden="true">
+                                  <span className={barrasIconClassName} aria-hidden="true">
                                     {barcodeIcon()}
                                   </span>
                                   <input
@@ -1946,6 +2028,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                     onChange={(e) => {
                                       setBarras(e.target.value);
                                       setValidatedBarras(null);
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.key !== "Enter") return;
+                                      event.preventDefault();
+                                      void autoValidateStageBarras(event.currentTarget.value);
                                     }}
                                     onFocus={keepFocusedControlVisible}
                                     inputMode="numeric"
@@ -2047,12 +2134,20 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           <label>
                             Barras final (obrigatório na sobra)
                             <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
-                              <span className="field-icon" aria-hidden="true">
+                              <span className={finalBarrasIconClassName} aria-hidden="true">
                                 {barcodeIcon()}
                               </span>
                               <input
                                 value={finalBarras}
-                                onChange={(e) => setFinalBarras(e.target.value)}
+                                onChange={(e) => {
+                                  setFinalBarras(e.target.value);
+                                  setValidatedFinalBarras(null);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key !== "Enter") return;
+                                  event.preventDefault();
+                                  void autoValidateFinalBarras(event.currentTarget.value);
+                                }}
                                 onFocus={keepFocusedControlVisible}
                                 inputMode="numeric"
                                 pattern="[0-9]*"
