@@ -171,6 +171,17 @@ function searchIcon() {
   );
 }
 
+function reportIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
+    </svg>
+  );
+}
+
 function isS1Pending(row: Row): boolean {
   return row.c1 == null;
 }
@@ -1037,7 +1048,21 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
       <section className="modules-shell termo-shell inventario-shell">
         <div className="termo-head">
-          <h2>Olá, {userName}</h2>
+          <div className="inventario-head-row">
+            <h2>Olá, {userName}</h2>
+            {canExport && isDesktop ? (
+              <button
+                type="button"
+                className="btn btn-muted termo-route-btn inventario-report-inline-btn"
+                onClick={() => setReportOpen(true)}
+                title="Gerar Relatório"
+                aria-label="Gerar Relatório"
+              >
+                <span aria-hidden="true">{reportIcon()}</span>
+                Gerar Relatório
+              </button>
+            ) : null}
+          </div>
           <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE} | db_inventario: ${manifestItems.length}/${manifestMeta?.row_count ?? 0} | db_barras: ${dbBarrasCount}`}</p>
           <div className="inventario-base-chips">
             <span className={`inventario-base-chip ${manifestMeta && manifestItems.length >= manifestMeta.row_count ? "ok" : "warn"}`}>{`db_inventario ${manifestItems.length}/${manifestMeta?.row_count ?? 0}`}</span>
@@ -1079,22 +1104,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             >
               <span aria-hidden="true">{listIcon()}</span>
               Zonas
-            </button>
-          ) : null}
-          {canExport && isDesktop ? (
-            <button
-              type="button"
-              className="btn btn-muted inventario-report-icon-btn"
-              onClick={() => setReportOpen(true)}
-              title="Relatório XLSX (Admin)"
-              aria-label="Abrir relatório XLSX"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="4" y="3" width="16" height="18" rx="2" />
-                <path d="M8 8h8" />
-                <path d="M8 12h8" />
-                <path d="M8 16h5" />
-              </svg>
             </button>
           ) : null}
         </div>
