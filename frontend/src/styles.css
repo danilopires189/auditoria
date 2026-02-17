@@ -3270,6 +3270,18 @@ small {
   font: inherit;
 }
 
+.inventario-popup-input-action-wrap {
+  position: relative;
+}
+
+.inventario-popup-input-action-wrap input {
+  padding-right: 50px;
+}
+
+.inventario-popup-scan-btn {
+  right: 10px;
+}
+
 .inventario-editor-actions,
 .inventario-report-actions {
   width: 100%;
