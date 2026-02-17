@@ -1516,17 +1516,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       className={`inventario-address-card${selectedAddress === bucket.key ? " active" : ""}`}
                       onClick={() => openAddressEditor(bucket)}
                     >
-                      <div className="inventario-address-main">
-                        <div className="inventario-address-head">
+                      <span className="inventario-address-main">
+                        <span className="inventario-address-head">
                           <strong>{bucket.endereco}</strong>
                           <span className={`termo-divergencia inventario-address-status ${bucket.pending_items > 0 ? "andamento" : "correto"}`}>
                             {bucket.pending_items > 0
                               ? (bucket.pending_items === 1 ? "pendente" : labelByCount(bucket.pending_items, "pendente", "pendentes"))
                               : (bucket.done_items === 1 ? "concluído" : labelByCount(bucket.done_items, "concluído", "concluídos"))}
                           </span>
-                        </div>
-                        <p className="inventario-address-meta">{addressMeta}</p>
-                      </div>
+                        </span>
+                        <span className="inventario-address-meta">{addressMeta}</span>
+                      </span>
                     </button>
                   );
                 })}
@@ -1630,7 +1630,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     ) : null}
                     {requiresBarras ? (
                       <label>
-                        Barras (obrigatório na sobra)
+                        Barras (obrigatório)
                         <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
                           <input
                             value={barras}
