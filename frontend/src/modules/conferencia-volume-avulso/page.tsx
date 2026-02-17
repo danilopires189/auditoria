@@ -397,6 +397,23 @@ function chevronIcon(open: boolean) {
   );
 }
 
+function startConferenceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 6v12l10-6z" />
+    </svg>
+  );
+}
+
+function resumeConferenceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 12a8 8 0 1 0 2.3-5.7" />
+      <path d="M4 4v4h4" />
+    </svg>
+  );
+}
+
 function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("VOLUME_NAO_ENCONTRADO")) return "NR Volume não encontrado na base do dia.";
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
@@ -431,12 +448,35 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
+function conferenceActionLabel(status: VolumeAvulsoStoreStatus): string {
+  return status === "pendente" ? "Iniciar conferência" : "Retornar conferência";
+}
+
+function conferenceActionIcon(status: VolumeAvulsoStoreStatus) {
+  return status === "pendente" ? startConferenceIcon() : resumeConferenceIcon();
+}
+
+function formatModalContributor(value: {
+  nome?: string | null;
+  mat?: string | null;
+}): string {
+  const nome = value.nome?.trim() ?? "";
+  const mat = value.mat?.trim() ?? "";
+  if (nome && mat) return `${nome} (${mat})`;
+  if (nome) return nome;
+  if (mat) return `Matrícula ${mat}`;
+  return "";
+}
+
 function buildVolumeSearchBlob(row: VolumeAvulsoModalVolumeRow): string {
   return normalizeSearchText([
     row.nr_volume,
     `${row.itens_total}`,
     `${row.qtd_esperada_total}`,
-    routeStatusLabel(row.status)
+    routeStatusLabel(row.status),
+    row.colaborador_nome ?? "",
+    row.colaborador_mat ?? "",
+    conferenceActionLabel(row.status)
   ].join(" "));
 }
 
@@ -612,7 +652,10 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     }
 
     const withStatus = manifestVolumeRows.map((row) => {
-      let status: VolumeAvulsoStoreStatus = "pendente";
+      let status: VolumeAvulsoStoreStatus = row.status ?? "pendente";
+      let colaborador_nome = row.colaborador_nome ?? null;
+      let colaborador_mat = row.colaborador_mat ?? null;
+      let status_at = row.status_at ?? null;
 
       if (
         activeVolume
@@ -622,17 +665,36 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         && !activeVolume.is_read_only
       ) {
         status = "em_andamento";
-      } else {
+        colaborador_nome = activeVolume.started_nome || null;
+        colaborador_mat = activeVolume.started_mat || null;
+        status_at = activeVolume.started_at ?? null;
+      } else if (row.status == null) {
         const latestLocal = latestByNrVolume.get(row.nr_volume);
         if (latestLocal) {
-          if (latestLocal.status === "em_conferencia" && !latestLocal.is_read_only) status = "em_andamento";
-          else if (latestLocal.status === "finalizado_ok" || latestLocal.status === "finalizado_falta" || latestLocal.is_read_only) status = "concluido";
+          if (latestLocal.status === "em_conferencia" && !latestLocal.is_read_only) {
+            status = "em_andamento";
+            colaborador_nome = latestLocal.started_nome || null;
+            colaborador_mat = latestLocal.started_mat || null;
+            status_at = latestLocal.started_at ?? null;
+          } else if (
+            latestLocal.status === "finalizado_ok"
+            || latestLocal.status === "finalizado_falta"
+            || latestLocal.is_read_only
+          ) {
+            status = "concluido";
+            colaborador_nome = latestLocal.started_nome || null;
+            colaborador_mat = latestLocal.started_mat || null;
+            status_at = latestLocal.finalized_at ?? latestLocal.updated_at ?? null;
+          }
         }
       }
 
       const base: VolumeAvulsoModalVolumeRow = {
         ...row,
         status,
+        colaborador_nome,
+        colaborador_mat,
+        status_at,
         search_blob: ""
       };
 
@@ -2590,6 +2652,10 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                 ) : (
                   <div className="termo-routes-list">
                     {filteredModalVolumes.map((row) => {
+                      const contributorLabel = formatModalContributor({
+                        nome: row.colaborador_nome,
+                        mat: row.colaborador_mat
+                      });
                       return (
                         <div key={row.nr_volume} className="termo-route-group">
                           <button
@@ -2608,11 +2674,29 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                                 {" | "}
                                 Qtd. esperada: {row.qtd_esperada_total}
                               </span>
+                              {row.status === "em_andamento" && contributorLabel ? (
+                                <span className="termo-route-sub">Em andamento por: {contributorLabel}</span>
+                              ) : null}
+                              {row.status === "concluido" && contributorLabel ? (
+                                <span className="termo-route-sub">Concluído por: {contributorLabel}</span>
+                              ) : null}
+                              {row.status === "em_andamento" && row.status_at ? (
+                                <span className="termo-route-sub">Iniciado em: {formatDateTime(row.status_at)}</span>
+                              ) : null}
+                              {row.status === "concluido" && row.status_at ? (
+                                <span className="termo-route-sub">Concluído em: {formatDateTime(row.status_at)}</span>
+                              ) : null}
                             </span>
                             <span className="termo-route-metrics">
                               <span>{row.itens_total} item(ns)</span>
                               <span className={`termo-divergencia ${routeStatusClass(row.status)}`}>
                                 {routeStatusLabel(row.status)}
+                              </span>
+                              <span className={`termo-route-action ${row.status === "pendente" ? "is-start" : "is-resume"}`}>
+                                <span className="termo-route-action-icon" aria-hidden="true">
+                                  {conferenceActionIcon(row.status)}
+                                </span>
+                                {conferenceActionLabel(row.status)}
                               </span>
                             </span>
                           </button>
