@@ -1600,7 +1600,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           <div className="inventario-layout">
             <div className="termo-form inventario-address-panel">
               <h3 className="inventario-address-title-row">
-                <span>{`Endereços - ${stageLabel(tab)}${zone ? ` | ${zone}` : ""}`}</span>
+                <span>{`Endereços - ${stageLabel(tab)}`}</span>
+                {zone ? <span className="inventario-address-title-sep">|</span> : null}
+                {zone ? <span className="inventario-zone-name-chip">{zone}</span> : null}
                 <span className="inventario-zone-total-chip" title={`Total de endereços: ${addressBuckets.length}`}>
                   {addressBuckets.length}
                 </span>
