@@ -3308,6 +3308,12 @@ small {
   gap: 12px;
 }
 
+.inventario-popup-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .inventario-popup-head h3 {
   margin: 0;
   color: #12305e;
@@ -3322,6 +3328,31 @@ small {
   line-height: 1.34;
 }
 
+.inventario-popup-edit {
+  border: 1px solid #cfdbef;
+  border-radius: 10px;
+  background: #f6f9ff;
+  color: #284877;
+  padding: 8px 10px;
+  min-height: 42px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.inventario-popup-edit svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .inventario-popup-close {
   border: 1px solid #cfdbef;
   border-radius: 10px;
@@ -3333,6 +3364,22 @@ small {
   font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.inventario-count-readonly {
+  border: 1px solid #d4deef;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.inventario-count-readonly p {
+  margin: 0;
+  color: #3f557c;
+  font-size: 0.82rem;
+  line-height: 1.24;
 }
 
 .inventario-popup-body {
@@ -3428,6 +3475,7 @@ small {
 }
 
 .inventario-popup-close:focus-visible,
+.inventario-popup-edit:focus-visible,
 .inventario-popup-body input:focus-visible,
 .inventario-popup-body select:focus-visible,
 .inventario-editor-actions .btn:focus-visible,
@@ -3492,6 +3540,16 @@ small {
 
   .inventario-popup-head p {
     font-size: 0.88rem;
+  }
+
+  .inventario-popup-head-actions {
+    gap: 6px;
+  }
+
+  .inventario-popup-edit {
+    min-height: 42px;
+    font-size: 0.84rem;
+    padding: 8px 9px;
   }
 
   .inventario-popup-close {
