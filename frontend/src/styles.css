@@ -3117,15 +3117,15 @@ small {
 .inventario-address-extra {
   margin: 1px 0 0;
   color: #3d5680;
-  font-size: 0.68rem;
-  line-height: 1.12;
+  font-size: 0.34rem;
+  line-height: 1.08;
 }
 
 .inventario-address-user {
   margin: 1px 0 0;
   color: #6b7d99;
-  font-size: 0.56rem;
-  line-height: 1.05;
+  font-size: 0.28rem;
+  line-height: 1.08;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
