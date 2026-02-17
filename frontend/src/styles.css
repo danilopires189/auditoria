@@ -2775,6 +2775,18 @@ small {
   color: var(--text-muted);
 }
 
+.inventario-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inventario-report-inline-btn {
+  white-space: nowrap;
+}
+
 .inventario-toolbar,
 .inventario-subfilters,
 .inventario-report-filters,
