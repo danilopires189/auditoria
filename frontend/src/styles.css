@@ -2077,6 +2077,28 @@ small {
   padding: 5px 8px;
 }
 
+.entrada-notas-item-owner {
+  color: #51637f;
+  font-weight: 600;
+}
+
+.entrada-notas-route-contributors {
+  margin-top: 4px;
+  display: grid;
+  gap: 2px;
+}
+
+.entrada-notas-route-contributors p {
+  margin: 0;
+  color: #4e6180;
+  font-size: 0.76rem;
+}
+
+.entrada-notas-route-contributors-loading {
+  color: #6a7d9d;
+  font-size: 0.75rem;
+}
+
 .termo-routes-dialog,
 .termo-finalize-dialog {
   width: min(100%, 520px);
