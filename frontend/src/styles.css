@@ -2798,6 +2798,61 @@ small {
   gap: 8px;
 }
 
+.inventario-mobile-stage-card {
+  padding: 10px;
+}
+
+.inventario-mobile-stage-card h3 {
+  margin: 0 0 8px;
+  color: #12305e;
+  font-family: "Sora", sans-serif;
+  font-size: 0.98rem;
+}
+
+.inventario-mobile-stage-list {
+  display: grid;
+  gap: 9px;
+}
+
+.inventario-mobile-stage-btn {
+  width: 100%;
+  border: 1px solid #d4deef;
+  border-radius: 12px;
+  background: #fff;
+  color: #12305e;
+  padding: 11px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+}
+
+.inventario-mobile-stage-btn span {
+  font-weight: 700;
+}
+
+.inventario-mobile-stage-btn small {
+  color: #5a6f95;
+  font-size: 0.8rem;
+}
+
+.inventario-mobile-stage-btn.active {
+  border-color: #89a7d3;
+  background: #edf4ff;
+  box-shadow: 0 0 0 1px rgba(77, 116, 176, 0.24);
+}
+
+.inventario-mobile-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.inventario-mobile-back-btn {
+  min-height: 40px;
+}
+
 .inventario-tab-btn {
   border: 1px solid #c8d6ef;
   background: #f7faff;
@@ -2846,6 +2901,44 @@ small {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.inventario-zone-list-mobile {
+  padding: 10px;
+}
+
+.inventario-zone-list-mobile h3 {
+  margin: 0 0 8px;
+  color: #12305e;
+  font-family: "Sora", sans-serif;
+  font-size: 0.97rem;
+}
+
+.inventario-zone-mobile-list {
+  display: grid;
+  gap: 8px;
+}
+
+.inventario-zone-mobile-card {
+  width: 100%;
+  border: 1px solid #d4deef;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  display: grid;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.inventario-zone-mobile-card strong {
+  color: #142d58;
+}
+
+.inventario-zone-mobile-card p {
+  margin: 0;
+  color: #4b5e81;
+  font-size: 0.82rem;
 }
 
 .inventario-zone-chip {
@@ -2956,6 +3049,22 @@ small {
   margin: 0;
   color: #4b5e80;
   font-size: 0.82rem;
+}
+
+.inventario-popup-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #f2d49b;
+  background: #fff6e2;
+  color: #8a5d10;
+  font-size: 0.83rem;
+}
+
+.inventario-popup-note.warn {
+  border-color: #f2d49b;
+  background: #fff6e2;
+  color: #8a5d10;
 }
 
 .inventario-conciliation-grid {
@@ -3143,6 +3252,15 @@ small {
 
   .inventario-editor-hint {
     display: none;
+  }
+
+  .inventario-mobile-nav {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .inventario-mobile-back-btn {
+    min-width: 90px;
   }
 
   .inventario-popup-overlay {
