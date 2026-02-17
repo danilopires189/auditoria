@@ -303,6 +303,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [dtIni, setDtIni] = useState(CYCLE_DATE);
   const [dtFim, setDtFim] = useState(CYCLE_DATE);
   const [reportCount, setReportCount] = useState<number | null>(null);
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth >= 1024;
+  });
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const syncRef = useRef(false);
 
@@ -442,6 +448,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   useEffect(() => { if (fixed == null) void saveInventarioPreferences(profile.user_id, { cd_ativo: cd, prefer_offline_mode: preferOffline } satisfies InventarioPreferences); }, [cd, fixed, preferOffline, profile.user_id]);
   useEffect(() => { if (cd != null) { void loadLocal(); void refreshPending(); void getDbBarrasMeta().then((m) => setDbBarrasCount(m.row_count)); if (isOnline) void syncNow(false); } }, [cd, isOnline, loadLocal, refreshPending, syncNow]);
   useEffect(() => { if (!isOnline || cd == null) return; const id = window.setInterval(() => { void syncNow(false); }, 30000); return () => window.clearInterval(id); }, [cd, isOnline, syncNow]);
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= 1024);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  useEffect(() => {
+    if (!isDesktop) setReportOpen(false);
+  }, [isDesktop]);
 
   useEffect(() => {
     const needsLock = (tab === "s1" || tab === "s2") && isOnline && cd != null && zone && canEdit;
@@ -597,6 +612,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setFinalQtd(String(suggestedFinal));
     setFinalBarras(active.review?.final_barras ?? "");
   }, [active, tab]);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+    if (!active) setEditorOpen(false);
+  }, [active, editorOpen]);
 
   const canEditCount = useCallback((row: Row | null): boolean => {
     if (!row || !canEdit) return false;
@@ -776,6 +796,22 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             {preferOffline ? "Offline local" : "Online"}
           </button>
           <button className="btn btn-muted" type="button" onClick={() => void syncNow(true)} disabled={!isOnline || busy || cd == null}>{busy ? "Sincronizando..." : "Sincronizar"}</button>
+          {canExport && isDesktop ? (
+            <button
+              type="button"
+              className="btn btn-muted inventario-report-icon-btn"
+              onClick={() => setReportOpen(true)}
+              title="Relatório XLSX (Admin)"
+              aria-label="Abrir relatório XLSX"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="3" width="16" height="18" rx="2" />
+                <path d="M8 8h8" />
+                <path d="M8 12h8" />
+                <path d="M8 16h5" />
+              </svg>
+            </button>
+          ) : null}
         </div>
 
         <div className="termo-actions-row inventario-tabs">
@@ -814,7 +850,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   type="button"
                   key={bucket.key}
                   className={`inventario-address-card${selectedAddress === bucket.key ? " active" : ""}`}
-                  onClick={() => setSelectedAddress(bucket.key)}
+                  onClick={() => {
+                    setSelectedAddress(bucket.key);
+                    setSelectedItem(bucket.items[0]?.key ?? null);
+                    setEditorOpen(true);
+                  }}
                 >
                   <div>
                     <strong>{bucket.endereco}</strong>
@@ -831,18 +871,29 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             </div>
           </div>
 
-          <div className="termo-form inventario-editor">
-            {active ? (
-              <>
-                <h3>{active.endereco}</h3>
-                <p className="inventario-editor-text">{`Zona ${active.zona}`}</p>
-                <p className="inventario-editor-text">{`Produto CODDV ${active.coddv}`}</p>
+          <div className="termo-form inventario-editor-hint">
+            <h3>Edição em Popup</h3>
+            <p className="inventario-editor-text">Toque no endereço para abrir o popup de conferência.</p>
+            <p className="inventario-editor-text">Fluxo otimizado para uso no navegador do celular.</p>
+          </div>
+        </div>
+
+        {editorOpen && active ? (
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setEditorOpen(false)}>
+            <div className="inventario-popup-card" onClick={(event) => event.stopPropagation()}>
+              <div className="inventario-popup-head">
+                <div>
+                  <h3>{active.endereco}</h3>
+                  <p>{`${stageLabel(tab)} | CODDV ${active.coddv}`}</p>
+                </div>
+                <button type="button" className="inventario-popup-close" onClick={() => setEditorOpen(false)} aria-label="Fechar popup">Fechar</button>
+              </div>
+              <div className="inventario-popup-body">
                 <p className="inventario-editor-text">{active.descricao}</p>
                 {(tab === "s1" || tab === "s2") ? (
                   <>
                     <label>Quantidade<input value={qtd} onChange={(e) => setQtd(e.target.value)} disabled={!canEditCount(active) || busy} /></label>
                     <label>Barras (obrigatório se sobra)<input value={barras} onChange={(e) => setBarras(e.target.value)} disabled={!canEditCount(active) || busy} /></label>
-                    <p className="inventario-editor-text">Se a quantidade for maior que o esperado, o código de barras válido do mesmo CODDV é obrigatório.</p>
                     <div className="inventario-editor-actions">
                       <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>Salvar</button>
                       <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
@@ -871,25 +922,35 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   </>
                 ) : null}
                 {tab === "done" ? <p className="inventario-editor-text">Item concluído e imutável.</p> : null}
-              </>
-            ) : <div className="inventario-empty-card"><p>Selecione um endereço para iniciar.</p></div>}
+              </div>
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        {canExport ? (
-          <section className="coleta-report-panel inventario-report">
-            <h3>Relatório XLSX (Admin)</h3>
-            <div className="inventario-report-filters">
-              <label>Data inicial<input type="date" value={dtIni} onChange={(e) => setDtIni(e.target.value)} /></label>
-              <label>Data final<input type="date" value={dtFim} onChange={(e) => setDtFim(e.target.value)} /></label>
-              <label>CD<input disabled value={cd ?? ""} /></label>
+        {canExport && isDesktop && reportOpen ? (
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setReportOpen(false)}>
+            <div className="inventario-popup-card inventario-report-popup" onClick={(event) => event.stopPropagation()}>
+              <div className="inventario-popup-head">
+                <div>
+                  <h3>Relatório XLSX (Admin)</h3>
+                  <p>Defina o período e exporte.</p>
+                </div>
+                <button type="button" className="inventario-popup-close" onClick={() => setReportOpen(false)} aria-label="Fechar popup">Fechar</button>
+              </div>
+              <div className="inventario-popup-body">
+                <div className="inventario-report-filters">
+                  <label>Data inicial<input type="date" value={dtIni} onChange={(e) => setDtIni(e.target.value)} /></label>
+                  <label>Data final<input type="date" value={dtFim} onChange={(e) => setDtFim(e.target.value)} /></label>
+                  <label>CD<input disabled value={cd ?? ""} /></label>
+                </div>
+                <div className="inventario-report-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => void countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd: cd ?? -1 }).then(setReportCount).catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Contar</button>
+                  <button className="btn btn-primary" type="button" onClick={() => void exportReport().catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Exportar XLSX</button>
+                </div>
+                {reportCount != null ? <p>{`Registros: ${reportCount}`}</p> : null}
+              </div>
             </div>
-            <div className="inventario-report-actions">
-              <button className="btn btn-muted" type="button" onClick={() => void countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd: cd ?? -1 }).then(setReportCount).catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Contar</button>
-              <button className="btn btn-primary" type="button" onClick={() => void exportReport().catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Exportar XLSX</button>
-            </div>
-            {reportCount != null ? <p>{`Registros: ${reportCount}`}</p> : null}
-          </section>
+          </div>
         ) : null}
       </section>
     </>
