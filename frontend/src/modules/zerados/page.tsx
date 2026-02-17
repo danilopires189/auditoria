@@ -233,6 +233,10 @@ function stageLabel(stage: InventarioStageView): string {
   return "Concluídos";
 }
 
+function labelByCount(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function derive(manifest: InventarioManifestItemRow[], remote: InventarioSyncPullState): Row[] {
   const counts = new Map<string, { c1: InventarioCountRow | null; c2: InventarioCountRow | null }>();
   for (const c of remote.counts) {
@@ -1095,17 +1099,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           >
             {preferOffline ? "📦 Offline ativo" : "📶 Trabalhar offline"}
           </button>
-          {!canShowStageSelector ? (
-            <button
-              type="button"
-              className="btn btn-muted termo-route-btn"
-              onClick={() => setShowZonePicker(true)}
-              disabled={zoneBuckets.length === 0}
-            >
-              <span aria-hidden="true">{listIcon()}</span>
-              Zonas
-            </button>
-          ) : null}
         </div>
 
         {canShowStageSelector ? (
@@ -1120,7 +1113,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   onClick={() => handleTabChange(stageEntry.view)}
                 >
                   <span>{stageEntry.label}</span>
-                  <small>{`${stageEntry.count} item(ns)`}</small>
+                  <small>{labelByCount(stageEntry.count, "item", "itens")}</small>
                 </button>
               ))}
             </div>
@@ -1152,9 +1145,22 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             >
               Voltar
             </button>
-            <p className="inventario-editor-text">
-              {mobileStep === "zone" ? `Etapa atual: ${stageLabel(tab)}` : `Zona atual: ${zone ?? "-"}`}
-            </p>
+            {mobileStep === "zone" ? (
+              <p className="inventario-editor-text">{`Etapa atual: ${stageLabel(tab)}`}</p>
+            ) : (
+              <div className="inventario-zone-current-row">
+                <p className="inventario-editor-text">{`Zona atual: ${zone ?? "-"}`}</p>
+                <button
+                  type="button"
+                  className="btn btn-muted termo-route-btn inventario-change-zone-btn"
+                  onClick={() => setShowZonePicker(true)}
+                  disabled={zoneBuckets.length === 0}
+                >
+                  <span aria-hidden="true">{listIcon()}</span>
+                  Alterar Zona
+                </button>
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -1181,9 +1187,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         {canShowZoneSelector ? (
           <div className="termo-form inventario-zone-list-mobile">
             <h3>{`Zonas - ${stageLabel(tab)}`}</h3>
-            <p className="inventario-editor-text">Use o botão `Zonas` acima para escolher entre as zonas disponíveis.</p>
+            <p className="inventario-editor-text">Use o botão abaixo para escolher entre as zonas disponíveis.</p>
             <button type="button" className="btn btn-muted termo-route-btn inventario-zone-picker-btn" onClick={() => setShowZonePicker(true)} disabled={zoneBuckets.length === 0}>
-              <span aria-hidden="true">{listIcon()}</span>
               Escolher zona
             </button>
             {zone ? <p className="inventario-editor-text">{`Zona atual: ${zone}`}</p> : null}
@@ -1197,7 +1202,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           <div className="inventario-layout">
             <div className="termo-form inventario-address-panel">
               <h3>{`Endereços - ${stageLabel(tab)}${zone ? ` | ${zone}` : ""}`}</h3>
-              <p className="inventario-editor-text">{`${addressBuckets.length} endereço(s)`}</p>
+              <p className="inventario-editor-text">{labelByCount(addressBuckets.length, "endereço", "endereços")}</p>
 
               <div className="inventario-address-list">
                 {addressBuckets.map((bucket) => (
@@ -1209,10 +1214,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   >
                     <div>
                       <strong>{bucket.endereco}</strong>
-                      <p>{`${bucket.total_items} item(ns)`}</p>
+                      <p>{labelByCount(bucket.total_items, "item", "itens")}</p>
                     </div>
                     <span className={`termo-divergencia ${bucket.pending_items > 0 ? "andamento" : "correto"}`}>
-                      {bucket.pending_items > 0 ? `${bucket.pending_items} pendente(s)` : `${bucket.done_items} concluído(s)`}
+                      {bucket.pending_items > 0
+                        ? labelByCount(bucket.pending_items, "pendente", "pendentes")
+                        : labelByCount(bucket.done_items, "concluído", "concluídos")}
                     </span>
                   </button>
                 ))}
@@ -1252,10 +1259,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             <span className="termo-route-main">
                               <span className="termo-route-info">
                                 <span className="termo-route-title">{zoneBucket.zona}</span>
-                                <span className="termo-route-sub">{`${zoneBucket.address_count} endereço(s) | ${zoneBucket.item_count} item(ns)`}</span>
+                                <span className="termo-route-sub">{`${labelByCount(zoneBucket.address_count, "endereço", "endereços")} | ${labelByCount(zoneBucket.item_count, "item", "itens")}`}</span>
                               </span>
                               <span className="termo-route-actions-row">
-                                <span className="termo-route-items-count">{`${zoneBucket.item_count} item(ns)`}</span>
+                                <span className="termo-route-items-count">{labelByCount(zoneBucket.item_count, "item", "itens")}</span>
                                 <span className={`termo-divergencia ${zone === zoneBucket.zona ? "correto" : "andamento"}`}>
                                   {zone === zoneBucket.zona ? "Selecionada" : "Disponível"}
                                 </span>
@@ -1427,7 +1434,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   <button className="btn btn-muted" type="button" onClick={() => void countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd: cd ?? -1 }).then(setReportCount).catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Contar</button>
                   <button className="btn btn-primary" type="button" onClick={() => void exportReport().catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Exportar XLSX</button>
                 </div>
-                {reportCount != null ? <p>{`Registros: ${reportCount}`}</p> : null}
+                {reportCount != null ? <p>{labelByCount(reportCount, "registro", "registros")}</p> : null}
               </div>
             </div>
           </div>
