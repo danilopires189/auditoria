@@ -7,6 +7,7 @@ import type {
   VolumeAvulsoManifestBarrasRow,
   VolumeAvulsoManifestItemRow,
   VolumeAvulsoManifestMeta,
+  VolumeAvulsoManifestVolumeRow,
   VolumeAvulsoPartialReopenInfo,
   VolumeAvulsoRouteOverviewRow,
   VolumeAvulsoVolumeRow
@@ -77,6 +78,14 @@ function mapManifestItem(raw: Record<string, unknown>): VolumeAvulsoManifestItem
     qtd_esperada: Math.max(parseInteger(raw.qtd_esperada, 1), 1),
     lotes: parseNullableString(raw.lotes ?? raw.lote),
     validades: parseNullableString(raw.validades ?? raw.val)
+  };
+}
+
+function mapManifestVolume(raw: Record<string, unknown>): VolumeAvulsoManifestVolumeRow {
+  return {
+    nr_volume: String(raw.nr_volume ?? "").trim(),
+    itens_total: Math.max(parseInteger(raw.itens_total), 0),
+    qtd_esperada_total: Math.max(parseInteger(raw.qtd_esperada_total), 0)
   };
 }
 
@@ -230,6 +239,18 @@ export async function fetchManifestItemsPage(
   return data
     .map((row) => mapManifestItem(row as Record<string, unknown>))
     .filter((row) => row.nr_volume && row.coddv > 0);
+}
+
+export async function fetchManifestVolumes(cd: number): Promise<VolumeAvulsoManifestVolumeRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_volume_avulso_manifest_volumes", {
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((row) => mapManifestVolume(row as Record<string, unknown>))
+    .filter((row) => row.nr_volume);
 }
 
 export async function fetchManifestBarrasPage(
