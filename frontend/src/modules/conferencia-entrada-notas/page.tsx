@@ -1019,6 +1019,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
   }, []);
 
+  const fetchSeqNfVolumeSnapshot = useCallback(async (
+    nrVolume: string,
+    cd: number
+  ): Promise<EntradaNotasLocalVolume> => {
+    const remoteVolume = await openVolume(nrVolume, cd);
+    const [remoteItems, contributors] = await Promise.all([
+      fetchVolumeItems(remoteVolume.conf_id),
+      fetchSeqNfContributors(remoteVolume)
+    ]);
+    const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems, contributors);
+    await saveLocalVolume(localVolume);
+    return localVolume;
+  }, [fetchSeqNfContributors, profile]);
+
   const promptPartialReopen = useCallback(async (
     etiqueta: string,
     selectedCd: number
@@ -1452,8 +1466,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
         const existingToday = await getLocalVolume(profile.user_id, selectedCd, today, etiqueta);
         if (existingToday) {
-          if (existingToday.status !== "em_conferencia") {
-            if (isOnline && existingToday.conference_kind !== "avulsa") {
+          let resolvedExisting = existingToday;
+          if (
+            isOnline
+            && existingToday.conference_kind === "seq_nf"
+            && !existingToday.pending_snapshot
+            && !existingToday.pending_finalize
+            && !existingToday.pending_cancel
+          ) {
+            resolvedExisting = await fetchSeqNfVolumeSnapshot(existingToday.nr_volume, selectedCd);
+            etiquetaFinal = resolvedExisting.nr_volume;
+          }
+
+          if (resolvedExisting.status !== "em_conferencia") {
+            if (isOnline && resolvedExisting.conference_kind !== "avulsa") {
               try {
                 const reopenPrompted = await promptPartialReopen(etiqueta, selectedCd);
                 if (reopenPrompted) return;
@@ -1467,7 +1493,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               confirmLabel: "Abrir leitura",
               cancelLabel: "Cancelar",
               onConfirm: () => {
-                setActiveVolume(existingToday);
+                setActiveVolume(resolvedExisting);
                 setExpandedItemKey(null);
                 setEditingItemKey(null);
                 setEditQtdInput("0");
@@ -1477,8 +1503,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             });
             return;
           }
-          setActiveVolume(existingToday);
-          etiquetaFinal = existingToday.nr_volume;
+          setActiveVolume(resolvedExisting);
+          etiquetaFinal = resolvedExisting.nr_volume;
           setExpandedItemKey(null);
           setEditingItemKey(null);
           setEditQtdInput("0");
@@ -1627,6 +1653,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     promptPartialReopen,
     resumeRemoteActiveVolume,
     showDialog,
+    fetchSeqNfVolumeSnapshot,
     fetchSeqNfContributors
   ]);
 
@@ -2926,8 +2953,22 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           && (row.status === "em_conferencia" || row.pending_snapshot || row.pending_finalize || row.pending_cancel)
       );
       if (latestToday) {
-        setActiveVolume(latestToday);
-        setEtiquetaInput(latestToday.nr_volume);
+        let resolvedLatest = latestToday;
+        if (
+          isOnline
+          && latestToday.conference_kind === "seq_nf"
+          && !latestToday.pending_snapshot
+          && !latestToday.pending_finalize
+          && !latestToday.pending_cancel
+        ) {
+          try {
+            resolvedLatest = await fetchSeqNfVolumeSnapshot(latestToday.nr_volume, latestToday.cd);
+          } catch {
+            // Mantém cache local se não conseguir atualizar snapshot remoto.
+          }
+        }
+        setActiveVolume(resolvedLatest);
+        setEtiquetaInput(resolvedLatest.nr_volume);
       } else {
         setActiveVolume(null);
         setEtiquetaInput("");
@@ -2955,7 +2996,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return () => {
       cancelled = true;
     };
-  }, [currentCd, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
+  }, [currentCd, fetchSeqNfVolumeSnapshot, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
 
   useEffect(() => {
     void refreshPendingState();
