@@ -3398,6 +3398,12 @@ small {
   padding: env(safe-area-inset-top, 0px) 0 0;
 }
 
+.inventario-popup-overlay-editor {
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+
 .inventario-popup-card {
   width: 100%;
   max-height: 92vh;
@@ -3413,6 +3419,20 @@ small {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.inventario-editor-popup-card {
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100svh;
+  max-height: 100dvh;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
 }
 
 .inventario-popup-head {
@@ -3509,6 +3529,8 @@ small {
   display: grid;
   gap: 12px;
   overflow: auto;
+  min-height: 0;
+  background: #fff;
   overscroll-behavior: contain;
   scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;

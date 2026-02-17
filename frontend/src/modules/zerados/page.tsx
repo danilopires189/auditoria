@@ -1847,8 +1847,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           : null}
 
         {editorOpen && active ? (
-          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeEditorPopup}>
-            <div className="inventario-popup-card" onClick={(event) => event.stopPropagation()}>
+          <div className="inventario-popup-overlay inventario-popup-overlay-editor" role="dialog" aria-modal="true" onClick={closeEditorPopup}>
+            <div className="inventario-popup-card inventario-editor-popup-card" onClick={(event) => event.stopPropagation()}>
               <div className="inventario-popup-head">
                 <div>
                   <h3>{active.endereco}</h3>
