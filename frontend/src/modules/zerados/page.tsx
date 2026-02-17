@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
+import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
@@ -64,6 +65,7 @@ interface InventarioPageProps {
 type StageStatusFilter = "pendente" | "concluido";
 type ReviewStatusFilter = "pendente" | "resolvido";
 type MobileFlowStep = "stage" | "zone" | "address";
+type ScannerTarget = "barras" | "final_barras";
 
 type Row = InventarioManifestItemRow & {
   key: string;
@@ -178,6 +180,33 @@ function reportIcon() {
       <path d="M8 8h8" />
       <path d="M8 12h8" />
       <path d="M8 16h5" />
+    </svg>
+  );
+}
+
+function cameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h4l1.5-2h5L16 7h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+function closeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
+function flashIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {on ? <path d="M7 2h10l-4 7h5l-9 13 2-9H6z" /> : <path d="M7 2h10l-4 7h5l-9 13 2-9H6z" />}
+      {!on ? <path d="M4 4l16 16" /> : null}
     </svg>
   );
 }
@@ -369,18 +398,37 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [zoneSearchInput, setZoneSearchInput] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scannerTarget, setScannerTarget] = useState<ScannerTarget>("barras");
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
 
   const syncRef = useRef(false);
   const qtdInputRef = useRef<HTMLInputElement | null>(null);
   const finalQtdInputRef = useRef<HTMLInputElement | null>(null);
   const reportDtIniInputRef = useRef<HTMLInputElement | null>(null);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
+  const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
   const popupWasOpenRef = useRef(false);
   const popupReturnFocusRef = useRef<HTMLElement | null>(null);
+  const cameraSupported = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return typeof navigator.mediaDevices?.getUserMedia === "function";
+  }, []);
 
   useEffect(() => { lockRef.current = lock; }, [lock]);
 
   const closeEditorPopup = useCallback(() => {
     setPopupErr(null);
+    setScannerOpen(false);
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
     setEditorOpen(false);
   }, []);
 
@@ -394,6 +442,113 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     event.currentTarget.select();
     keepFocusedControlVisible(event);
   }, [keepFocusedControlVisible]);
+
+  const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
+    const videoEl = scannerVideoRef.current;
+    if (videoEl?.srcObject instanceof MediaStream) {
+      const [track] = videoEl.srcObject.getVideoTracks();
+      return track ?? null;
+    }
+    return null;
+  }, []);
+
+  const supportsTrackTorch = useCallback((track: MediaStreamTrack | null): boolean => {
+    if (!track) return false;
+    const trackWithCaps = track as MediaStreamTrack & {
+      getCapabilities?: () => MediaTrackCapabilities;
+    };
+    if (typeof trackWithCaps.getCapabilities !== "function") return false;
+    const capabilities = trackWithCaps.getCapabilities();
+    return Boolean((capabilities as { torch?: boolean } | null)?.torch);
+  }, []);
+
+  const stopCameraScanner = useCallback(() => {
+    const controls = scannerControlsRef.current;
+    const activeTrack = scannerTrackRef.current ?? resolveScannerTrack();
+    if (controls) {
+      if (controls.switchTorch && torchEnabled && scannerTorchModeRef.current === "controls") {
+        void controls.switchTorch(false).catch(() => {
+          // Ignore torch shutdown failures on unsupported browsers.
+        });
+      }
+      controls.stop();
+      scannerControlsRef.current = null;
+    }
+    if (activeTrack && torchEnabled && scannerTorchModeRef.current === "track") {
+      const trackWithConstraints = activeTrack as MediaStreamTrack & {
+        applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+      };
+      if (typeof trackWithConstraints.applyConstraints === "function") {
+        void trackWithConstraints
+          .applyConstraints({ advanced: [{ torch: false } as MediaTrackConstraintSet] })
+          .catch(() => {
+            // Ignore torch shutdown failures on unsupported browsers.
+          });
+      }
+    }
+
+    const videoEl = scannerVideoRef.current;
+    if (videoEl && videoEl.srcObject instanceof MediaStream) {
+      for (const track of videoEl.srcObject.getTracks()) {
+        track.stop();
+      }
+      videoEl.srcObject = null;
+    }
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+  }, [resolveScannerTrack, torchEnabled]);
+
+  const closeCameraScanner = useCallback(() => {
+    stopCameraScanner();
+    setScannerOpen(false);
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+  }, [stopCameraScanner]);
+
+  const openCameraScanner = useCallback((target: ScannerTarget) => {
+    if (!cameraSupported) {
+      setPopupErr("Câmera não disponível neste navegador/dispositivo.");
+      return;
+    }
+    setPopupErr(null);
+    setScannerError(null);
+    setScannerTarget(target);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+    setScannerOpen(true);
+  }, [cameraSupported]);
+
+  const toggleTorch = useCallback(async () => {
+    const controls = scannerControlsRef.current;
+    const track = scannerTrackRef.current ?? resolveScannerTrack();
+    if (!controls?.switchTorch && scannerTorchModeRef.current !== "track") {
+      setScannerError("Flash não disponível neste dispositivo.");
+      return;
+    }
+    try {
+      const next = !torchEnabled;
+      if (scannerTorchModeRef.current === "controls" && controls?.switchTorch) {
+        await controls.switchTorch(next);
+      } else {
+        const trackWithConstraints = track as MediaStreamTrack & {
+          applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+        };
+        if (!trackWithConstraints || typeof trackWithConstraints.applyConstraints !== "function") {
+          throw new Error("Track sem suporte de constraints");
+        }
+        await trackWithConstraints.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      }
+      setTorchEnabled(next);
+      setScannerError(null);
+    } catch {
+      setScannerError("Não foi possível alternar o flash.");
+    }
+  }, [resolveScannerTrack, torchEnabled]);
 
   const refreshPending = useCallback(async () => {
     if (cd == null) return setPendingCount(0);
@@ -539,7 +694,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!isDesktop) setReportOpen(false);
   }, [isDesktop]);
   useEffect(() => {
-    const popupOpen = editorOpen || reportOpen;
+    const popupOpen = editorOpen || reportOpen || scannerOpen;
     if (popupOpen && !popupWasOpenRef.current) {
       popupReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     }
@@ -549,15 +704,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       popupReturnFocusRef.current = null;
     }
     popupWasOpenRef.current = popupOpen;
-  }, [editorOpen, reportOpen]);
+  }, [editorOpen, reportOpen, scannerOpen]);
   useEffect(() => {
-    if (!(editorOpen || reportOpen)) return;
+    if (!(editorOpen || reportOpen || scannerOpen)) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [editorOpen, reportOpen]);
+  }, [editorOpen, reportOpen, scannerOpen]);
   useEffect(() => {
     if (!editorOpen) return;
     const id = window.setTimeout(() => {
@@ -570,6 +725,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     return () => window.clearTimeout(id);
   }, [editorOpen, selectedItem, tab]);
   useEffect(() => {
+    if (!editorOpen && scannerOpen) {
+      closeCameraScanner();
+    }
+  }, [closeCameraScanner, editorOpen, scannerOpen]);
+  useEffect(() => {
     if (!reportOpen) return;
     const id = window.setTimeout(() => {
       const target = reportDtIniInputRef.current;
@@ -580,15 +740,16 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     return () => window.clearTimeout(id);
   }, [reportOpen]);
   useEffect(() => {
-    if (!(editorOpen || reportOpen)) return;
+    if (!(editorOpen || reportOpen || scannerOpen)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (reportOpen) setReportOpen(false);
+      if (scannerOpen) closeCameraScanner();
+      else if (reportOpen) setReportOpen(false);
       else closeEditorPopup();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeEditorPopup, editorOpen, reportOpen]);
+  }, [closeCameraScanner, closeEditorPopup, editorOpen, reportOpen, scannerOpen]);
 
   useEffect(() => {
     const needsLock = (tab === "s1" || tab === "s2") && isOnline && cd != null && zone && canEdit;
@@ -994,6 +1155,105 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
   }, [active, advanceAfterAction, canResolveConciliation, cd, finalBarras, finalQtd, selectedAddress, send, validateBarras]);
 
+  useEffect(() => {
+    if (!scannerOpen) return;
+
+    let cancelled = false;
+    let torchProbeTimer: number | null = null;
+    let torchProbeAttempts = 0;
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTorchModeRef.current = "none";
+
+    const startScanner = async () => {
+      try {
+        const zxing = await import("@zxing/browser");
+        if (cancelled) return;
+
+        const videoEl = scannerVideoRef.current;
+        if (!videoEl) {
+          setScannerError("Falha ao abrir visualização da câmera.");
+          return;
+        }
+
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: "environment" }
+            }
+          },
+          videoEl,
+          (result, error) => {
+            if (cancelled) return;
+
+            if (result) {
+              const scanned = normalizeBarcode(result.getText() ?? "");
+              if (!scanned) return;
+
+              if (scannerTarget === "final_barras") setFinalBarras(scanned);
+              else setBarras(scanned);
+
+              closeCameraScanner();
+              return;
+            }
+
+            const errorName = (error as { name?: string } | null)?.name;
+            if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
+              setScannerError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
+            }
+          }
+        );
+
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+        scannerControlsRef.current = controls;
+        const probeTorchAvailability = () => {
+          if (cancelled) return;
+          if (typeof controls.switchTorch === "function") {
+            scannerTorchModeRef.current = "controls";
+            setTorchSupported(true);
+            return;
+          }
+          const track = resolveScannerTrack();
+          if (track) {
+            scannerTrackRef.current = track;
+          }
+          if (supportsTrackTorch(track)) {
+            scannerTorchModeRef.current = "track";
+            setTorchSupported(true);
+            return;
+          }
+          if (torchProbeAttempts < 10) {
+            torchProbeAttempts += 1;
+            torchProbeTimer = window.setTimeout(probeTorchAvailability, 120);
+            return;
+          }
+          scannerTorchModeRef.current = "none";
+          setTorchSupported(false);
+        };
+
+        probeTorchAvailability();
+      } catch (error) {
+        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
+      }
+    };
+
+    void startScanner();
+
+    return () => {
+      cancelled = true;
+      if (torchProbeTimer != null) {
+        window.clearTimeout(torchProbeTimer);
+      }
+      stopCameraScanner();
+    };
+  }, [closeCameraScanner, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch]);
+
   const exportReport = useCallback(async () => {
     if (!canExport || cd == null) return;
     const total = await countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
@@ -1328,19 +1588,31 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     {requiresBarras ? (
                       <label>
                         Barras (obrigatório na sobra)
-                        <input
-                          value={barras}
-                          onChange={(e) => setBarras(e.target.value)}
-                          onFocus={keepFocusedControlVisible}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          autoCapitalize="off"
-                          autoCorrect="off"
-                          autoComplete="off"
-                          spellCheck={false}
-                          enterKeyHint="done"
-                          disabled={!canEditCount(active) || busy}
-                        />
+                        <div className="inventario-popup-input-action-wrap">
+                          <input
+                            value={barras}
+                            onChange={(e) => setBarras(e.target.value)}
+                            onFocus={keepFocusedControlVisible}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            autoCapitalize="off"
+                            autoCorrect="off"
+                            autoComplete="off"
+                            spellCheck={false}
+                            enterKeyHint="done"
+                            disabled={!canEditCount(active) || busy}
+                          />
+                          <button
+                            type="button"
+                            className="input-action-btn inventario-popup-scan-btn"
+                            onClick={() => openCameraScanner("barras")}
+                            title="Ler código pela câmera"
+                            aria-label="Ler código pela câmera"
+                            disabled={!canEditCount(active) || busy || !cameraSupported}
+                          >
+                            {cameraIcon()}
+                          </button>
+                        </div>
                       </label>
                     ) : null}
                     <div className="inventario-editor-actions">
@@ -1385,25 +1657,37 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     {requiresFinalBarras ? (
                       <label>
                         Barras final (obrigatório na sobra)
-                        <input
-                          value={finalBarras}
-                          onChange={(e) => setFinalBarras(e.target.value)}
-                          onFocus={keepFocusedControlVisible}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          autoCapitalize="off"
-                          autoCorrect="off"
-                          autoComplete="off"
-                          spellCheck={false}
-                          enterKeyHint="done"
-                          disabled={!canResolveConciliation || busy}
-                        />
+                        <div className="inventario-popup-input-action-wrap">
+                          <input
+                            value={finalBarras}
+                            onChange={(e) => setFinalBarras(e.target.value)}
+                            onFocus={keepFocusedControlVisible}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            autoCapitalize="off"
+                            autoCorrect="off"
+                            autoComplete="off"
+                            spellCheck={false}
+                            enterKeyHint="done"
+                            disabled={!canResolveConciliation || busy}
+                          />
+                          <button
+                            type="button"
+                            className="input-action-btn inventario-popup-scan-btn"
+                            onClick={() => openCameraScanner("final_barras")}
+                            title="Ler código pela câmera"
+                            aria-label="Ler código pela câmera"
+                            disabled={!canResolveConciliation || busy || !cameraSupported}
+                          >
+                            {cameraIcon()}
+                          </button>
+                        </div>
                       </label>
                     ) : null}
                     <div className="inventario-editor-actions"><button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button></div>
                   </>
                 ) : null}
-                {tab === "done" ? <p className="inventario-editor-text">Item concluído e imutável.</p> : null}
+                {tab === "done" ? <p className="inventario-editor-text">Item concluído e  não pode ser alterado.</p> : null}
               </div>
             </div>
           </div>
@@ -1450,6 +1734,54 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             </div>
           </div>
         ) : null}
+        {scannerOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-scanner-title" onClick={closeCameraScanner}>
+                <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <div className="scanner-head">
+                    <h3 id="inventario-scanner-title">Scanner de barras</h3>
+                    <div className="scanner-head-actions">
+                      {!isDesktop ? (
+                        <button
+                          type="button"
+                          className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
+                          onClick={() => void toggleTorch()}
+                          aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
+                          title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
+                          disabled={!torchSupported}
+                        >
+                          {flashIcon({ on: torchEnabled })}
+                          <span>{torchEnabled ? "Flash on" : "Flash"}</span>
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="scanner-close-btn"
+                        onClick={closeCameraScanner}
+                        aria-label="Fechar scanner"
+                        title="Fechar scanner"
+                      >
+                        {closeIcon()}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="scanner-video-wrap">
+                    <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+                    <div className="scanner-frame" aria-hidden="true">
+                      <div className="scanner-frame-corner top-left" />
+                      <div className="scanner-frame-corner top-right" />
+                      <div className="scanner-frame-corner bottom-left" />
+                      <div className="scanner-frame-corner bottom-right" />
+                      <div className="scanner-frame-line" />
+                    </div>
+                  </div>
+                  <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
+                  {scannerError ? <div className="alert error">{scannerError}</div> : null}
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
       </section>
     </>
   );
