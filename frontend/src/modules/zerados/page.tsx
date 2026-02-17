@@ -1203,7 +1203,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!active || cd == null) return;
     if (!(tab === "s1" || tab === "s2")) return;
     if (!canEditCount(active)) {
-      setPopupErr("Você não pode editar este item nesta etapa.");
+      setPopupErr("Você não pode editar este endereço nesta etapa.");
       return;
     }
 
@@ -1511,7 +1511,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   onClick={() => handleTabChange(stageEntry.view)}
                 >
                   <span>{stageEntry.label}</span>
-                  <small>{labelByCount(stageEntry.count, "item", "itens")}</small>
+                  <small>{labelByCount(stageEntry.count, "endereço", "endereços")}</small>
                 </button>
               ))}
             </div>
@@ -1620,7 +1620,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   const countedByLine = countedInfo ? formatCountedByLine(countedInfo.mat, countedInfo.nome) : null;
                   const addressMeta = singleItem
                     ? `${singleItem.coddv} - ${singleItem.descricao}`
-                    : labelByCount(bucket.total_items, "item", "itens");
+                    : labelByCount(bucket.total_items, "endereço", "endereços");
                   return (
                     <button
                       type="button"
