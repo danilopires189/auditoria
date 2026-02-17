@@ -18,7 +18,7 @@ import type {
   InventarioZoneOverviewRow
 } from "./types";
 
-const MANIFEST_PAGE_SIZE = 1500;
+const MANIFEST_PAGE_SIZE = 1000;
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -254,18 +254,24 @@ export async function fetchManifestBundle(
 
   const items: InventarioManifestItemRow[] = [];
   let offset = 0;
+  const expectedTotal = Math.max(meta.row_count, 0);
 
   while (true) {
     const page = await fetchManifestItemsPage(cd, offset, MANIFEST_PAGE_SIZE);
     if (!page.length) break;
     items.push(...page);
     offset += page.length;
-    const total = Math.max(meta.row_count, 0);
-    const percent = total > 0 ? Math.round(Math.min(1, items.length / total) * 100) : 100;
-    onProgress?.({ rows: items.length, total, percent });
+    const percent = expectedTotal > 0 ? Math.round(Math.min(1, items.length / expectedTotal) * 100) : 100;
+    onProgress?.({ rows: items.length, total: expectedTotal, percent });
+    if (expectedTotal > 0 && items.length >= expectedTotal) break;
     if (page.length < MANIFEST_PAGE_SIZE) break;
   }
 
+  if (expectedTotal > 0 && items.length !== expectedTotal) {
+    throw new Error(`MANIFESTO_INCOMPLETO: local=${items.length} esperado=${expectedTotal}`);
+  }
+
+  onProgress?.({ rows: items.length, total: expectedTotal, percent: 100 });
   return { meta, items };
 }
 
