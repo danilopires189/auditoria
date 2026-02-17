@@ -838,19 +838,36 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     )))
   ), [activeVolume?.items, profile.user_id]);
 
+  const hasInformedItemsFromPreviousSession = useMemo(() => {
+    if (!activeVolume || activeVolume.conference_kind !== "seq_nf") return false;
+    const startedAtMs = Date.parse(activeVolume.started_at ?? "");
+    if (!Number.isFinite(startedAtMs)) return false;
+    return activeVolume.items.some((item) => {
+      if (item.qtd_conferida <= 0) return false;
+      const itemUpdatedMs = Date.parse(item.updated_at ?? "");
+      if (!Number.isFinite(itemUpdatedMs)) return false;
+      return itemUpdatedMs < startedAtMs;
+    });
+  }, [activeVolume]);
+
   const shouldProtectPartialResumeOnCancel = useMemo(() => (
     Boolean(
       activeVolume
       && activeVolume.conference_kind === "seq_nf"
       && activeVolume.status === "em_conferencia"
       && hasAnyItemInformed
-      && (hasItemsLockedByOtherUser || hasOtherUserContributors)
+      && (
+        hasItemsLockedByOtherUser
+        || hasOtherUserContributors
+        || hasInformedItemsFromPreviousSession
+      )
     )
   ), [
     activeVolume,
     hasAnyItemInformed,
     hasItemsLockedByOtherUser,
-    hasOtherUserContributors
+    hasOtherUserContributors,
+    hasInformedItemsFromPreviousSession
   ]);
 
   const activeContributorsLabel = useMemo(() => {
@@ -3135,11 +3152,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const requestCancelConference = useCallback(() => {
     if (!activeVolume || !canEditActiveVolume) return;
     const preserveAlreadyCountedData = shouldProtectPartialResumeOnCancel;
+    const preserveReasonLabel =
+      hasItemsLockedByOtherUser || hasOtherUserContributors
+        ? "por outro usuário"
+        : hasInformedItemsFromPreviousSession
+          ? "em sessão anterior"
+          : "em outro momento";
 
     showDialog({
       title: "Cancelar conferência",
       message: preserveAlreadyCountedData
-        ? `A conferência do Seq/NF ${activeVolume.nr_volume} possui itens já conferidos por outro usuário.\n\n`
+        ? `A conferência do Seq/NF ${activeVolume.nr_volume} possui itens já conferidos ${preserveReasonLabel}.\n\n`
           + "Ao confirmar, esta retomada será encerrada mantendo tudo que já foi conferido (não haverá descarte)."
         : activeVolume.conference_kind === "avulsa"
           ? "A conferência avulsa será cancelada e todos os dados lançados serão perdidos. Deseja continuar?"
@@ -3247,6 +3270,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     markStorePendingAfterCancel,
     refreshPendingState,
     showDialog,
+    hasInformedItemsFromPreviousSession,
+    hasItemsLockedByOtherUser,
+    hasOtherUserContributors,
     shouldProtectPartialResumeOnCancel,
     syncRouteOverview,
     handleClosedConferenceError
