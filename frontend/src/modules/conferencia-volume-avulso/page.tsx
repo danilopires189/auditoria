@@ -2668,34 +2668,37 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                             disabled={busyOpenVolume}
                           >
                             <span className="termo-route-main">
-                              <span className="termo-route-title">NR Volume {row.nr_volume}</span>
-                              <span className="termo-route-sub">
-                                Itens: {row.itens_total}
-                                {" | "}
-                                Qtd. esperada: {row.qtd_esperada_total}
+                              <span className="termo-route-info">
+                                <span className="termo-route-title">NR Volume {row.nr_volume}</span>
+                                <span className="termo-route-sub">
+                                  Itens: {row.itens_total}
+                                  {" | "}
+                                  Qtd. esperada: {row.qtd_esperada_total}
+                                </span>
+                                {row.status === "em_andamento" && contributorLabel ? (
+                                  <span className="termo-route-sub">Em andamento por: {contributorLabel}</span>
+                                ) : null}
+                                {row.status === "concluido" && contributorLabel ? (
+                                  <span className="termo-route-sub">Concluído por: {contributorLabel}</span>
+                                ) : null}
+                                {row.status === "em_andamento" && row.status_at ? (
+                                  <span className="termo-route-sub">Iniciado em: {formatDateTime(row.status_at)}</span>
+                                ) : null}
+                                {row.status === "concluido" && row.status_at ? (
+                                  <span className="termo-route-sub">Concluído em: {formatDateTime(row.status_at)}</span>
+                                ) : null}
                               </span>
-                              {row.status === "em_andamento" && contributorLabel ? (
-                                <span className="termo-route-sub">Em andamento por: {contributorLabel}</span>
-                              ) : null}
-                              {row.status === "concluido" && contributorLabel ? (
-                                <span className="termo-route-sub">Concluído por: {contributorLabel}</span>
-                              ) : null}
-                              {row.status === "em_andamento" && row.status_at ? (
-                                <span className="termo-route-sub">Iniciado em: {formatDateTime(row.status_at)}</span>
-                              ) : null}
-                              {row.status === "concluido" && row.status_at ? (
-                                <span className="termo-route-sub">Concluído em: {formatDateTime(row.status_at)}</span>
-                              ) : null}
                               <span className="termo-route-actions-row">
                                 <span className="termo-route-items-count">{row.itens_total} item(ns)</span>
                                 <span className={`termo-divergencia ${routeStatusClass(row.status)}`}>
                                   {routeStatusLabel(row.status)}
                                 </span>
-                                <span className="btn btn-primary termo-route-open-chip">
-                                  <span className="termo-route-open-chip-icon" aria-hidden="true">
-                                    {conferenceActionIcon(row.status)}
-                                  </span>
-                                  {conferenceActionLabel(row.status)}
+                                <span
+                                  className="termo-route-open-icon"
+                                  title={conferenceActionLabel(row.status)}
+                                  aria-hidden="true"
+                                >
+                                  {conferenceActionIcon(row.status)}
                                 </span>
                               </span>
                             </span>

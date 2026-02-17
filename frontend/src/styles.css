@@ -2215,16 +2215,25 @@ small {
   align-items: flex-start;
   gap: 5px;
   min-height: 100%;
+  width: 100%;
+}
+
+.termo-route-row-button-volume .termo-route-info {
+  display: grid;
+  gap: 5px;
+  width: 100%;
 }
 
 .termo-route-actions-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   width: 100%;
   gap: 8px;
   margin-top: auto;
   padding-top: 2px;
+  order: 99;
+  justify-content: flex-start;
 }
 
 .termo-route-items-count {
@@ -2256,6 +2265,34 @@ small {
 
 .termo-route-open-chip-icon svg path,
 .termo-route-open-chip-icon svg circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.termo-route-open-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(130deg, var(--accent), #3b6ec6);
+  box-shadow: 0 2px 6px rgba(27, 63, 124, 0.24);
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.termo-route-open-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.termo-route-open-icon svg path,
+.termo-route-open-icon svg circle {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
