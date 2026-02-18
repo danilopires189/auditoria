@@ -98,12 +98,15 @@ type DialogState = {
 
 const MODULE_DEF = getModuleByKeyOrThrow("conferencia-termo");
 const PREFERRED_SYNC_DELAY_MS = 800;
+const SCAN_FEEDBACK_SUCCESS_MS = 1500;
+const SCAN_FEEDBACK_ERROR_MS = 2200;
 const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 
 type ScannerInputTarget = "etiqueta" | "barras";
+type ScanFeedbackTone = "success" | "error";
 
 interface ScannerInputState {
   lastInputAt: number;
@@ -123,6 +126,13 @@ function createScannerInputState(): ScannerInputState {
     lastSubmittedValue: "",
     lastSubmittedAt: 0
   };
+}
+
+interface ScanFeedbackToast {
+  id: number;
+  tone: ScanFeedbackTone;
+  title: string;
+  detail: string | null;
 }
 
 function toDisplayName(value: string): string {
@@ -531,6 +541,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     etiqueta: createScannerInputState(),
     barras: createScannerInputState()
   });
+  const scanFeedbackTimerRef = useRef<number | null>(null);
 
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -575,6 +586,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const [busyFinalize, setBusyFinalize] = useState(false);
   const [busyCancel, setBusyCancel] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
+  const [scanFeedback, setScanFeedback] = useState<ScanFeedbackToast | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
@@ -1284,21 +1296,100 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     return true;
   }, [activeVolume, clearConferenceScreen, isOnline, profile, refreshPendingState]);
 
+  const clearScanFeedbackTimer = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (scanFeedbackTimerRef.current != null) {
+      window.clearTimeout(scanFeedbackTimerRef.current);
+      scanFeedbackTimerRef.current = null;
+    }
+  }, []);
+
+  const showScanFeedback = useCallback((tone: ScanFeedbackTone, title: string, detail: string | null = null) => {
+    const id = Math.trunc(Date.now() + Math.random() * 1000);
+    clearScanFeedbackTimer();
+    setScanFeedback({
+      id,
+      tone,
+      title,
+      detail
+    });
+    if (typeof window === "undefined") return;
+    const duration = tone === "error" ? SCAN_FEEDBACK_ERROR_MS : SCAN_FEEDBACK_SUCCESS_MS;
+    scanFeedbackTimerRef.current = window.setTimeout(() => {
+      setScanFeedback((current) => (current?.id === id ? null : current));
+      scanFeedbackTimerRef.current = null;
+    }, duration);
+  }, [clearScanFeedbackTimer]);
+
+  const playScanErrorSound = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const audioCtor = window.AudioContext
+      ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!audioCtor) return;
+
+    try {
+      const ctx = new audioCtor();
+      void ctx.resume().catch(() => undefined);
+      const baseTime = ctx.currentTime + 0.01;
+
+      const playTone = (
+        start: number,
+        freqStart: number,
+        freqEnd: number,
+        duration: number,
+        type: OscillatorType
+      ) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freqStart, start);
+        osc.frequency.exponentialRampToValueAtTime(freqEnd, start + duration);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.45, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + duration + 0.03);
+      };
+
+      playTone(baseTime, 440, 170, 0.22, "sawtooth");
+      playTone(baseTime + 0.24, 360, 120, 0.26, "square");
+
+      window.setTimeout(() => {
+        void ctx.close().catch(() => undefined);
+      }, 900);
+    } catch {
+      // Mantem silencioso se o navegador bloquear audio programatico.
+    }
+  }, []);
+
+  const triggerScanErrorAlert = useCallback((detail: string | null = null) => {
+    showScanFeedback("error", "Erro", detail);
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate([140, 70, 220]);
+    }
+    playScanErrorSound();
+  }, [playScanErrorSound, showScanFeedback]);
+
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
       setErrorMessage("Abra um volume para iniciar a conferência.");
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Abra um volume para iniciar a conferência.");
       return;
     }
     if (activeVolume.is_read_only || !canEditActiveVolume) {
       setErrorMessage("Volume em modo leitura. Não é possível alterar.");
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Volume em modo leitura.");
       return;
     }
 
     const barras = normalizeBarcode(value);
     if (!barras) {
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Código de barras obrigatório.");
       return;
     }
 
@@ -1319,6 +1410,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
           });
           setBarcodeValidationState("invalid");
+          triggerScanErrorAlert("Código de barras inválido.");
           return;
         }
         const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
@@ -1330,6 +1422,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             confirmLabel: "OK"
           });
           setBarcodeValidationState("invalid");
+          triggerScanErrorAlert("Produto fora do volume.");
           return;
         }
         produtoRegistrado = target.descricao;
@@ -1376,6 +1469,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           ? `Produto registrado na conferência: ${baseMessage}`
           : `Produto registrado localmente: ${baseMessage}`
       );
+      showScanFeedback("success", descricao, `+ ${qtd}`);
       setBarcodeValidationState("valid");
       focusBarras();
     } catch (error) {
@@ -1388,6 +1482,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`,
           confirmLabel: "OK"
         });
+        triggerScanErrorAlert("Código de barras inválido.");
         return;
       }
       if (message.includes("PRODUTO_FORA_DO_VOLUME")) {
@@ -1400,9 +1495,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
           confirmLabel: "OK"
         });
+        triggerScanErrorAlert("Produto fora do volume.");
         return;
       }
-      setErrorMessage(normalizeRpcErrorMessage(message));
+      const normalizedError = normalizeRpcErrorMessage(message);
+      setErrorMessage(normalizedError);
+      triggerScanErrorAlert(normalizedError);
     }
   }, [
     activeVolume,
@@ -1416,6 +1514,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     resolveBarcodeProduct,
     runPendingSync,
     showDialog,
+    showScanFeedback,
+    triggerScanErrorAlert,
     updateItemQtyLocal,
     handleClosedConferenceError
   ]);
@@ -2081,6 +2181,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      clearScanFeedbackTimer();
+    };
+  }, [clearScanFeedbackTimer]);
+
   const handleToggleOffline = async () => {
     const next = !preferOfflineMode;
     setPreferOfflineMode(next);
@@ -2253,6 +2359,17 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {scanFeedback ? (
+          <div
+            key={scanFeedback.id}
+            className={`termo-scan-feedback ${scanFeedback.tone === "error" ? "is-error" : "is-success"}`}
+            role="status"
+            aria-live="polite"
+          >
+            <strong>{scanFeedback.tone === "error" ? "Erro" : scanFeedback.title}</strong>
+            {scanFeedback.detail ? <span>{scanFeedback.detail}</span> : null}
+          </div>
+        ) : null}
 
         {isGlobalAdmin ? (
           <div className="termo-cd-selector">
