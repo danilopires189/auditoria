@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -94,6 +94,30 @@ const CYCLE_DATE = new Intl.DateTimeFormat("en-CA", {
   month: "2-digit",
   day: "2-digit"
 }).format(new Date());
+const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
+const SCANNER_INPUT_MIN_BURST_CHARS = 5;
+const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
+const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+
+interface ScannerInputState {
+  lastInputAt: number;
+  lastLength: number;
+  burstChars: number;
+  timerId: number | null;
+  lastSubmittedValue: string;
+  lastSubmittedAt: number;
+}
+
+function createScannerInputState(): ScannerInputState {
+  return {
+    lastInputAt: 0,
+    lastLength: 0,
+    burstChars: 0,
+    timerId: null,
+    lastSubmittedValue: "",
+    lastSubmittedAt: 0
+  };
+}
 
 function displayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
@@ -590,6 +614,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
+  const scannerInputStateRef = useRef<Record<ScannerTarget, ScannerInputState>>({
+    barras: createScannerInputState(),
+    final_barras: createScannerInputState()
+  });
   const barrasValueRef = useRef("");
   const finalBarrasValueRef = useRef("");
   const popupWasOpenRef = useRef(false);
@@ -1412,6 +1440,129 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
   }, [active, requiresFinalBarras, tab, validateBarras]);
 
+  const clearScannerInputTimer = useCallback((target: ScannerTarget) => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current[target];
+    if (state.timerId != null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+  }, []);
+
+  const commitScannerInputValidation = useCallback(async (target: ScannerTarget, rawValue: string) => {
+    const normalized = normalizeBarcode(rawValue);
+    if (!normalized) return;
+
+    const state = scannerInputStateRef.current[target];
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (
+      state.lastSubmittedValue === normalized
+      && now - state.lastSubmittedAt < SCANNER_INPUT_SUBMIT_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    clearScannerInputTimer(target);
+    state.lastSubmittedValue = normalized;
+    state.lastSubmittedAt = now;
+    state.lastInputAt = 0;
+    state.lastLength = 0;
+    state.burstChars = 0;
+
+    if (target === "barras") {
+      setBarras(normalized);
+      await autoValidateStageBarras(normalized);
+      return;
+    }
+
+    setFinalBarras(normalized);
+    await autoValidateFinalBarras(normalized);
+  }, [autoValidateFinalBarras, autoValidateStageBarras, clearScannerInputTimer]);
+
+  const scheduleScannerInputAutoSubmit = useCallback((target: ScannerTarget, value: string) => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current[target];
+    clearScannerInputTimer(target);
+    state.timerId = window.setTimeout(() => {
+      state.timerId = null;
+      void commitScannerInputValidation(target, value);
+    }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+  }, [clearScannerInputTimer, commitScannerInputValidation]);
+
+  const handleScannerInputChange = useCallback((target: ScannerTarget, value: string) => {
+    if (target === "barras") {
+      setBarras(value);
+      setValidatedBarras(null);
+      setBarrasValidationState("idle");
+    } else {
+      setFinalBarras(value);
+      setValidatedFinalBarras(null);
+      setFinalBarrasValidationState("idle");
+    }
+
+    const state = scannerInputStateRef.current[target];
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const elapsed = state.lastInputAt > 0 ? now - state.lastInputAt : Number.POSITIVE_INFINITY;
+    const lengthDelta = Math.max(value.length - state.lastLength, 0);
+
+    if (lengthDelta > 0 && elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+      state.burstChars += lengthDelta;
+    } else {
+      state.burstChars = lengthDelta;
+    }
+    state.lastInputAt = now;
+    state.lastLength = value.length;
+
+    if (!value) {
+      state.burstChars = 0;
+      clearScannerInputTimer(target);
+      return;
+    }
+
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+      scheduleScannerInputAutoSubmit(target, value);
+      return;
+    }
+
+    clearScannerInputTimer(target);
+  }, [clearScannerInputTimer, scheduleScannerInputAutoSubmit]);
+
+  const shouldHandleScannerTab = (target: ScannerTarget, value: string): boolean => {
+    if (!value.trim()) return false;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const state = scannerInputStateRef.current[target];
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) return true;
+    if (state.lastInputAt <= 0) return false;
+    return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
+  };
+
+  const onStageBarrasKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab("barras", barras)) return;
+    if (event.key !== "Enter" && event.key !== "Tab") return;
+    event.preventDefault();
+    void commitScannerInputValidation("barras", event.currentTarget.value);
+  };
+
+  const onFinalBarrasKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab("final_barras", finalBarras)) return;
+    if (event.key !== "Enter" && event.key !== "Tab") return;
+    event.preventDefault();
+    void commitScannerInputValidation("final_barras", event.currentTarget.value);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      const state = scannerInputStateRef.current;
+      for (const target of ["barras", "final_barras"] as const) {
+        if (state[target].timerId != null) {
+          window.clearTimeout(state[target].timerId);
+          state[target].timerId = null;
+        }
+      }
+    };
+  }, []);
+
   const saveCount = useCallback(async (discarded: boolean) => {
     if (!active || cd == null) return;
     if (!(tab === "s1" || tab === "s2")) return;
@@ -2042,16 +2193,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                   </span>
                                   <input
                                     value={barras}
-                                    onChange={(e) => {
-                                      setBarras(e.target.value);
-                                      setValidatedBarras(null);
-                                      setBarrasValidationState("idle");
-                                    }}
-                                    onKeyDown={(event) => {
-                                      if (event.key !== "Enter") return;
-                                      event.preventDefault();
-                                      void autoValidateStageBarras(event.currentTarget.value);
-                                    }}
+                                    onChange={(e) => handleScannerInputChange("barras", e.target.value)}
+                                    onKeyDown={onStageBarrasKeyDown}
                                     onFocus={keepFocusedControlVisible}
                                     inputMode="numeric"
                                     pattern="[0-9]*"
@@ -2157,16 +2300,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                               </span>
                               <input
                                 value={finalBarras}
-                                onChange={(e) => {
-                                  setFinalBarras(e.target.value);
-                                  setValidatedFinalBarras(null);
-                                  setFinalBarrasValidationState("idle");
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key !== "Enter") return;
-                                  event.preventDefault();
-                                  void autoValidateFinalBarras(event.currentTarget.value);
-                                }}
+                                onChange={(e) => handleScannerInputChange("final_barras", e.target.value)}
+                                onKeyDown={onFinalBarrasKeyDown}
                                 onFocus={keepFocusedControlVisible}
                                 inputMode="numeric"
                                 pattern="[0-9]*"
