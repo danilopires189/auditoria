@@ -8,6 +8,7 @@ import {
   fetchDbBarrasByBarcodeOnline,
   normalizeBarcode
 } from "../../shared/db-barras/sync";
+import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import {
   getDbBarrasByBarcode,
@@ -642,10 +643,16 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     showScanFeedback,
     triggerScanErrorAlert
   } = useScanFeedback(resolveScanFeedbackAnchor);
+  const {
+    inputMode: barcodeInputMode,
+    enableSoftKeyboard: enableBarcodeSoftKeyboard,
+    disableSoftKeyboard: disableBarcodeSoftKeyboard
+  } = useOnDemandSoftKeyboard("numeric");
 
   useEffect(() => { lockRef.current = lock; }, [lock]);
 
   const closeEditorPopup = useCallback(() => {
+    disableBarcodeSoftKeyboard();
     setPopupErr(null);
     setCountEditMode(true);
     setValidatedBarras(null);
@@ -659,7 +666,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     scannerTrackRef.current = null;
     scannerTorchModeRef.current = "none";
     setEditorOpen(false);
-  }, []);
+  }, [disableBarcodeSoftKeyboard]);
+
+  useEffect(() => {
+    if (editorOpen) {
+      disableBarcodeSoftKeyboard();
+    }
+  }, [disableBarcodeSoftKeyboard, editorOpen]);
 
   const keepFocusedControlVisible = useCallback((event: FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = event.currentTarget;
@@ -2280,11 +2293,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                   </span>
                                   <input
                                     ref={stageBarrasInputRef}
+                                    inputMode={barcodeInputMode}
                                     value={barras}
                                     onChange={(e) => handleScannerInputChange("barras", e.target.value)}
                                     onKeyDown={onStageBarrasKeyDown}
+                                    onPointerDown={enableBarcodeSoftKeyboard}
+                                    onBlur={disableBarcodeSoftKeyboard}
                                     onFocus={keepFocusedControlVisible}
-                                    inputMode="numeric"
                                     pattern="[0-9]*"
                                     autoCapitalize="off"
                                     autoCorrect="off"
@@ -2388,11 +2403,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                               </span>
                               <input
                                 ref={finalBarrasInputRef}
+                                inputMode={barcodeInputMode}
                                 value={finalBarras}
                                 onChange={(e) => handleScannerInputChange("final_barras", e.target.value)}
                                 onKeyDown={onFinalBarrasKeyDown}
+                                onPointerDown={enableBarcodeSoftKeyboard}
+                                onBlur={disableBarcodeSoftKeyboard}
                                 onFocus={keepFocusedControlVisible}
-                                inputMode="numeric"
                                 pattern="[0-9]*"
                                 autoCapitalize="off"
                                 autoCorrect="off"
