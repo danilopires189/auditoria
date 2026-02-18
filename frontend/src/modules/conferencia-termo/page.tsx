@@ -1343,46 +1343,83 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       const ctx = new audioCtor();
       void ctx.resume().catch(() => undefined);
       const baseTime = ctx.currentTime + 0.01;
+      const master = ctx.createGain();
+      const comp = ctx.createDynamicsCompressor();
+
+      // Maximiza o ganho interno permitido no browser; nao controla volume global do aparelho.
+      master.gain.setValueAtTime(1, baseTime);
+      comp.threshold.setValueAtTime(-20, baseTime);
+      comp.knee.setValueAtTime(12, baseTime);
+      comp.ratio.setValueAtTime(8, baseTime);
+      comp.attack.setValueAtTime(0.002, baseTime);
+      comp.release.setValueAtTime(0.18, baseTime);
+      master.connect(comp);
+      comp.connect(ctx.destination);
 
       const playTone = (
         start: number,
         freqStart: number,
         freqEnd: number,
-        duration: number,
-        type: OscillatorType
+        duration: number
       ) => {
-        const osc = ctx.createOscillator();
+        const primary = ctx.createOscillator();
+        const harmonic = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freqStart, start);
-        osc.frequency.exponentialRampToValueAtTime(freqEnd, start + duration);
+
+        primary.type = "square";
+        harmonic.type = "sawtooth";
+
+        primary.frequency.setValueAtTime(freqStart, start);
+        primary.frequency.exponentialRampToValueAtTime(Math.max(80, freqEnd), start + duration);
+        harmonic.frequency.setValueAtTime(freqStart * 1.5, start);
+        harmonic.frequency.exponentialRampToValueAtTime(Math.max(120, freqEnd * 1.5), start + duration);
+
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.45, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.9, start + 0.012);
         gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + duration + 0.03);
+
+        primary.connect(gain);
+        harmonic.connect(gain);
+        gain.connect(master);
+
+        primary.start(start);
+        harmonic.start(start);
+        primary.stop(start + duration + 0.02);
+        harmonic.stop(start + duration + 0.02);
       };
 
-      playTone(baseTime, 440, 170, 0.22, "sawtooth");
-      playTone(baseTime + 0.24, 360, 120, 0.26, "square");
+      playTone(baseTime, 980, 260, 0.16);
+      playTone(baseTime + 0.2, 920, 220, 0.18);
+      playTone(baseTime + 0.44, 820, 170, 0.24);
 
       window.setTimeout(() => {
         void ctx.close().catch(() => undefined);
-      }, 900);
+      }, 1300);
     } catch {
       // Mantem silencioso se o navegador bloquear audio programatico.
     }
   }, []);
 
+  const triggerDeviceVibration = useCallback(() => {
+    if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    try {
+      navigator.vibrate(0);
+      navigator.vibrate([280, 100, 360, 120, 520]);
+      if (typeof window !== "undefined") {
+        window.setTimeout(() => {
+          navigator.vibrate([180, 60, 260]);
+        }, 360);
+      }
+    } catch {
+      // Alguns browsers/webviews bloqueiam vibracao.
+    }
+  }, []);
+
   const triggerScanErrorAlert = useCallback((detail: string | null = null) => {
     showScanFeedback("error", "Erro", detail);
-    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-      navigator.vibrate([140, 70, 220]);
-    }
+    triggerDeviceVibration();
     playScanErrorSound();
-  }, [playScanErrorSound, showScanFeedback]);
+  }, [playScanErrorSound, showScanFeedback, triggerDeviceVibration]);
 
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
