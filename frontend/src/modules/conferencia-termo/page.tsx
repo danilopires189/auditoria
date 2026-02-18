@@ -1348,13 +1348,27 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
       // Maximiza o ganho interno permitido no browser; nao controla volume global do aparelho.
       master.gain.setValueAtTime(1, baseTime);
-      comp.threshold.setValueAtTime(-20, baseTime);
-      comp.knee.setValueAtTime(12, baseTime);
-      comp.ratio.setValueAtTime(8, baseTime);
+      comp.threshold.setValueAtTime(-28, baseTime);
+      comp.knee.setValueAtTime(6, baseTime);
+      comp.ratio.setValueAtTime(12, baseTime);
       comp.attack.setValueAtTime(0.002, baseTime);
-      comp.release.setValueAtTime(0.18, baseTime);
+      comp.release.setValueAtTime(0.14, baseTime);
       master.connect(comp);
       comp.connect(ctx.destination);
+
+      const createDistortionCurve = (amount: number): Float32Array<ArrayBuffer> => {
+        const samples = 2048;
+        const curve = new Float32Array(
+          new ArrayBuffer(samples * Float32Array.BYTES_PER_ELEMENT)
+        );
+        const k = amount;
+        const deg = Math.PI / 180;
+        for (let i = 0; i < samples; i += 1) {
+          const x = (i * 2) / samples - 1;
+          curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+      };
 
       const playTone = (
         start: number,
@@ -1365,22 +1379,31 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         const primary = ctx.createOscillator();
         const harmonic = ctx.createOscillator();
         const gain = ctx.createGain();
+        const shaper = ctx.createWaveShaper();
+        const highPass = ctx.createBiquadFilter();
 
         primary.type = "square";
         harmonic.type = "sawtooth";
+        shaper.curve = createDistortionCurve(420);
+        shaper.oversample = "4x";
+        highPass.type = "highpass";
+        highPass.frequency.setValueAtTime(1450, start);
+        highPass.Q.setValueAtTime(1.4, start);
 
         primary.frequency.setValueAtTime(freqStart, start);
-        primary.frequency.exponentialRampToValueAtTime(Math.max(80, freqEnd), start + duration);
-        harmonic.frequency.setValueAtTime(freqStart * 1.5, start);
-        harmonic.frequency.exponentialRampToValueAtTime(Math.max(120, freqEnd * 1.5), start + duration);
+        primary.frequency.exponentialRampToValueAtTime(Math.max(220, freqEnd), start + duration);
+        harmonic.frequency.setValueAtTime(freqStart * 1.85, start);
+        harmonic.frequency.exponentialRampToValueAtTime(Math.max(320, freqEnd * 1.85), start + duration);
 
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.9, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(1, start + 0.006);
         gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
         primary.connect(gain);
         harmonic.connect(gain);
-        gain.connect(master);
+        gain.connect(shaper);
+        shaper.connect(highPass);
+        highPass.connect(master);
 
         primary.start(start);
         harmonic.start(start);
@@ -1388,13 +1411,14 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         harmonic.stop(start + duration + 0.02);
       };
 
-      playTone(baseTime, 980, 260, 0.16);
-      playTone(baseTime + 0.2, 920, 220, 0.18);
-      playTone(baseTime + 0.44, 820, 170, 0.24);
+      playTone(baseTime, 3600, 1900, 0.12);
+      playTone(baseTime + 0.14, 3300, 1700, 0.12);
+      playTone(baseTime + 0.3, 2900, 1450, 0.14);
+      playTone(baseTime + 0.5, 2600, 1200, 0.18);
 
       window.setTimeout(() => {
         void ctx.close().catch(() => undefined);
-      }, 1300);
+      }, 1200);
     } catch {
       // Mantem silencioso se o navegador bloquear audio programatico.
     }
