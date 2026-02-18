@@ -8,6 +8,7 @@ import {
   fetchDbBarrasByBarcodeOnline,
   normalizeBarcode
 } from "../../shared/db-barras/sync";
+import { useScanFeedback } from "../../shared/use-scan-feedback";
 import {
   getDbBarrasByBarcode,
   getDbBarrasMeta,
@@ -609,6 +610,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const syncRef = useRef(false);
   const qtdInputRef = useRef<HTMLInputElement | null>(null);
   const finalQtdInputRef = useRef<HTMLInputElement | null>(null);
+  const stageBarrasInputRef = useRef<HTMLInputElement | null>(null);
+  const finalBarrasInputRef = useRef<HTMLInputElement | null>(null);
   const reportDtIniInputRef = useRef<HTMLInputElement | null>(null);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
@@ -627,6 +630,18 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
   }, []);
+  const resolveScanFeedbackAnchor = useCallback(() => {
+    if (scannerTarget === "final_barras") {
+      return finalBarrasInputRef.current ?? stageBarrasInputRef.current;
+    }
+    return stageBarrasInputRef.current ?? finalBarrasInputRef.current;
+  }, [scannerTarget]);
+  const {
+    scanFeedback,
+    scanFeedbackTop,
+    showScanFeedback,
+    triggerScanErrorAlert
+  } = useScanFeedback(resolveScanFeedbackAnchor);
 
   useEffect(() => { lockRef.current = lock; }, [lock]);
 
@@ -731,6 +746,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const openCameraScanner = useCallback((target: ScannerTarget) => {
     if (!cameraSupported) {
       setPopupErr("Câmera não disponível neste navegador/dispositivo.");
+      triggerScanErrorAlert("Câmera não disponível neste navegador/dispositivo.");
       return;
     }
     setPopupErr(null);
@@ -741,7 +757,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     scannerTrackRef.current = null;
     scannerTorchModeRef.current = "none";
     setScannerOpen(true);
-  }, [cameraSupported]);
+  }, [cameraSupported, triggerScanErrorAlert]);
 
   const toggleTorch = useCallback(async () => {
     const controls = scannerControlsRef.current;
@@ -1393,6 +1409,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!normalized) {
       setValidatedBarras(null);
       setBarrasValidationState("invalid");
+      triggerScanErrorAlert("Informe o código de barras.");
       return false;
     }
     setBarrasValidationState("validating");
@@ -1408,10 +1425,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       if (normalizeBarcode(barrasValueRef.current) !== normalized) return false;
       setValidatedBarras(null);
       setBarrasValidationState("invalid");
-      setPopupErr(parseErr(error));
+      const normalizedError = parseErr(error);
+      setPopupErr(normalizedError);
+      triggerScanErrorAlert(normalizedError);
       return false;
     }
-  }, [active, requiresBarras, tab, validateBarras]);
+  }, [active, requiresBarras, tab, triggerScanErrorAlert, validateBarras]);
 
   const autoValidateFinalBarras = useCallback(async (value: string): Promise<boolean> => {
     if (!active || tab !== "conciliation") return false;
@@ -1420,6 +1439,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!normalized) {
       setValidatedFinalBarras(null);
       setFinalBarrasValidationState("invalid");
+      triggerScanErrorAlert("Informe o código de barras final.");
       return false;
     }
     setFinalBarrasValidationState("validating");
@@ -1435,10 +1455,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       if (normalizeBarcode(finalBarrasValueRef.current) !== normalized) return false;
       setValidatedFinalBarras(null);
       setFinalBarrasValidationState("invalid");
-      setPopupErr(parseErr(error));
+      const normalizedError = parseErr(error);
+      setPopupErr(normalizedError);
+      triggerScanErrorAlert(normalizedError);
       return false;
     }
-  }, [active, requiresFinalBarras, tab, validateBarras]);
+  }, [active, requiresFinalBarras, tab, triggerScanErrorAlert, validateBarras]);
 
   const clearScannerInputTimer = useCallback((target: ScannerTarget) => {
     if (typeof window === "undefined") return;
@@ -1568,6 +1590,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!(tab === "s1" || tab === "s2")) return;
     if (!canEditCount(active)) {
       setPopupErr("Você não pode editar este endereço nesta etapa.");
+      triggerScanErrorAlert("Você não pode editar este endereço nesta etapa.");
       return;
     }
 
@@ -1577,7 +1600,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       const currentItemKey = active.key;
       const etapa = tab === "s2" ? 2 : 1;
       const qty = discarded ? 0 : Number.parseInt(qtd, 10);
-      if (!discarded && (!Number.isFinite(qty) || qty < 0)) return setPopupErr("Quantidade inválida.");
+      if (!discarded && (!Number.isFinite(qty) || qty < 0)) {
+        setPopupErr("Quantidade inválida.");
+        triggerScanErrorAlert("Quantidade inválida.");
+        return;
+      }
       let b: string | null = null;
       const needsBarrasValidation = !discarded && qty > active.estoque;
       if (needsBarrasValidation) {
@@ -1585,6 +1612,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         if (!normalized) {
           setValidatedBarras(null);
           setPopupErr("Sobra detectada. Informe o código de barras ou descarte.");
+          triggerScanErrorAlert("Sobra detectada. Informe o código de barras ou descarte.");
           return;
         }
 
@@ -1596,6 +1624,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         if (!b) {
           setValidatedBarras(null);
           setPopupErr("Sobra detectada. Informe o código de barras ou descarte.");
+          triggerScanErrorAlert("Sobra detectada. Informe o código de barras ou descarte.");
           return;
         }
       }
@@ -1613,17 +1642,35 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         discarded
       });
       setValidatedBarras(null);
+      showScanFeedback("success", active.descricao, discarded ? "Descartado" : `+ ${qty}`);
       advanceAfterAction(currentAddressKey, currentItemKey);
     } catch (error) {
       setValidatedBarras(null);
-      setPopupErr(parseErr(error));
+      const normalizedError = parseErr(error);
+      setPopupErr(normalizedError);
+      triggerScanErrorAlert(normalizedError);
     }
-  }, [active, advanceAfterAction, autoValidateStageBarras, barras, canEditCount, cd, qtd, selectedAddress, send, tab, validatedBarras]);
+  }, [
+    active,
+    advanceAfterAction,
+    autoValidateStageBarras,
+    barras,
+    canEditCount,
+    cd,
+    qtd,
+    selectedAddress,
+    send,
+    showScanFeedback,
+    tab,
+    triggerScanErrorAlert,
+    validatedBarras
+  ]);
 
   const resolveReview = useCallback(async () => {
     if (!active || !active.review || cd == null) return;
     if (!canResolveConciliation) {
       setPopupErr("Conciliação já resolvida.");
+      triggerScanErrorAlert("Conciliação já resolvida.");
       return;
     }
     setPopupErr(null);
@@ -1631,17 +1678,29 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       const currentAddressKey = selectedAddress;
       const currentItemKey = active.key;
       const qty = Number.parseInt(finalQtd, 10);
-      if (!Number.isFinite(qty) || qty < 0) return setPopupErr("Quantidade final inválida.");
+      if (!Number.isFinite(qty) || qty < 0) {
+        setPopupErr("Quantidade final inválida.");
+        triggerScanErrorAlert("Quantidade final inválida.");
+        return;
+      }
       let b: string | null = null;
       if (qty > active.estoque) {
         const normalized = normalizeBarcode(finalBarras);
-        if (!normalized) return setPopupErr("Informe código de barras válido do mesmo CODDV.");
+        if (!normalized) {
+          setPopupErr("Informe código de barras válido do mesmo CODDV.");
+          triggerScanErrorAlert("Informe código de barras válido do mesmo CODDV.");
+          return;
+        }
         if (validatedFinalBarras !== normalized) {
           const validatedNow = await autoValidateFinalBarras(normalized);
           if (!validatedNow) return;
         }
         b = normalizeBarcode(finalBarrasValueRef.current);
-        if (!b) return setPopupErr("Informe código de barras válido do mesmo CODDV.");
+        if (!b) {
+          setPopupErr("Informe código de barras válido do mesmo CODDV.");
+          triggerScanErrorAlert("Informe código de barras válido do mesmo CODDV.");
+          return;
+        }
       }
       await send("review_resolve", {
         cycle_date: CYCLE_DATE,
@@ -1653,11 +1712,27 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         final_qtd: qty,
         final_barras: b
       });
+      showScanFeedback("success", active.descricao, `Qtd final: ${qty}`);
       advanceAfterAction(currentAddressKey, currentItemKey);
     } catch (error) {
-      setPopupErr(parseErr(error));
+      const normalizedError = parseErr(error);
+      setPopupErr(normalizedError);
+      triggerScanErrorAlert(normalizedError);
     }
-  }, [active, advanceAfterAction, autoValidateFinalBarras, canResolveConciliation, cd, finalBarras, finalQtd, selectedAddress, send, validatedFinalBarras]);
+  }, [
+    active,
+    advanceAfterAction,
+    autoValidateFinalBarras,
+    canResolveConciliation,
+    cd,
+    finalBarras,
+    finalQtd,
+    selectedAddress,
+    send,
+    showScanFeedback,
+    triggerScanErrorAlert,
+    validatedFinalBarras
+  ]);
 
   useEffect(() => {
     if (!scannerOpen) return;
@@ -1849,6 +1924,18 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             </div>
             {err ? <div className="alert error">{err}</div> : null}
             {msg ? <div className="alert success">{msg}</div> : null}
+            {scanFeedback ? (
+              <div
+                key={scanFeedback.id}
+                className={`termo-scan-feedback ${scanFeedback.tone === "error" ? "is-error" : "is-success"}`}
+                role="status"
+                aria-live="polite"
+                style={scanFeedbackTop != null ? { top: `${scanFeedbackTop}px` } : undefined}
+              >
+                <strong>{scanFeedback.tone === "error" ? "Erro" : scanFeedback.title}</strong>
+                {scanFeedback.detail ? <span>{scanFeedback.detail}</span> : null}
+              </div>
+            ) : null}
 
             <div className="termo-actions-row inventario-toolbar">
               {isGlobalAdmin ? (
@@ -2192,6 +2279,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                     {barcodeIcon()}
                                   </span>
                                   <input
+                                    ref={stageBarrasInputRef}
                                     value={barras}
                                     onChange={(e) => handleScannerInputChange("barras", e.target.value)}
                                     onKeyDown={onStageBarrasKeyDown}
@@ -2299,6 +2387,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                                 {barcodeIcon()}
                               </span>
                               <input
+                                ref={finalBarrasInputRef}
                                 value={finalBarras}
                                 onChange={(e) => handleScannerInputChange("final_barras", e.target.value)}
                                 onKeyDown={onFinalBarrasKeyDown}

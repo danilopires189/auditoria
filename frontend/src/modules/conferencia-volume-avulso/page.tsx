@@ -18,6 +18,7 @@ import {
   fetchDbBarrasByBarcodeOnline,
   refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
+import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   buildVolumeAvulsoVolumeKey,
@@ -544,6 +545,13 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     etiqueta: createScannerInputState(),
     barras: createScannerInputState()
   });
+  const resolveScanFeedbackAnchor = useCallback(() => barrasRef.current, []);
+  const {
+    scanFeedback,
+    scanFeedbackTop,
+    showScanFeedback,
+    triggerScanErrorAlert
+  } = useScanFeedback(resolveScanFeedbackAnchor);
 
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -1403,17 +1411,20 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     if (!activeVolume) {
       setErrorMessage("Abra um volume para iniciar a conferência.");
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Abra um volume para iniciar a conferência.");
       return;
     }
     if (activeVolume.is_read_only || !canEditActiveVolume) {
       setErrorMessage("Volume em modo leitura. Não é possível alterar.");
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Volume em modo leitura.");
       return;
     }
 
     const barras = normalizeBarcode(value);
     if (!barras) {
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Código de barras obrigatório.");
       return;
     }
 
@@ -1434,6 +1445,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
           });
           setBarcodeValidationState("invalid");
+          triggerScanErrorAlert("Código de barras inválido.");
           return;
         }
         const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
@@ -1445,6 +1457,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             confirmLabel: "OK"
           });
           setBarcodeValidationState("invalid");
+          triggerScanErrorAlert("Produto fora do volume.");
           return;
         }
         produtoRegistrado = target.descricao;
@@ -1491,6 +1504,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           ? `Produto registrado na conferência: ${baseMessage}`
           : `Produto registrado localmente: ${baseMessage}`
       );
+      showScanFeedback("success", descricao, `+ ${qtd}`);
       setBarcodeValidationState("valid");
       focusBarras();
     } catch (error) {
@@ -1503,6 +1517,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`,
           confirmLabel: "OK"
         });
+        triggerScanErrorAlert("Código de barras inválido.");
         return;
       }
       if (message.includes("PRODUTO_FORA_DO_VOLUME")) {
@@ -1515,9 +1530,12 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
           confirmLabel: "OK"
         });
+        triggerScanErrorAlert("Produto fora do volume.");
         return;
       }
-      setErrorMessage(normalizeRpcErrorMessage(message));
+      const normalizedError = normalizeRpcErrorMessage(message);
+      setErrorMessage(normalizedError);
+      triggerScanErrorAlert(normalizedError);
     }
   }, [
     activeVolume,
@@ -1531,6 +1549,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     resolveBarcodeProduct,
     runPendingSync,
     showDialog,
+    showScanFeedback,
+    triggerScanErrorAlert,
     updateItemQtyLocal,
     handleClosedConferenceError
   ]);
@@ -2438,6 +2458,18 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {scanFeedback ? (
+          <div
+            key={scanFeedback.id}
+            className={`termo-scan-feedback ${scanFeedback.tone === "error" ? "is-error" : "is-success"}`}
+            role="status"
+            aria-live="polite"
+            style={scanFeedbackTop != null ? { top: `${scanFeedbackTop}px` } : undefined}
+          >
+            <strong>{scanFeedback.tone === "error" ? "Erro" : scanFeedback.title}</strong>
+            {scanFeedback.detail ? <span>{scanFeedback.detail}</span> : null}
+          </div>
+        ) : null}
 
         {isGlobalAdmin ? (
           <div className="termo-cd-selector">
