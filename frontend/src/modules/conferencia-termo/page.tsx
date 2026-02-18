@@ -587,6 +587,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const [busyCancel, setBusyCancel] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [scanFeedback, setScanFeedback] = useState<ScanFeedbackToast | null>(null);
+  const [scanFeedbackTop, setScanFeedbackTop] = useState<number | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
@@ -1296,6 +1297,16 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     return true;
   }, [activeVolume, clearConferenceScreen, isOnline, profile, refreshPendingState]);
 
+  const resolveScanFeedbackTop = useCallback((): number | null => {
+    if (typeof window === "undefined") return null;
+    const input = barrasRef.current;
+    if (!input) return null;
+    const rect = input.getBoundingClientRect();
+    const minTop = 72;
+    const maxTop = Math.max(minTop, window.innerHeight - 96);
+    return Math.max(minTop, Math.min(maxTop, Math.round(rect.top)));
+  }, []);
+
   const clearScanFeedbackTimer = useCallback(() => {
     if (typeof window === "undefined") return;
     if (scanFeedbackTimerRef.current != null) {
@@ -1307,6 +1318,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const showScanFeedback = useCallback((tone: ScanFeedbackTone, title: string, detail: string | null = null) => {
     const id = Math.trunc(Date.now() + Math.random() * 1000);
     clearScanFeedbackTimer();
+    setScanFeedbackTop(resolveScanFeedbackTop());
     setScanFeedback({
       id,
       tone,
@@ -1319,7 +1331,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       setScanFeedback((current) => (current?.id === id ? null : current));
       scanFeedbackTimerRef.current = null;
     }, duration);
-  }, [clearScanFeedbackTimer]);
+  }, [clearScanFeedbackTimer, resolveScanFeedbackTop]);
 
   const playScanErrorSound = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -2187,6 +2199,20 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     };
   }, [clearScanFeedbackTimer]);
 
+  useEffect(() => {
+    if (!scanFeedback || typeof window === "undefined") return;
+    const updatePosition = () => {
+      setScanFeedbackTop(resolveScanFeedbackTop());
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [resolveScanFeedbackTop, scanFeedback]);
+
   const handleToggleOffline = async () => {
     const next = !preferOfflineMode;
     setPreferOfflineMode(next);
@@ -2365,6 +2391,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             className={`termo-scan-feedback ${scanFeedback.tone === "error" ? "is-error" : "is-success"}`}
             role="status"
             aria-live="polite"
+            style={scanFeedbackTop != null ? { top: `${scanFeedbackTop}px` } : undefined}
           >
             <strong>{scanFeedback.tone === "error" ? "Erro" : scanFeedback.title}</strong>
             {scanFeedback.detail ? <span>{scanFeedback.detail}</span> : null}
