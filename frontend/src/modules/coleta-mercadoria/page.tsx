@@ -58,6 +58,30 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const SWIPE_ACTION_WIDTH = 104;
 const SWIPE_OPEN_THRESHOLD = 40;
 const QUICK_SYNC_THROTTLE_MS = 2500;
+const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
+const SCANNER_INPUT_MIN_BURST_CHARS = 5;
+const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
+const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+
+interface ScannerInputState {
+  lastInputAt: number;
+  lastLength: number;
+  burstChars: number;
+  timerId: number | null;
+  lastSubmittedValue: string;
+  lastSubmittedAt: number;
+}
+
+function createScannerInputState(): ScannerInputState {
+  return {
+    lastInputAt: 0,
+    lastLength: 0,
+    burstChars: 0,
+    timerId: null,
+    lastSubmittedValue: "",
+    lastSubmittedAt: 0
+  };
+}
 
 type RowEditDraft = {
   qtd: string;
@@ -352,6 +376,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
+  const scannerInputStateRef = useRef<ScannerInputState>(createScannerInputState());
   const swipeTouchRowRef = useRef<string | null>(null);
   const swipeStartXRef = useRef(0);
   const swipeStartYRef = useRef(0);
@@ -1333,16 +1358,112 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     validadeInput
   ]);
 
+  const clearScannerInputTimer = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current;
+    if (state.timerId != null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+  }, []);
+
+  const commitScannerInput = useCallback(async (rawValue: string) => {
+    const normalized = normalizeBarcode(rawValue);
+    if (!normalized) return;
+
+    const state = scannerInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (
+      state.lastSubmittedValue === normalized
+      && now - state.lastSubmittedAt < SCANNER_INPUT_SUBMIT_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    clearScannerInputTimer();
+    state.lastSubmittedValue = normalized;
+    state.lastSubmittedAt = now;
+    state.lastInputAt = 0;
+    state.lastLength = 0;
+    state.burstChars = 0;
+
+    setBarcodeInput(normalized);
+    await handleCollect(normalized);
+  }, [clearScannerInputTimer, handleCollect]);
+
+  const scheduleScannerInputAutoSubmit = useCallback((value: string) => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current;
+    clearScannerInputTimer();
+    state.timerId = window.setTimeout(() => {
+      state.timerId = null;
+      void commitScannerInput(value);
+    }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+  }, [clearScannerInputTimer, commitScannerInput]);
+
+  const onBarcodeInputChange = (event: ReactChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+    setBarcodeInput(nextValue);
+    setBarcodeValidationState("idle");
+
+    const state = scannerInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const elapsed = state.lastInputAt > 0 ? now - state.lastInputAt : Number.POSITIVE_INFINITY;
+    const lengthDelta = Math.max(nextValue.length - state.lastLength, 0);
+
+    if (lengthDelta > 0 && elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+      state.burstChars += lengthDelta;
+    } else {
+      state.burstChars = lengthDelta;
+    }
+    state.lastInputAt = now;
+    state.lastLength = nextValue.length;
+
+    if (!nextValue) {
+      state.burstChars = 0;
+      clearScannerInputTimer();
+      return;
+    }
+
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+      scheduleScannerInputAutoSubmit(nextValue);
+      return;
+    }
+
+    clearScannerInputTimer();
+  };
+
+  const shouldHandleScannerTab = (value: string): boolean => {
+    if (!value.trim()) return false;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const state = scannerInputStateRef.current;
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) return true;
+    if (state.lastInputAt <= 0) return false;
+    return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
+  };
+
   const onCollectSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void handleCollect();
+    void commitScannerInput(barcodeInput);
   };
 
   const onBarcodeKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter") return;
+    if (event.key === "Tab" && !shouldHandleScannerTab(barcodeInput)) return;
+    if (event.key !== "Enter" && event.key !== "Tab") return;
     event.preventDefault();
-    void handleCollect();
+    void commitScannerInput(barcodeInput);
   };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      const state = scannerInputStateRef.current;
+      if (state.timerId != null) {
+        window.clearTimeout(state.timerId);
+        state.timerId = null;
+      }
+    };
+  }, []);
 
   const onMultiploFocus = (event: ReactFocusEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -1670,10 +1791,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   ref={barcodeRef}
                   type="text"
                   value={barcodeInput}
-                  onChange={(event) => {
-                    setBarcodeInput(event.target.value);
-                    setBarcodeValidationState("idle");
-                  }}
+                  onChange={onBarcodeInputChange}
                   autoComplete="off"
                   autoCapitalize="none"
                   autoCorrect="off"

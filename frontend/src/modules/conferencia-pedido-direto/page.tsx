@@ -2078,13 +2078,24 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     setMultiploInput(Number.isFinite(parsed) ? String(Math.max(1, parsed)) : "1");
   };
 
+  const shouldHandleScannerTab = (target: ScannerInputTarget, value: string): boolean => {
+    if (!value.trim()) return false;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const state = scannerInputStateRef.current[target];
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) return true;
+    if (state.lastInputAt <= 0) return false;
+    return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
+  };
+
   const onEtiquetaKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab("etiqueta", etiquetaInput)) return;
     if (event.key !== "Enter" && event.key !== "Tab") return;
     event.preventDefault();
     void commitScannerInput("etiqueta", etiquetaInput);
   };
 
   const onBarcodeKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab("barras", barcodeInput)) return;
     if (event.key !== "Enter" && event.key !== "Tab") return;
     event.preventDefault();
     void commitScannerInput("barras", barcodeInput);

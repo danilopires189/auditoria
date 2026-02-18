@@ -146,6 +146,32 @@ type BarcodeOpenSelection = {
 const MODULE_DEF = getModuleByKeyOrThrow("conferencia-entrada-notas");
 const PREFERRED_SYNC_DELAY_MS = 800;
 const OFFLINE_BASE_STALE_MS = 1000 * 60 * 60 * 24;
+const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
+const SCANNER_INPUT_MIN_BURST_CHARS = 5;
+const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
+const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+
+type ScannerInputTarget = "etiqueta" | "barras";
+
+interface ScannerInputState {
+  lastInputAt: number;
+  lastLength: number;
+  burstChars: number;
+  timerId: number | null;
+  lastSubmittedValue: string;
+  lastSubmittedAt: number;
+}
+
+function createScannerInputState(): ScannerInputState {
+  return {
+    lastInputAt: 0,
+    lastLength: 0,
+    burstChars: 0,
+    timerId: null,
+    lastSubmittedValue: "",
+    lastSubmittedAt: 0
+  };
+}
 
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
@@ -753,6 +779,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
   const etiquetaRef = useRef<HTMLInputElement | null>(null);
   const barrasRef = useRef<HTMLInputElement | null>(null);
+  const scannerInputStateRef = useRef<Record<ScannerInputTarget, ScannerInputState>>({
+    etiqueta: createScannerInputState(),
+    barras: createScannerInputState()
+  });
   const activeVolumeRef = useRef<EntradaNotasLocalVolume | null>(null);
   const routeContributorsInFlightRef = useRef<Set<string>>(new Set());
 
@@ -3475,14 +3505,104 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
   };
 
+  const clearScannerInputTimer = useCallback((target: ScannerInputTarget) => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current[target];
+    if (state.timerId != null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+  }, []);
+
+  const commitScannerInput = useCallback(async (target: ScannerInputTarget, rawValue: string) => {
+    const normalized = target === "etiqueta" ? rawValue.replace(/\s+/g, "").trim() : normalizeBarcode(rawValue);
+    if (!normalized) return;
+
+    const state = scannerInputStateRef.current[target];
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (
+      state.lastSubmittedValue === normalized
+      && now - state.lastSubmittedAt < SCANNER_INPUT_SUBMIT_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    clearScannerInputTimer(target);
+    state.lastSubmittedValue = normalized;
+    state.lastSubmittedAt = now;
+    state.lastInputAt = 0;
+    state.lastLength = 0;
+    state.burstChars = 0;
+
+    if (target === "etiqueta") {
+      setEtiquetaInput(normalized);
+      await openConferenceFromInput(normalized);
+      return;
+    }
+
+    setBarcodeInput(normalized);
+    await handleCollectBarcode(normalized);
+  }, [clearScannerInputTimer, handleCollectBarcode, openConferenceFromInput]);
+
+  const scheduleScannerInputAutoSubmit = useCallback((target: ScannerInputTarget, value: string) => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current[target];
+    clearScannerInputTimer(target);
+    state.timerId = window.setTimeout(() => {
+      state.timerId = null;
+      void commitScannerInput(target, value);
+    }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+  }, [clearScannerInputTimer, commitScannerInput]);
+
+  const handleScannerInputChange = useCallback((target: ScannerInputTarget, value: string) => {
+    const state = scannerInputStateRef.current[target];
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const elapsed = state.lastInputAt > 0 ? now - state.lastInputAt : Number.POSITIVE_INFINITY;
+    const lengthDelta = Math.max(value.length - state.lastLength, 0);
+
+    if (lengthDelta > 0 && elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+      state.burstChars += lengthDelta;
+    } else {
+      state.burstChars = lengthDelta;
+    }
+    state.lastInputAt = now;
+    state.lastLength = value.length;
+
+    if (!value) {
+      state.burstChars = 0;
+      clearScannerInputTimer(target);
+      return;
+    }
+
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+      scheduleScannerInputAutoSubmit(target, value);
+      return;
+    }
+
+    clearScannerInputTimer(target);
+  }, [clearScannerInputTimer, scheduleScannerInputAutoSubmit]);
+
   const onSubmitEtiqueta = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await openConferenceFromInput(etiquetaInput);
+    await commitScannerInput("etiqueta", etiquetaInput);
   };
 
   const onSubmitBarras = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await handleCollectBarcode(barcodeInput);
+    await commitScannerInput("barras", barcodeInput);
+  };
+
+  const onEtiquetaInputChange = (event: ReactChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+    setEtiquetaInput(nextValue);
+    handleScannerInputChange("etiqueta", nextValue);
+  };
+
+  const onBarcodeInputChange = (event: ReactChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+    setBarcodeInput(nextValue);
+    setBarcodeValidationState("idle");
+    handleScannerInputChange("barras", nextValue);
   };
 
   const onMultiploChange = (event: ReactChangeEvent<HTMLInputElement>) => {
@@ -3495,11 +3615,41 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setMultiploInput(Number.isFinite(parsed) ? String(Math.max(1, parsed)) : "1");
   };
 
-  const onBarcodeKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    void handleCollectBarcode(barcodeInput);
+  const shouldHandleScannerTab = (target: ScannerInputTarget, value: string): boolean => {
+    if (!value.trim()) return false;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const state = scannerInputStateRef.current[target];
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) return true;
+    if (state.lastInputAt <= 0) return false;
+    return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
   };
+
+  const onEtiquetaKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab("etiqueta", etiquetaInput)) return;
+    if (event.key !== "Enter" && event.key !== "Tab") return;
+    event.preventDefault();
+    void commitScannerInput("etiqueta", etiquetaInput);
+  };
+
+  const onBarcodeKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab("barras", barcodeInput)) return;
+    if (event.key !== "Enter" && event.key !== "Tab") return;
+    event.preventDefault();
+    void commitScannerInput("barras", barcodeInput);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      const state = scannerInputStateRef.current;
+      for (const target of ["etiqueta", "barras"] as const) {
+        if (state[target].timerId != null) {
+          window.clearTimeout(state[target].timerId);
+          state[target].timerId = null;
+        }
+      }
+    };
+  }, []);
 
   const handleToggleOffline = async () => {
     const next = !preferOfflineMode;
@@ -3767,7 +3917,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   ref={etiquetaRef}
                   type="text"
                   value={etiquetaInput}
-                  onChange={(event) => setEtiquetaInput(event.target.value)}
+                  onChange={onEtiquetaInputChange}
+                  onKeyDown={onEtiquetaKeyDown}
                   autoComplete="off"
                   autoCapitalize="none"
                   autoCorrect="off"
@@ -3861,10 +4012,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       ref={barrasRef}
                       type="text"
                       value={barcodeInput}
-                      onChange={(event) => {
-                        setBarcodeInput(event.target.value);
-                        setBarcodeValidationState("idle");
-                      }}
+                      onChange={onBarcodeInputChange}
                       onKeyDown={onBarcodeKeyDown}
                       autoComplete="off"
                       autoCapitalize="none"
@@ -4519,4 +4667,3 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     </>
   );
 }
-
