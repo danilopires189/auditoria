@@ -804,7 +804,7 @@ small {
   color: #122949;
 }
 
-.confirm-dialog p {
+.confirm-dialog > p {
   margin: 0;
   font-size: 0.92rem;
   color: #44516a;
