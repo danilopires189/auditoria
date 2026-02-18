@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-SyncMode = Literal["full_replace", "upsert", "incremental"]
+SyncMode = Literal["full_replace", "upsert", "incremental", "insert_new"]
 
 
 class IncrementalConfig(BaseModel):

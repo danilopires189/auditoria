@@ -1,7 +1,7 @@
 app:
   data_dir: "./data"
   stop_on_error: false
-  default_sync_mode: "full_replace"
+  default_sync_mode: "upsert"
   rejections_dir: "./logs/rejections"
   refresh_timeout_seconds: 300
   refresh_poll_seconds: 2
@@ -15,7 +15,7 @@ tables:
   db_entrada_notas:
     file: "DB_ENTRADA_NOTAS.xlsx"
     sheet: "DB_ENTRADA"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["cd", "seq_entrada", "nf", "coddv"]
     required_columns: ["cd", "seq_entrada", "nf", "coddv"]
     refresh_before_load: false
@@ -35,7 +35,7 @@ tables:
   db_avulso:
     file: "BD_AVULSO.xlsx"
     sheet: "DB_AVULSO"
-    mode: "full_replace"
+    mode: "insert_new"
     unique_keys: []
     required_columns: ["cd", "id_mov", "nr_volume", "coddv", "dt_mov"]
     refresh_before_load: false
@@ -53,7 +53,7 @@ tables:
   db_usuario:
     file: "DB_USUARIO.xlsx"
     sheet: "DB_USUARIO"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["cd", "mat"]
     required_columns: ["mat", "nome"]
     refresh_before_load: false
@@ -69,7 +69,7 @@ tables:
   db_barras:
     file: "DB_BARRAS.xlsx"
     sheet: "DB_BARRAS"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["coddv", "barras"]
     required_columns: ["coddv", "barras"]
     refresh_before_load: false
@@ -81,7 +81,7 @@ tables:
   db_inventario:
     file: "DB_INVENTARIO.xlsx"
     sheet: "DB_INVENTARIO"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["cd", "endereco", "coddv"]
     required_columns: ["cd", "rua", "endereco", "coddv", "estoque"]
     refresh_before_load: false
@@ -96,7 +96,7 @@ tables:
   db_devolucao:
     file: "DB_DEVOLUCAO.xlsx"
     sheet: "DB_DEVOLUCAO"
-    mode: "full_replace"
+    mode: "insert_new"
     unique_keys: []
     required_columns: ["cd", "chave", "coddv", "dt_gera"]
     refresh_before_load: false
@@ -115,8 +115,8 @@ tables:
   db_pedido_direto:
     file: "DB_PEDIDO_DIRETO.xlsx"
     sheet: "DB_PEDIDODIRETO"
-    mode: "full_replace"
-    unique_keys: ["cd", "pedidoseq", "coddv"]
+    mode: "upsert"
+    unique_keys: ["cd", "pedido", "sq", "coddv"]
     required_columns: ["cd", "pedidoseq", "coddv", "dt_pedido"]
     refresh_before_load: false
     types:
@@ -133,7 +133,7 @@ tables:
   db_rotas:
     file: "BD_ROTAS.xlsx"
     sheet: "BD_ROTAS"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["cd", "filial"]
     required_columns: ["cd", "filial", "rota"]
     refresh_before_load: false
@@ -147,7 +147,7 @@ tables:
   db_termo:
     file: "DB_TERMO.xlsx"
     sheet: "DB_TERMO"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["pedido", "cd", "filial", "coddv", "id_etiqueta"]
     required_columns: ["pedido", "cd", "filial", "coddv", "id_etiqueta"]
     refresh_before_load: false

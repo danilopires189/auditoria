@@ -14,6 +14,7 @@ from app.etl.extract.readers import read_source_dataframe
 from app.etl.load.staging_loader import clear_staging_for_run, load_dataframe_to_staging
 from app.etl.promote.full_replace import promote_full_replace
 from app.etl.promote.incremental import promote_incremental
+from app.etl.promote.insert_new import promote_insert_new
 from app.etl.promote.upsert import promote_upsert
 from app.etl.table_specs import get_table_spec
 from app.etl.transform.cast import apply_type_casts
@@ -265,6 +266,14 @@ class SyncService:
                 },
             )
             return promoted_rows
+
+        if mode == "insert_new":
+            return promote_insert_new(
+                self.engine,
+                table_name=table_name,
+                business_columns=spec.business_columns,
+                run_id=run_id,
+            )
 
         raise ValueError(f"[{table_name}] unsupported sync mode: {mode}")
 
