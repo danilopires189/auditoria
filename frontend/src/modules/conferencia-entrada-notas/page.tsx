@@ -18,6 +18,7 @@ import {
   fetchDbBarrasByBarcodeOnline,
   refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
+import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
@@ -791,6 +792,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     showScanFeedback,
     triggerScanErrorAlert
   } = useScanFeedback(resolveScanFeedbackAnchor);
+  const {
+    inputMode: barcodeInputMode,
+    enableSoftKeyboard: enableBarcodeSoftKeyboard,
+    disableSoftKeyboard: disableBarcodeSoftKeyboard
+  } = useOnDemandSoftKeyboard("text");
   const activeVolumeRef = useRef<EntradaNotasLocalVolume | null>(null);
   const routeContributorsInFlightRef = useRef<Set<string>>(new Set());
 
@@ -1086,10 +1092,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, [routeGroups, routeSearchInput]);
 
   const focusBarras = useCallback(() => {
+    disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
       barrasRef.current?.focus();
     });
-  }, []);
+  }, [disableBarcodeSoftKeyboard]);
 
   const showDialog = useCallback((payload: DialogState) => {
     setDialogState(payload);
@@ -4052,9 +4059,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                     <input
                       ref={barrasRef}
                       type="text"
+                      inputMode={barcodeInputMode}
                       value={barcodeInput}
                       onChange={onBarcodeInputChange}
                       onKeyDown={onBarcodeKeyDown}
+                      onPointerDown={enableBarcodeSoftKeyboard}
+                      onBlur={disableBarcodeSoftKeyboard}
                       autoComplete="off"
                       autoCapitalize="none"
                       autoCorrect="off"

@@ -22,6 +22,7 @@ import {
   normalizeBarcode,
   refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
+import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
@@ -379,6 +380,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     showScanFeedback,
     triggerScanErrorAlert
   } = useScanFeedback(resolveScanFeedbackAnchor);
+  const {
+    inputMode: barcodeInputMode,
+    enableSoftKeyboard: enableBarcodeSoftKeyboard,
+    disableSoftKeyboard: disableBarcodeSoftKeyboard
+  } = useOnDemandSoftKeyboard("numeric");
   const quantityInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
@@ -537,10 +543,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   }, [currentCd, isOnline]);
 
   const focusBarcode = useCallback(() => {
+    disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
       barcodeRef.current?.focus();
     });
-  }, []);
+  }, [disableBarcodeSoftKeyboard]);
 
   const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
     const videoEl = scannerVideoRef.current;
@@ -1820,8 +1827,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                 <input
                   ref={barcodeRef}
                   type="text"
+                  inputMode={barcodeInputMode}
                   value={barcodeInput}
                   onChange={onBarcodeInputChange}
+                  onPointerDown={enableBarcodeSoftKeyboard}
+                  onBlur={disableBarcodeSoftKeyboard}
                   autoComplete="off"
                   autoCapitalize="none"
                   autoCorrect="off"

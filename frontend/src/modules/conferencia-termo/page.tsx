@@ -18,6 +18,7 @@ import {
   fetchDbBarrasByBarcodeOnline,
   refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
+import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   buildTermoVolumeKey,
@@ -542,6 +543,11 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     barras: createScannerInputState()
   });
   const scanFeedbackTimerRef = useRef<number | null>(null);
+  const {
+    inputMode: barcodeInputMode,
+    enableSoftKeyboard: enableBarcodeSoftKeyboard,
+    disableSoftKeyboard: disableBarcodeSoftKeyboard
+  } = useOnDemandSoftKeyboard("text");
 
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -735,10 +741,11 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   }, [routeGroups, routeSearchInput]);
 
   const focusBarras = useCallback(() => {
+    disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
       barrasRef.current?.focus();
     });
-  }, []);
+  }, [disableBarcodeSoftKeyboard]);
 
   const showDialog = useCallback((payload: DialogState) => {
     setDialogState(payload);
@@ -2577,9 +2584,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                     <input
                       ref={barrasRef}
                       type="text"
+                      inputMode={barcodeInputMode}
                       value={barcodeInput}
                       onChange={onBarcodeInputChange}
                       onKeyDown={onBarcodeKeyDown}
+                      onPointerDown={enableBarcodeSoftKeyboard}
+                      onBlur={disableBarcodeSoftKeyboard}
                       autoComplete="off"
                       autoCapitalize="none"
                       autoCorrect="off"
