@@ -108,6 +108,8 @@ interface EntradaNotasRouteGroupView extends EntradaNotasRouteGroup {
   force_open: boolean;
 }
 
+type RouteBatchGroupSelectionSource = Pick<EntradaNotasRouteGroup, "rota" | "filiais">;
+
 type RouteContributorsState = {
   status: "loading" | "loaded" | "error";
   contributors: EntradaNotasContributor[];
@@ -800,6 +802,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   } = useOnDemandSoftKeyboard("text");
   const activeVolumeRef = useRef<EntradaNotasLocalVolume | null>(null);
   const routeContributorsInFlightRef = useRef<Set<string>>(new Set());
+  const routeBatchDispatchingRef = useRef(false);
 
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -844,6 +847,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [routeSearchInput, setRouteSearchInput] = useState("");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [routeContributorsMap, setRouteContributorsMap] = useState<Record<string, RouteContributorsState>>({});
+  const [routeBatchSelectionByGroup, setRouteBatchSelectionByGroup] = useState<Record<string, string[]>>({});
+  const [routeBatchQueue, setRouteBatchQueue] = useState<string[]>([]);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
@@ -1091,6 +1096,98 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
     return mapped.filter((group): group is EntradaNotasRouteGroupView => group !== null);
   }, [routeGroups, routeSearchInput]);
+
+  const isRouteRowSelectableForBatch = useCallback((row: EntradaNotasRouteOverviewRow) => {
+    if (!buildSeqNfLabelKey(row.seq_entrada, row.nf)) return false;
+    if (normalizeStoreStatus(row.status) === "concluido") return false;
+    return row.produtos_multiplos_seq <= 0;
+  }, []);
+
+  const getRouteBatchSelectableLabels = useCallback((group: RouteBatchGroupSelectionSource): string[] => {
+    const labels: string[] = [];
+    const seen = new Set<string>();
+
+    for (const row of group.filiais) {
+      const seqNfLabel = buildSeqNfLabelKey(row.seq_entrada, row.nf);
+      if (!seqNfLabel) continue;
+      if (!isRouteRowSelectableForBatch(row)) continue;
+      if (seen.has(seqNfLabel)) continue;
+      seen.add(seqNfLabel);
+      labels.push(seqNfLabel);
+    }
+
+    return labels;
+  }, [isRouteRowSelectableForBatch]);
+
+  const toggleRouteBatchSelection = useCallback((groupRota: string, seqNfLabel: string, checked: boolean) => {
+    setRouteBatchSelectionByGroup((current) => {
+      const currentLabels = current[groupRota] ?? [];
+      const alreadySelected = currentLabels.includes(seqNfLabel);
+      if (checked && alreadySelected) return current;
+      if (!checked && !alreadySelected) return current;
+
+      const nextLabels = checked
+        ? [...currentLabels, seqNfLabel]
+        : currentLabels.filter((value) => value !== seqNfLabel);
+
+      if (nextLabels.length === 0) {
+        if (!(groupRota in current)) return current;
+        const next = { ...current };
+        delete next[groupRota];
+        return next;
+      }
+
+      return {
+        ...current,
+        [groupRota]: nextLabels
+      };
+    });
+  }, []);
+
+  const setAllRouteBatchSelection = useCallback((group: RouteBatchGroupSelectionSource, checked: boolean) => {
+    const selectable = getRouteBatchSelectableLabels(group);
+    setRouteBatchSelectionByGroup((current) => {
+      if (!checked || selectable.length === 0) {
+        if (!(group.rota in current)) return current;
+        const next = { ...current };
+        delete next[group.rota];
+        return next;
+      }
+
+      return {
+        ...current,
+        [group.rota]: selectable
+      };
+    });
+  }, [getRouteBatchSelectableLabels]);
+
+  const startRouteBatchByGroup = useCallback((group: RouteBatchGroupSelectionSource) => {
+    const selectable = getRouteBatchSelectableLabels(group);
+    const selected = routeBatchSelectionByGroup[group.rota] ?? [];
+    const selectedSet = new Set(selected);
+    const queue = selectable.filter((seqNfLabel) => selectedSet.has(seqNfLabel));
+
+    if (queue.length === 0) {
+      setErrorMessage("Selecione pelo menos uma Seq/NF válida para iniciar a conferência em lote.");
+      return;
+    }
+
+    if (hasOpenConference) {
+      setErrorMessage("Existe uma conferência em andamento. Finalize a conferência atual para iniciar o lote.");
+      return;
+    }
+
+    setRouteBatchQueue(queue);
+    setShowRoutesModal(false);
+    setErrorMessage(null);
+    setStatusMessage(`Lote preparado: ${queue.length} Seq/NF selecionada(s).`);
+    setRouteBatchSelectionByGroup((current) => {
+      if (!(group.rota in current)) return current;
+      const next = { ...current };
+      delete next[group.rota];
+      return next;
+    });
+  }, [getRouteBatchSelectableLabels, hasOpenConference, routeBatchSelectionByGroup]);
 
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
@@ -1927,6 +2024,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return;
     }
 
+    setRouteBatchQueue((current) => (current.length > 0 ? [] : current));
+
     if (hasOpenConference && activeVolume && activeVolume.conference_kind !== "avulsa") {
       setErrorMessage("Existe uma conferência Seq/NF em andamento. Finalize-a antes de iniciar a avulsa.");
       return;
@@ -2424,6 +2523,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return;
     }
 
+    setRouteBatchQueue((current) => (current.length > 0 ? [] : current));
+
     const parsedSeqNf = parseStrictSeqNfInput(value);
     if (parsedSeqNf) {
       await openVolumeFromEtiqueta(parsedSeqNf.label);
@@ -2463,6 +2564,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const handleSelectPendingBarcodeOpen = useCallback(async (option: EntradaNotasBarcodeSeqNfOption) => {
     const seqNfLabel = `${option.seq_entrada}/${option.nf}`;
+    setRouteBatchQueue((current) => (current.length > 0 ? [] : current));
     setPendingBarcodeOpenSelection(null);
     setEtiquetaInput(seqNfLabel);
     setStatusMessage(`Código encontrado. Seq/NF ${seqNfLabel} será iniciada.`);
@@ -3280,6 +3382,28 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     await syncRouteOverview();
   }, [syncRouteOverview]);
 
+  useEffect(() => {
+    if (routeBatchQueue.length === 0) return;
+    if (busyOpenVolume) return;
+    if (hasOpenConference) return;
+    if (routeBatchDispatchingRef.current) return;
+
+    const [nextSeqNf, ...remaining] = routeBatchQueue;
+    routeBatchDispatchingRef.current = true;
+    setRouteBatchQueue(remaining);
+    setEtiquetaInput(nextSeqNf);
+    setErrorMessage(null);
+    setStatusMessage(
+      remaining.length > 0
+        ? `Abrindo Seq/NF ${nextSeqNf}. Restam ${remaining.length} no lote.`
+        : `Abrindo Seq/NF ${nextSeqNf}.`
+    );
+
+    void openVolumeFromEtiqueta(nextSeqNf).finally(() => {
+      routeBatchDispatchingRef.current = false;
+    });
+  }, [busyOpenVolume, hasOpenConference, openVolumeFromEtiqueta, routeBatchQueue]);
+
   const markStorePendingAfterCancel = useCallback(async (volume: EntradaNotasLocalVolume) => {
     if (volume.filial == null) return;
     if (routeRows.length === 0) return;
@@ -3366,6 +3490,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   useEffect(() => {
     setRouteContributorsMap({});
     routeContributorsInFlightRef.current.clear();
+    routeBatchDispatchingRef.current = false;
+    setRouteBatchSelectionByGroup({});
+    setRouteBatchQueue([]);
   }, [currentCd]);
 
   useEffect(() => {
@@ -4014,6 +4141,22 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {routeBatchQueue.length > 0 ? (
+          <div className="alert success entrada-notas-route-batch-queue">
+            <span>Lote ativo: {routeBatchQueue.length} Seq/NF pendente(s).</span>
+            <button
+              type="button"
+              className="btn btn-muted"
+              onClick={() => {
+                routeBatchDispatchingRef.current = false;
+                setRouteBatchQueue([]);
+                setStatusMessage("Lote cancelado.");
+              }}
+            >
+              Cancelar lote
+            </button>
+          </div>
+        ) : null}
         {scanFeedback ? (
           <div
             key={scanFeedback.id}
@@ -4470,6 +4613,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       const routeKey = `${group.rota}::${index}`;
                       const isOpen = group.force_open || expandedRoute === routeKey;
                       const groupStatus = group.status;
+                      const selectableBatchSeqNf = getRouteBatchSelectableLabels(group);
+                      const selectedBatchSeqNf = routeBatchSelectionByGroup[group.rota] ?? [];
+                      const selectedBatchSet = new Set(selectedBatchSeqNf);
+                      const selectedBatchCount = selectableBatchSeqNf.filter((label) => selectedBatchSet.has(label)).length;
+                      const allBatchSelected = selectableBatchSeqNf.length > 0 && selectedBatchCount === selectableBatchSeqNf.length;
                       const canToggle = !group.force_open;
                       const toggleRoute = () => {
                         if (!canToggle) return;
@@ -4516,12 +4664,38 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                           </div>
                           {isOpen ? (
                             <div className="termo-route-stores">
+                              <div className="termo-route-batch-actions">
+                                <p>
+                                  Selecionadas para lote: {selectedBatchCount}/{selectableBatchSeqNf.length}
+                                </p>
+                                <div className="termo-route-batch-buttons">
+                                  <button
+                                    className="btn btn-muted"
+                                    type="button"
+                                    onClick={() => setAllRouteBatchSelection(group, !allBatchSelected)}
+                                    disabled={selectableBatchSeqNf.length === 0}
+                                  >
+                                    {allBatchSelected ? "Desmarcar todas" : "Marcar todas"}
+                                  </button>
+                                  <button
+                                    className="btn btn-primary"
+                                    type="button"
+                                    onClick={() => startRouteBatchByGroup(group)}
+                                    disabled={selectedBatchCount === 0 || hasOpenConference}
+                                  >
+                                    {selectedBatchCount > 0 ? `Iniciar selecionadas (${selectedBatchCount})` : "Iniciar selecionadas"}
+                                  </button>
+                                </div>
+                              </div>
                               {group.visible_filiais.map((row) => {
                                 const lojaStatus = normalizeStoreStatus(row.status);
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
                                 const colaboradorMat = row.colaborador_mat?.trim() || "";
                                 const seqLabel = row.pedidos_seq ?? `Seq ${row.seq_entrada ?? "-"} / NF ${row.nf ?? "-"}`;
                                 const seqNfKey = buildSeqNfLabelKey(row.seq_entrada, row.nf);
+                                const batchSelectable = isRouteRowSelectableForBatch(row);
+                                const batchSelected = Boolean(seqNfKey && selectedBatchSet.has(seqNfKey));
+                                const batchBlockedByDuplicate = row.produtos_multiplos_seq > 0;
                                 const contributorsState = seqNfKey ? routeContributorsMap[seqNfKey] : undefined;
                                 const contributors = contributorsState?.contributors ?? [];
                                 const contributorNames = contributors.length > 0
@@ -4535,7 +4709,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                     ? `${colaboradorNome}${colaboradorMat ? ` (${colaboradorMat})` : ""}`
                                     : "";
                                 return (
-                                  <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
+                                  <div key={`${group.rota}-${row.seq_entrada}-${row.nf}-${row.filial ?? "na"}`} className="termo-route-store-row">
                                     <div>
                                       <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
                                       <p>{seqLabel}</p>
@@ -4544,16 +4718,36 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                         <p>Produtos repetidos em múltiplos Seq/NF: {row.produtos_multiplos_seq}</p>
                                       ) : null}
                                       <p>Status: {routeStatusLabel(lojaStatus)}</p>
-                                      <button
-                                        className="btn btn-primary"
-                                        type="button"
-                                        onClick={() => {
-                                          setShowRoutesModal(false);
-                                          void openVolumeFromEtiqueta(`${row.seq_entrada ?? ""}/${row.nf ?? ""}`);
-                                        }}
-                                      >
-                                        {lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
-                                      </button>
+                                      {batchBlockedByDuplicate ? (
+                                        <p className="termo-route-batch-note">
+                                          Seleção em lote bloqueada: esta Seq/NF possui produtos repetidos em outras Seq/NF da transportadora.
+                                        </p>
+                                      ) : null}
+                                      <div className="termo-route-store-actions">
+                                        <label className={`termo-route-store-check${batchSelectable ? "" : " is-disabled"}`}>
+                                          <input
+                                            type="checkbox"
+                                            checked={batchSelected}
+                                            disabled={!batchSelectable || !seqNfKey}
+                                            onChange={(event) => {
+                                              if (!seqNfKey) return;
+                                              toggleRouteBatchSelection(group.rota, seqNfKey, event.target.checked);
+                                            }}
+                                          />
+                                          <span>Selecionar no lote</span>
+                                        </label>
+                                        <button
+                                          className="btn btn-primary"
+                                          type="button"
+                                          onClick={() => {
+                                            setRouteBatchQueue((current) => (current.length > 0 ? [] : current));
+                                            setShowRoutesModal(false);
+                                            void openVolumeFromEtiqueta(`${row.seq_entrada ?? ""}/${row.nf ?? ""}`);
+                                          }}
+                                        >
+                                          {lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
+                                        </button>
+                                      </div>
                                       {lojaStatus === "em_andamento" && contributorNames ? (
                                         <p>Em andamento por: {contributorNames}</p>
                                       ) : null}
