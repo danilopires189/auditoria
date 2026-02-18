@@ -119,6 +119,7 @@ type DialogState = {
   confirmLabel?: string;
   cancelLabel?: string;
   onConfirm?: () => void;
+  onCancel?: () => void;
 };
 
 type OfflineBaseState = {
@@ -1183,16 +1184,100 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return localVolume;
   }, [fetchSeqNfContributors, profile]);
 
+  const openReadOnlyVolume = useCallback((volume: EntradaNotasLocalVolume) => {
+    setActiveVolume(volume);
+    setExpandedItemKey(null);
+    setEditingItemKey(null);
+    setEditQtdInput("0");
+    setStatusMessage("Conferência aberta em modo leitura.");
+  }, []);
+
   const promptPartialReopen = useCallback(async (
     etiqueta: string,
-    selectedCd: number
+    selectedCd: number,
+    options?: { onOpenReadOnly?: () => void }
   ): Promise<boolean> => {
     const reopenInfo = await fetchPartialReopenInfo(etiqueta, selectedCd);
+    const reopenedBySameUser = reopenInfo.previous_started_by === profile.user_id;
+    if (reopenedBySameUser) {
+      showDialog({
+        title: "Conferência já finalizada",
+        message:
+          `A Seq/NF ${etiqueta} já foi finalizada por você hoje.\n\n`
+          + `Itens bloqueados: ${reopenInfo.locked_items}\n`
+          + `Itens pendentes: ${reopenInfo.pending_items}\n\n`
+          + "Escolha como deseja abrir a conferência:",
+        confirmLabel: "Reabrir conferência",
+        cancelLabel: "Abrir leitura",
+        onCancel: () => {
+          closeDialog();
+          const openReadOnly = options?.onOpenReadOnly;
+          if (openReadOnly) {
+            openReadOnly();
+            return;
+          }
+          void (async () => {
+            setBusyOpenVolume(true);
+            setStatusMessage(null);
+            setErrorMessage(null);
+            try {
+              const readOnlyVolume = await fetchSeqNfVolumeSnapshot(etiqueta, selectedCd);
+              openReadOnlyVolume(readOnlyVolume);
+              setEtiquetaInput(readOnlyVolume.nr_volume);
+            } catch (readOnlyError) {
+              const readOnlyMessage = readOnlyError instanceof Error
+                ? readOnlyError.message
+                : "Falha ao abrir conferência em leitura.";
+              setErrorMessage(normalizeRpcErrorMessage(readOnlyMessage));
+            } finally {
+              setBusyOpenVolume(false);
+            }
+          })();
+        },
+        onConfirm: () => {
+          void (async () => {
+            closeDialog();
+            setBusyOpenVolume(true);
+            setStatusMessage(null);
+            setErrorMessage(null);
+            try {
+              const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd);
+              const [reopenedItems, reopenedContributors] = await Promise.all([
+                fetchVolumeItems(reopenedVolume.conf_id),
+                fetchSeqNfContributors(reopenedVolume)
+              ]);
+              const reopenedLocalVolume = createLocalVolumeFromRemote(
+                profile,
+                reopenedVolume,
+                reopenedItems,
+                reopenedContributors
+              );
+              await saveLocalVolume(reopenedLocalVolume);
+              setActiveVolume(reopenedLocalVolume);
+              setEtiquetaInput(reopenedLocalVolume.nr_volume);
+              setExpandedItemKey(null);
+              setEditingItemKey(null);
+              setEditQtdInput("0");
+              setStatusMessage("Conferência reaberta. Você pode editar todos os itens novamente.");
+              focusBarras();
+            } catch (reopenError) {
+              const reopenMessage = reopenError instanceof Error
+                ? reopenError.message
+                : "Falha ao reabrir conferência.";
+              setErrorMessage(normalizeRpcErrorMessage(reopenMessage));
+            } finally {
+              setBusyOpenVolume(false);
+            }
+          })();
+        }
+      });
+      return true;
+    }
+
     if (!reopenInfo.can_reopen) {
       return false;
     }
 
-    const reopenedBySameUser = reopenInfo.previous_started_by === profile.user_id;
     const previousCollaborator = formatCollaboratorName({
       nome: reopenInfo.previous_started_nome,
       mat: reopenInfo.previous_started_mat
@@ -1231,11 +1316,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             setExpandedItemKey(null);
             setEditingItemKey(null);
             setEditQtdInput("0");
-            setStatusMessage(
-              reopenedBySameUser
-                ? "Conferência retomada. Continue informando os itens pendentes."
-                : "Conferência retomada. Itens já conferidos por outro usuário permanecem bloqueados."
-            );
+            setStatusMessage("Conferência retomada. Itens já conferidos por outro usuário permanecem bloqueados.");
             focusBarras();
           } catch (reopenError) {
             const reopenMessage = reopenError instanceof Error
@@ -1252,8 +1333,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return true;
   }, [
     closeDialog,
+    fetchSeqNfVolumeSnapshot,
     fetchSeqNfContributors,
     focusBarras,
+    openReadOnlyVolume,
     profile,
     showDialog
   ]);
@@ -1635,7 +1718,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           if (resolvedExisting.status !== "em_conferencia") {
             if (isOnline && resolvedExisting.conference_kind !== "avulsa") {
               try {
-                const reopenPrompted = await promptPartialReopen(etiqueta, selectedCd);
+                const reopenPrompted = await promptPartialReopen(etiqueta, selectedCd, {
+                  onOpenReadOnly: () => {
+                    openReadOnlyVolume(resolvedExisting);
+                  }
+                });
                 if (reopenPrompted) return;
               } catch {
                 // Em falha de validação de reabertura, mantém opção de leitura.
@@ -1647,11 +1734,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               confirmLabel: "Abrir leitura",
               cancelLabel: "Cancelar",
               onConfirm: () => {
-                setActiveVolume(resolvedExisting);
-                setExpandedItemKey(null);
-                setEditingItemKey(null);
-                setEditQtdInput("0");
-                setStatusMessage("Conferência aberta em modo leitura.");
+                openReadOnlyVolume(resolvedExisting);
                 closeDialog();
               }
             });
@@ -1677,7 +1760,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           etiquetaFinal = localVolume.nr_volume;
           if (remoteVolume.is_read_only && remoteVolume.conference_kind !== "avulsa") {
             try {
-              const reopenPrompted = await promptPartialReopen(etiqueta, selectedCd);
+              const reopenPrompted = await promptPartialReopen(etiqueta, selectedCd, {
+                onOpenReadOnly: () => {
+                  openReadOnlyVolume(localVolume);
+                }
+              });
               if (reopenPrompted) return;
             } catch {
               // Em falha de validação de reabertura, mantém abertura em leitura.
@@ -1728,7 +1815,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       if (remoteVolume.is_read_only) {
         if (remoteVolume.conference_kind !== "avulsa") {
           try {
-            const reopenPrompted = await promptPartialReopen(etiqueta, selectedCd);
+            const reopenPrompted = await promptPartialReopen(etiqueta, selectedCd, {
+              onOpenReadOnly: () => {
+                openReadOnlyVolume(localVolume);
+              }
+            });
             if (reopenPrompted) return;
           } catch {
             // Em falha de validação de reabertura, mantém abertura em leitura.
@@ -1740,7 +1831,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           confirmLabel: "Abrir leitura",
           cancelLabel: "Cancelar",
           onConfirm: () => {
-            setActiveVolume(localVolume);
+            openReadOnlyVolume(localVolume);
             closeDialog();
           }
         });
@@ -1805,6 +1896,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     prepareOfflineManifest,
     profile,
     promptPartialReopen,
+    openReadOnlyVolume,
     resumeRemoteActiveVolume,
     showDialog,
     fetchSeqNfVolumeSnapshot,
@@ -4653,7 +4745,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 <div className="confirm-actions">
                   {dialogState.onConfirm ? (
                     <>
-                      <button className="btn btn-muted" type="button" onClick={closeDialog}>
+                      <button
+                        className="btn btn-muted"
+                        type="button"
+                        onClick={dialogState.onCancel ?? closeDialog}
+                      >
                         {dialogState.cancelLabel ?? "Cancelar"}
                       </button>
                       <button className="btn btn-primary" type="button" onClick={dialogState.onConfirm}>
