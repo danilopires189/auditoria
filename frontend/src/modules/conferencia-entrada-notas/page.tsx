@@ -63,6 +63,7 @@ import {
   reopenPartialConference,
   scanBarcode,
   setItemQtd,
+  syncSnapshot,
   resolveAvulsaTargets,
   syncPendingEntradaNotasVolumes
 } from "./sync";
@@ -871,6 +872,42 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     && activeVolume.started_by === profile.user_id
   );
   const hasOpenConference = Boolean(activeVolume && activeVolume.status === "em_conferencia" && !activeVolume.is_read_only);
+  const isCombinedRouteMode = Boolean(
+    activeVolume
+    && activeVolume.conference_kind === "avulsa"
+    && (activeVolume.combined_seq_nf_labels?.length ?? 0) > 0
+  );
+
+  const combinedSeqNfLabels = useMemo(() => {
+    if (!activeVolume) return [] as string[];
+    return activeVolume.combined_seq_nf_labels ?? [];
+  }, [activeVolume]);
+
+  const combinedItemBreakdownByCoddv = useMemo(() => {
+    const map: Record<number, Array<{
+      seq_entrada: number;
+      nf: number;
+      qtd_esperada: number;
+      qtd_conferida: number;
+    }>> = {};
+    const allocations = activeVolume?.combined_seq_allocations ?? [];
+    for (const row of allocations) {
+      if (!map[row.coddv]) map[row.coddv] = [];
+      map[row.coddv].push({
+        seq_entrada: row.seq_entrada,
+        nf: row.nf,
+        qtd_esperada: row.qtd_esperada,
+        qtd_conferida: row.qtd_conferida
+      });
+    }
+    for (const coddv of Object.keys(map)) {
+      map[Number(coddv)].sort((a, b) => {
+        if (a.seq_entrada !== b.seq_entrada) return a.seq_entrada - b.seq_entrada;
+        return a.nf - b.nf;
+      });
+    }
+    return map;
+  }, [activeVolume?.combined_seq_allocations]);
 
   useEffect(() => {
     activeVolumeRef.current = activeVolume;
@@ -993,6 +1030,28 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return unique.size > 1;
   }, [activeVolume?.contributors]);
 
+  const renderCombinedBreakdown = useCallback((item: EntradaNotasLocalItem) => {
+    if (!isCombinedRouteMode) return null;
+    const breakdown = combinedItemBreakdownByCoddv[item.coddv] ?? [];
+    if (!breakdown.length) return null;
+    return (
+      <div className="entrada-notas-combined-breakdown">
+        <p>Distribuição por Seq/NF:</p>
+        {breakdown.map((row) => (
+          <p key={`${item.coddv}:${row.seq_entrada}/${row.nf}`}>
+            Seq/NF {row.seq_entrada}/{row.nf}
+            {" | "}
+            Esperada {row.qtd_esperada}
+            {" | "}
+            Conferida {row.qtd_conferida}
+            {" | "}
+            Pendente {Math.max(row.qtd_esperada - row.qtd_conferida, 0)}
+          </p>
+        ))}
+      </div>
+    );
+  }, [combinedItemBreakdownByCoddv, isCombinedRouteMode]);
+
   const offlineBaseBadge = useMemo(() => {
     const overall = offlineBaseState.entrada_ready && offlineBaseState.barras_ready
       ? (offlineBaseState.stale ? "desatualizado" : "completo")
@@ -1100,7 +1159,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const isRouteRowSelectableForBatch = useCallback((row: EntradaNotasRouteOverviewRow) => {
     if (!buildSeqNfLabelKey(row.seq_entrada, row.nf)) return false;
     if (normalizeStoreStatus(row.status) === "concluido") return false;
-    return row.produtos_multiplos_seq <= 0;
+    return true;
   }, []);
 
   const getRouteBatchSelectableLabels = useCallback((group: RouteBatchGroupSelectionSource): string[] => {
@@ -1161,13 +1220,203 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     });
   }, [getRouteBatchSelectableLabels]);
 
+  const openCombinedRouteConference = useCallback(async (
+    group: RouteBatchGroupSelectionSource,
+    seqNfLabels: string[]
+  ) => {
+    if (currentCd == null) {
+      setErrorMessage("CD não definido para esta conferência.");
+      return;
+    }
+    if (hasOpenConference) {
+      setErrorMessage("Existe uma conferência em andamento. Finalize a conferência atual antes de iniciar outra.");
+      return;
+    }
+
+    const parsedLabels = seqNfLabels
+      .map((value) => parseStrictSeqNfInput(value))
+      .filter((value): value is NonNullable<typeof value> => value !== null)
+      .map((value) => value.label);
+    const normalizedLabels = [...new Set(parsedLabels)];
+
+    setBusyOpenVolume(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+
+    try {
+      if (!manifestReady) {
+        throw new Error("Base local não sincronizada. Sincronize a base para iniciar conferência conjunta.");
+      }
+
+      const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+      if (!manifestItems.length) {
+        throw new Error("BASE_ENTRADA_NOTAS_VAZIA");
+      }
+
+      const labelSet = new Set(normalizedLabels);
+      const allocationByKey = new Map<string, {
+        coddv: number;
+        descricao: string;
+        barras: string | null;
+        seq_entrada: number;
+        nf: number;
+        qtd_esperada: number;
+        qtd_conferida: number;
+      }>();
+      const itemByCoddv = new Map<number, EntradaNotasLocalItem>();
+      const nowIso = new Date().toISOString();
+
+      for (const row of manifestItems) {
+        const seq = Number.parseInt(String(row.seq_entrada ?? 0), 10);
+        const nf = Number.parseInt(String(row.nf ?? 0), 10);
+        const seqLabel = buildSeqNfLabelKey(seq, nf);
+        if (!seqLabel || !labelSet.has(seqLabel)) continue;
+
+        const coddv = Number.parseInt(String(row.coddv ?? 0), 10);
+        if (!Number.isFinite(coddv) || coddv <= 0) continue;
+        const qtdEsperada = Math.max(Number.parseInt(String(row.qtd_esperada ?? 0), 10) || 0, 0);
+        if (qtdEsperada <= 0) continue;
+
+        const allocationKey = buildAvulsaItemKey(seq, nf, coddv);
+        const currentAllocation = allocationByKey.get(allocationKey);
+        if (!currentAllocation) {
+          allocationByKey.set(allocationKey, {
+            coddv,
+            descricao: row.descricao?.trim() || `Produto ${coddv}`,
+            barras: null,
+            seq_entrada: seq,
+            nf,
+            qtd_esperada: qtdEsperada,
+            qtd_conferida: 0
+          });
+        } else {
+          currentAllocation.qtd_esperada += qtdEsperada;
+        }
+
+        const currentItem = itemByCoddv.get(coddv);
+        if (!currentItem) {
+          itemByCoddv.set(coddv, {
+            coddv,
+            barras: null,
+            descricao: row.descricao?.trim() || `Produto ${coddv}`,
+            qtd_esperada: qtdEsperada,
+            qtd_conferida: 0,
+            updated_at: nowIso,
+            item_key: `multi:${coddv}`
+          });
+        } else {
+          currentItem.qtd_esperada += qtdEsperada;
+        }
+      }
+
+      if (itemByCoddv.size === 0 || allocationByKey.size === 0) {
+        throw new Error("Não foi possível montar a conferência conjunta para as Seq/NF selecionadas.");
+      }
+
+      const labelOrder = new Map(normalizedLabels.map((label, index) => [label, index]));
+      const allocations = [...allocationByKey.values()].sort((a, b) => {
+        const aLabel = `${a.seq_entrada}/${a.nf}`;
+        const bLabel = `${b.seq_entrada}/${b.nf}`;
+        const byOrder = (labelOrder.get(aLabel) ?? Number.MAX_SAFE_INTEGER) - (labelOrder.get(bLabel) ?? Number.MAX_SAFE_INTEGER);
+        if (byOrder !== 0) return byOrder;
+        return a.coddv - b.coddv;
+      });
+      const items = [...itemByCoddv.values()].sort((a, b) => {
+        const byDescricao = a.descricao.localeCompare(b.descricao, "pt-BR");
+        if (byDescricao !== 0) return byDescricao;
+        return a.coddv - b.coddv;
+      });
+      const fornecedores = [...new Set(
+        group.filiais
+          .map((row) => row.filial_nome?.trim() || row.fornecedor?.trim() || "")
+          .filter(Boolean)
+      )];
+      const fornecedorLabel = fornecedores.length === 1 ? fornecedores[0] : `${fornecedores.length} fornecedores`;
+      const confDate = todayIsoBrasilia();
+      const volumeId = `ROTA:${group.rota}`;
+      const localVolume: EntradaNotasLocalVolume = {
+        local_key: buildEntradaNotasVolumeKey(profile.user_id, currentCd, confDate, volumeId),
+        user_id: profile.user_id,
+        conf_date: confDate,
+        cd: currentCd,
+        conference_kind: "avulsa",
+        seq_entrada: 0,
+        nf: 0,
+        transportadora: group.rota,
+        fornecedor: fornecedorLabel || "MÚLTIPLOS",
+        nr_volume: `ROTA ${group.rota}`,
+        caixa: null,
+        pedido: null,
+        filial: null,
+        filial_nome: fornecedorLabel || "MÚLTIPLOS",
+        rota: group.rota,
+        remote_conf_id: null,
+        status: "em_conferencia",
+        falta_motivo: null,
+        started_by: profile.user_id,
+        started_mat: profile.mat || "",
+        started_nome: profile.nome || "Usuário",
+        started_at: nowIso,
+        finalized_at: null,
+        updated_at: nowIso,
+        is_read_only: false,
+        items,
+        avulsa_targets: [],
+        avulsa_queue: [],
+        combined_seq_nf_labels: normalizedLabels,
+        combined_seq_transportadora: group.rota,
+        combined_seq_allocations: allocations,
+        contributors: [{
+          user_id: profile.user_id,
+          mat: profile.mat || "",
+          nome: profile.nome || "Usuário",
+          first_action_at: nowIso,
+          last_action_at: nowIso
+        }],
+        pending_snapshot: false,
+        pending_finalize: false,
+        pending_finalize_reason: null,
+        pending_cancel: false,
+        sync_error: null,
+        last_synced_at: null
+      };
+
+      await saveLocalVolume(localVolume);
+      activeVolumeRef.current = localVolume;
+      setActiveVolume(localVolume);
+      setEtiquetaInput(localVolume.nr_volume);
+      setExpandedItemKey(null);
+      setEditingItemKey(null);
+      setEditQtdInput("0");
+      setPendingAvulsaScan(null);
+      setPendingBarcodeOpenSelection(null);
+      setShowRoutesModal(false);
+      setStatusMessage(`Conferência conjunta iniciada para ${normalizedLabels.length} Seq/NF da transportadora ${group.rota}.`);
+      disableBarcodeSoftKeyboard();
+      window.requestAnimationFrame(() => {
+        barrasRef.current?.focus();
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao iniciar conferência conjunta.";
+      setErrorMessage(normalizeRpcErrorMessage(message));
+    } finally {
+      setBusyOpenVolume(false);
+    }
+  }, [
+    currentCd,
+    disableBarcodeSoftKeyboard,
+    hasOpenConference,
+    manifestReady,
+    profile
+  ]);
+
   const startRouteBatchByGroup = useCallback((group: RouteBatchGroupSelectionSource) => {
     const selectable = getRouteBatchSelectableLabels(group);
     const selected = routeBatchSelectionByGroup[group.rota] ?? [];
     const selectedSet = new Set(selected);
-    const queue = selectable.filter((seqNfLabel) => selectedSet.has(seqNfLabel));
+    const picked = selectable.filter((seqNfLabel) => selectedSet.has(seqNfLabel));
 
-    if (queue.length === 0) {
+    if (picked.length === 0) {
       setErrorMessage("Selecione pelo menos uma Seq/NF válida para iniciar a conferência em lote.");
       return;
     }
@@ -1177,17 +1426,33 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return;
     }
 
-    setRouteBatchQueue(queue);
-    setShowRoutesModal(false);
+    if (picked.length === 1) {
+      setShowRoutesModal(false);
+      setErrorMessage(null);
+      setRouteBatchSelectionByGroup((current) => {
+        if (!(group.rota in current)) return current;
+        const next = { ...current };
+        delete next[group.rota];
+        return next;
+      });
+      void openVolumeFromEtiqueta(picked[0]);
+      return;
+    }
+
     setErrorMessage(null);
-    setStatusMessage(`Lote preparado: ${queue.length} Seq/NF selecionada(s).`);
+    void openCombinedRouteConference(group, picked);
     setRouteBatchSelectionByGroup((current) => {
       if (!(group.rota in current)) return current;
       const next = { ...current };
       delete next[group.rota];
       return next;
     });
-  }, [getRouteBatchSelectableLabels, hasOpenConference, routeBatchSelectionByGroup]);
+  }, [
+    getRouteBatchSelectableLabels,
+    hasOpenConference,
+    openCombinedRouteConference,
+    routeBatchSelectionByGroup
+  ]);
 
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
@@ -2936,40 +3201,137 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           return;
         }
 
-        const onlineAvulsa = isOnline && !preferOfflineMode && Boolean(activeVolume.remote_conf_id);
-        const candidateOptions = onlineAvulsa && activeVolume.remote_conf_id
-          ? await resolveAvulsaTargets(activeVolume.remote_conf_id, barras)
-          : await resolveAvulsaTargetsOffline(lookup.coddv, lookup.barras || barras, lookup.descricao ?? "");
-        const availableOptions = candidateOptions.filter((option) => option.is_available);
+        if (isCombinedRouteMode && (activeVolume.combined_seq_nf_labels?.length ?? 0) > 0) {
+          const selectedLabels = activeVolume.combined_seq_nf_labels ?? [];
+          const selectedSet = new Set(selectedLabels);
+          const orderMap = new Map(selectedLabels.map((label, index) => [label, index]));
+          const allocations = (activeVolume.combined_seq_allocations ?? [])
+            .filter((row) => row.coddv === lookup.coddv)
+            .filter((row) => selectedSet.has(`${row.seq_entrada}/${row.nf}`))
+            .sort((a, b) => {
+              const aLabel = `${a.seq_entrada}/${a.nf}`;
+              const bLabel = `${b.seq_entrada}/${b.nf}`;
+              const byOrder = (orderMap.get(aLabel) ?? Number.MAX_SAFE_INTEGER) - (orderMap.get(bLabel) ?? Number.MAX_SAFE_INTEGER);
+              if (byOrder !== 0) return byOrder;
+              return a.nf - b.nf;
+            });
 
-        if (availableOptions.length === 0) {
-          showDialog({
-            title: "Sem pendência disponível",
-            message: "Este produto não possui Seq/NF pendente disponível para conferência.",
-            confirmLabel: "OK"
+          if (allocations.length === 0) {
+            showDialog({
+              title: "Produto fora da conferência",
+              message: "Este produto não pertence às Seq/NF selecionadas para a conferência conjunta.",
+              confirmLabel: "OK"
+            });
+            setBarcodeValidationState("invalid");
+            triggerScanErrorAlert("Produto fora da conferência conjunta.");
+            return;
+          }
+
+          const totalPendente = allocations.reduce((sum, row) => sum + Math.max(row.qtd_esperada - row.qtd_conferida, 0), 0);
+          if (totalPendente <= 0) {
+            showDialog({
+              title: "Sem pendência disponível",
+              message: "Este produto já atingiu a quantidade total esperada nas Seq/NF selecionadas.",
+              confirmLabel: "OK"
+            });
+            setBarcodeValidationState("invalid");
+            triggerScanErrorAlert("Produto sem pendência disponível.");
+            return;
+          }
+          if (qtd > totalPendente) {
+            showDialog({
+              title: "Quantidade acima do pendente",
+              message: `Restam ${totalPendente} unidade(s) pendente(s) para este produto nas Seq/NF selecionadas.`,
+              confirmLabel: "OK"
+            });
+            setBarcodeValidationState("invalid");
+            triggerScanErrorAlert("Quantidade acima do pendente.");
+            return;
+          }
+
+          let remaining = qtd;
+          const nowIso = new Date().toISOString();
+          const nextAllocations = (activeVolume.combined_seq_allocations ?? []).map((row) => ({ ...row }));
+          const appliedDetails: string[] = [];
+
+          for (const allocation of allocations) {
+            if (remaining <= 0) break;
+            const pending = Math.max(allocation.qtd_esperada - allocation.qtd_conferida, 0);
+            if (pending <= 0) continue;
+            const toApply = Math.min(pending, remaining);
+            remaining -= toApply;
+            const targetLabel = `${allocation.seq_entrada}/${allocation.nf}`;
+            const nextAllocation = nextAllocations.find((row) => (
+              row.coddv === allocation.coddv
+              && row.seq_entrada === allocation.seq_entrada
+              && row.nf === allocation.nf
+            ));
+            if (!nextAllocation) continue;
+            nextAllocation.qtd_conferida += toApply;
+            nextAllocation.barras = lookup.barras || barras;
+            appliedDetails.push(`Seq/NF ${targetLabel} +${toApply}`);
+          }
+
+          const appliedTotal = qtd - remaining;
+          const nextItems = activeVolume.items.map((item) => {
+            if (item.coddv !== lookup.coddv) return item;
+            return {
+              ...item,
+              barras: lookup.barras || barras,
+              qtd_conferida: Math.max(item.qtd_conferida + appliedTotal, 0),
+              updated_at: nowIso
+            };
           });
-          setBarcodeValidationState("invalid");
-          triggerScanErrorAlert("Produto sem pendência disponível.");
-          return;
-        }
 
-        if (availableOptions.length > 1) {
-          setBarcodeValidationState("valid");
-          setPendingAvulsaScan({
-            barras: lookup.barras || barras,
-            qtd,
-            coddv: lookup.coddv,
-            descricao: lookup.descricao || `Produto ${lookup.coddv}`,
-            options: availableOptions
-          });
-          return;
-        }
+          const nextVolume: EntradaNotasLocalVolume = {
+            ...activeVolume,
+            items: nextItems.sort(itemSort),
+            combined_seq_allocations: nextAllocations,
+            updated_at: nowIso,
+            pending_snapshot: false,
+            sync_error: null,
+            last_synced_at: nowIso
+          };
+          await applyVolumeUpdate(nextVolume);
+          produtoRegistrado = `${lookup.descricao || `Produto ${lookup.coddv}`}${appliedDetails.length ? ` | ${appliedDetails.join(" | ")}` : ""}`;
+          barrasRegistrada = lookup.barras || barras;
+          registroRemoto = false;
+        } else {
+          const onlineAvulsa = isOnline && !preferOfflineMode && Boolean(activeVolume.remote_conf_id);
+          const candidateOptions = onlineAvulsa && activeVolume.remote_conf_id
+            ? await resolveAvulsaTargets(activeVolume.remote_conf_id, barras)
+            : await resolveAvulsaTargetsOffline(lookup.coddv, lookup.barras || barras, lookup.descricao ?? "");
+          const availableOptions = candidateOptions.filter((option) => option.is_available);
 
-        const chosen = availableOptions[0];
-        const result = await applyAvulsaScanChoice(lookup.barras || barras, qtd, chosen);
-        produtoRegistrado = result.produtoRegistrado;
-        barrasRegistrada = result.barrasRegistrada;
-        registroRemoto = result.registroRemoto;
+          if (availableOptions.length === 0) {
+            showDialog({
+              title: "Sem pendência disponível",
+              message: "Este produto não possui Seq/NF pendente disponível para conferência.",
+              confirmLabel: "OK"
+            });
+            setBarcodeValidationState("invalid");
+            triggerScanErrorAlert("Produto sem pendência disponível.");
+            return;
+          }
+
+          if (availableOptions.length > 1) {
+            setBarcodeValidationState("valid");
+            setPendingAvulsaScan({
+              barras: lookup.barras || barras,
+              qtd,
+              coddv: lookup.coddv,
+              descricao: lookup.descricao || `Produto ${lookup.coddv}`,
+              options: availableOptions
+            });
+            return;
+          }
+
+          const chosen = availableOptions[0];
+          const result = await applyAvulsaScanChoice(lookup.barras || barras, qtd, chosen);
+          produtoRegistrado = result.produtoRegistrado;
+          barrasRegistrada = result.barrasRegistrada;
+          registroRemoto = result.registroRemoto;
+        }
       }
 
       setBarcodeInput("");
@@ -3306,6 +3668,42 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
     setBusyFinalize(true);
     try {
+      if (isCombinedRouteMode) {
+        if (!isOnline) {
+          setFinalizeError("A finalização da conferência conjunta exige conexão com a internet.");
+          return;
+        }
+        const seqLabels = activeVolume.combined_seq_nf_labels ?? [];
+        const allocations = activeVolume.combined_seq_allocations ?? [];
+        if (!seqLabels.length || !allocations.length) {
+          setFinalizeError("Conferência conjunta sem dados para distribuir.");
+          return;
+        }
+
+        for (const seqLabel of seqLabels) {
+          const parsed = parseStrictSeqNfInput(seqLabel);
+          if (!parsed) continue;
+          const remote = await openVolume(parsed.label, activeVolume.cd);
+          if (remote.is_read_only || remote.status !== "em_conferencia") continue;
+
+          const payload = allocations
+            .filter((row) => row.seq_entrada === parsed.seq_entrada && row.nf === parsed.nf)
+            .map((row) => ({
+              coddv: row.coddv,
+              qtd_conferida: Math.max(0, Math.trunc(row.qtd_conferida)),
+              barras: row.barras
+            }));
+          await syncSnapshot(remote.conf_id, payload);
+          await finalizeVolume(remote.conf_id, null);
+        }
+
+        await removeLocalVolume(activeVolume.local_key);
+        await refreshPendingState();
+        setStatusMessage(`Conferência conjunta finalizada. Distribuição aplicada em ${seqLabels.length} Seq/NF.`);
+        clearConferenceScreen();
+        return;
+      }
+
       if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
         const nowIso = new Date().toISOString();
         const nextStatus = falta > 0 || sobra > 0 ? "finalizado_divergencia" : "finalizado_ok";
@@ -3348,6 +3746,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     clearConferenceScreen,
     divergenciaTotals.falta,
     divergenciaTotals.sobra,
+    isCombinedRouteMode,
     isOnline,
     preferOfflineMode,
     refreshPendingState,
@@ -3378,6 +3777,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const openRoutesModal = useCallback(async () => {
     setRouteSearchInput("");
     setExpandedRoute(null);
+    setRouteBatchSelectionByGroup({});
     setShowRoutesModal(true);
     await syncRouteOverview();
   }, [syncRouteOverview]);
@@ -4233,18 +4633,33 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           <article className="termo-volume-card">
             <div className="termo-volume-head">
               <div>
-                <h3>Conferência {activeVolume.nr_volume}</h3>
+                <h3>
+                  {isCombinedRouteMode
+                    ? `Conferência conjunta ${activeVolume.combined_seq_transportadora ?? activeVolume.transportadora ?? activeVolume.rota ?? ""}`.trim()
+                    : `Conferência ${activeVolume.nr_volume}`}
+                </h3>
                 <p>
                   Transportadora: {activeVolume.transportadora ?? activeVolume.rota ?? "SEM TRANSPORTADORA"}
                   {" | "}
                   Fornecedor: {activeVolume.fornecedor ?? activeVolume.filial_nome ?? "SEM FORNECEDOR"}
                   {" | "}
                   {activeVolume.conference_kind === "avulsa" ? "Modo: " : "Seq/NF: "}
-                  <strong>{activeVolume.conference_kind === "avulsa" ? "Conferência Avulsa" : activeVolume.nr_volume}</strong>
+                  <strong>
+                    {isCombinedRouteMode
+                      ? "Conferência conjunta"
+                      : activeVolume.conference_kind === "avulsa"
+                        ? "Conferência Avulsa"
+                        : activeVolume.nr_volume}
+                  </strong>
                 </p>
                 <p>
                   Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com divergência"}
                 </p>
+                {isCombinedRouteMode ? (
+                  <p className="entrada-notas-contributors">
+                    Seq/NF em conferência: {combinedSeqNfLabels.join(", ")}
+                  </p>
+                ) : null}
                 {activeVolume.conference_kind !== "avulsa" && activeContributorsLabel ? (
                   <p className="entrada-notas-contributors">Colaboradores: {activeContributorsLabel}</p>
                 ) : null}
@@ -4359,11 +4774,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Código: {item.coddv}</p>
                         {item.seq_entrada != null && item.nf != null ? (
                           <p>Seq/NF: {item.seq_entrada}/{item.nf}</p>
+                        ) : isCombinedRouteMode ? (
+                          <p>Conferência conjunta: {combinedSeqNfLabels.length} Seq/NF</p>
                         ) : null}
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
                       </div>
                       <div className="termo-item-side">
                         <span className="termo-divergencia falta">Falta {qtd_falta}</span>
@@ -4373,7 +4790,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                     {expandedItemKey === itemKey ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        {canEditActiveVolume ? (
+                        {renderCombinedBreakdown(item)}
+                        {canEditActiveVolume && !isCombinedRouteMode ? (
                           <div className="termo-item-actions">
                             {editingItemKey === itemKey && item.qtd_conferida > 0 && !isItemLocked ? (
                               <>
@@ -4440,11 +4858,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Código: {item.coddv}</p>
                         {item.seq_entrada != null && item.nf != null ? (
                           <p>Seq/NF: {item.seq_entrada}/{item.nf}</p>
+                        ) : isCombinedRouteMode ? (
+                          <p>Conferência conjunta: {combinedSeqNfLabels.length} Seq/NF</p>
                         ) : null}
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
                       </div>
                       <div className="termo-item-side">
                         <span className="termo-divergencia sobra">Sobra {qtd_sobra}</span>
@@ -4454,7 +4874,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                     {expandedItemKey === itemKey ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        {canEditActiveVolume ? (
+                        {renderCombinedBreakdown(item)}
+                        {canEditActiveVolume && !isCombinedRouteMode ? (
                           <div className="termo-item-actions">
                             {editingItemKey === itemKey && item.qtd_conferida > 0 && !isItemLocked ? (
                               <>
@@ -4520,11 +4941,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Código: {item.coddv}</p>
                         {item.seq_entrada != null && item.nf != null ? (
                           <p>Seq/NF: {item.seq_entrada}/{item.nf}</p>
+                        ) : isCombinedRouteMode ? (
+                          <p>Conferência conjunta: {combinedSeqNfLabels.length} Seq/NF</p>
                         ) : null}
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
                       </div>
                       <div className="termo-item-side">
                         <span className="termo-divergencia correto">Correto</span>
@@ -4534,7 +4957,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                     {expandedItemKey === itemKey ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        {canEditActiveVolume ? (
+                        {renderCombinedBreakdown(item)}
+                        {canEditActiveVolume && !isCombinedRouteMode ? (
                           <div className="termo-item-actions">
                             {editingItemKey === itemKey && item.qtd_conferida > 0 && !isItemLocked ? (
                               <>
@@ -4618,6 +5042,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       const selectedBatchSet = new Set(selectedBatchSeqNf);
                       const selectedBatchCount = selectableBatchSeqNf.filter((label) => selectedBatchSet.has(label)).length;
                       const allBatchSelected = selectableBatchSeqNf.length > 0 && selectedBatchCount === selectableBatchSeqNf.length;
+                      const showBatchControls = selectableBatchSeqNf.length > 1;
                       const canToggle = !group.force_open;
                       const toggleRoute = () => {
                         if (!canToggle) return;
@@ -4664,29 +5089,31 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                           </div>
                           {isOpen ? (
                             <div className="termo-route-stores">
-                              <div className="termo-route-batch-actions">
-                                <p>
-                                  Selecionadas para lote: {selectedBatchCount}/{selectableBatchSeqNf.length}
-                                </p>
-                                <div className="termo-route-batch-buttons">
-                                  <button
-                                    className="btn btn-muted"
-                                    type="button"
-                                    onClick={() => setAllRouteBatchSelection(group, !allBatchSelected)}
-                                    disabled={selectableBatchSeqNf.length === 0}
-                                  >
-                                    {allBatchSelected ? "Desmarcar todas" : "Marcar todas"}
-                                  </button>
-                                  <button
-                                    className="btn btn-primary"
-                                    type="button"
-                                    onClick={() => startRouteBatchByGroup(group)}
-                                    disabled={selectedBatchCount === 0 || hasOpenConference}
-                                  >
-                                    {selectedBatchCount > 0 ? `Iniciar selecionadas (${selectedBatchCount})` : "Iniciar selecionadas"}
-                                  </button>
+                              {showBatchControls ? (
+                                <div className="termo-route-batch-actions">
+                                  <p>
+                                    Selecionadas para lote: {selectedBatchCount}/{selectableBatchSeqNf.length}
+                                  </p>
+                                  <div className="termo-route-batch-buttons">
+                                    <button
+                                      className="btn btn-muted"
+                                      type="button"
+                                      onClick={() => setAllRouteBatchSelection(group, !allBatchSelected)}
+                                      disabled={selectableBatchSeqNf.length === 0}
+                                    >
+                                      {allBatchSelected ? "Desmarcar todas" : "Marcar todas"}
+                                    </button>
+                                    <button
+                                      className="btn btn-primary"
+                                      type="button"
+                                      onClick={() => startRouteBatchByGroup(group)}
+                                      disabled={selectedBatchCount === 0 || hasOpenConference}
+                                    >
+                                      {selectedBatchCount > 0 ? `Iniciar selecionadas (${selectedBatchCount})` : "Iniciar selecionadas"}
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
+                              ) : null}
                               {group.visible_filiais.map((row) => {
                                 const lojaStatus = normalizeStoreStatus(row.status);
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
@@ -4695,7 +5122,6 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                 const seqNfKey = buildSeqNfLabelKey(row.seq_entrada, row.nf);
                                 const batchSelectable = isRouteRowSelectableForBatch(row);
                                 const batchSelected = Boolean(seqNfKey && selectedBatchSet.has(seqNfKey));
-                                const batchBlockedByDuplicate = row.produtos_multiplos_seq > 0;
                                 const contributorsState = seqNfKey ? routeContributorsMap[seqNfKey] : undefined;
                                 const contributors = contributorsState?.contributors ?? [];
                                 const contributorNames = contributors.length > 0
@@ -4718,24 +5144,21 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                         <p>Produtos repetidos em múltiplos Seq/NF: {row.produtos_multiplos_seq}</p>
                                       ) : null}
                                       <p>Status: {routeStatusLabel(lojaStatus)}</p>
-                                      {batchBlockedByDuplicate ? (
-                                        <p className="termo-route-batch-note">
-                                          Seleção em lote bloqueada: esta Seq/NF possui produtos repetidos em outras Seq/NF da transportadora.
-                                        </p>
-                                      ) : null}
                                       <div className="termo-route-store-actions">
-                                        <label className={`termo-route-store-check${batchSelectable ? "" : " is-disabled"}`}>
-                                          <input
-                                            type="checkbox"
-                                            checked={batchSelected}
-                                            disabled={!batchSelectable || !seqNfKey}
-                                            onChange={(event) => {
-                                              if (!seqNfKey) return;
-                                              toggleRouteBatchSelection(group.rota, seqNfKey, event.target.checked);
-                                            }}
-                                          />
-                                          <span>Selecionar no lote</span>
-                                        </label>
+                                        {showBatchControls ? (
+                                          <label className={`termo-route-store-check${batchSelectable ? "" : " is-disabled"}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={batchSelected}
+                                              disabled={!batchSelectable || !seqNfKey}
+                                              onChange={(event) => {
+                                                if (!seqNfKey) return;
+                                                toggleRouteBatchSelection(group.rota, seqNfKey, event.target.checked);
+                                              }}
+                                            />
+                                            <span>Selecionar no lote</span>
+                                          </label>
+                                        ) : null}
                                         <button
                                           className="btn btn-primary"
                                           type="button"

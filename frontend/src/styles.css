@@ -1943,6 +1943,23 @@ small {
 .entrada-notas-contributors {
   color: #596987;
   font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.entrada-notas-combined-breakdown {
+  margin-top: 6px;
+  border: 1px solid #d9e4f5;
+  border-radius: 8px;
+  background: #f6f9ff;
+  padding: 6px 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.entrada-notas-combined-breakdown p {
+  margin: 0;
+  color: #425575;
+  font-size: 0.75rem;
 }
 
 .termo-volume-head-right {

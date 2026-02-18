@@ -260,6 +260,17 @@ export interface EntradaNotasLocalVolume {
   items: EntradaNotasLocalItem[];
   avulsa_targets?: EntradaNotasAvulsaTargetSummary[];
   avulsa_queue?: EntradaNotasAvulsaQueueEvent[];
+  combined_seq_nf_labels?: string[];
+  combined_seq_transportadora?: string | null;
+  combined_seq_allocations?: Array<{
+    coddv: number;
+    descricao: string;
+    barras: string | null;
+    seq_entrada: number;
+    nf: number;
+    qtd_esperada: number;
+    qtd_conferida: number;
+  }>;
   contributors?: EntradaNotasContributor[];
   pending_snapshot: boolean;
   pending_finalize: boolean;
