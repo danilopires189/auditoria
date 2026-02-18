@@ -18,6 +18,7 @@ import {
   fetchDbBarrasByBarcodeOnline,
   refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
+import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   buildEntradaNotasVolumeKey,
@@ -783,6 +784,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     etiqueta: createScannerInputState(),
     barras: createScannerInputState()
   });
+  const resolveScanFeedbackAnchor = useCallback(() => barrasRef.current, []);
+  const {
+    scanFeedback,
+    scanFeedbackTop,
+    showScanFeedback,
+    triggerScanErrorAlert
+  } = useScanFeedback(resolveScanFeedbackAnchor);
   const activeVolumeRef = useRef<EntradaNotasLocalVolume | null>(null);
   const routeContributorsInFlightRef = useRef<Set<string>>(new Set());
 
@@ -2625,17 +2633,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (!activeVolume) {
       setErrorMessage("Inicie uma conferência para começar a bipagem.");
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Inicie uma conferência para começar a bipagem.");
       return;
     }
     if (activeVolume.is_read_only || !canEditActiveVolume) {
       setErrorMessage("Conferência em modo leitura. Não é possível alterar.");
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Conferência em modo leitura.");
       return;
     }
 
     const barras = normalizeBarcode(value);
     if (!barras) {
       setBarcodeValidationState("invalid");
+      triggerScanErrorAlert("Código de barras obrigatório.");
       return;
     }
 
@@ -2659,6 +2670,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
             });
             setBarcodeValidationState("invalid");
+            triggerScanErrorAlert("Código de barras inválido.");
             return;
           }
           const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
@@ -2670,6 +2682,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               confirmLabel: "OK"
             });
             setBarcodeValidationState("invalid");
+            triggerScanErrorAlert("Produto fora da entrada.");
             return;
           }
           const itemKey = target.item_key ?? String(target.coddv);
@@ -2718,6 +2731,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`
           });
           setBarcodeValidationState("invalid");
+          triggerScanErrorAlert("Código de barras inválido.");
           return;
         }
 
@@ -2734,6 +2748,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             confirmLabel: "OK"
           });
           setBarcodeValidationState("invalid");
+          triggerScanErrorAlert("Produto sem pendência disponível.");
           return;
         }
 
@@ -2766,6 +2781,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           ? `Produto registrado na conferência: ${baseMessage}`
           : `Produto registrado localmente: ${baseMessage}`
       );
+      showScanFeedback("success", descricao, `+ ${qtd}`);
       setBarcodeValidationState("valid");
       focusBarras();
     } catch (error) {
@@ -2778,6 +2794,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           message: `O código de barras "${barras}" é inválido. Ele não existe na base db_barras.`,
           confirmLabel: "OK"
         });
+        triggerScanErrorAlert("Código de barras inválido.");
         return;
       }
       if (message.includes("PRODUTO_FORA_DA_ENTRADA")) {
@@ -2792,6 +2809,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             : `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
           confirmLabel: "OK"
         });
+        triggerScanErrorAlert(activeVolume?.conference_kind === "avulsa" ? "Produto inválido." : "Produto fora da entrada.");
         return;
       }
       if (message.includes("PRODUTO_FORA_BASE_AVULSA")) {
@@ -2804,6 +2822,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           message: `Produto "${produtoNome}" não faz parte de nenhum recebimento pendente para esta conferência.`,
           confirmLabel: "OK"
         });
+        triggerScanErrorAlert("Produto inválido.");
         return;
       }
       if (message.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")) {
@@ -2816,9 +2835,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           message: `Produto "${produtoNome}" não faz parte de nenhum recebimento pendente para esta conferência.`,
           confirmLabel: "OK"
         });
+        triggerScanErrorAlert("Produto inválido.");
         return;
       }
-      setErrorMessage(normalizeRpcErrorMessage(message));
+      const normalizedError = normalizeRpcErrorMessage(message);
+      setErrorMessage(normalizedError);
+      triggerScanErrorAlert(normalizedError);
     }
   }, [
     activeVolume,
@@ -2834,6 +2856,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     resolveBarcodeProduct,
     runPendingSync,
     showDialog,
+    showScanFeedback,
+    triggerScanErrorAlert,
     updateItemQtyLocal,
     handleClosedConferenceError
   ]);
@@ -2852,18 +2876,23 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           ? `Produto registrado na conferência: ${baseMessage}`
           : `Produto registrado localmente: ${baseMessage}`
       );
+      showScanFeedback("success", result.produtoRegistrado, `+ ${pendingAvulsaScan.qtd}`);
       focusBarras();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar leitura avulsa.";
       if (await handleClosedConferenceError(message)) return;
-      setErrorMessage(normalizeRpcErrorMessage(message));
+      const normalizedError = normalizeRpcErrorMessage(message);
+      setErrorMessage(normalizedError);
+      triggerScanErrorAlert(normalizedError);
     }
   }, [
     applyAvulsaScanChoice,
     focusBarras,
     handleClosedConferenceError,
     pendingAvulsaScan,
-    persistPreferences
+    persistPreferences,
+    showScanFeedback,
+    triggerScanErrorAlert
   ]);
 
   const handleSaveItemEdit = useCallback(async (itemKey: string) => {
@@ -3886,6 +3915,18 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {scanFeedback ? (
+          <div
+            key={scanFeedback.id}
+            className={`termo-scan-feedback ${scanFeedback.tone === "error" ? "is-error" : "is-success"}`}
+            role="status"
+            aria-live="polite"
+            style={scanFeedbackTop != null ? { top: `${scanFeedbackTop}px` } : undefined}
+          >
+            <strong>{scanFeedback.tone === "error" ? "Erro" : scanFeedback.title}</strong>
+            {scanFeedback.detail ? <span>{scanFeedback.detail}</span> : null}
+          </div>
+        ) : null}
 
         {isGlobalAdmin ? (
           <div className="termo-cd-selector">

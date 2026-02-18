@@ -22,6 +22,7 @@ import {
   normalizeBarcode,
   refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
+import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   cleanupExpiredColetaRows,
@@ -371,6 +372,13 @@ function FileIcon() {
 
 export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercadoriaPageProps) {
   const barcodeRef = useRef<HTMLInputElement | null>(null);
+  const resolveScanFeedbackAnchor = useCallback(() => barcodeRef.current, []);
+  const {
+    scanFeedback,
+    scanFeedbackTop,
+    showScanFeedback,
+    triggerScanErrorAlert
+  } = useScanFeedback(resolveScanFeedbackAnchor);
   const quantityInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
@@ -592,6 +600,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const openCameraScanner = useCallback(() => {
     if (!cameraSupported) {
       setErrorMessage("Câmera não disponível neste navegador/dispositivo.");
+      triggerScanErrorAlert("Câmera não disponível neste navegador/dispositivo.");
       return;
     }
     setScannerError(null);
@@ -600,7 +609,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     scannerTrackRef.current = null;
     scannerTorchModeRef.current = "none";
     setScannerOpen(true);
-  }, [cameraSupported]);
+  }, [cameraSupported, triggerScanErrorAlert]);
 
   const closeCameraScanner = useCallback(() => {
     stopCameraScanner();
@@ -877,7 +886,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
   const openBlockingAlert = useCallback((title: string, message: string) => {
     setBlockingAlert({ title, message });
-  }, []);
+    triggerScanErrorAlert(message);
+  }, [triggerScanErrorAlert]);
 
   const closeBlockingAlert = useCallback(() => {
     setBlockingAlert(null);
@@ -1228,6 +1238,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       if (currentCd == null) {
         setBarcodeValidationState("invalid");
         setErrorMessage("CD não definido para a coleta atual.");
+        triggerScanErrorAlert("CD não definido para a coleta atual.");
         return;
       }
       setBarcodeValidationState("validating");
@@ -1237,7 +1248,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         valMmaa = normalizeValidadeInput(validadeInput);
       } catch (error) {
         setBarcodeValidationState("invalid");
-        setErrorMessage(error instanceof Error ? error.message : "Validade inválida.");
+        const validationError = error instanceof Error ? error.message : "Validade inválida.";
+        setErrorMessage(validationError);
+        triggerScanErrorAlert(validationError);
         return;
       }
 
@@ -1329,11 +1342,14 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       } else {
         setStatusMessage("Item coletado localmente. Pendência será sincronizada quando houver internet.");
       }
+      showScanFeedback("success", product.descricao || "Produto", `+ ${qtd}`);
       setBarcodeValidationState("valid");
       focusBarcode();
     } catch (error) {
       setBarcodeValidationState("invalid");
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar coleta.");
+      const normalizedError = error instanceof Error ? error.message : "Falha ao salvar coleta.";
+      setErrorMessage(normalizedError);
+      triggerScanErrorAlert(normalizedError);
       focusBarcode();
     } finally {
       collectInFlightRef.current = false;
@@ -1354,7 +1370,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     profile.user_id,
     refreshLocalState,
     runSync,
+    showScanFeedback,
     openBlockingAlert,
+    triggerScanErrorAlert,
     validadeInput
   ]);
 
@@ -1633,6 +1651,18 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {scanFeedback ? (
+          <div
+            key={scanFeedback.id}
+            className={`termo-scan-feedback ${scanFeedback.tone === "error" ? "is-error" : "is-success"}`}
+            role="status"
+            aria-live="polite"
+            style={scanFeedbackTop != null ? { top: `${scanFeedbackTop}px` } : undefined}
+          >
+            <strong>{scanFeedback.tone === "error" ? "Erro" : scanFeedback.title}</strong>
+            {scanFeedback.detail ? <span>{scanFeedback.detail}</span> : null}
+          </div>
+        ) : null}
         {preferOfflineMode ? (
           <div className="alert success">
             Modo offline ativo: novas coletas ficam locais e você sincroniza quando quiser.
