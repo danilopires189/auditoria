@@ -59,6 +59,7 @@ import {
   lookupSeqNfByBarcode,
   normalizeBarcode,
   openAvulsaVolume,
+  openVolumeBatch,
   openVolume,
   reopenPartialConference,
   scanBarcode,
@@ -883,6 +884,19 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return activeVolume.combined_seq_nf_labels ?? [];
   }, [activeVolume]);
 
+  const combinedSeqConfIdByLabel = useMemo(() => {
+    const map: Record<string, string> = {};
+    const confRows = activeVolume?.combined_seq_conf_ids ?? [];
+    for (const row of confRows) {
+      const key = buildSeqNfLabelKey(row.seq_entrada, row.nf);
+      if (!key) continue;
+      const confId = String(row.conf_id ?? "").trim();
+      if (!confId) continue;
+      map[key] = confId;
+    }
+    return map;
+  }, [activeVolume?.combined_seq_conf_ids]);
+
   const combinedItemBreakdownByCoddv = useMemo(() => {
     const map: Record<number, Array<{
       seq_entrada: number;
@@ -1244,19 +1258,47 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setErrorMessage(null);
 
     try {
+      if (!isOnline) {
+        throw new Error("A conferência conjunta precisa ser iniciada online para abrir todos os Seq/NF em conferência.");
+      }
+
       let manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
-      if (!manifestItems.length && isOnline) {
+      if (!manifestItems.length) {
         const remoteBundle = await fetchManifestBundle(currentCd, undefined, { includeBarras: false });
         manifestItems = remoteBundle.items;
       }
       if (!manifestItems.length) {
-        if (isOnline) {
-          throw new Error("BASE_ENTRADA_NOTAS_VAZIA");
-        }
-        throw new Error("Sem base local disponível para conferência conjunta. Conecte-se para carregar os dados online.");
+        throw new Error("BASE_ENTRADA_NOTAS_VAZIA");
       }
 
       const labelSet = new Set(normalizedLabels);
+      const parsedTargets = normalizedLabels
+        .map((value) => parseStrictSeqNfInput(value))
+        .filter((value): value is NonNullable<typeof value> => value !== null)
+        .map((value) => ({ seq_entrada: value.seq_entrada, nf: value.nf }));
+      const openedVolumes = await openVolumeBatch(parsedTargets, currentCd);
+      const combinedSeqConfIds = openedVolumes
+        .map((volume) => {
+          const seq = volume.seq_entrada ?? null;
+          const nf = volume.nf ?? null;
+          const confId = String(volume.conf_id ?? "").trim();
+          if (seq == null || nf == null || !confId) return null;
+          return {
+            seq_entrada: seq,
+            nf,
+            conf_id: confId
+          };
+        })
+        .filter((row): row is { seq_entrada: number; nf: number; conf_id: string } => row !== null);
+      const openedLabels = new Set(
+        combinedSeqConfIds
+          .map((row) => buildSeqNfLabelKey(row.seq_entrada, row.nf))
+          .filter((value): value is string => Boolean(value))
+      );
+      if (openedLabels.size !== normalizedLabels.length) {
+        throw new Error("Não foi possível abrir todos os Seq/NF selecionados em modo conferência.");
+      }
+
       const allocationByKey = new Map<string, {
         coddv: number;
         descricao: string;
@@ -1368,6 +1410,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         avulsa_queue: [],
         combined_seq_nf_labels: normalizedLabels,
         combined_seq_transportadora: group.rota,
+        combined_seq_conf_ids: combinedSeqConfIds,
         combined_seq_allocations: allocations,
         contributors: [{
           user_id: profile.user_id,
@@ -1408,8 +1451,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, [
     currentCd,
     disableBarcodeSoftKeyboard,
+    fetchManifestBundle,
     isOnline,
     hasOpenConference,
+    listManifestItemsByCd,
+    openVolumeBatch,
     profile
   ]);
 
@@ -3256,6 +3302,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           const nowIso = new Date().toISOString();
           const nextAllocations = (activeVolume.combined_seq_allocations ?? []).map((row) => ({ ...row }));
           const appliedDetails: string[] = [];
+          const shouldWriteRemoteNow = isOnline && !preferOfflineMode;
 
           for (const allocation of allocations) {
             if (remaining <= 0) break;
@@ -3264,6 +3311,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             const toApply = Math.min(pending, remaining);
             remaining -= toApply;
             const targetLabel = `${allocation.seq_entrada}/${allocation.nf}`;
+            if (shouldWriteRemoteNow) {
+              const targetConfId = combinedSeqConfIdByLabel[targetLabel];
+              if (!targetConfId) {
+                throw new Error(`Seq/NF ${targetLabel} sem conferência ativa vinculada.`);
+              }
+              await scanBarcode(targetConfId, lookup.barras || barras, toApply);
+            }
             const nextAllocation = nextAllocations.find((row) => (
               row.coddv === allocation.coddv
               && row.seq_entrada === allocation.seq_entrada
@@ -3291,9 +3345,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             items: nextItems.sort(itemSort),
             combined_seq_allocations: nextAllocations,
             updated_at: nowIso,
-            pending_snapshot: false,
+            pending_snapshot: !shouldWriteRemoteNow,
             sync_error: null,
-            last_synced_at: nowIso
+            last_synced_at: shouldWriteRemoteNow ? nowIso : activeVolume.last_synced_at
           };
           await applyVolumeUpdate(nextVolume);
           produtoRegistrado = `${lookup.descricao || `Produto ${lookup.coddv}`}${appliedDetails.length ? ` | ${appliedDetails.join(" | ")}` : ""}`;
@@ -3413,7 +3467,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     applyAvulsaScanChoice,
     applyVolumeUpdate,
     canEditActiveVolume,
+    combinedSeqConfIdByLabel,
     focusBarras,
+    isCombinedRouteMode,
     isOnline,
     multiploInput,
     persistPreferences,
@@ -3677,6 +3733,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           return;
         }
         const seqLabels = activeVolume.combined_seq_nf_labels ?? [];
+        const confRows = activeVolume.combined_seq_conf_ids ?? [];
+        const confMap = new Map<string, string>();
+        for (const row of confRows) {
+          const key = buildSeqNfLabelKey(row.seq_entrada, row.nf);
+          const confId = String(row.conf_id ?? "").trim();
+          if (!key || !confId) continue;
+          confMap.set(key, confId);
+        }
         const allocations = activeVolume.combined_seq_allocations ?? [];
         if (!seqLabels.length || !allocations.length) {
           setFinalizeError("Conferência conjunta sem dados para distribuir.");
@@ -3686,8 +3750,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         for (const seqLabel of seqLabels) {
           const parsed = parseStrictSeqNfInput(seqLabel);
           if (!parsed) continue;
-          const remote = await openVolume(parsed.label, activeVolume.cd);
-          if (remote.is_read_only || remote.status !== "em_conferencia") continue;
+          let targetConfId = confMap.get(parsed.label) ?? null;
+          if (!targetConfId) {
+            const remote = await openVolume(parsed.label, activeVolume.cd);
+            if (remote.is_read_only || remote.status !== "em_conferencia") continue;
+            targetConfId = remote.conf_id;
+          }
+          if (!targetConfId) continue;
 
           const payload = allocations
             .filter((row) => row.seq_entrada === parsed.seq_entrada && row.nf === parsed.nf)
@@ -3696,8 +3765,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               qtd_conferida: Math.max(0, Math.trunc(row.qtd_conferida)),
               barras: row.barras
             }));
-          await syncSnapshot(remote.conf_id, payload);
-          await finalizeVolume(remote.conf_id, null);
+          await syncSnapshot(targetConfId, payload);
+          await finalizeVolume(targetConfId, null);
         }
 
         await removeLocalVolume(activeVolume.local_key);
@@ -4340,6 +4409,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const requestCancelConference = useCallback(() => {
     if (!activeVolume || !canEditActiveVolume) return;
+    const isCombinedMode = (
+      activeVolume.conference_kind === "avulsa"
+      && (activeVolume.combined_seq_nf_labels?.length ?? 0) > 0
+    );
     const preserveAlreadyCountedData = shouldProtectPartialResumeOnCancel;
     const preserveReasonLabel =
       hasItemsLockedByOtherUser || hasOtherUserContributors
@@ -4349,10 +4422,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           : "em outro momento";
 
     showDialog({
-      title: "Cancelar conferência",
+      title: isCombinedMode ? "Cancelar conferência conjunta" : "Cancelar conferência",
       message: preserveAlreadyCountedData
         ? `A conferência do Seq/NF ${activeVolume.nr_volume} possui itens já conferidos ${preserveReasonLabel}.\n\n`
           + "Ao confirmar, esta retomada será encerrada mantendo tudo que já foi conferido (não haverá descarte)."
+        : isCombinedMode
+          ? "A conferência conjunta será cancelada e os Seq/NF serão liberados. Deseja continuar?"
         : activeVolume.conference_kind === "avulsa"
           ? "A conferência avulsa será cancelada e todos os dados lançados serão perdidos. Deseja continuar?"
           : `A conferência do Seq/NF ${activeVolume.nr_volume} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
@@ -4366,6 +4441,31 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           setStatusMessage(null);
 
           try {
+            const isCombinedMode = (
+              activeVolume.conference_kind === "avulsa"
+              && (activeVolume.combined_seq_nf_labels?.length ?? 0) > 0
+            );
+            if (isCombinedMode) {
+              if (!isOnline) {
+                setErrorMessage("A conferência conjunta precisa de internet para cancelar e liberar os Seq/NF.");
+                return;
+              }
+              const combinedConfIds = [...new Set(
+                (activeVolume.combined_seq_conf_ids ?? [])
+                  .map((row) => String(row.conf_id ?? "").trim())
+                  .filter(Boolean)
+              )];
+              for (const confId of combinedConfIds) {
+                await cancelVolume(confId);
+              }
+              await removeLocalVolume(activeVolume.local_key);
+              await refreshPendingState();
+              clearConferenceScreen();
+              setStatusMessage("Conferência conjunta cancelada. Os Seq/NF foram liberados.");
+              await syncRouteOverview();
+              return;
+            }
+
             if (preserveAlreadyCountedData) {
               if (activeVolume.remote_conf_id && isOnline) {
                 await finalizeVolume(activeVolume.remote_conf_id, null);

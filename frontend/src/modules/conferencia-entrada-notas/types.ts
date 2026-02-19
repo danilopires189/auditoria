@@ -262,6 +262,11 @@ export interface EntradaNotasLocalVolume {
   avulsa_queue?: EntradaNotasAvulsaQueueEvent[];
   combined_seq_nf_labels?: string[];
   combined_seq_transportadora?: string | null;
+  combined_seq_conf_ids?: Array<{
+    seq_entrada: number;
+    nf: number;
+    conf_id: string;
+  }>;
   combined_seq_allocations?: Array<{
     coddv: number;
     descricao: string;
