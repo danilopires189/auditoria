@@ -1506,6 +1506,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     setErrorMessage(null);
+    setShowRoutesModal(false);
     void openCombinedRouteConference(group, picked);
     setRouteBatchSelectionByGroup((current) => {
       if (!(group.rota in current)) return current;
@@ -4500,12 +4501,47 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 throw new Error("Conferência conjunta sem vínculos remotos para cancelamento.");
               }
               const cancelResults = await Promise.allSettled(
-                combinedConfIds.map((confId) => cancelVolume(confId))
+                combinedConfIds.map(async (confId) => {
+                  const cancelled = await cancelVolume(confId);
+                  if (!cancelled) throw new Error(`Cancelamento não confirmado para ${confId}.`);
+                })
               );
               const failedCancels = cancelResults.filter((result) => result.status === "rejected");
               if (failedCancels.length > 0) {
                 throw new Error(`Falha ao cancelar ${failedCancels.length} de ${combinedConfIds.length} Seq/NF da conferência conjunta.`);
               }
+
+              const labelsSet = new Set(activeVolume.combined_seq_nf_labels ?? []);
+              const currentMat = (profile.mat ?? "").trim();
+              const routeRowsAfterCancel = await fetchRouteOverview(activeVolume.cd);
+              const labelsStillOpen = routeRowsAfterCancel
+                .filter((row) => {
+                  const label = buildSeqNfLabelKey(row.seq_entrada, row.nf);
+                  if (!label || !labelsSet.has(label)) return false;
+                  if (normalizeStoreStatus(row.status) !== "em_andamento") return false;
+                  const rowMat = row.colaborador_mat?.trim() ?? "";
+                  if (currentMat && rowMat && rowMat !== currentMat) return false;
+                  return true;
+                })
+                .map((row) => buildSeqNfLabelKey(row.seq_entrada, row.nf))
+                .filter((value): value is string => Boolean(value));
+
+              if (labelsStillOpen.length > 0) {
+                const retryFailures: string[] = [];
+                for (const label of labelsStillOpen) {
+                  try {
+                    const volume = await openVolume(label, activeVolume.cd);
+                    const cancelled = await cancelVolume(volume.conf_id);
+                    if (!cancelled) retryFailures.push(label);
+                  } catch {
+                    retryFailures.push(label);
+                  }
+                }
+                if (retryFailures.length > 0) {
+                  throw new Error(`Falha ao cancelar automaticamente: ${retryFailures.join(", ")}.`);
+                }
+              }
+
               await removeLocalVolume(activeVolume.local_key);
               await refreshPendingState();
               clearConferenceScreen();
