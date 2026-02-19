@@ -1244,13 +1244,16 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setErrorMessage(null);
 
     try {
-      if (!manifestReady) {
-        throw new Error("Base local não sincronizada. Sincronize a base para iniciar conferência conjunta.");
+      let manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+      if (!manifestItems.length && isOnline) {
+        const remoteBundle = await fetchManifestBundle(currentCd, undefined, { includeBarras: false });
+        manifestItems = remoteBundle.items;
       }
-
-      const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
       if (!manifestItems.length) {
-        throw new Error("BASE_ENTRADA_NOTAS_VAZIA");
+        if (isOnline) {
+          throw new Error("BASE_ENTRADA_NOTAS_VAZIA");
+        }
+        throw new Error("Sem base local disponível para conferência conjunta. Conecte-se para carregar os dados online.");
       }
 
       const labelSet = new Set(normalizedLabels);
@@ -1405,8 +1408,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, [
     currentCd,
     disableBarcodeSoftKeyboard,
+    isOnline,
     hasOpenConference,
-    manifestReady,
     profile
   ]);
 
