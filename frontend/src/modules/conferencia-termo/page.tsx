@@ -543,6 +543,53 @@ function searchIcon() {
   );
 }
 
+function playScannerReadBeep(): void {
+  if (typeof window === "undefined") return;
+  const audioCtor = window.AudioContext
+    ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!audioCtor) return;
+
+  try {
+    const ctx = new audioCtor();
+    void ctx.resume().catch(() => undefined);
+    const start = ctx.currentTime + 0.005;
+
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, start);
+    master.gain.exponentialRampToValueAtTime(0.95, start + 0.008);
+    master.gain.exponentialRampToValueAtTime(0.0001, start + 0.13);
+    master.connect(ctx.destination);
+
+    const oscA = ctx.createOscillator();
+    const oscB = ctx.createOscillator();
+    const gainA = ctx.createGain();
+    const gainB = ctx.createGain();
+
+    oscA.type = "square";
+    oscB.type = "square";
+    oscA.frequency.setValueAtTime(1900, start);
+    oscB.frequency.setValueAtTime(2400, start);
+    gainA.gain.setValueAtTime(0.65, start);
+    gainB.gain.setValueAtTime(0.35, start);
+
+    oscA.connect(gainA);
+    oscB.connect(gainB);
+    gainA.connect(master);
+    gainB.connect(master);
+
+    oscA.start(start);
+    oscB.start(start);
+    oscA.stop(start + 0.12);
+    oscB.stop(start + 0.12);
+
+    window.setTimeout(() => {
+      void ctx.close().catch(() => undefined);
+    }, 260);
+  } catch {
+    // Mantem silencioso se o navegador bloquear audio programatico.
+  }
+}
+
 export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaTermoPageProps) {
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
@@ -2052,6 +2099,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             if (result) {
               const scanned = normalizeBarcode(result.getText() ?? "");
               if (!scanned) return;
+              playScannerReadBeep();
               setScannerOpen(false);
               stopScanner();
               setScannerError(null);
