@@ -633,7 +633,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     const controls = scannerControlsRef.current;
     const track = scannerTrackRef.current ?? resolveScannerTrack();
     if (!controls?.switchTorch && scannerTorchModeRef.current !== "track") {
-      setScannerError("Flash não disponível neste dispositivo.");
+      const message = "Flash não disponível neste dispositivo.";
+      setScannerError(message);
+      triggerScanErrorAlert(message);
       return;
     }
     try {
@@ -652,9 +654,11 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       setTorchEnabled(next);
       setScannerError(null);
     } catch {
-      setScannerError("Não foi possível alternar o flash.");
+      const message = "Não foi possível alternar o flash.";
+      setScannerError(message);
+      triggerScanErrorAlert(message);
     }
-  }, [resolveScannerTrack, torchEnabled]);
+  }, [resolveScannerTrack, torchEnabled, triggerScanErrorAlert]);
 
   const getOpenedSwipeOffset = useCallback(
     (rowId: string): number => {
@@ -806,7 +810,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         }
       } catch (error) {
         if (!silent) {
-          setErrorMessage(error instanceof Error ? error.message : "Falha ao sincronizar pendências.");
+          const message = error instanceof Error ? error.message : "Falha ao sincronizar pendências.";
+          setErrorMessage(message);
+          triggerScanErrorAlert(message);
         }
       } finally {
         syncInFlightRef.current = false;
@@ -815,7 +821,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         }
       }
     },
-    [isOnline, profile.user_id, refreshLocalState, refreshSharedState]
+    [isOnline, profile.user_id, refreshLocalState, refreshSharedState, triggerScanErrorAlert]
   );
 
   const runDbBarrasRefresh = useCallback(
@@ -851,7 +857,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         }
       } catch (error) {
         if (!silent) {
-          setErrorMessage(error instanceof Error ? error.message : "Falha ao atualizar base de barras.");
+          const message = error instanceof Error ? error.message : "Falha ao atualizar base de barras.";
+          setErrorMessage(message);
+          triggerScanErrorAlert(message);
         }
       } finally {
         refreshInFlightRef.current = false;
@@ -859,7 +867,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         setBusyRefresh(false);
       }
     },
-    [isOnline, refreshLocalState]
+    [isOnline, refreshLocalState, triggerScanErrorAlert]
   );
 
   const onToggleOfflineMode = useCallback(async () => {
@@ -871,7 +879,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     if (nextOffline) {
       if (!isOnline) {
         if (dbBarrasCount <= 0) {
-          setErrorMessage("Sem internet para carregar base offline agora.");
+          const message = "Sem internet para carregar base offline agora.";
+          setErrorMessage(message);
+          triggerScanErrorAlert(message);
         } else {
           setStatusMessage("Modo offline ativado com base local existente.");
         }
@@ -889,7 +899,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     }
 
     setStatusMessage("Modo online ativado. Busca de barras direto no Supabase.");
-  }, [dbBarrasCount, isOnline, preferOfflineMode, runDbBarrasRefresh]);
+  }, [dbBarrasCount, isOnline, preferOfflineMode, runDbBarrasRefresh, triggerScanErrorAlert]);
 
   const openBlockingAlert = useCallback((title: string, message: string) => {
     setBlockingAlert({ title, message });
@@ -946,10 +956,12 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         setEditingRowId(null);
         setEditDraft(null);
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Falha ao validar alterações.");
+        const message = error instanceof Error ? error.message : "Falha ao validar alterações.";
+        setErrorMessage(message);
+        triggerScanErrorAlert(message);
       }
     },
-    [applyRowUpdate, editDraft, editingRowId, profile]
+    [applyRowUpdate, editDraft, editingRowId, profile, triggerScanErrorAlert]
   );
 
   const executeDeleteRow = useCallback(
@@ -1518,6 +1530,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     if (!scannerOpen) return;
 
     let cancelled = false;
+    let decodeErrorAlerted = false;
     let torchProbeTimer: number | null = null;
     let torchProbeAttempts = 0;
     setScannerError(null);
@@ -1532,7 +1545,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
         const videoEl = scannerVideoRef.current;
         if (!videoEl) {
-          setScannerError("Falha ao abrir visualização da câmera.");
+          const message = "Falha ao abrir visualização da câmera.";
+          setScannerError(message);
+          triggerScanErrorAlert(message);
           return;
         }
 
@@ -1563,7 +1578,12 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
             const errorName = (error as { name?: string } | null)?.name;
             if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
-              setScannerError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
+              const message = "Não foi possível ler o código. Aproxime a câmera e tente novamente.";
+              setScannerError(message);
+              if (!decodeErrorAlerted) {
+                decodeErrorAlerted = true;
+                triggerScanErrorAlert(message);
+              }
             }
           }
         );
@@ -1600,7 +1620,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
         probeTorchAvailability();
       } catch (error) {
-        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
+        const message = error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.";
+        setScannerError(message);
+        triggerScanErrorAlert(message);
       }
     };
 
@@ -1613,7 +1635,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
       stopCameraScanner();
     };
-  }, [handleCollect, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch]);
+  }, [handleCollect, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch, triggerScanErrorAlert]);
 
   return (
     <>
