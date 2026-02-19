@@ -36,7 +36,6 @@ import type { InventarioModuleProfile } from "./modules/zerados/types";
 import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
-const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
 const ADMIN_EMAIL_CANDIDATES = [
   "1@pmenos.com.br",
   "0001@pmenos.com.br",
@@ -211,10 +210,6 @@ function profileCacheKey(userId: string): string {
   return `${PROFILE_CACHE_PREFIX}${userId}`;
 }
 
-function globalCdSelectionKey(userId: string): string {
-  return `${GLOBAL_CD_STORAGE_PREFIX}${userId}`;
-}
-
 function parseRole(value: unknown): ProfileContext["role"] {
   return value === "admin" || value === "auditor" || value === "viewer" ? value : null;
 }
@@ -261,14 +256,21 @@ function writeCachedProfileContext(context: ProfileContext): void {
 
 function mergeProfileContext(primary: ProfileContext, fallback: ProfileContext | null): ProfileContext {
   if (!fallback) return primary;
+  const keepPrimaryCd = primary.cd_default != null || (primary.role === "admin" && primary.cd_default == null);
+  const mergedCdDefault = keepPrimaryCd ? primary.cd_default : fallback.cd_default;
+  const mergedCdNome =
+    primary.cd_nome
+    || (keepPrimaryCd && primary.role === "admin" && primary.cd_default == null ? "Todos CDs" : null)
+    || fallback.cd_nome;
+
   return {
     user_id: primary.user_id || fallback.user_id,
     nome: primary.nome || fallback.nome,
     mat: primary.mat || fallback.mat,
     role: primary.role || fallback.role,
     cargo: primary.cargo || fallback.cargo,
-    cd_default: primary.cd_default ?? fallback.cd_default,
-    cd_nome: primary.cd_nome || fallback.cd_nome
+    cd_default: mergedCdDefault,
+    cd_nome: mergedCdNome
   };
 }
 
@@ -1154,26 +1156,14 @@ export default function App() {
     }
 
     let mounted = true;
-    const key = globalCdSelectionKey(session.user.id);
-
     const loadOptions = async () => {
       setGlobalCdLoading(true);
       try {
         const options = await rpcListAvailableCds();
         if (!mounted) return;
         setGlobalCdOptions(options);
-
-        let cachedCd: number | null = null;
-        if (typeof window !== "undefined") {
-          const raw = window.localStorage.getItem(key);
-          cachedCd = parseInteger(raw);
-        }
-
-        if (cachedCd != null && options.some((item) => item.cd === cachedCd)) {
-          setGlobalCdSelection(cachedCd);
-        } else {
-          setGlobalCdSelection(null);
-        }
+        // Always require explicit CD choice after login for global admin.
+        setGlobalCdSelection(null);
       } catch (error) {
         if (!mounted) return;
         setGlobalCdOptions([]);
@@ -1344,9 +1334,6 @@ export default function App() {
                 disabled={globalCdSelection == null || globalCdLoading}
                 onClick={() => {
                   if (!session || globalCdSelection == null) return;
-                  if (typeof window !== "undefined") {
-                    window.localStorage.setItem(globalCdSelectionKey(session.user.id), String(globalCdSelection));
-                  }
                   navigate("/inicio", { replace: true });
                 }}
               >
@@ -1536,12 +1523,6 @@ export default function App() {
                       onClick={() => {
                         if (!session || pendingGlobalCdSelection == null) return;
                         setGlobalCdSelection(pendingGlobalCdSelection);
-                        if (typeof window !== "undefined") {
-                          window.localStorage.setItem(
-                            globalCdSelectionKey(session.user.id),
-                            String(pendingGlobalCdSelection)
-                          );
-                        }
                         setShowGlobalCdSwitcher(false);
                         navigate("/inicio", { replace: true });
                       }}
