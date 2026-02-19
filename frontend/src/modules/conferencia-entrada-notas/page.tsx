@@ -1255,6 +1255,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return;
     }
     if (hasOpenConference) {
+      setShowRoutesModal(false);
       setErrorMessage("Existe uma conferência em andamento. Finalize a conferência atual antes de iniciar outra.");
       return;
     }
@@ -1456,6 +1457,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao iniciar conferência conjunta.";
+      if (message.includes("CONFERENCIA_EM_ABERTO_OUTRO_VOLUME") || message.includes("CONFERENCIA_EM_ABERTO_OUTRA_ENTRADA")) {
+        setShowRoutesModal(false);
+      }
       setErrorMessage(normalizeRpcErrorMessage(message));
     } finally {
       setBusyOpenVolume(false);
@@ -1483,6 +1487,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     if (hasOpenConference) {
+      setShowRoutesModal(false);
       setErrorMessage("Existe uma conferência em andamento. Finalize a conferência atual para iniciar o lote.");
       return;
     }
@@ -2095,6 +2100,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
     const selectedCd = currentCd;
     if (hasOpenConference && activeVolume && activeVolume.nr_volume !== etiqueta) {
+      setShowRoutesModal(false);
       const activeLabel = activeVolume.conference_kind === "avulsa"
         ? "Conferência Avulsa"
         : `Seq/NF ${activeVolume.nr_volume}`;
@@ -2283,6 +2289,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         }
       }
       if (message.includes("CONFERENCIA_EM_ABERTO_OUTRO_VOLUME") || message.includes("CONFERENCIA_EM_ABERTO_OUTRA_ENTRADA")) {
+        setShowRoutesModal(false);
         try {
           const resumed = await resumeRemoteActiveVolume(true);
           if (resumed) {
@@ -4489,8 +4496,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   .map((row) => String(row.conf_id ?? "").trim())
                   .filter(Boolean)
               )];
-              for (const confId of combinedConfIds) {
-                await cancelVolume(confId);
+              if (combinedConfIds.length === 0) {
+                throw new Error("Conferência conjunta sem vínculos remotos para cancelamento.");
+              }
+              const cancelResults = await Promise.allSettled(
+                combinedConfIds.map((confId) => cancelVolume(confId))
+              );
+              const failedCancels = cancelResults.filter((result) => result.status === "rejected");
+              if (failedCancels.length > 0) {
+                throw new Error(`Falha ao cancelar ${failedCancels.length} de ${combinedConfIds.length} Seq/NF da conferência conjunta.`);
               }
               await removeLocalVolume(activeVolume.local_key);
               await refreshPendingState();

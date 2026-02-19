@@ -716,8 +716,12 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         }
 
         if (row.pending_cancel) {
-          for (const confId of confMap.values()) {
-            await cancelVolume(confId);
+          const cancelResults = await Promise.allSettled(
+            [...confMap.values()].map((confId) => cancelVolume(confId))
+          );
+          const failedCancels = cancelResults.filter((result) => result.status === "rejected");
+          if (failedCancels.length > 0) {
+            throw new Error(`Falha ao cancelar ${failedCancels.length} de ${confMap.size} Seq/NF pendentes.`);
           }
           await removeLocalVolume(row.local_key);
           synced += 1;
