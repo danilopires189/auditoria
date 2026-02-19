@@ -2782,7 +2782,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
             <form className="termo-form termo-scan-form" onSubmit={onSubmitBarras}>
               <h4>Conferência de produtos</h4>
-              <div className="termo-scan-grid">
+              <div className="termo-scan-grid termo-scan-grid-stack">
                 <label>
                   Código de barras
                   <div className="input-icon-wrap with-action">
