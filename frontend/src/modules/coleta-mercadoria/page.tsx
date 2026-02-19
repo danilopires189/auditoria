@@ -1932,6 +1932,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   inputMode={barcodeInputMode}
                   value={barcodeInput}
                   onChange={onBarcodeInputChange}
+                  onFocus={enableBarcodeSoftKeyboard}
                   onPointerDown={enableBarcodeSoftKeyboard}
                   onBlur={disableBarcodeSoftKeyboard}
                   autoComplete="off"
