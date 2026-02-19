@@ -417,6 +417,31 @@ export async function openVolume(nrVolume: string, cd: number): Promise<EntradaN
   return mapVolume(first);
 }
 
+export async function openVolumeBatch(
+  targets: Array<{ seq_entrada: number; nf: number }>,
+  cd: number
+): Promise<EntradaNotasVolumeRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const payload = targets
+    .map((target) => ({
+      seq_entrada: Math.max(1, Math.trunc(Number(target.seq_entrada) || 0)),
+      nf: Math.max(1, Math.trunc(Number(target.nf) || 0))
+    }))
+    .filter((target) => target.seq_entrada > 0 && target.nf > 0);
+
+  if (!payload.length) {
+    throw new Error("SEQ_NF_INVALIDO");
+  }
+
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_open_conference_batch", {
+    p_targets: payload,
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapVolume(row as Record<string, unknown>));
+}
+
 export async function fetchActiveVolume(): Promise<EntradaNotasVolumeRow | null> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_get_active_conference");
@@ -670,11 +695,82 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
 
   for (const row of pending) {
     try {
-      const isLegacyAvulsa = row.nr_volume === "AVULSA" || String(row.conference_kind ?? "") === "avulsa";
+      const isCombinedMode = (row.combined_seq_nf_labels?.length ?? 0) > 0;
+      const isLegacyAvulsa = (
+        row.nr_volume === "AVULSA"
+        || String(row.conference_kind ?? "") === "avulsa"
+      ) && !isCombinedMode;
       if (isLegacyAvulsa) {
         await removeLocalVolume(row.local_key);
         synced += 1;
         continue;
+      }
+
+      if (isCombinedMode) {
+        const confMap = new Map<string, string>();
+        for (const confRow of row.combined_seq_conf_ids ?? []) {
+          const key = composeVolumeLabel(confRow.seq_entrada, confRow.nf);
+          const confId = String(confRow.conf_id ?? "").trim();
+          if (!key || !confId) continue;
+          confMap.set(key, confId);
+        }
+
+        if (row.pending_cancel) {
+          for (const confId of confMap.values()) {
+            await cancelVolume(confId);
+          }
+          await removeLocalVolume(row.local_key);
+          synced += 1;
+          continue;
+        }
+
+        if (row.pending_snapshot || row.pending_finalize) {
+          if (confMap.size <= 0) {
+            throw new Error("Conferência conjunta sem vínculos remotos para sincronizar.");
+          }
+          const hadPendingFinalize = row.pending_finalize;
+          const labels = row.combined_seq_nf_labels ?? [];
+          const allocations = row.combined_seq_allocations ?? [];
+          let lastFinalizeStatus = row.status;
+          let lastFinalizedAt = row.finalized_at;
+
+          for (const label of labels) {
+            const confId = confMap.get(label);
+            if (!confId) continue;
+            const parsed = parseVolumeLabel(label);
+            if (!parsed) continue;
+
+            if (row.pending_snapshot) {
+              const payload = allocations
+                .filter((entry) => entry.seq_entrada === parsed.seqEntrada && entry.nf === parsed.nf)
+                .map((entry) => ({
+                  coddv: entry.coddv,
+                  qtd_conferida: Math.max(0, Math.trunc(entry.qtd_conferida)),
+                  barras: entry.barras ?? null
+                }));
+              await syncSnapshot(confId, payload);
+            }
+
+            if (row.pending_finalize) {
+              const finalized = await finalizeVolume(confId, row.pending_finalize_reason);
+              lastFinalizeStatus = normalizeConferenceStatus(finalized.status);
+              lastFinalizedAt = finalized.finalized_at;
+            }
+          }
+
+          row.pending_snapshot = false;
+          row.pending_finalize = false;
+          row.pending_cancel = false;
+          row.sync_error = null;
+          row.status = hadPendingFinalize ? lastFinalizeStatus : row.status;
+          row.finalized_at = hadPendingFinalize ? lastFinalizedAt : row.finalized_at;
+          row.is_read_only = hadPendingFinalize ? lastFinalizeStatus !== "em_conferencia" : row.is_read_only;
+          row.last_synced_at = new Date().toISOString();
+          row.updated_at = new Date().toISOString();
+          await saveLocalVolume(row);
+          synced += 1;
+          continue;
+        }
       }
 
       if (row.pending_cancel) {
