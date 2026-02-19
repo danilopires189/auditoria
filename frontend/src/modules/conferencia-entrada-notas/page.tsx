@@ -5255,7 +5255,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       onChange={(event) => setOcorrenciaInput(event.target.value as EntradaNotasOcorrenciaTipo)}
                       disabled={!canEditActiveVolume}
                     >
-                      <option value="">Sem ocorrência</option>
+                      <option value="">&nbsp;</option>
                       <option value="Avariado">Avariado</option>
                       <option value="Vencido">Vencido</option>
                     </select>
