@@ -717,7 +717,12 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
 
         if (row.pending_cancel) {
           const cancelResults = await Promise.allSettled(
-            [...confMap.values()].map((confId) => cancelVolume(confId))
+            [...confMap.values()].map(async (confId) => {
+              const cancelled = await cancelVolume(confId);
+              if (!cancelled) {
+                throw new Error(`Cancelamento não confirmado para ${confId}.`);
+              }
+            })
           );
           const failedCancels = cancelResults.filter((result) => result.status === "rejected");
           if (failedCancels.length > 0) {
