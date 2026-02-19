@@ -8,9 +8,27 @@ interface HomePageProps {
   displayContext: DisplayContext;
   isOnline: boolean;
   onRequestLogout: () => void;
+  showCdSwitcher?: boolean;
+  onRequestCdSwitcher?: () => void;
 }
 
-export default function HomePage({ displayContext, isOnline, onRequestLogout }: HomePageProps) {
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10v6" />
+      <circle cx="12" cy="7.2" r="1" />
+    </svg>
+  );
+}
+
+export default function HomePage({
+  displayContext,
+  isOnline,
+  onRequestLogout,
+  showCdSwitcher = false,
+  onRequestCdSwitcher
+}: HomePageProps) {
   return (
     <>
       <header className="app-topbar">
@@ -41,7 +59,20 @@ export default function HomePage({ displayContext, isOnline, onRequestLogout }: 
           </button>
         </div>
         <div className="topbar-meta">
-          <span>{displayContext.cdLabel}</span>
+          <span className="topbar-meta-cd">
+            <span>{displayContext.cdLabel}</span>
+            {showCdSwitcher && onRequestCdSwitcher ? (
+              <button
+                type="button"
+                className="topbar-cd-info-btn"
+                onClick={onRequestCdSwitcher}
+                aria-label="Ajustar CD"
+                title="Ajustar CD"
+              >
+                <InfoIcon />
+              </button>
+            ) : null}
+          </span>
           <span>Perfil: {displayContext.roleLabel}</span>
         </div>
       </header>
