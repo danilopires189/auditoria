@@ -405,6 +405,56 @@ export async function getManifestItemsByEtiqueta(
     .sort((a, b) => a.coddv - b.coddv);
 }
 
+export async function getManifestPrimaryEtiquetaByStore(
+  userId: string,
+  cd: number
+): Promise<Array<{ rota: string; filial: number | null; id_etiqueta: string }>> {
+  const db = await getDb();
+  const transaction = db.transaction(STORE_MANIFEST_ITEMS, "readonly");
+  const store = transaction.objectStore(STORE_MANIFEST_ITEMS);
+  const index = store.index(INDEX_ITEMS_BY_USER_CD);
+  const rows = (await requestToPromise(
+    index.getAll(IDBKeyRange.only([userId, cd]))
+  )) as ManifestItemStoreRow[];
+  await transactionDone(transaction);
+
+  const grouped = new Map<string, { rota: string; filial: number | null; etiquetas: Set<string> }>();
+  for (const row of rows) {
+    const idEtiqueta = String(row.id_etiqueta ?? "").trim();
+    if (!idEtiqueta) continue;
+    const rota = (String(row.rota ?? "SEM ROTA").trim() || "SEM ROTA");
+    const filial = typeof row.filial === "number" && Number.isFinite(row.filial)
+      ? Math.trunc(row.filial)
+      : null;
+    const key = `${rota}::${filial == null ? "na" : String(filial)}`;
+    const current = grouped.get(key);
+    if (current) {
+      current.etiquetas.add(idEtiqueta);
+      continue;
+    }
+    grouped.set(key, {
+      rota,
+      filial,
+      etiquetas: new Set([idEtiqueta])
+    });
+  }
+
+  const result: Array<{ rota: string; filial: number | null; id_etiqueta: string }> = [];
+  for (const entry of grouped.values()) {
+    const firstEtiqueta = Array.from(entry.etiquetas).sort((a, b) => (
+      a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" })
+    ))[0];
+    if (!firstEtiqueta) continue;
+    result.push({
+      rota: entry.rota,
+      filial: entry.filial,
+      id_etiqueta: firstEtiqueta
+    });
+  }
+
+  return result;
+}
+
 export async function findManifestBarras(
   userId: string,
   cd: number,
