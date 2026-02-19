@@ -73,6 +73,10 @@ interface ConferenciaPedidoDiretoPageProps {
 type PedidoDiretoStoreStatus = "pendente" | "em_andamento" | "concluido";
 type PedidoDiretoRouteStatus = "pendente" | "iniciado" | "concluido";
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
+type LastAddedItemMarker = {
+  volumeKey: string;
+  coddv: number;
+};
 
 interface PedidoDiretoRouteGroup {
   rota: string;
@@ -601,6 +605,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const [activeVolume, setActiveVolume] = useState<PedidoDiretoLocalVolume | null>(null);
   const [expandedCoddv, setExpandedCoddv] = useState<number | null>(null);
   const [editingCoddv, setEditingCoddv] = useState<number | null>(null);
+  const [lastAddedItemMarker, setLastAddedItemMarker] = useState<LastAddedItemMarker | null>(null);
   const [editQtdInput, setEditQtdInput] = useState("0");
 
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -663,6 +668,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
     return empty;
   }, [activeVolume]);
+
+  const activeLastAddedCoddv = useMemo(() => {
+    if (!activeVolume || !lastAddedItemMarker) return null;
+    if (lastAddedItemMarker.volumeKey !== activeVolume.local_key) return null;
+    return lastAddedItemMarker.coddv;
+  }, [activeVolume, lastAddedItemMarker]);
 
   const divergenciaTotals = useMemo(() => {
     if (!activeVolume) {
@@ -1357,6 +1368,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     let produtoRegistrado = "";
     let barrasRegistrada = barras;
     let registroRemoto = false;
+    let highlightedCoddv: number | null = null;
     setStatusMessage(null);
     setErrorMessage(null);
     setBarcodeValidationState("validating");
@@ -1387,6 +1399,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         }
         produtoRegistrado = target.descricao;
         barrasRegistrada = lookup.barras || barras;
+        highlightedCoddv = target.coddv;
         await updateItemQtyLocal(target.coddv, target.qtd_conferida + qtd, barrasRegistrada);
         if (isOnline) {
           void runPendingSync(true);
@@ -1396,6 +1409,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         produtoRegistrado = updated.descricao;
         barrasRegistrada = updated.barras ?? barras;
         registroRemoto = true;
+        highlightedCoddv = updated.coddv;
         const nowIso = new Date().toISOString();
         const nextItems = activeVolume.items.map((item) => (
           item.coddv === updated.coddv
@@ -1419,6 +1433,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         await applyVolumeUpdate(nextVolume);
       }
 
+      if (highlightedCoddv != null) {
+        setLastAddedItemMarker({
+          volumeKey: activeVolume.local_key,
+          coddv: highlightedCoddv
+        });
+      }
       setBarcodeInput("");
       setMultiploInput("1");
       await persistPreferences({ multiplo_padrao: 1 });
@@ -2508,8 +2528,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               {groupedItems.falta.length === 0 ? (
                 <div className="coleta-empty">Sem itens com falta.</div>
               ) : (
-                groupedItems.falta.map(({ item, qtd_falta, qtd_sobra }) => (
-                  <article key={`falta-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}`}>
+                groupedItems.falta.map(({ item, qtd_falta, qtd_sobra }) => {
+                  const isLastAddedItem = activeLastAddedCoddv === item.coddv;
+                  return (
+                  <article key={`falta-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
@@ -2520,6 +2542,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
                       </div>
                       <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
                         <span className="termo-divergencia falta">Falta {qtd_falta}</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
                       </div>
@@ -2563,7 +2591,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                       </div>
                     ) : null}
                   </article>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -2572,8 +2601,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               {groupedItems.sobra.length === 0 ? (
                 <div className="coleta-empty">Sem itens com sobra.</div>
               ) : (
-                groupedItems.sobra.map(({ item, qtd_sobra }) => (
-                  <article key={`sobra-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}`}>
+                groupedItems.sobra.map(({ item, qtd_sobra }) => {
+                  const isLastAddedItem = activeLastAddedCoddv === item.coddv;
+                  return (
+                  <article key={`sobra-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
@@ -2584,6 +2615,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
                       </div>
                       <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
                         <span className="termo-divergencia sobra">Sobra {qtd_sobra}</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
                       </div>
@@ -2626,7 +2663,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                       </div>
                     ) : null}
                   </article>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -2635,8 +2673,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               {groupedItems.correto.length === 0 ? (
                 <div className="coleta-empty">Sem itens corretos ainda.</div>
               ) : (
-                groupedItems.correto.map(({ item }) => (
-                  <article key={`correto-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}`}>
+                groupedItems.correto.map(({ item }) => {
+                  const isLastAddedItem = activeLastAddedCoddv === item.coddv;
+                  return (
+                  <article key={`correto-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
@@ -2647,6 +2687,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
                       </div>
                       <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
                         <span className="termo-divergencia correto">Correto</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
                       </div>
@@ -2689,7 +2735,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                       </div>
                     ) : null}
                   </article>
-                ))
+                  );
+                })
               )}
             </div>
           </article>
