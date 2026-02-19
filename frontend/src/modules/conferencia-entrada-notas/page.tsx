@@ -150,6 +150,11 @@ type BarcodeOpenSelection = {
   options: EntradaNotasBarcodeSeqNfOption[];
 };
 
+type LastAddedItemMarker = {
+  volumeKey: string;
+  itemKey: string;
+};
+
 const MODULE_DEF = getModuleByKeyOrThrow("conferencia-entrada-notas");
 const PREFERRED_SYNC_DELAY_MS = 800;
 const OFFLINE_BASE_STALE_MS = 1000 * 60 * 60 * 24;
@@ -837,6 +842,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [activeVolume, setActiveVolume] = useState<EntradaNotasLocalVolume | null>(null);
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
   const [editingItemKey, setEditingItemKey] = useState<string | null>(null);
+  const [lastAddedItemMarker, setLastAddedItemMarker] = useState<LastAddedItemMarker | null>(null);
   const [editQtdInput, setEditQtdInput] = useState("0");
 
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -956,6 +962,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
     return empty;
   }, [activeVolume]);
+
+  const activeLastAddedItemKey = useMemo(() => {
+    if (!activeVolume || !lastAddedItemMarker) return null;
+    if (lastAddedItemMarker.volumeKey !== activeVolume.local_key) return null;
+    return lastAddedItemMarker.itemKey;
+  }, [activeVolume, lastAddedItemMarker]);
 
   const divergenciaTotals = useMemo(() => {
     if (!activeVolume) {
@@ -1599,6 +1611,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setActiveVolume(volume);
     setExpandedItemKey(null);
     setEditingItemKey(null);
+    setLastAddedItemMarker(null);
     setEditQtdInput("0");
     setStatusMessage("Conferência aberta em modo leitura.");
   }, []);
@@ -2972,6 +2985,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setPendingAvulsaScan(null);
     setExpandedItemKey(null);
     setEditingItemKey(null);
+    setLastAddedItemMarker(null);
     setEditQtdInput("0");
     setBarcodeInput("");
     activeVolumeRef.current = null;
@@ -3038,7 +3052,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     barras: string,
     qtd: number,
     chosen: EntradaNotasAvulsaTargetOption
-  ): Promise<{ produtoRegistrado: string; barrasRegistrada: string; registroRemoto: boolean }> => {
+  ): Promise<{ produtoRegistrado: string; barrasRegistrada: string; registroRemoto: boolean; itemKey: string }> => {
     if (!activeVolume || activeVolume.conference_kind !== "avulsa") {
       throw new Error("Conferência avulsa não está ativa.");
     }
@@ -3103,7 +3117,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return {
         produtoRegistrado: `${updated.descricao} (Seq ${updated.seq_entrada ?? chosen.seq_entrada}/NF ${updated.nf ?? chosen.nf})`,
         barrasRegistrada: updated.barras ?? barras,
-        registroRemoto: true
+        registroRemoto: true,
+        itemKey
       };
     }
 
@@ -3132,7 +3147,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return {
       produtoRegistrado: `${chosen.descricao} (Seq ${chosen.seq_entrada}/NF ${chosen.nf})`,
       barrasRegistrada: barras,
-      registroRemoto: false
+      registroRemoto: false,
+      itemKey: chosenItemKey
     };
   }, [
     activeVolume,
@@ -3169,6 +3185,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     let produtoRegistrado = "";
     let barrasRegistrada = barras;
     let registroRemoto = false;
+    let highlightedItemKey: string | null = null;
     setStatusMessage(null);
     setErrorMessage(null);
     setBarcodeValidationState("validating");
@@ -3203,6 +3220,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           const itemKey = target.item_key ?? String(target.coddv);
           produtoRegistrado = target.descricao;
           barrasRegistrada = lookup.barras || barras;
+          highlightedItemKey = itemKey;
           await updateItemQtyLocal(itemKey, target.qtd_conferida + qtd, barrasRegistrada);
           if (isOnline) {
             void runPendingSync(true);
@@ -3212,6 +3230,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           produtoRegistrado = updated.descricao;
           barrasRegistrada = updated.barras ?? barras;
           registroRemoto = true;
+          highlightedItemKey = activeVolume.items.find((item) => item.coddv === updated.coddv)?.item_key ?? String(updated.coddv);
           const nowIso = new Date().toISOString();
           const nextItems = activeVolume.items.map((item) => (
             item.coddv === updated.coddv
@@ -3352,6 +3371,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           await applyVolumeUpdate(nextVolume);
           produtoRegistrado = `${lookup.descricao || `Produto ${lookup.coddv}`}${appliedDetails.length ? ` | ${appliedDetails.join(" | ")}` : ""}`;
           barrasRegistrada = lookup.barras || barras;
+          highlightedItemKey = activeVolume.items.find((item) => item.coddv === lookup.coddv)?.item_key ?? `multi:${lookup.coddv}`;
           registroRemoto = false;
         } else {
           const onlineAvulsa = isOnline && !preferOfflineMode && Boolean(activeVolume.remote_conf_id);
@@ -3388,9 +3408,16 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           produtoRegistrado = result.produtoRegistrado;
           barrasRegistrada = result.barrasRegistrada;
           registroRemoto = result.registroRemoto;
+          highlightedItemKey = result.itemKey;
         }
       }
 
+      if (highlightedItemKey) {
+        setLastAddedItemMarker({
+          volumeKey: activeVolume.local_key,
+          itemKey: highlightedItemKey
+        });
+      }
       setBarcodeInput("");
       setMultiploInput("1");
       await persistPreferences({ multiplo_padrao: 1 });
@@ -3489,6 +3516,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     try {
       const result = await applyAvulsaScanChoice(pendingAvulsaScan.barras, pendingAvulsaScan.qtd, option);
       setPendingAvulsaScan(null);
+      if (activeVolume) {
+        setLastAddedItemMarker({
+          volumeKey: activeVolume.local_key,
+          itemKey: result.itemKey
+        });
+      }
       setBarcodeInput("");
       setMultiploInput("1");
       await persistPreferences({ multiplo_padrao: 1 });
@@ -3508,6 +3541,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       triggerScanErrorAlert(normalizedError);
     }
   }, [
+    activeVolume,
     applyAvulsaScanChoice,
     focusBarras,
     handleClosedConferenceError,
@@ -4869,8 +4903,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 groupedItems.falta.map(({ item, qtd_falta, qtd_sobra }) => {
                   const itemKey = item.item_key ?? String(item.coddv);
                   const isItemLocked = item.is_locked === true;
+                  const isLastAddedItem = activeLastAddedItemKey === itemKey;
                   return (
-                  <article key={`falta-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
+                  <article key={`falta-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
@@ -4886,6 +4921,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
                       </div>
                       <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
                         <span className="termo-divergencia falta">Falta {qtd_falta}</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
                       </div>
@@ -4953,8 +4994,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 groupedItems.sobra.map(({ item, qtd_sobra }) => {
                   const itemKey = item.item_key ?? String(item.coddv);
                   const isItemLocked = item.is_locked === true;
+                  const isLastAddedItem = activeLastAddedItemKey === itemKey;
                   return (
-                  <article key={`sobra-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
+                  <article key={`sobra-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
@@ -4970,6 +5012,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
                       </div>
                       <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
                         <span className="termo-divergencia sobra">Sobra {qtd_sobra}</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
                       </div>
@@ -5036,8 +5084,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 groupedItems.correto.map(({ item }) => {
                   const itemKey = item.item_key ?? String(item.coddv);
                   const isItemLocked = item.is_locked === true;
+                  const isLastAddedItem = activeLastAddedItemKey === itemKey;
                   return (
-                  <article key={`correto-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
+                  <article key={`correto-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
@@ -5053,6 +5102,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
                       </div>
                       <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
                         <span className="termo-divergencia correto">Correto</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
                       </div>
