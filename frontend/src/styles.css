@@ -343,6 +343,23 @@ select:focus {
   background: transparent;
 }
 
+.input-icon-wrap select {
+  display: block;
+  width: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  padding-left: 42px;
+  padding-right: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+  min-width: 0;
+  height: 48px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .input-icon-wrap.with-action input {
   padding-right: 44px;
 }
@@ -388,6 +405,11 @@ select:focus {
 }
 
 .input-icon-wrap input:focus {
+  outline: none;
+  border-color: transparent;
+}
+
+.input-icon-wrap select:focus {
   outline: none;
   border-color: transparent;
 }
