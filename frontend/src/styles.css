@@ -2017,7 +2017,23 @@ small {
 .termo-scan-grid {
   display: grid;
   gap: 9px;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 0.7fr) minmax(0, 1fr);
+}
+
+.termo-scan-field {
+  min-width: 0;
+}
+
+.termo-scan-field-barcode {
+  min-width: 0;
+}
+
+.termo-scan-field-multiplo {
+  max-width: 150px;
+}
+
+.termo-scan-field-ocorrencia {
+  max-width: 220px;
 }
 
 .termo-volume-card {
@@ -3063,6 +3079,11 @@ small {
 
   .termo-scan-grid {
     grid-template-columns: 1fr;
+  }
+
+  .termo-scan-field-multiplo,
+  .termo-scan-field-ocorrencia {
+    max-width: none;
   }
 
   .termo-item-actions {

@@ -5173,7 +5173,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             <form className="termo-form termo-scan-form" onSubmit={onSubmitBarras}>
               <h4>Conferência de produtos</h4>
               <div className="termo-scan-grid">
-                <label>
+                <label className="termo-scan-field termo-scan-field-barcode">
                   Código de barras
                   <div className="input-icon-wrap with-action">
                     <span className={barcodeIconClassName} aria-hidden="true">{barcodeIcon()}</span>
@@ -5206,7 +5206,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   </div>
                 </label>
 
-                <label>
+                <label className="termo-scan-field termo-scan-field-multiplo">
                   Múltiplo
                   <div className="input-icon-wrap with-stepper">
                     <span className="field-icon" aria-hidden="true">{quantityIcon()}</span>
@@ -5246,7 +5246,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   </div>
                 </label>
 
-                <label>
+                <label className="termo-scan-field termo-scan-field-ocorrencia">
                   Ocorrência
                   <div className="input-icon-wrap">
                     <span className="field-icon" aria-hidden="true">{occurrenceIcon()}</span>
