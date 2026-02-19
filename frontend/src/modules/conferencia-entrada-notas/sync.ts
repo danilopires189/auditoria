@@ -209,6 +209,8 @@ function mapItem(raw: Record<string, unknown>): EntradaNotasItemRow {
     descricao: String(raw.descricao ?? "").trim(),
     qtd_esperada: parseInteger(raw.qtd_esperada),
     qtd_conferida: parseInteger(raw.qtd_conferida),
+    ocorrencia_avariado_qtd: Math.max(parseInteger(raw.ocorrencia_avariado_qtd), 0),
+    ocorrencia_vencido_qtd: Math.max(parseInteger(raw.ocorrencia_vencido_qtd), 0),
     qtd_falta: parseInteger(raw.qtd_falta),
     qtd_sobra: parseInteger(raw.qtd_sobra),
     divergencia_tipo,
@@ -602,6 +604,28 @@ export async function scanBarcode(confId: string, barras: string, qtd: number): 
   return mapItem(first);
 }
 
+export async function scanBarcodeWithOccurrence(
+  confId: string,
+  barras: string,
+  qtd: number,
+  occurrenceType: "" | "Avariado" | "Vencido"
+): Promise<EntradaNotasItemRow> {
+  const updated = await scanBarcode(confId, barras, qtd);
+  if (!occurrenceType || qtd <= 0) return updated;
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_apply_occurrence", {
+    p_conf_id: confId,
+    p_coddv: updated.coddv,
+    p_tipo: occurrenceType,
+    p_qtd: Math.max(1, Math.trunc(qtd))
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) return updated;
+  return mapItem(first);
+}
+
 export async function setItemQtd(confId: string, coddv: number, qtdConferida: number): Promise<EntradaNotasItemRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_set_item_qtd", {
@@ -629,13 +653,21 @@ export async function resetItem(confId: string, coddv: number): Promise<EntradaN
 
 export async function syncSnapshot(
   confId: string,
-  items: Array<{ coddv: number; qtd_conferida: number; barras?: string | null }>
+  items: Array<{
+    coddv: number;
+    qtd_conferida: number;
+    barras?: string | null;
+    ocorrencia_avariado_qtd?: number;
+    ocorrencia_vencido_qtd?: number;
+  }>
 ): Promise<void> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const payload = items.map((item) => ({
     coddv: item.coddv,
     qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
-    barras: item.barras ? normalizeBarcode(item.barras) : null
+    barras: item.barras ? normalizeBarcode(item.barras) : null,
+    ocorrencia_avariado_qtd: Math.max(0, Math.trunc(item.ocorrencia_avariado_qtd ?? 0)),
+    ocorrencia_vencido_qtd: Math.max(0, Math.trunc(item.ocorrencia_vencido_qtd ?? 0))
   }));
 
   const { error } = await supabase.rpc("rpc_conf_entrada_notas_sync_snapshot", {
@@ -865,7 +897,9 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         const payload = row.items.map((item) => ({
           coddv: item.coddv,
           qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
-          barras: item.barras ?? null
+          barras: item.barras ?? null,
+          ocorrencia_avariado_qtd: Math.max(0, Math.trunc(item.ocorrencia_avariado_qtd ?? 0)),
+          ocorrencia_vencido_qtd: Math.max(0, Math.trunc(item.ocorrencia_vencido_qtd ?? 0))
         }));
         await syncSnapshot(remoteConfId, payload);
         row.pending_snapshot = false;
