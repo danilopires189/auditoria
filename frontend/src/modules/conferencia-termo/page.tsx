@@ -843,7 +843,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
   const openScannerFor = useCallback((target: "etiqueta" | "barras") => {
     if (!cameraSupported) {
-      setErrorMessage("Câmera não disponível neste dispositivo.");
+      const message = "Câmera não disponível neste dispositivo.";
+      setErrorMessage(message);
+      triggerScanErrorAlert(message);
       return;
     }
     setScannerTarget(target);
@@ -1957,6 +1959,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     if (!scannerOpen) return;
 
     let cancelled = false;
+    let decodeErrorAlerted = false;
     let torchProbeTimer: number | null = null;
     let torchProbeAttempts = 0;
     setScannerError(null);
@@ -1970,7 +1973,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         if (cancelled) return;
         const videoEl = scannerVideoRef.current;
         if (!videoEl) {
-          setScannerError("Falha ao abrir visualização da câmera.");
+          const message = "Falha ao abrir visualização da câmera.";
+          setScannerError(message);
+          triggerScanErrorAlert(message);
           return;
         }
 
@@ -2001,7 +2006,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
             const errorName = (error as { name?: string } | null)?.name;
             if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
-              setScannerError("Não foi possível ler o código. Ajuste foco/distância e tente novamente.");
+              const message = "Não foi possível ler o código. Ajuste foco/distância e tente novamente.";
+              setScannerError(message);
+              if (!decodeErrorAlerted) {
+                decodeErrorAlerted = true;
+                triggerScanErrorAlert(message);
+              }
             }
           }
         );
@@ -2037,7 +2047,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
         probeTorchAvailability();
       } catch (error) {
-        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera.");
+        const message = error instanceof Error ? error.message : "Falha ao iniciar câmera.";
+        setScannerError(message);
+        triggerScanErrorAlert(message);
       }
     };
 
@@ -2048,13 +2060,15 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       if (torchProbeTimer != null) window.clearTimeout(torchProbeTimer);
       stopScanner();
     };
-  }, [handleCollectBarcode, openVolumeFromEtiqueta, resolveScannerTrack, scannerOpen, scannerTarget, stopScanner, supportsTrackTorch]);
+  }, [handleCollectBarcode, openVolumeFromEtiqueta, resolveScannerTrack, scannerOpen, scannerTarget, stopScanner, supportsTrackTorch, triggerScanErrorAlert]);
 
   const toggleTorch = async () => {
     const controls = scannerControlsRef.current;
     const track = scannerTrackRef.current ?? resolveScannerTrack();
     if (!controls?.switchTorch && scannerTorchModeRef.current !== "track") {
-      setScannerError("Flash não disponível neste dispositivo.");
+      const message = "Flash não disponível neste dispositivo.";
+      setScannerError(message);
+      triggerScanErrorAlert(message);
       return;
     }
     try {
@@ -2073,7 +2087,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       setTorchEnabled(next);
       setScannerError(null);
     } catch {
-      setScannerError("Não foi possível alternar o flash.");
+      const message = "Não foi possível alternar o flash.";
+      setScannerError(message);
+      triggerScanErrorAlert(message);
     }
   };
 

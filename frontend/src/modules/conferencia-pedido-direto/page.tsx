@@ -869,7 +869,9 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
   const openScannerFor = useCallback((target: "etiqueta" | "barras") => {
     if (!cameraSupported) {
-      setErrorMessage("Câmera não disponível neste dispositivo.");
+      const message = "Câmera não disponível neste dispositivo.";
+      setErrorMessage(message);
+      triggerScanErrorAlert(message);
       return;
     }
     setScannerTarget(target);
@@ -877,7 +879,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     setScannerOpen(true);
     setTorchEnabled(false);
     setTorchSupported(false);
-  }, [cameraSupported]);
+  }, [cameraSupported, triggerScanErrorAlert]);
 
   const runPendingSync = useCallback(async (silent = false) => {
     if (!isOnline) return;
@@ -1875,6 +1877,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     if (!scannerOpen) return;
 
     let cancelled = false;
+    let decodeErrorAlerted = false;
     let torchProbeTimer: number | null = null;
     let torchProbeAttempts = 0;
     setScannerError(null);
@@ -1888,7 +1891,9 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         if (cancelled) return;
         const videoEl = scannerVideoRef.current;
         if (!videoEl) {
-          setScannerError("Falha ao abrir visualização da câmera.");
+          const message = "Falha ao abrir visualização da câmera.";
+          setScannerError(message);
+          triggerScanErrorAlert(message);
           return;
         }
 
@@ -1919,7 +1924,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
             const errorName = (error as { name?: string } | null)?.name;
             if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
-              setScannerError("Não foi possível ler o código. Ajuste foco/distância e tente novamente.");
+              const message = "Não foi possível ler o código. Ajuste foco/distância e tente novamente.";
+              setScannerError(message);
+              if (!decodeErrorAlerted) {
+                decodeErrorAlerted = true;
+                triggerScanErrorAlert(message);
+              }
             }
           }
         );
@@ -1955,7 +1965,9 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
         probeTorchAvailability();
       } catch (error) {
-        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera.");
+        const message = error instanceof Error ? error.message : "Falha ao iniciar câmera.";
+        setScannerError(message);
+        triggerScanErrorAlert(message);
       }
     };
 
@@ -1966,13 +1978,15 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       if (torchProbeTimer != null) window.clearTimeout(torchProbeTimer);
       stopScanner();
     };
-  }, [handleCollectBarcode, openVolumeFromEtiqueta, resolveScannerTrack, scannerOpen, scannerTarget, stopScanner, supportsTrackTorch]);
+  }, [handleCollectBarcode, openVolumeFromEtiqueta, resolveScannerTrack, scannerOpen, scannerTarget, stopScanner, supportsTrackTorch, triggerScanErrorAlert]);
 
   const toggleTorch = async () => {
     const controls = scannerControlsRef.current;
     const track = scannerTrackRef.current ?? resolveScannerTrack();
     if (!controls?.switchTorch && scannerTorchModeRef.current !== "track") {
-      setScannerError("Flash não disponível neste dispositivo.");
+      const message = "Flash não disponível neste dispositivo.";
+      setScannerError(message);
+      triggerScanErrorAlert(message);
       return;
     }
     try {
@@ -1991,7 +2005,9 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       setTorchEnabled(next);
       setScannerError(null);
     } catch {
-      setScannerError("Não foi possível alternar o flash.");
+      const message = "Não foi possível alternar o flash.";
+      setScannerError(message);
+      triggerScanErrorAlert(message);
     }
   };
 

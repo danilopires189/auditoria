@@ -776,7 +776,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const controls = scannerControlsRef.current;
     const track = scannerTrackRef.current ?? resolveScannerTrack();
     if (!controls?.switchTorch && scannerTorchModeRef.current !== "track") {
-      setScannerError("Flash não disponível neste dispositivo.");
+      const message = "Flash não disponível neste dispositivo.";
+      setScannerError(message);
+      triggerScanErrorAlert(message);
       return;
     }
     try {
@@ -795,9 +797,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setTorchEnabled(next);
       setScannerError(null);
     } catch {
-      setScannerError("Não foi possível alternar o flash.");
+      const message = "Não foi possível alternar o flash.";
+      setScannerError(message);
+      triggerScanErrorAlert(message);
     }
-  }, [resolveScannerTrack, torchEnabled]);
+  }, [resolveScannerTrack, torchEnabled, triggerScanErrorAlert]);
 
   const refreshPending = useCallback(async () => {
     if (cd == null) return setPendingCount(0);
@@ -1751,6 +1755,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!scannerOpen) return;
 
     let cancelled = false;
+    let decodeErrorAlerted = false;
     let torchProbeTimer: number | null = null;
     let torchProbeAttempts = 0;
     setScannerError(null);
@@ -1765,7 +1770,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
         const videoEl = scannerVideoRef.current;
         if (!videoEl) {
-          setScannerError("Falha ao abrir visualização da câmera.");
+          const message = "Falha ao abrir visualização da câmera.";
+          setScannerError(message);
+          triggerScanErrorAlert(message);
           return;
         }
 
@@ -1801,7 +1808,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
             const errorName = (error as { name?: string } | null)?.name;
             if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
-              setScannerError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
+              const message = "Não foi possível ler o código. Aproxime a câmera e tente novamente.";
+              setScannerError(message);
+              if (!decodeErrorAlerted) {
+                decodeErrorAlerted = true;
+                triggerScanErrorAlert(message);
+              }
             }
           }
         );
@@ -1838,7 +1850,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
         probeTorchAvailability();
       } catch (error) {
-        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
+        const message = error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.";
+        setScannerError(message);
+        triggerScanErrorAlert(message);
       }
     };
 
@@ -1851,7 +1865,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       }
       stopCameraScanner();
     };
-  }, [autoValidateFinalBarras, autoValidateStageBarras, closeCameraScanner, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch]);
+  }, [autoValidateFinalBarras, autoValidateStageBarras, closeCameraScanner, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch, triggerScanErrorAlert]);
 
   const exportReport = useCallback(async () => {
     if (!canExport || cd == null) return;
