@@ -93,6 +93,7 @@ interface ConferenciaEntradaNotasPageProps {
 type EntradaNotasStoreStatus = "pendente" | "em_andamento" | "concluido";
 type EntradaNotasRouteStatus = "pendente" | "iniciado" | "concluido";
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
+type EntradaNotasOcorrenciaTipo = "" | "Avariado" | "Vencido";
 
 interface EntradaNotasRouteGroup {
   rota: string;
@@ -314,6 +315,60 @@ function withDivergencia(item: EntradaNotasLocalItem): {
   return { item, divergencia, qtd_falta: qtdFalta, qtd_sobra: qtdSobra };
 }
 
+function getItemOcorrenciaAvariado(item: EntradaNotasLocalItem): number {
+  return Math.max(Number.parseInt(String(item.ocorrencia_avariado_qtd ?? 0), 10) || 0, 0);
+}
+
+function getItemOcorrenciaVencido(item: EntradaNotasLocalItem): number {
+  return Math.max(Number.parseInt(String(item.ocorrencia_vencido_qtd ?? 0), 10) || 0, 0);
+}
+
+function getItemOcorrenciaTotal(item: EntradaNotasLocalItem): number {
+  return getItemOcorrenciaAvariado(item) + getItemOcorrenciaVencido(item);
+}
+
+function formatItemOcorrenciaTipo(item: EntradaNotasLocalItem): string {
+  const avariado = getItemOcorrenciaAvariado(item);
+  const vencido = getItemOcorrenciaVencido(item);
+  if (avariado > 0 && vencido > 0) return `Avariado ${avariado} | Vencido ${vencido}`;
+  if (avariado > 0) return `Avariado ${avariado}`;
+  if (vencido > 0) return `Vencido ${vencido}`;
+  return "-";
+}
+
+function buildOcorrenciaDelta(
+  tipo: EntradaNotasOcorrenciaTipo,
+  qtd: number
+): { avariado: number; vencido: number } {
+  const delta = Math.max(0, Math.trunc(qtd));
+  if (delta <= 0) return { avariado: 0, vencido: 0 };
+  if (tipo === "Avariado") return { avariado: delta, vencido: 0 };
+  if (tipo === "Vencido") return { avariado: 0, vencido: delta };
+  return { avariado: 0, vencido: 0 };
+}
+
+function normalizeOccurrenceForQtd(
+  avariado: number,
+  vencido: number,
+  qtdTotal: number
+): { avariado: number; vencido: number } {
+  let nextAvariado = Math.max(avariado, 0);
+  let nextVencido = Math.max(vencido, 0);
+  const maxTotal = Math.max(qtdTotal, 0);
+  let overflow = nextAvariado + nextVencido - maxTotal;
+  if (overflow <= 0) {
+    return { avariado: nextAvariado, vencido: nextVencido };
+  }
+  const reduceVencido = Math.min(nextVencido, overflow);
+  nextVencido -= reduceVencido;
+  overflow -= reduceVencido;
+  if (overflow > 0) {
+    const reduceAvariado = Math.min(nextAvariado, overflow);
+    nextAvariado -= reduceAvariado;
+  }
+  return { avariado: nextAvariado, vencido: nextVencido };
+}
+
 function itemSort(a: EntradaNotasLocalItem, b: EntradaNotasLocalItem): number {
   const aSeq = a.seq_entrada ?? 0;
   const bSeq = b.seq_entrada ?? 0;
@@ -402,6 +457,8 @@ function createLocalVolumeFromRemote(
     descricao: item.descricao,
     qtd_esperada: item.qtd_esperada,
     qtd_conferida: item.qtd_conferida,
+    ocorrencia_avariado_qtd: 0,
+    ocorrencia_vencido_qtd: 0,
     updated_at: item.updated_at,
     seq_entrada: item.seq_entrada ?? null,
     nf: item.nf ?? null,
@@ -478,6 +535,8 @@ function createLocalVolumeFromManifest(
     descricao: row.descricao,
     qtd_esperada: row.qtd_esperada,
     qtd_conferida: 0,
+    ocorrencia_avariado_qtd: 0,
+    ocorrencia_vencido_qtd: 0,
     updated_at: nowIso
   }));
 
@@ -603,6 +662,16 @@ function quantityIcon() {
       <path d="M6 8h12" />
       <path d="M12 4v16" />
       <circle cx="12" cy="12" r="9" />
+    </svg>
+  );
+}
+
+function occurrenceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3l9 16H3z" />
+      <path d="M12 9v5" />
+      <circle cx="12" cy="17" r="1" />
     </svg>
   );
 }
@@ -839,6 +908,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [barcodeInput, setBarcodeInput] = useState("");
   const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [multiploInput, setMultiploInput] = useState("1");
+  const [ocorrenciaInput, setOcorrenciaInput] = useState<EntradaNotasOcorrenciaTipo>("");
 
   const [activeVolume, setActiveVolume] = useState<EntradaNotasLocalVolume | null>(null);
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
@@ -964,6 +1034,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return empty;
   }, [activeVolume]);
 
+  const groupedOcorrencias = useMemo(() => {
+    if (!activeVolume) return [] as Array<ReturnType<typeof withDivergencia>>;
+    return activeVolume.items
+      .filter((item) => getItemOcorrenciaTotal(item) > 0)
+      .map((item) => withDivergencia(item))
+      .sort((a, b) => itemSort(a.item, b.item));
+  }, [activeVolume]);
+
   const activeLastAddedItemKey = useMemo(() => {
     if (!activeVolume || !lastAddedItemMarker) return null;
     if (lastAddedItemMarker.volumeKey !== activeVolume.local_key) return null;
@@ -972,14 +1050,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const divergenciaTotals = useMemo(() => {
     if (!activeVolume) {
-      return { falta: 0, sobra: 0, correto: 0 };
+      return { falta: 0, sobra: 0, correto: 0, ocorrencia: 0, correcao_qtd: 0 };
     }
+    const correcaoQtd = activeVolume.items.reduce((sum, item) => sum + getItemOcorrenciaTotal(item), 0);
     return {
       falta: groupedItems.falta.length,
       sobra: groupedItems.sobra.length,
-      correto: groupedItems.correto.length
+      correto: groupedItems.correto.length,
+      ocorrencia: groupedOcorrencias.length,
+      correcao_qtd: correcaoQtd
     };
-  }, [activeVolume, groupedItems]);
+  }, [activeVolume, groupedItems, groupedOcorrencias]);
 
   const hasAnyItemInformed = useMemo(() => (
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
@@ -1360,6 +1441,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             descricao: row.descricao?.trim() || `Produto ${coddv}`,
             qtd_esperada: qtdEsperada,
             qtd_conferida: 0,
+            ocorrencia_avariado_qtd: 0,
+            ocorrencia_vencido_qtd: 0,
             updated_at: nowIso,
             item_key: `multi:${coddv}`
           });
@@ -2577,22 +2660,36 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     openAvulsaVolumeWithRemoteState
   ]);
 
-  const updateItemQtyLocal = useCallback(async (itemKey: string, qtd: number, barras: string | null = null) => {
+  const updateItemQtyLocal = useCallback(async (
+    itemKey: string,
+    qtd: number,
+    barras: string | null = null,
+    options?: { ocorrenciaTipo?: EntradaNotasOcorrenciaTipo; ocorrenciaDelta?: number }
+  ) => {
     const currentVolume = activeVolumeRef.current;
     if (!currentVolume) return;
     const nowIso = new Date().toISOString();
     const nextQtd = Math.max(0, Math.trunc(qtd));
+    const occDelta = Math.max(0, Math.trunc(options?.ocorrenciaDelta ?? 0));
     const nextItems = currentVolume.items
-      .map((item) => (
-        (item.item_key ?? String(item.coddv)) === itemKey
-          ? {
-              ...item,
-              barras: barras ?? item.barras ?? null,
-              qtd_conferida: nextQtd,
-              updated_at: nowIso
-            }
-          : item
-      ))
+      .map((item) => {
+        if ((item.item_key ?? String(item.coddv)) !== itemKey) return item;
+        let nextAvariado = getItemOcorrenciaAvariado(item);
+        let nextVencido = getItemOcorrenciaVencido(item);
+        if (occDelta > 0) {
+          if (options?.ocorrenciaTipo === "Avariado") nextAvariado += occDelta;
+          if (options?.ocorrenciaTipo === "Vencido") nextVencido += occDelta;
+        }
+        const normalizedOcc = normalizeOccurrenceForQtd(nextAvariado, nextVencido, nextQtd);
+        return {
+          ...item,
+          barras: barras ?? item.barras ?? null,
+          qtd_conferida: nextQtd,
+          ocorrencia_avariado_qtd: normalizedOcc.avariado,
+          ocorrencia_vencido_qtd: normalizedOcc.vencido,
+          updated_at: nowIso
+        };
+      })
       .filter((item) => (
         currentVolume.conference_kind !== "avulsa"
           || (item.item_key ?? String(item.coddv)) !== itemKey
@@ -2618,6 +2715,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     barras: string;
     qtd_esperada: number;
     qtd_conferida: number;
+    ocorrencia_tipo?: EntradaNotasOcorrenciaTipo;
+    ocorrencia_delta?: number;
   }) => {
     const currentVolume = activeVolumeRef.current;
     if (!currentVolume) return;
@@ -2629,12 +2728,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       const currentKey = item.item_key ?? String(item.coddv);
       if (currentKey !== itemKey) return item;
       found = true;
+      const delta = buildOcorrenciaDelta(params.ocorrencia_tipo ?? "", params.ocorrencia_delta ?? 0);
+      const normalizedOcc = normalizeOccurrenceForQtd(
+        getItemOcorrenciaAvariado(item) + delta.avariado,
+        getItemOcorrenciaVencido(item) + delta.vencido,
+        Math.max(params.qtd_conferida, 0)
+      );
       return {
         ...item,
         barras: (params.barras || item.barras) ?? null,
         descricao: params.descricao || item.descricao,
         qtd_esperada: Math.max(params.qtd_esperada, 0),
         qtd_conferida: Math.max(params.qtd_conferida, 0),
+        ocorrencia_avariado_qtd: normalizedOcc.avariado,
+        ocorrencia_vencido_qtd: normalizedOcc.vencido,
         seq_entrada: params.seq_entrada,
         nf: params.nf,
         target_conf_id: params.target_conf_id,
@@ -2644,12 +2751,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     });
 
     if (!found) {
+      const delta = buildOcorrenciaDelta(params.ocorrencia_tipo ?? "", params.ocorrencia_delta ?? 0);
+      const normalizedOcc = normalizeOccurrenceForQtd(
+        delta.avariado,
+        delta.vencido,
+        Math.max(params.qtd_conferida, 0)
+      );
       nextItems.push({
         coddv: params.coddv,
         barras: params.barras || null,
         descricao: params.descricao || `Produto ${params.coddv}`,
         qtd_esperada: Math.max(params.qtd_esperada, 0),
         qtd_conferida: Math.max(params.qtd_conferida, 0),
+        ocorrencia_avariado_qtd: normalizedOcc.avariado,
+        ocorrencia_vencido_qtd: normalizedOcc.vencido,
         seq_entrada: params.seq_entrada,
         nf: params.nf,
         target_conf_id: params.target_conf_id,
@@ -3079,17 +3194,25 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       );
       const nowIso = new Date().toISOString();
       const itemKey = updated.item_key ?? chosenItemKey;
+      const occDelta = buildOcorrenciaDelta(ocorrenciaInput, qtd);
       let found = false;
       const nextItems = activeVolume.items.map((item) => {
         const key = item.item_key ?? String(item.coddv);
         if (key !== itemKey) return item;
         found = true;
+        const normalizedOcc = normalizeOccurrenceForQtd(
+          getItemOcorrenciaAvariado(item) + occDelta.avariado,
+          getItemOcorrenciaVencido(item) + occDelta.vencido,
+          Math.max(updated.qtd_conferida, 0)
+        );
         return {
           ...item,
           barras: updated.barras ?? barras,
           descricao: updated.descricao,
           qtd_esperada: updated.qtd_esperada,
           qtd_conferida: updated.qtd_conferida,
+          ocorrencia_avariado_qtd: normalizedOcc.avariado,
+          ocorrencia_vencido_qtd: normalizedOcc.vencido,
           seq_entrada: updated.seq_entrada ?? chosen.seq_entrada,
           nf: updated.nf ?? chosen.nf,
           target_conf_id: updated.target_conf_id ?? updated.conf_id,
@@ -3098,12 +3221,19 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         } satisfies EntradaNotasLocalItem;
       });
       if (!found) {
+        const normalizedOcc = normalizeOccurrenceForQtd(
+          occDelta.avariado,
+          occDelta.vencido,
+          Math.max(updated.qtd_conferida, 0)
+        );
         nextItems.push({
           coddv: updated.coddv,
           barras: updated.barras ?? barras,
           descricao: updated.descricao,
           qtd_esperada: updated.qtd_esperada,
           qtd_conferida: updated.qtd_conferida,
+          ocorrencia_avariado_qtd: normalizedOcc.avariado,
+          ocorrencia_vencido_qtd: normalizedOcc.vencido,
           seq_entrada: updated.seq_entrada ?? chosen.seq_entrada,
           nf: updated.nf ?? chosen.nf,
           target_conf_id: updated.target_conf_id ?? updated.conf_id,
@@ -3141,7 +3271,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       descricao: chosen.descricao,
       barras,
       qtd_esperada: chosen.qtd_esperada,
-      qtd_conferida: nextQtd
+      qtd_conferida: nextQtd,
+      ocorrencia_tipo: ocorrenciaInput,
+      ocorrencia_delta: qtd
     });
     await enqueueAvulsaEvent({
       kind: "scan",
@@ -3164,6 +3296,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     applyVolumeUpdate,
     enqueueAvulsaEvent,
     isOnline,
+    ocorrenciaInput,
     preferOfflineMode,
     runPendingSync,
     upsertAvulsaItemLocal
@@ -3191,6 +3324,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     const qtd = parsePositiveInteger(multiploInput, 1);
+    const occurrenceDelta = buildOcorrenciaDelta(ocorrenciaInput, qtd);
     let produtoRegistrado = "";
     let barrasRegistrada = barras;
     let registroRemoto = false;
@@ -3230,7 +3364,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           produtoRegistrado = target.descricao;
           barrasRegistrada = lookup.barras || barras;
           highlightedItemKey = itemKey;
-          await updateItemQtyLocal(itemKey, target.qtd_conferida + qtd, barrasRegistrada);
+          await updateItemQtyLocal(itemKey, target.qtd_conferida + qtd, barrasRegistrada, {
+            ocorrenciaTipo: ocorrenciaInput,
+            ocorrenciaDelta: qtd
+          });
           if (isOnline) {
             void runPendingSync(true);
           }
@@ -3247,6 +3384,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   ...item,
                   barras: updated.barras ?? barras,
                   qtd_conferida: updated.qtd_conferida,
+                  ...(() => {
+                    const normalizedOcc = normalizeOccurrenceForQtd(
+                      getItemOcorrenciaAvariado(item) + occurrenceDelta.avariado,
+                      getItemOcorrenciaVencido(item) + occurrenceDelta.vencido,
+                      Math.max(updated.qtd_conferida, 0)
+                    );
+                    return {
+                      ocorrencia_avariado_qtd: normalizedOcc.avariado,
+                      ocorrencia_vencido_qtd: normalizedOcc.vencido
+                    };
+                  })(),
                   qtd_esperada: updated.qtd_esperada,
                   is_locked: updated.is_locked === true,
                   locked_by: updated.locked_by ?? null,
@@ -3360,10 +3508,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           const appliedTotal = qtd - remaining;
           const nextItems = activeVolume.items.map((item) => {
             if (item.coddv !== lookup.coddv) return item;
+            const normalizedOcc = normalizeOccurrenceForQtd(
+              getItemOcorrenciaAvariado(item) + occurrenceDelta.avariado,
+              getItemOcorrenciaVencido(item) + occurrenceDelta.vencido,
+              Math.max(item.qtd_conferida + appliedTotal, 0)
+            );
             return {
               ...item,
               barras: lookup.barras || barras,
               qtd_conferida: Math.max(item.qtd_conferida + appliedTotal, 0),
+              ocorrencia_avariado_qtd: normalizedOcc.avariado,
+              ocorrencia_vencido_qtd: normalizedOcc.vencido,
               updated_at: nowIso
             };
           });
@@ -3508,6 +3663,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     isCombinedRouteMode,
     isOnline,
     multiploInput,
+    ocorrenciaInput,
     persistPreferences,
     preferOfflineMode,
     resolveAvulsaTargetsOffline,
@@ -3605,10 +3761,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           .map((row) => {
             const rowKey = row.item_key ?? String(row.coddv);
             if (rowKey !== itemKey) return row;
+            const normalizedOcc = normalizeOccurrenceForQtd(
+              getItemOcorrenciaAvariado(row),
+              getItemOcorrenciaVencido(row),
+              Math.max(updated.qtd_conferida, 0)
+            );
             return {
               ...row,
               barras: updated.barras ?? row.barras ?? null,
               qtd_conferida: updated.qtd_conferida,
+              ocorrencia_avariado_qtd: normalizedOcc.avariado,
+              ocorrencia_vencido_qtd: normalizedOcc.vencido,
               qtd_esperada: updated.qtd_esperada,
               is_locked: updated.is_locked === true,
               locked_by: updated.locked_by ?? null,
@@ -3708,6 +3871,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                     ...row,
                     barras: updated.barras ?? row.barras ?? null,
                     qtd_conferida: updated.qtd_conferida,
+                    ocorrencia_avariado_qtd: 0,
+                    ocorrencia_vencido_qtd: 0,
                     qtd_esperada: updated.qtd_esperada,
                     is_locked: updated.is_locked === true,
                     locked_by: updated.locked_by ?? null,
@@ -5079,6 +5244,22 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                     </div>
                   </div>
                 </label>
+
+                <label>
+                  Ocorrência
+                  <div className="input-icon-wrap">
+                    <span className="field-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                    <select
+                      value={ocorrenciaInput}
+                      onChange={(event) => setOcorrenciaInput(event.target.value as EntradaNotasOcorrenciaTipo)}
+                      disabled={!canEditActiveVolume}
+                    >
+                      <option value="">Sem ocorrência</option>
+                      <option value="Avariado">Avariado</option>
+                      <option value="Vencido">Vencido</option>
+                    </select>
+                  </div>
+                </label>
               </div>
               <button className="btn btn-primary" type="submit" disabled={!canEditActiveVolume}>
                 Registrar leitura
@@ -5108,7 +5289,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5199,7 +5380,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5289,7 +5470,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5355,6 +5536,97 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 })
               )}
             </div>
+
+            {groupedOcorrencias.length > 0 ? (
+              <div className="termo-list-block">
+                <h4>Ocorrências ({groupedOcorrencias.length})</h4>
+                {groupedOcorrencias.map(({ item, qtd_falta, qtd_sobra }) => {
+                  const itemKey = item.item_key ?? String(item.coddv);
+                  const isItemLocked = item.is_locked === true;
+                  const isLastAddedItem = activeLastAddedItemKey === itemKey;
+                  return (
+                  <article key={`ocorrencia-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
+                    <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
+                      <div className="termo-item-main">
+                        <strong>{item.descricao}</strong>
+                        <p>Código: {item.coddv}</p>
+                        {item.seq_entrada != null && item.nf != null ? (
+                          <p>Seq/NF: {item.seq_entrada}/{item.nf}</p>
+                        ) : isCombinedRouteMode ? (
+                          <p>Conferência conjunta: {combinedSeqNfLabels.length} Seq/NF</p>
+                        ) : null}
+                        {item.qtd_conferida > 0 ? (
+                          <p>Barras: {item.barras ?? "-"}</p>
+                        ) : null}
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                      </div>
+                      <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
+                        <span className="termo-divergencia ocorrencia">{formatItemOcorrenciaTipo(item)}</span>
+                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
+                      </div>
+                    </button>
+                    {expandedItemKey === itemKey ? (
+                      <div className="termo-item-detail">
+                        <p>Última alteração: {formatDateTime(item.updated_at)}</p>
+                        {renderCombinedBreakdown(item)}
+                        {canEditActiveVolume && !isCombinedRouteMode ? (
+                          <div className="termo-item-actions">
+                            {editingItemKey === itemKey && item.qtd_conferida > 0 && !isItemLocked ? (
+                              <>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  value={editQtdInput}
+                                  onFocus={(event) => event.currentTarget.select()}
+                                  onClick={(event) => event.currentTarget.select()}
+                                  onChange={(event) => setEditQtdInput(event.target.value.replace(/\D/g, ""))}
+                                />
+                                <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(itemKey)}>Salvar</button>
+                                <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(null); setEditQtdInput("0"); }}>Cancelar</button>
+                              </>
+                            ) : (
+                              <>
+                                {item.qtd_conferida > 0 && !isItemLocked ? (
+                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingItemKey(itemKey); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                    Editar
+                                  </button>
+                                ) : null}
+                                {item.qtd_conferida > 0 && !isItemLocked ? (
+                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(itemKey)}>
+                                    Limpar
+                                  </button>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
+                        ) : null}
+                        {hasMultipleActiveContributors && item.qtd_conferida > 0 && (item.locked_nome || item.locked_mat) ? (
+                          <p className="entrada-notas-item-owner">
+                            Conferido por: {formatLockedItemOwner(item)}
+                          </p>
+                        ) : null}
+                        {canEditActiveVolume && item.qtd_conferida > 0 && isItemLocked ? (
+                          <p className="entrada-notas-item-locked">
+                            Item bloqueado por {formatLockedItemOwner(item)}. Apenas itens pendentes podem ser alterados.
+                          </p>
+                        ) : null}
+                        <p className="termo-inline-note">Tipo: {formatItemOcorrenciaTipo(item)}</p>
+                        {qtd_falta > 0 ? <p className="termo-inline-note">Falta detectada: {qtd_falta}</p> : null}
+                        {qtd_sobra > 0 ? <p className="termo-inline-note">Sobra detectada: {qtd_sobra}</p> : null}
+                      </div>
+                    ) : null}
+                  </article>
+                  );
+                })}
+              </div>
+            ) : null}
           </article>
         ) : (
           <div className="coleta-empty">
@@ -5666,7 +5938,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-finalizar-title" onClick={() => setShowFinalizeModal(false)}>
               <div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="termo-finalizar-title">Finalizar conferência</h3>
-                <p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>
+                <p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto} | Ocorrências {divergenciaTotals.ocorrencia} | Correção {divergenciaTotals.correcao_qtd}</p>
                 {divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? (
                   <div className="termo-item-detail">
                     <p>Itens com divergência:</p>

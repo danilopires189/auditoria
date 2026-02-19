@@ -2231,6 +2231,12 @@ small {
   color: #116943;
 }
 
+.termo-divergencia.ocorrencia {
+  border-color: #efd47d;
+  background: #fff6d8;
+  color: #8a5a00;
+}
+
 .termo-divergencia.andamento {
   border-color: #e8cf9e;
   background: #fff4dd;
