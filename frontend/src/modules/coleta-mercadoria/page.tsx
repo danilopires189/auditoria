@@ -1524,6 +1524,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     setMultiploInput(Number.isFinite(parsed) ? String(Math.max(1, parsed)) : "1");
   };
 
+  const adjustMultiplo = (delta: number) => {
+    setMultiploInput((current) => String(Math.max(1, parseMultiplo(current) + delta)));
+  };
+
   useEffect(() => {
     if (!scannerOpen) return;
 
@@ -1954,7 +1958,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
             <label>
               Múltiplo
-              <div className="input-icon-wrap">
+              <div className="input-icon-wrap with-stepper">
                 <span className="field-icon" aria-hidden="true">
                   <QuantityIcon />
                 </span>
@@ -1974,6 +1978,26 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                   }}
                   onChange={onMultiploChange}
                 />
+                <div className="input-stepper-group" aria-hidden="false">
+                  <button
+                    type="button"
+                    className="input-stepper-btn"
+                    onClick={() => adjustMultiplo(-1)}
+                    aria-label="Diminuir múltiplo"
+                    title="Diminuir múltiplo"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="input-stepper-btn"
+                    onClick={() => adjustMultiplo(1)}
+                    aria-label="Aumentar múltiplo"
+                    title="Aumentar múltiplo"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </label>
 

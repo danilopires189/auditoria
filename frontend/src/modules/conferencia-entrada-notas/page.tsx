@@ -4529,6 +4529,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setMultiploInput(Number.isFinite(parsed) ? String(Math.max(1, parsed)) : "1");
   };
 
+  const adjustMultiplo = (delta: number) => {
+    setMultiploInput((current) => String(Math.max(1, parsePositiveInteger(current, 1) + delta)));
+  };
+
   const shouldHandleScannerTab = (target: ScannerInputTarget, value: string): boolean => {
     if (!value.trim()) return false;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -5038,7 +5042,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
                 <label>
                   Múltiplo
-                  <div className="input-icon-wrap">
+                  <div className="input-icon-wrap with-stepper">
                     <span className="field-icon" aria-hidden="true">{quantityIcon()}</span>
                     <input
                       type="text"
@@ -5051,6 +5055,28 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       onChange={onMultiploChange}
                       disabled={!canEditActiveVolume}
                     />
+                    <div className="input-stepper-group" aria-hidden="false">
+                      <button
+                        type="button"
+                        className="input-stepper-btn"
+                        onClick={() => adjustMultiplo(-1)}
+                        disabled={!canEditActiveVolume}
+                        aria-label="Diminuir múltiplo"
+                        title="Diminuir múltiplo"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        className="input-stepper-btn"
+                        onClick={() => adjustMultiplo(1)}
+                        disabled={!canEditActiveVolume}
+                        aria-label="Aumentar múltiplo"
+                        title="Aumentar múltiplo"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </label>
               </div>
