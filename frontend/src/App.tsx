@@ -36,12 +36,18 @@ import type { InventarioModuleProfile } from "./modules/zerados/types";
 import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
+const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
 const ADMIN_EMAIL_CANDIDATES = [
   "1@pmenos.com.br",
   "0001@pmenos.com.br",
   "mat_1@login.auditoria.local",
   "mat_0001@login.auditoria.local"
 ];
+
+interface CdOption {
+  cd: number;
+  cd_nome: string;
+}
 
 function normalizeMat(value: string): string {
   return value.replace(/\D/g, "");
@@ -203,6 +209,10 @@ const PROFILE_CACHE_PREFIX = "auditoria.profile_context.v1:";
 
 function profileCacheKey(userId: string): string {
   return `${PROFILE_CACHE_PREFIX}${userId}`;
+}
+
+function globalCdSelectionKey(userId: string): string {
+  return `${GLOBAL_CD_STORAGE_PREFIX}${userId}`;
 }
 
 function parseRole(value: unknown): ProfileContext["role"] {
@@ -446,7 +456,23 @@ async function rpcHasProfileByMat(mat: string): Promise<boolean> {
 }
 
 async function loginWithMatAndPassword(mat: string, password: string): Promise<Session> {
-  const normalizedMat = normalizeMat(mat);
+  const rawLogin = mat.trim();
+  if (rawLogin.includes("@")) {
+    const { data, error } = await supabase!.auth.signInWithPassword({
+      email: rawLogin.toLowerCase(),
+      password
+    });
+    if (error) throw error;
+    if (!data.session) {
+      throw new Error("Invalid login credentials");
+    }
+    return data.session;
+  }
+
+  const normalizedMat = normalizeMat(rawLogin);
+  if (!normalizedMat) {
+    throw new Error("Matrícula ou login inválido.");
+  }
   const canonical = canonicalMat(normalizedMat);
 
   const candidates = new Set<string>();
@@ -511,6 +537,25 @@ async function loginWithMatAndPassword(mat: string, password: string): Promise<S
   }
 
   throw new Error("Falha inesperada no login.");
+}
+
+async function rpcListAvailableCds(): Promise<CdOption[]> {
+  const { data, error } = await supabase!.rpc("rpc_list_available_cds");
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((row) => {
+      const parsedCd = parseInteger((row as Record<string, unknown>).cd);
+      if (parsedCd == null) return null;
+      const parsedName = (row as Record<string, unknown>).cd_nome;
+      const cd_nome =
+        typeof parsedName === "string" && parsedName.trim() !== ""
+          ? parsedName.trim()
+          : `CD ${String(parsedCd).padStart(2, "0")}`;
+      return { cd: parsedCd, cd_nome };
+    })
+    .filter((row): row is CdOption => row != null)
+    .sort((a, b) => a.cd - b.cd);
 }
 
 async function rpcStartIdentityChallenge(
@@ -622,6 +667,9 @@ export default function App() {
   const [loginMat, setLoginMat] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [globalCdOptions, setGlobalCdOptions] = useState<CdOption[]>([]);
+  const [globalCdSelection, setGlobalCdSelection] = useState<number | null>(null);
+  const [globalCdLoading, setGlobalCdLoading] = useState(false);
 
   const [registerMat, setRegisterMat] = useState("");
   const [registerDtNasc, setRegisterDtNasc] = useState("");
@@ -823,14 +871,19 @@ export default function App() {
     } catch (error) {
       const friendly = asErrorMessage(error);
       if (friendly === "Matrícula ou senha inválida.") {
-        try {
-          const hasProfile = await rpcHasProfileByMat(loginMat);
-          if (!hasProfile) {
-            setErrorMessage("Matrícula sem cadastro. Use \"Quero me cadastrar\" para criar sua conta.");
-          } else {
+        const normalizedLoginMat = normalizeMat(loginMat);
+        if (normalizedLoginMat) {
+          try {
+            const hasProfile = await rpcHasProfileByMat(normalizedLoginMat);
+            if (!hasProfile) {
+              setErrorMessage("Matrícula sem cadastro. Use \"Quero me cadastrar\" para criar sua conta.");
+            } else {
+              setErrorMessage(friendly);
+            }
+          } catch {
             setErrorMessage(friendly);
           }
-        } catch {
+        } else {
           setErrorMessage(friendly);
         }
       } else {
@@ -1078,81 +1131,152 @@ export default function App() {
     };
   }, [profile, session]);
 
-  const coletaProfile = useMemo<ColetaModuleProfile | null>(() => {
-    if (!session || !effectiveProfile) return null;
-    return {
-      user_id: effectiveProfile.user_id || session.user.id,
-      nome: effectiveProfile.nome || "Usuário",
-      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
-      role: effectiveProfile.role || "auditor",
-      cd_default: effectiveProfile.cd_default,
-      cd_nome: effectiveProfile.cd_nome
+  const isGlobalProfile = useMemo(
+    () => Boolean(effectiveProfile && effectiveProfile.role === "admin" && effectiveProfile.cd_default == null),
+    [effectiveProfile]
+  );
+
+  useEffect(() => {
+    if (!session) {
+      setGlobalCdOptions([]);
+      setGlobalCdSelection(null);
+      setGlobalCdLoading(false);
+      return;
+    }
+
+    if (!isGlobalProfile) {
+      setGlobalCdOptions([]);
+      setGlobalCdSelection(null);
+      setGlobalCdLoading(false);
+      return;
+    }
+
+    let mounted = true;
+    const key = globalCdSelectionKey(session.user.id);
+
+    const loadOptions = async () => {
+      setGlobalCdLoading(true);
+      try {
+        const options = await rpcListAvailableCds();
+        if (!mounted) return;
+        setGlobalCdOptions(options);
+
+        let cachedCd: number | null = null;
+        if (typeof window !== "undefined") {
+          const raw = window.localStorage.getItem(key);
+          cachedCd = parseInteger(raw);
+        }
+
+        if (cachedCd != null && options.some((item) => item.cd === cachedCd)) {
+          setGlobalCdSelection(cachedCd);
+        } else {
+          setGlobalCdSelection(null);
+        }
+      } catch (error) {
+        if (!mounted) return;
+        setGlobalCdOptions([]);
+        setGlobalCdSelection(null);
+        setErrorMessage(asErrorMessage(error));
+      } finally {
+        if (mounted) {
+          setGlobalCdLoading(false);
+        }
+      }
     };
-  }, [effectiveProfile, session]);
+
+    void loadOptions();
+    return () => {
+      mounted = false;
+    };
+  }, [isGlobalProfile, session]);
+
+  const effectiveProfileWithCd = useMemo<ProfileContext | null>(() => {
+    if (!effectiveProfile) return null;
+    if (!isGlobalProfile || globalCdSelection == null) return effectiveProfile;
+
+    const selectedCdName = globalCdOptions.find((item) => item.cd === globalCdSelection)?.cd_nome ?? null;
+    return {
+      ...effectiveProfile,
+      cd_default: globalCdSelection,
+      cd_nome: selectedCdName
+    };
+  }, [effectiveProfile, globalCdOptions, globalCdSelection, isGlobalProfile]);
+
+  const coletaProfile = useMemo<ColetaModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
 
   const termoProfile = useMemo<TermoModuleProfile | null>(() => {
-    if (!session || !effectiveProfile) return null;
+    if (!session || !effectiveProfileWithCd) return null;
     return {
-      user_id: effectiveProfile.user_id || session.user.id,
-      nome: effectiveProfile.nome || "Usuário",
-      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
-      role: effectiveProfile.role || "auditor",
-      cd_default: effectiveProfile.cd_default,
-      cd_nome: effectiveProfile.cd_nome
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
     };
-  }, [effectiveProfile, session]);
+  }, [effectiveProfileWithCd, session]);
 
   const pedidoDiretoProfile = useMemo<PedidoDiretoModuleProfile | null>(() => {
-    if (!session || !effectiveProfile) return null;
+    if (!session || !effectiveProfileWithCd) return null;
     return {
-      user_id: effectiveProfile.user_id || session.user.id,
-      nome: effectiveProfile.nome || "Usuário",
-      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
-      role: effectiveProfile.role || "auditor",
-      cd_default: effectiveProfile.cd_default,
-      cd_nome: effectiveProfile.cd_nome
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
     };
-  }, [effectiveProfile, session]);
+  }, [effectiveProfileWithCd, session]);
 
   const volumeAvulsoProfile = useMemo<VolumeAvulsoModuleProfile | null>(() => {
-    if (!session || !effectiveProfile) return null;
+    if (!session || !effectiveProfileWithCd) return null;
     return {
-      user_id: effectiveProfile.user_id || session.user.id,
-      nome: effectiveProfile.nome || "Usuário",
-      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
-      role: effectiveProfile.role || "auditor",
-      cd_default: effectiveProfile.cd_default,
-      cd_nome: effectiveProfile.cd_nome
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
     };
-  }, [effectiveProfile, session]);
+  }, [effectiveProfileWithCd, session]);
 
   const entradaNotasProfile = useMemo<EntradaNotasModuleProfile | null>(() => {
-    if (!session || !effectiveProfile) return null;
+    if (!session || !effectiveProfileWithCd) return null;
     return {
-      user_id: effectiveProfile.user_id || session.user.id,
-      nome: effectiveProfile.nome || "Usuário",
-      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
-      role: effectiveProfile.role || "auditor",
-      cd_default: effectiveProfile.cd_default,
-      cd_nome: effectiveProfile.cd_nome
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
     };
-  }, [effectiveProfile, session]);
+  }, [effectiveProfileWithCd, session]);
 
   const inventarioProfile = useMemo<InventarioModuleProfile | null>(() => {
-    if (!session || !effectiveProfile) return null;
+    if (!session || !effectiveProfileWithCd) return null;
     return {
-      user_id: effectiveProfile.user_id || session.user.id,
-      nome: effectiveProfile.nome || "Usuário",
-      mat: normalizeMat(effectiveProfile.mat || extractMatFromLoginEmail(session.user.email)),
-      role: effectiveProfile.role || "auditor",
-      cd_default: effectiveProfile.cd_default,
-      cd_nome: effectiveProfile.cd_nome
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
     };
-  }, [effectiveProfile, session]);
+  }, [effectiveProfileWithCd, session]);
 
   const displayContext = useMemo(() => {
-    if (!session || !effectiveProfile) return null;
-    const merged = effectiveProfile;
+    if (!session || !effectiveProfileWithCd) return null;
+    const merged = effectiveProfileWithCd;
     const role = merged.role || "auditor";
     const isGlobalAdmin = role === "admin" && merged.cd_default == null;
     const rawCd =
@@ -1166,7 +1290,9 @@ export default function App() {
       cdLabel: formatCdLabel(rawCd, merged.cd_default, isGlobalAdmin),
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
-  }, [effectiveProfile, session]);
+  }, [effectiveProfileWithCd, session]);
+
+  const requiresGlobalCdChoice = Boolean(session && isGlobalProfile && globalCdSelection == null);
   const isModuleRoute = useMemo(() => findModuleByPath(location.pathname) != null, [location.pathname]);
   if (loadingSession) {
     return (
@@ -1183,6 +1309,56 @@ export default function App() {
   }
 
   if (session && displayContext) {
+    if (requiresGlobalCdChoice) {
+      return (
+        <div className="page-shell">
+          <div className="auth-card surface-enter">
+            <h1>Escolha o CD</h1>
+            <p className="subtitle">
+              Selecione o CD para iniciar. A sessão ficará restrita ao CD escolhido.
+            </p>
+            {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
+            <div className="form-grid">
+              <label>
+                Centro de distribuição
+                <select
+                  value={globalCdSelection ?? ""}
+                  onChange={(event) => setGlobalCdSelection(parseInteger(event.target.value))}
+                  disabled={globalCdLoading}
+                >
+                  <option value="" disabled>
+                    {globalCdLoading ? "Carregando CDs..." : "Selecione um CD"}
+                  </option>
+                  {globalCdOptions.map((option) => (
+                    <option key={option.cd} value={option.cd}>
+                      {`CD ${String(option.cd).padStart(2, "0")} - ${option.cd_nome}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={globalCdSelection == null || globalCdLoading}
+                onClick={() => {
+                  if (!session || globalCdSelection == null) return;
+                  if (typeof window !== "undefined") {
+                    window.localStorage.setItem(globalCdSelectionKey(session.user.id), String(globalCdSelection));
+                  }
+                  navigate("/inicio", { replace: true });
+                }}
+              >
+                Entrar no CD
+              </button>
+              <button className="btn btn-muted" type="button" onClick={() => void onLogout()} disabled={logoutBusy}>
+                {logoutBusy ? "Saindo..." : "Trocar usuário"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}`}>
         <Routes>
@@ -1313,7 +1489,7 @@ export default function App() {
           <h1>{authMode === "login" ? "Login" : authMode === "register" ? "Cadastro" : "Redefinir senha"}</h1>
           <p className="subtitle">
             {authMode === "login"
-              ? "Entre com matrícula e senha."
+              ? "Entre com matrícula (ou login) e senha."
               : authMode === "register"
                 ? "Cadastro por matrícula, nascimento e admissão."
                 : "Recupere a senha com matrícula, nascimento e admissão."}
@@ -1342,7 +1518,7 @@ export default function App() {
           {authMode === "login" && (
             <form className="form-grid" autoComplete="off" onSubmit={onLogin}>
               <label>
-                Matrícula
+                Matrícula ou login
                 <div className="input-icon-wrap">
                   <span className="field-icon" aria-hidden="true">
                     <UserIcon />
@@ -1350,7 +1526,7 @@ export default function App() {
                   <input
                     name="login_mat_no_store"
                     type="text"
-                    inputMode="numeric"
+                    inputMode="text"
                     autoComplete="off"
                     autoCapitalize="none"
                     autoCorrect="off"
