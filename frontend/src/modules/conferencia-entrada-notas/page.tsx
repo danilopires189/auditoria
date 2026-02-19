@@ -1333,8 +1333,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         group.filiais
           .map((row) => row.filial_nome?.trim() || row.fornecedor?.trim() || "")
           .filter(Boolean)
-      )];
-      const fornecedorLabel = fornecedores.length === 1 ? fornecedores[0] : `${fornecedores.length} fornecedores`;
+      )].sort((a, b) => a.localeCompare(b, "pt-BR"));
+      const fornecedorLabel = fornecedores.join(", ");
       const confDate = todayIsoBrasilia();
       const volumeId = `ROTA:${group.rota}`;
       const localVolume: EntradaNotasLocalVolume = {
