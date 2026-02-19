@@ -4074,11 +4074,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       );
       setRouteRows(localRoutes);
 
-      const latestOpen = volumes.find((row) => (
-        row.status === "em_conferencia"
+      const latestOpen = volumes.find((row) => {
+        const isCombinedLocalConference = (
+          row.conference_kind === "avulsa"
+          && (row.combined_seq_nf_labels?.length ?? 0) > 0
+        );
+        return (
+          row.status === "em_conferencia"
           && !row.is_read_only
-          && row.conference_kind !== "avulsa"
-      )) ?? null;
+          && (row.conference_kind !== "avulsa" || isCombinedLocalConference)
+        );
+      }) ?? null;
       if (latestOpen) {
         if (isGlobalAdmin && latestOpen.cd !== currentCd) {
           setCdAtivo(latestOpen.cd);
@@ -4092,12 +4098,18 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       }
 
       const today = todayIsoBrasilia();
-      const latestToday = volumes.find(
-        (row) => row.cd === currentCd
+      const latestToday = volumes.find((row) => {
+        const isCombinedLocalConference = (
+          row.conference_kind === "avulsa"
+          && (row.combined_seq_nf_labels?.length ?? 0) > 0
+        );
+        return (
+          row.cd === currentCd
           && row.conf_date === today
-          && row.conference_kind !== "avulsa"
+          && (row.conference_kind !== "avulsa" || isCombinedLocalConference)
           && (row.status === "em_conferencia" || row.pending_snapshot || row.pending_finalize || row.pending_cancel)
-      );
+        );
+      });
       if (latestToday) {
         let resolvedLatest = latestToday;
         if (
