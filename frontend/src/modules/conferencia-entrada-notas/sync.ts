@@ -680,6 +680,39 @@ export async function cancelVolume(confId: string): Promise<boolean> {
   return first?.cancelled === true;
 }
 
+export async function cancelVolumeBatch(confIds: string[]): Promise<Array<{ conf_id: string; cancelled: boolean }>> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const payload = [...new Set(confIds.map((value) => String(value ?? "").trim()).filter(Boolean))];
+  if (payload.length === 0) return [];
+
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_cancel_batch", {
+    p_conf_ids: payload
+  });
+  if (error) {
+    const message = toErrorMessage(error);
+    // Fallback temporário enquanto a migração não estiver aplicada em todos os ambientes.
+    if (message.includes("rpc_conf_entrada_notas_cancel_batch")) {
+      const fallbackRows: Array<{ conf_id: string; cancelled: boolean }> = [];
+      for (const confId of payload) {
+        const cancelled = await cancelVolume(confId);
+        fallbackRows.push({ conf_id: confId, cancelled });
+      }
+      return fallbackRows;
+    }
+    throw new Error(message);
+  }
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((row) => {
+      const raw = row as Record<string, unknown>;
+      return {
+        conf_id: String(raw.conf_id ?? ""),
+        cancelled: raw.cancelled === true
+      };
+    })
+    .filter((row) => row.conf_id !== "");
+}
+
 export async function cancelAvulsaVolume(_confId: string): Promise<boolean> {
   return true;
 }
@@ -716,17 +749,19 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
         }
 
         if (row.pending_cancel) {
-          const cancelResults = await Promise.allSettled(
-            [...confMap.values()].map(async (confId) => {
-              const cancelled = await cancelVolume(confId);
-              if (!cancelled) {
-                throw new Error(`Cancelamento não confirmado para ${confId}.`);
-              }
-            })
+          const expectedIds = [...confMap.values()];
+          if (expectedIds.length === 0) {
+            throw new Error("Conferência conjunta sem vínculos remotos para cancelamento.");
+          }
+          const rows = await cancelVolumeBatch(expectedIds);
+          const cancelledSet = new Set(
+            rows
+              .filter((entry) => entry.cancelled)
+              .map((entry) => entry.conf_id)
           );
-          const failedCancels = cancelResults.filter((result) => result.status === "rejected");
-          if (failedCancels.length > 0) {
-            throw new Error(`Falha ao cancelar ${failedCancels.length} de ${confMap.size} Seq/NF pendentes.`);
+          const missingIds = expectedIds.filter((confId) => !cancelledSet.has(confId));
+          if (missingIds.length > 0) {
+            throw new Error(`Falha ao cancelar ${missingIds.length} de ${expectedIds.length} Seq/NF pendentes.`);
           }
           await removeLocalVolume(row.local_key);
           synced += 1;
@@ -740,14 +775,21 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
           const hadPendingFinalize = row.pending_finalize;
           const labels = row.combined_seq_nf_labels ?? [];
           const allocations = row.combined_seq_allocations ?? [];
+          if (labels.length === 0) {
+            throw new Error("Conferência conjunta sem Seq/NF para sincronizar.");
+          }
           let lastFinalizeStatus = row.status;
           let lastFinalizedAt = row.finalized_at;
 
           for (const label of labels) {
-            const confId = confMap.get(label);
-            if (!confId) continue;
             const parsed = parseVolumeLabel(label);
-            if (!parsed) continue;
+            if (!parsed) {
+              throw new Error(`Seq/NF inválido na conferência conjunta: ${label}.`);
+            }
+            const confId = confMap.get(label);
+            if (!confId) {
+              throw new Error(`Seq/NF ${label} sem vínculo remoto para sincronização.`);
+            }
 
             if (row.pending_snapshot) {
               const payload = allocations
