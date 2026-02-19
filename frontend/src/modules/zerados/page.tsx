@@ -1760,6 +1760,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!scannerOpen) return;
 
     let cancelled = false;
+    let nativeFrameId: number | null = null;
+    let nativeStream: MediaStream | null = null;
     let torchProbeTimer: number | null = null;
     let torchProbeAttempts = 0;
     setScannerError(null);
@@ -1769,14 +1771,97 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
     const startScanner = async () => {
       try {
-        const zxing = await import("@zxing/browser");
-        if (cancelled) return;
-
         const videoEl = scannerVideoRef.current;
         if (!videoEl) {
           setScannerError("Falha ao abrir visualização da câmera.");
           return;
         }
+
+        const nativeBarcodeDetectorCtor = (window as Window & {
+          BarcodeDetector?: new (options?: { formats?: string[] }) => {
+            detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+          };
+        }).BarcodeDetector;
+
+        if (nativeBarcodeDetectorCtor && typeof navigator.mediaDevices?.getUserMedia === "function") {
+          try {
+            const detector = new nativeBarcodeDetectorCtor({
+              formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "codabar"]
+            });
+            nativeStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
+            });
+            if (cancelled) {
+              nativeStream.getTracks().forEach((track) => track.stop());
+              nativeStream = null;
+              return;
+            }
+
+            videoEl.srcObject = nativeStream;
+            await videoEl.play().catch(() => undefined);
+            const track = nativeStream.getVideoTracks()[0] ?? null;
+            if (track) scannerTrackRef.current = track;
+
+            const runNativeDetect = async () => {
+              if (cancelled) return;
+              try {
+                const detections = await detector.detect(videoEl);
+                const first = detections[0];
+                const scanned = normalizeBarcode(first?.rawValue ?? "");
+                if (scanned) {
+                  if (scannerTarget === "final_barras") {
+                    setFinalBarras(scanned);
+                    setValidatedFinalBarras(null);
+                    void autoValidateFinalBarras(scanned);
+                  } else {
+                    setBarras(scanned);
+                    setValidatedBarras(null);
+                    void autoValidateStageBarras(scanned);
+                  }
+                  closeCameraScanner();
+                  return;
+                }
+              } catch {
+                // Mantem polling silencioso enquanto a camera busca foco.
+              }
+              nativeFrameId = window.requestAnimationFrame(() => {
+                void runNativeDetect();
+              });
+            };
+
+            nativeFrameId = window.requestAnimationFrame(() => {
+              void runNativeDetect();
+            });
+
+            const probeTorchAvailabilityNative = () => {
+              if (cancelled) return;
+              const track = resolveScannerTrack();
+              if (track) scannerTrackRef.current = track;
+              if (supportsTrackTorch(track)) {
+                scannerTorchModeRef.current = "track";
+                setTorchSupported(true);
+              } else {
+                scannerTorchModeRef.current = "none";
+                setTorchSupported(false);
+              }
+            };
+            probeTorchAvailabilityNative();
+            return;
+          } catch {
+            if (nativeStream) {
+              nativeStream.getTracks().forEach((track) => track.stop());
+              nativeStream = null;
+            }
+          }
+        }
+
+        const zxing = await import("@zxing/browser");
+        if (cancelled) return;
 
         const reader = new zxing.BrowserMultiFormatReader();
         const controls = await reader.decodeFromConstraints(
@@ -1791,6 +1876,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             if (cancelled) return;
 
             if (result) {
+              const formatName = result.getBarcodeFormat?.().toString?.() ?? "";
+              if (/QR_CODE/i.test(formatName)) return;
               const scanned = normalizeBarcode(result.getText() ?? "");
               if (!scanned) return;
 
@@ -1855,6 +1942,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
     return () => {
       cancelled = true;
+      if (nativeFrameId != null) window.cancelAnimationFrame(nativeFrameId);
+      if (nativeStream) {
+        nativeStream.getTracks().forEach((track) => track.stop());
+        nativeStream = null;
+      }
       if (torchProbeTimer != null) {
         window.clearTimeout(torchProbeTimer);
       }
