@@ -2095,20 +2095,31 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
         if (nativeBarcodeDetectorCtor && typeof navigator.mediaDevices?.getUserMedia === "function") {
           try {
-            const formats = [
-              "qr_code",
-              "code_128",
-              "code_39",
-              "ean_13",
-              "ean_8",
-              "upc_a",
-              "upc_e",
-              "itf",
-              "codabar",
-              "data_matrix",
-              "pdf417",
-              "aztec"
-            ];
+            const formats = scannerTarget === "etiqueta"
+              ? [
+                  "qr_code",
+                  "code_128",
+                  "code_39",
+                  "ean_13",
+                  "ean_8",
+                  "upc_a",
+                  "upc_e",
+                  "itf",
+                  "codabar",
+                  "data_matrix",
+                  "pdf417",
+                  "aztec"
+                ]
+              : [
+                  "code_128",
+                  "code_39",
+                  "ean_13",
+                  "ean_8",
+                  "upc_a",
+                  "upc_e",
+                  "itf",
+                  "codabar"
+                ];
             const detector = new nativeBarcodeDetectorCtor({ formats });
             nativeStream = await navigator.mediaDevices.getUserMedia({
               audio: false,
@@ -2195,6 +2206,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           (result, error) => {
             if (cancelled) return;
             if (result) {
+              const formatName = result.getBarcodeFormat?.().toString?.() ?? "";
+              if (scannerTarget !== "etiqueta" && /QR_CODE/i.test(formatName)) return;
               const scanned = normalizeBarcode(result.getText() ?? "");
               if (!scanned) return;
               playScannerReadBeep();
