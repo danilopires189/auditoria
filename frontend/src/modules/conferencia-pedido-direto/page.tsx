@@ -869,9 +869,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
   const openScannerFor = useCallback((target: "etiqueta" | "barras") => {
     if (!cameraSupported) {
-      const message = "Câmera não disponível neste dispositivo.";
-      setErrorMessage(message);
-      triggerScanErrorAlert(message);
+      setErrorMessage("Câmera não disponível neste dispositivo.");
       return;
     }
     setScannerTarget(target);
@@ -879,7 +877,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     setScannerOpen(true);
     setTorchEnabled(false);
     setTorchSupported(false);
-  }, [cameraSupported, triggerScanErrorAlert]);
+  }, [cameraSupported]);
 
   const runPendingSync = useCallback(async (silent = false) => {
     if (!isOnline) return;
@@ -1877,7 +1875,6 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     if (!scannerOpen) return;
 
     let cancelled = false;
-    let decodeErrorAlerted = false;
     let torchProbeTimer: number | null = null;
     let torchProbeAttempts = 0;
     setScannerError(null);
@@ -1891,9 +1888,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         if (cancelled) return;
         const videoEl = scannerVideoRef.current;
         if (!videoEl) {
-          const message = "Falha ao abrir visualização da câmera.";
-          setScannerError(message);
-          triggerScanErrorAlert(message);
+          setScannerError("Falha ao abrir visualização da câmera.");
           return;
         }
 
@@ -1924,12 +1919,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
             const errorName = (error as { name?: string } | null)?.name;
             if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
-              const message = "Não foi possível ler o código. Ajuste foco/distância e tente novamente.";
-              setScannerError(message);
-              if (!decodeErrorAlerted) {
-                decodeErrorAlerted = true;
-                triggerScanErrorAlert(message);
-              }
+              setScannerError("Não foi possível ler o código. Ajuste foco/distância e tente novamente.");
             }
           }
         );
@@ -1942,15 +1932,15 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         scannerControlsRef.current = controls;
         const probeTorchAvailability = () => {
           if (cancelled) return;
-          if (typeof controls.switchTorch === "function") {
-            scannerTorchModeRef.current = "controls";
-            setTorchSupported(true);
-            return;
-          }
           const track = resolveScannerTrack();
           if (track) scannerTrackRef.current = track;
           if (supportsTrackTorch(track)) {
             scannerTorchModeRef.current = "track";
+            setTorchSupported(true);
+            return;
+          }
+          if (typeof controls.switchTorch === "function") {
+            scannerTorchModeRef.current = "controls";
             setTorchSupported(true);
             return;
           }
@@ -1965,9 +1955,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
         probeTorchAvailability();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Falha ao iniciar câmera.";
-        setScannerError(message);
-        triggerScanErrorAlert(message);
+        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera.");
       }
     };
 
@@ -1978,22 +1966,19 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       if (torchProbeTimer != null) window.clearTimeout(torchProbeTimer);
       stopScanner();
     };
-  }, [handleCollectBarcode, openVolumeFromEtiqueta, resolveScannerTrack, scannerOpen, scannerTarget, stopScanner, supportsTrackTorch, triggerScanErrorAlert]);
+  }, [handleCollectBarcode, openVolumeFromEtiqueta, resolveScannerTrack, scannerOpen, scannerTarget, stopScanner, supportsTrackTorch]);
 
   const toggleTorch = async () => {
     const controls = scannerControlsRef.current;
     const track = scannerTrackRef.current ?? resolveScannerTrack();
-    if (!controls?.switchTorch && scannerTorchModeRef.current !== "track") {
-      const message = "Flash não disponível neste dispositivo.";
-      setScannerError(message);
-      triggerScanErrorAlert(message);
+    const hasTrackTorch = supportsTrackTorch(track);
+    if (!controls?.switchTorch && !hasTrackTorch) {
+      setScannerError("Flash não disponível neste dispositivo.");
       return;
     }
     try {
       const next = !torchEnabled;
-      if (scannerTorchModeRef.current === "controls" && controls?.switchTorch) {
-        await controls.switchTorch(next);
-      } else {
+      if (hasTrackTorch && track) {
         const trackWithConstraints = track as MediaStreamTrack & {
           applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
         };
@@ -2001,13 +1986,22 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           throw new Error("Flash indisponível");
         }
         await trackWithConstraints.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+        if (next) {
+          window.setTimeout(() => {
+            void trackWithConstraints
+              .applyConstraints?.({ advanced: [{ torch: true } as MediaTrackConstraintSet] })
+              .catch(() => undefined);
+          }, 140);
+        }
+        scannerTorchModeRef.current = "track";
+      } else if (controls?.switchTorch) {
+        await controls.switchTorch(next);
+        scannerTorchModeRef.current = "controls";
       }
       setTorchEnabled(next);
       setScannerError(null);
     } catch {
-      const message = "Não foi possível alternar o flash.";
-      setScannerError(message);
-      triggerScanErrorAlert(message);
+      setScannerError("Não foi possível alternar o flash.");
     }
   };
 
