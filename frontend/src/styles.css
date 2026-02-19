@@ -2020,6 +2020,10 @@ small {
   grid-template-columns: minmax(0, 2fr) minmax(0, 0.7fr) minmax(0, 1fr);
 }
 
+.termo-scan-grid.termo-scan-grid-stack {
+  grid-template-columns: 1fr;
+}
+
 .termo-scan-field {
   min-width: 0;
 }
