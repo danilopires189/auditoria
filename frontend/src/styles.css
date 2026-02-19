@@ -243,7 +243,23 @@ input {
   height: 48px;
 }
 
+select {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 1rem;
+  background: #fff;
+  color: var(--text);
+  height: 48px;
+}
+
 input:focus {
+  outline: 2px solid rgba(22, 63, 135, 0.25);
+  border-color: var(--accent);
+}
+
+select:focus {
   outline: 2px solid rgba(22, 63, 135, 0.25);
   border-color: var(--accent);
 }
