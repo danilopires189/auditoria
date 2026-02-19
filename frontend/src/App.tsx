@@ -36,6 +36,7 @@ import type { InventarioModuleProfile } from "./modules/zerados/types";
 import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
+const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
 const ADMIN_EMAIL_CANDIDATES = [
   "1@pmenos.com.br",
   "0001@pmenos.com.br",
@@ -46,6 +47,10 @@ const ADMIN_EMAIL_CANDIDATES = [
 interface CdOption {
   cd: number;
   cd_nome: string;
+}
+
+function globalCdSelectionKey(userId: string): string {
+  return `${GLOBAL_CD_STORAGE_PREFIX}${userId}`;
 }
 
 function normalizeMat(value: string): string {
@@ -1082,6 +1087,9 @@ export default function App() {
     try {
       const currentUserId = session?.user.id;
       if (currentUserId) {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(globalCdSelectionKey(currentUserId));
+        }
         try {
           await clearUserColetaSessionCache(currentUserId);
         } catch {
@@ -1156,14 +1164,23 @@ export default function App() {
     }
 
     let mounted = true;
+    const storageKey = globalCdSelectionKey(session.user.id);
     const loadOptions = async () => {
       setGlobalCdLoading(true);
       try {
         const options = await rpcListAvailableCds();
         if (!mounted) return;
         setGlobalCdOptions(options);
-        // Always require explicit CD choice after login for global admin.
-        setGlobalCdSelection(null);
+
+        let cachedCd: number | null = null;
+        if (typeof window !== "undefined") {
+          cachedCd = parseInteger(window.localStorage.getItem(storageKey));
+        }
+        if (cachedCd != null && options.some((item) => item.cd === cachedCd)) {
+          setGlobalCdSelection(cachedCd);
+        } else {
+          setGlobalCdSelection(null);
+        }
       } catch (error) {
         if (!mounted) return;
         setGlobalCdOptions([]);
@@ -1334,6 +1351,9 @@ export default function App() {
                 disabled={globalCdSelection == null || globalCdLoading}
                 onClick={() => {
                   if (!session || globalCdSelection == null) return;
+                  if (typeof window !== "undefined") {
+                    window.localStorage.setItem(globalCdSelectionKey(session.user.id), String(globalCdSelection));
+                  }
                   navigate("/inicio", { replace: true });
                 }}
               >
@@ -1350,20 +1370,6 @@ export default function App() {
 
     return (
       <div className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}`}>
-        {isGlobalProfile && globalCdOptions.length > 0 ? (
-          <button
-            type="button"
-            className="global-cd-switcher-trigger"
-            onClick={() => {
-              setPendingGlobalCdSelection(globalCdSelection);
-              setShowGlobalCdSwitcher(true);
-            }}
-            title="Trocar CD"
-          >
-            Trocar CD
-          </button>
-        ) : null}
-
         <Routes>
           <Route
             path="/inicio"
@@ -1372,6 +1378,11 @@ export default function App() {
                 displayContext={displayContext}
                 isOnline={isOnline}
                 onRequestLogout={openLogoutConfirm}
+                showCdSwitcher={isGlobalProfile && globalCdOptions.length > 0}
+                onRequestCdSwitcher={() => {
+                  setPendingGlobalCdSelection(globalCdSelection);
+                  setShowGlobalCdSwitcher(true);
+                }}
               />
             )}
           />
@@ -1523,6 +1534,12 @@ export default function App() {
                       onClick={() => {
                         if (!session || pendingGlobalCdSelection == null) return;
                         setGlobalCdSelection(pendingGlobalCdSelection);
+                        if (typeof window !== "undefined") {
+                          window.localStorage.setItem(
+                            globalCdSelectionKey(session.user.id),
+                            String(pendingGlobalCdSelection)
+                          );
+                        }
                         setShowGlobalCdSwitcher(false);
                         navigate("/inicio", { replace: true });
                       }}
