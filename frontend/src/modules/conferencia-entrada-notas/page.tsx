@@ -63,7 +63,7 @@ import {
   openVolumeBatch,
   openVolume,
   reopenPartialConference,
-  scanBarcode,
+  scanBarcodeWithOccurrence,
   setItemQtd,
   syncSnapshot,
   resolveAvulsaTargets,
@@ -457,8 +457,8 @@ function createLocalVolumeFromRemote(
     descricao: item.descricao,
     qtd_esperada: item.qtd_esperada,
     qtd_conferida: item.qtd_conferida,
-    ocorrencia_avariado_qtd: 0,
-    ocorrencia_vencido_qtd: 0,
+    ocorrencia_avariado_qtd: Math.max(Number.parseInt(String(item.ocorrencia_avariado_qtd ?? 0), 10) || 0, 0),
+    ocorrencia_vencido_qtd: Math.max(Number.parseInt(String(item.ocorrencia_vencido_qtd ?? 0), 10) || 0, 0),
     updated_at: item.updated_at,
     seq_entrada: item.seq_entrada ?? null,
     nf: item.nf ?? null,
@@ -3372,7 +3372,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             void runPendingSync(true);
           }
         } else {
-          const updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd);
+          const updated = await scanBarcodeWithOccurrence(
+            activeVolume.remote_conf_id,
+            barras,
+            qtd,
+            ocorrenciaInput
+          );
           produtoRegistrado = updated.descricao;
           barrasRegistrada = updated.barras ?? barras;
           registroRemoto = true;
@@ -3384,17 +3389,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   ...item,
                   barras: updated.barras ?? barras,
                   qtd_conferida: updated.qtd_conferida,
-                  ...(() => {
-                    const normalizedOcc = normalizeOccurrenceForQtd(
-                      getItemOcorrenciaAvariado(item) + occurrenceDelta.avariado,
-                      getItemOcorrenciaVencido(item) + occurrenceDelta.vencido,
-                      Math.max(updated.qtd_conferida, 0)
-                    );
-                    return {
-                      ocorrencia_avariado_qtd: normalizedOcc.avariado,
-                      ocorrencia_vencido_qtd: normalizedOcc.vencido
-                    };
-                  })(),
+                  ocorrencia_avariado_qtd: Math.max(Number.parseInt(String(updated.ocorrencia_avariado_qtd ?? 0), 10) || 0, 0),
+                  ocorrencia_vencido_qtd: Math.max(Number.parseInt(String(updated.ocorrencia_vencido_qtd ?? 0), 10) || 0, 0),
                   qtd_esperada: updated.qtd_esperada,
                   is_locked: updated.is_locked === true,
                   locked_by: updated.locked_by ?? null,
@@ -3492,7 +3488,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               if (!targetConfId) {
                 throw new Error(`Seq/NF ${targetLabel} sem conferência ativa vinculada.`);
               }
-              await scanBarcode(targetConfId, lookup.barras || barras, toApply);
+              await scanBarcodeWithOccurrence(
+                targetConfId,
+                lookup.barras || barras,
+                toApply,
+                ocorrenciaInput
+              );
             }
             const nextAllocation = nextAllocations.find((row) => (
               row.coddv === allocation.coddv
