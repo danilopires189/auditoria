@@ -871,7 +871,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [pendingAvulsaScan, setPendingAvulsaScan] = useState<AvulsaPendingScan | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
-  const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
+  const isGlobalAdmin = useMemo(() => profile.role === "admin", [profile]);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
   const canEditActiveVolume = Boolean(
