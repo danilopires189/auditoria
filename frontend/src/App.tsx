@@ -37,6 +37,7 @@ import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
+const DEFAULT_GLOBAL_CD = 2;
 const ADMIN_EMAIL_CANDIDATES = [
   "1@pmenos.com.br",
   "0001@pmenos.com.br",
@@ -1165,6 +1166,15 @@ export default function App() {
 
     let mounted = true;
     const storageKey = globalCdSelectionKey(session.user.id);
+    let preferredCd = DEFAULT_GLOBAL_CD;
+    if (typeof window !== "undefined") {
+      const cached = parseInteger(window.localStorage.getItem(storageKey));
+      if (cached != null) {
+        preferredCd = cached;
+      }
+    }
+    setGlobalCdSelection((current) => current ?? preferredCd);
+
     const loadOptions = async () => {
       setGlobalCdLoading(true);
       try {
@@ -1172,19 +1182,19 @@ export default function App() {
         if (!mounted) return;
         setGlobalCdOptions(options);
 
-        let cachedCd: number | null = null;
-        if (typeof window !== "undefined") {
-          cachedCd = parseInteger(window.localStorage.getItem(storageKey));
-        }
-        if (cachedCd != null && options.some((item) => item.cd === cachedCd)) {
-          setGlobalCdSelection(cachedCd);
-        } else {
-          setGlobalCdSelection(null);
+        const nextCd =
+          options.some((item) => item.cd === preferredCd)
+            ? preferredCd
+            : (options[0]?.cd ?? null);
+
+        setGlobalCdSelection(nextCd);
+        if (nextCd != null && typeof window !== "undefined") {
+          window.localStorage.setItem(storageKey, String(nextCd));
         }
       } catch (error) {
         if (!mounted) return;
         setGlobalCdOptions([]);
-        setGlobalCdSelection(null);
+        setGlobalCdSelection(preferredCd);
         setErrorMessage(asErrorMessage(error));
       } finally {
         if (mounted) {
@@ -1201,12 +1211,13 @@ export default function App() {
 
   const effectiveProfileWithCd = useMemo<ProfileContext | null>(() => {
     if (!effectiveProfile) return null;
-    if (!isGlobalProfile || globalCdSelection == null) return effectiveProfile;
+    if (!isGlobalProfile) return effectiveProfile;
 
-    const selectedCdName = globalCdOptions.find((item) => item.cd === globalCdSelection)?.cd_nome ?? null;
+    const selectedCd = globalCdSelection ?? DEFAULT_GLOBAL_CD;
+    const selectedCdName = globalCdOptions.find((item) => item.cd === selectedCd)?.cd_nome ?? null;
     return {
       ...effectiveProfile,
-      cd_default: globalCdSelection,
+      cd_default: selectedCd,
       cd_nome: selectedCdName
     };
   }, [effectiveProfile, globalCdOptions, globalCdSelection, isGlobalProfile]);
@@ -1301,7 +1312,6 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
-  const requiresGlobalCdChoice = Boolean(session && isGlobalProfile && globalCdSelection == null);
   const isModuleRoute = useMemo(() => findModuleByPath(location.pathname) != null, [location.pathname]);
   if (loadingSession) {
     return (
@@ -1318,56 +1328,6 @@ export default function App() {
   }
 
   if (session && displayContext) {
-    if (requiresGlobalCdChoice) {
-      return (
-        <div className="page-shell">
-          <div className="auth-card surface-enter">
-            <h1>Escolha o CD</h1>
-            <p className="subtitle">
-              Selecione o CD para iniciar. A sessão ficará restrita ao CD escolhido.
-            </p>
-            {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
-            <div className="form-grid">
-              <label>
-                Centro de distribuição
-                <select
-                  value={globalCdSelection ?? ""}
-                  onChange={(event) => setGlobalCdSelection(parseInteger(event.target.value))}
-                  disabled={globalCdLoading}
-                >
-                  <option value="" disabled>
-                    {globalCdLoading ? "Carregando CDs..." : "Selecione um CD"}
-                  </option>
-                  {globalCdOptions.map((option) => (
-                    <option key={option.cd} value={option.cd}>
-                      {`CD ${String(option.cd).padStart(2, "0")} - ${option.cd_nome}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                className="btn btn-primary"
-                type="button"
-                disabled={globalCdSelection == null || globalCdLoading}
-                onClick={() => {
-                  if (!session || globalCdSelection == null) return;
-                  if (typeof window !== "undefined") {
-                    window.localStorage.setItem(globalCdSelectionKey(session.user.id), String(globalCdSelection));
-                  }
-                  navigate("/inicio", { replace: true });
-                }}
-              >
-                Entrar no CD
-              </button>
-              <button className="btn btn-muted" type="button" onClick={() => void onLogout()} disabled={logoutBusy}>
-                {logoutBusy ? "Saindo..." : "Trocar usuário"}
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}`}>
         <Routes>
