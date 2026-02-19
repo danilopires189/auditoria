@@ -3585,6 +3585,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       }
       setBarcodeInput("");
       setMultiploInput("1");
+      setOcorrenciaInput("");
       await persistPreferences({ multiplo_padrao: 1 });
       const descricao = produtoRegistrado || "Produto";
       const baseMessage = `${descricao} | Barras: ${barrasRegistrada} | +${qtd}`;
@@ -3690,6 +3691,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       }
       setBarcodeInput("");
       setMultiploInput("1");
+      setOcorrenciaInput("");
       await persistPreferences({ multiplo_padrao: 1 });
       const baseMessage = `${result.produtoRegistrado} | Barras: ${result.barrasRegistrada} | +${pendingAvulsaScan.qtd}`;
       setStatusMessage(
@@ -5291,7 +5293,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                        <p className={getItemOcorrenciaTotal(item) > 0 ? "entrada-notas-qtd-ocorrencia" : undefined}>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5382,7 +5384,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                        <p className={getItemOcorrenciaTotal(item) > 0 ? "entrada-notas-qtd-ocorrencia" : undefined}>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5472,7 +5474,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                        <p className={getItemOcorrenciaTotal(item) > 0 ? "entrada-notas-qtd-ocorrencia" : undefined}>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5545,9 +5547,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 {groupedOcorrencias.map(({ item, qtd_falta, qtd_sobra }) => {
                   const itemKey = item.item_key ?? String(item.coddv);
                   const isItemLocked = item.is_locked === true;
-                  const isLastAddedItem = activeLastAddedItemKey === itemKey;
                   return (
-                  <article key={`ocorrencia-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
+                  <article key={`ocorrencia-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
@@ -5560,15 +5561,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                        <p className={getItemOcorrenciaTotal(item) > 0 ? "entrada-notas-qtd-ocorrencia" : undefined}>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
-                        {isLastAddedItem ? (
-                          <span className="termo-last-added-tag">
-                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
-                            Último adicionado
-                          </span>
-                        ) : null}
                         <span className="termo-divergencia ocorrencia">{formatItemOcorrenciaTipo(item)}</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
                       </div>
