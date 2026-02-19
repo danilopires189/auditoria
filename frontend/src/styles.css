@@ -3078,7 +3078,16 @@ small {
   }
 
   .termo-scan-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .termo-scan-field-barcode {
+    grid-column: 1 / -1;
+  }
+
+  .termo-scan-field-multiplo,
+  .termo-scan-field-ocorrencia {
+    grid-column: auto;
   }
 
   .termo-scan-field-multiplo,
