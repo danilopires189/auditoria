@@ -2039,6 +2039,11 @@ small {
   box-shadow: 0 0 0 1px rgba(77, 116, 176, 0.3), 0 8px 20px rgba(18, 45, 87, 0.1);
 }
 
+.termo-item-card.is-last-added {
+  border-color: #95d8b0;
+  box-shadow: 0 0 0 1px rgba(52, 136, 87, 0.22);
+}
+
 .termo-item-line {
   width: 100%;
   border: 0;
@@ -2050,6 +2055,10 @@ small {
   gap: 10px;
   text-align: left;
   cursor: pointer;
+}
+
+.termo-item-card.is-last-added .termo-item-line {
+  background: #f2fbf5;
 }
 
 .termo-item-main {
@@ -2073,6 +2082,38 @@ small {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.termo-last-added-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid #b8dec8;
+  background: #edf8f1;
+  color: #3d8c63;
+  font-size: 0.69rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.termo-last-added-tag-icon {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+}
+
+.termo-last-added-tag-icon svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .termo-divergencia {
