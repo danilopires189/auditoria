@@ -153,6 +153,17 @@ function formatCdLabel(rawCd: string, cdDefault: number | null, isGlobalAdmin: b
   return "CD não definido";
 }
 
+function formatCdOptionLabel(cd: number, cdNome: string): string {
+  const base = `CD ${String(cd).padStart(2, "0")}`;
+  const compactNome = cdNome.trim();
+  if (!compactNome) return base;
+  const normalized = compactNome.toLowerCase();
+  if (normalized.startsWith(`cd ${String(cd)}`) || normalized.startsWith(`cd0${String(cd)}`) || normalized.startsWith(`cd${String(cd)}`)) {
+    return compactNome;
+  }
+  return `${base} - ${compactNome}`;
+}
+
 function roleLabel(role: "admin" | "auditor" | "viewer" | null): string {
   if (role === "admin") return "Admin";
   if (role === "viewer") return "Viewer";
@@ -1472,7 +1483,7 @@ export default function App() {
                         </option>
                         {globalCdOptions.map((option) => (
                           <option key={option.cd} value={option.cd}>
-                            {`CD ${String(option.cd).padStart(2, "0")} - ${option.cd_nome}`}
+                            {formatCdOptionLabel(option.cd, option.cd_nome)}
                           </option>
                         ))}
                       </select>
