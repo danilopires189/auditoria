@@ -759,7 +759,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const openCameraScanner = useCallback((target: ScannerTarget) => {
     if (!cameraSupported) {
       setPopupErr("Câmera não disponível neste navegador/dispositivo.");
-      triggerScanErrorAlert("Câmera não disponível neste navegador/dispositivo.");
       return;
     }
     setPopupErr(null);
@@ -770,22 +769,19 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     scannerTrackRef.current = null;
     scannerTorchModeRef.current = "none";
     setScannerOpen(true);
-  }, [cameraSupported, triggerScanErrorAlert]);
+  }, [cameraSupported]);
 
   const toggleTorch = useCallback(async () => {
     const controls = scannerControlsRef.current;
     const track = scannerTrackRef.current ?? resolveScannerTrack();
-    if (!controls?.switchTorch && scannerTorchModeRef.current !== "track") {
-      const message = "Flash não disponível neste dispositivo.";
-      setScannerError(message);
-      triggerScanErrorAlert(message);
+    const hasTrackTorch = supportsTrackTorch(track);
+    if (!controls?.switchTorch && !hasTrackTorch) {
+      setScannerError("Flash não disponível neste dispositivo.");
       return;
     }
     try {
       const next = !torchEnabled;
-      if (scannerTorchModeRef.current === "controls" && controls?.switchTorch) {
-        await controls.switchTorch(next);
-      } else {
+      if (hasTrackTorch && track) {
         const trackWithConstraints = track as MediaStreamTrack & {
           applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
         };
@@ -793,15 +789,24 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           throw new Error("Track sem suporte de constraints");
         }
         await trackWithConstraints.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+        if (next) {
+          window.setTimeout(() => {
+            void trackWithConstraints
+              .applyConstraints?.({ advanced: [{ torch: true } as MediaTrackConstraintSet] })
+              .catch(() => undefined);
+          }, 140);
+        }
+        scannerTorchModeRef.current = "track";
+      } else if (controls?.switchTorch) {
+        await controls.switchTorch(next);
+        scannerTorchModeRef.current = "controls";
       }
       setTorchEnabled(next);
       setScannerError(null);
     } catch {
-      const message = "Não foi possível alternar o flash.";
-      setScannerError(message);
-      triggerScanErrorAlert(message);
+      setScannerError("Não foi possível alternar o flash.");
     }
-  }, [resolveScannerTrack, torchEnabled, triggerScanErrorAlert]);
+  }, [resolveScannerTrack, supportsTrackTorch, torchEnabled]);
 
   const refreshPending = useCallback(async () => {
     if (cd == null) return setPendingCount(0);
@@ -1755,7 +1760,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!scannerOpen) return;
 
     let cancelled = false;
-    let decodeErrorAlerted = false;
     let torchProbeTimer: number | null = null;
     let torchProbeAttempts = 0;
     setScannerError(null);
@@ -1770,9 +1774,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
         const videoEl = scannerVideoRef.current;
         if (!videoEl) {
-          const message = "Falha ao abrir visualização da câmera.";
-          setScannerError(message);
-          triggerScanErrorAlert(message);
+          setScannerError("Falha ao abrir visualização da câmera.");
           return;
         }
 
@@ -1808,12 +1810,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
             const errorName = (error as { name?: string } | null)?.name;
             if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
-              const message = "Não foi possível ler o código. Aproxime a câmera e tente novamente.";
-              setScannerError(message);
-              if (!decodeErrorAlerted) {
-                decodeErrorAlerted = true;
-                triggerScanErrorAlert(message);
-              }
+              setScannerError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
             }
           }
         );
@@ -1825,17 +1822,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         scannerControlsRef.current = controls;
         const probeTorchAvailability = () => {
           if (cancelled) return;
-          if (typeof controls.switchTorch === "function") {
-            scannerTorchModeRef.current = "controls";
-            setTorchSupported(true);
-            return;
-          }
           const track = resolveScannerTrack();
           if (track) {
             scannerTrackRef.current = track;
           }
           if (supportsTrackTorch(track)) {
             scannerTorchModeRef.current = "track";
+            setTorchSupported(true);
+            return;
+          }
+          if (typeof controls.switchTorch === "function") {
+            scannerTorchModeRef.current = "controls";
             setTorchSupported(true);
             return;
           }
@@ -1850,9 +1847,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
         probeTorchAvailability();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.";
-        setScannerError(message);
-        triggerScanErrorAlert(message);
+        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
       }
     };
 
@@ -1865,7 +1860,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       }
       stopCameraScanner();
     };
-  }, [autoValidateFinalBarras, autoValidateStageBarras, closeCameraScanner, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch, triggerScanErrorAlert]);
+  }, [autoValidateFinalBarras, autoValidateStageBarras, closeCameraScanner, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch]);
 
   const exportReport = useCallback(async () => {
     if (!canExport || cd == null) return;
