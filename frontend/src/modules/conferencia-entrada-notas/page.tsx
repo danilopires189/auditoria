@@ -43,6 +43,7 @@ import {
   checkAvulsaConflict,
   fetchAvulsaTargets,
   cancelAvulsaVolume,
+  cancelVolumeBatch,
   cancelVolume,
   fetchCdOptions,
   fetchActiveAvulsaVolume,
@@ -3791,14 +3792,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
         for (const seqLabel of seqLabels) {
           const parsed = parseStrictSeqNfInput(seqLabel);
-          if (!parsed) continue;
+          if (!parsed) {
+            throw new Error(`Seq/NF inválido na conferência conjunta: ${seqLabel}.`);
+          }
           let targetConfId = confMap.get(parsed.label) ?? null;
           if (!targetConfId) {
             const remote = await openVolume(parsed.label, activeVolume.cd);
-            if (remote.is_read_only || remote.status !== "em_conferencia") continue;
+            if (remote.is_read_only || remote.status !== "em_conferencia") {
+              throw new Error(`Seq/NF ${parsed.label} não está disponível para finalizar em lote.`);
+            }
             targetConfId = remote.conf_id;
           }
-          if (!targetConfId) continue;
+          if (!targetConfId) {
+            throw new Error(`Seq/NF ${parsed.label} sem vínculo remoto para finalizar em lote.`);
+          }
 
           const payload = allocations
             .filter((row) => row.seq_entrada === parsed.seq_entrada && row.nf === parsed.nf)
@@ -4500,46 +4507,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               if (combinedConfIds.length === 0) {
                 throw new Error("Conferência conjunta sem vínculos remotos para cancelamento.");
               }
-              const cancelResults = await Promise.allSettled(
-                combinedConfIds.map(async (confId) => {
-                  const cancelled = await cancelVolume(confId);
-                  if (!cancelled) throw new Error(`Cancelamento não confirmado para ${confId}.`);
-                })
+              const cancelledRows = await cancelVolumeBatch(combinedConfIds);
+              const cancelledSet = new Set(
+                cancelledRows
+                  .filter((entry) => entry.cancelled)
+                  .map((entry) => entry.conf_id)
               );
-              const failedCancels = cancelResults.filter((result) => result.status === "rejected");
-              if (failedCancels.length > 0) {
-                throw new Error(`Falha ao cancelar ${failedCancels.length} de ${combinedConfIds.length} Seq/NF da conferência conjunta.`);
-              }
-
-              const labelsSet = new Set(activeVolume.combined_seq_nf_labels ?? []);
-              const currentMat = (profile.mat ?? "").trim();
-              const routeRowsAfterCancel = await fetchRouteOverview(activeVolume.cd);
-              const labelsStillOpen = routeRowsAfterCancel
-                .filter((row) => {
-                  const label = buildSeqNfLabelKey(row.seq_entrada, row.nf);
-                  if (!label || !labelsSet.has(label)) return false;
-                  if (normalizeStoreStatus(row.status) !== "em_andamento") return false;
-                  const rowMat = row.colaborador_mat?.trim() ?? "";
-                  if (currentMat && rowMat && rowMat !== currentMat) return false;
-                  return true;
-                })
-                .map((row) => buildSeqNfLabelKey(row.seq_entrada, row.nf))
-                .filter((value): value is string => Boolean(value));
-
-              if (labelsStillOpen.length > 0) {
-                const retryFailures: string[] = [];
-                for (const label of labelsStillOpen) {
-                  try {
-                    const volume = await openVolume(label, activeVolume.cd);
-                    const cancelled = await cancelVolume(volume.conf_id);
-                    if (!cancelled) retryFailures.push(label);
-                  } catch {
-                    retryFailures.push(label);
-                  }
-                }
-                if (retryFailures.length > 0) {
-                  throw new Error(`Falha ao cancelar automaticamente: ${retryFailures.join(", ")}.`);
-                }
+              const missingCancels = combinedConfIds.filter((confId) => !cancelledSet.has(confId));
+              if (missingCancels.length > 0) {
+                throw new Error(`Falha ao cancelar ${missingCancels.length} de ${combinedConfIds.length} Seq/NF da conferência conjunta.`);
               }
 
               await removeLocalVolume(activeVolume.local_key);
