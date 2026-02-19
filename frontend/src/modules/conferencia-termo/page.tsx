@@ -25,6 +25,7 @@ import {
   cleanupExpiredTermoVolumes,
   getLocalVolume,
   getManifestItemsByEtiqueta,
+  getManifestPrimaryEtiquetaByStore,
   getManifestMetaLocal,
   getPendingSummary,
   getRouteOverviewLocal,
@@ -489,6 +490,11 @@ function buildStoreSearchBlob(item: TermoRouteOverviewRow): string {
   ].join(" "));
 }
 
+function buildRouteStoreKey(rota: string, filial: number | null): string {
+  const normalizedRota = (rota || "SEM ROTA").trim() || "SEM ROTA";
+  return `${normalizedRota}::${filial == null ? "na" : String(filial)}`;
+}
+
 function normalizeStoreStatus(value: string | null | undefined): TermoStoreStatus {
   const normalized = String(value ?? "").toLowerCase();
   if (
@@ -589,6 +595,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const [showRoutesModal, setShowRoutesModal] = useState(false);
   const [routeSearchInput, setRouteSearchInput] = useState("");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
+  const [routeStartEtiquetaByStore, setRouteStartEtiquetaByStore] = useState<Record<string, string>>({});
+  const [busyRouteStartTargets, setBusyRouteStartTargets] = useState(false);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeMotivo, setFinalizeMotivo] = useState("");
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
@@ -1766,33 +1774,71 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     handleClosedConferenceError
   ]);
 
-  const syncRouteOverview = useCallback(async () => {
+  const syncRouteOverview = useCallback(async (): Promise<TermoRouteOverviewRow[]> => {
     if (currentCd == null) {
       setRouteRows([]);
-      return;
+      return [];
     }
     if (!isOnline) {
       const local = await getRouteOverviewLocal(profile.user_id, currentCd);
       setRouteRows(local);
-      return;
+      return local;
     }
 
     try {
       const rows = await fetchRouteOverview(currentCd);
       setRouteRows(rows);
       await saveRouteOverviewLocal(profile.user_id, currentCd, rows);
+      return rows;
     } catch {
       const fallback = await getRouteOverviewLocal(profile.user_id, currentCd);
       setRouteRows(fallback);
+      return fallback;
     }
   }, [currentCd, isOnline, profile.user_id]);
+
+  const syncRouteStartTargets = useCallback(async (rows: TermoRouteOverviewRow[]) => {
+    if (currentCd == null) {
+      setRouteStartEtiquetaByStore({});
+      return;
+    }
+
+    let manifestTargets = await getManifestPrimaryEtiquetaByStore(profile.user_id, currentCd);
+    if (manifestTargets.length === 0 && isOnline) {
+      try {
+        await prepareOfflineManifest(false, true);
+        manifestTargets = await getManifestPrimaryEtiquetaByStore(profile.user_id, currentCd);
+      } catch {
+        // Mantém fallback silencioso sem travar a abertura do modal.
+      }
+    }
+
+    const manifestMap = new Map<string, string>();
+    for (const target of manifestTargets) {
+      manifestMap.set(buildRouteStoreKey(target.rota, target.filial), target.id_etiqueta);
+    }
+
+    const nextMap: Record<string, string> = {};
+    for (const row of rows) {
+      const etiqueta = manifestMap.get(buildRouteStoreKey(row.rota, row.filial));
+      if (!etiqueta) continue;
+      nextMap[buildRouteStoreKey(row.rota, row.filial)] = etiqueta;
+    }
+    setRouteStartEtiquetaByStore(nextMap);
+  }, [currentCd, isOnline, prepareOfflineManifest, profile.user_id]);
 
   const openRoutesModal = useCallback(async () => {
     setRouteSearchInput("");
     setExpandedRoute(null);
     setShowRoutesModal(true);
-    await syncRouteOverview();
-  }, [syncRouteOverview]);
+    setBusyRouteStartTargets(true);
+    try {
+      const rows = await syncRouteOverview();
+      await syncRouteStartTargets(rows);
+    } finally {
+      setBusyRouteStartTargets(false);
+    }
+  }, [syncRouteOverview, syncRouteStartTargets]);
 
   const markStorePendingAfterCancel = useCallback(async (volume: TermoLocalVolume) => {
     if (volume.filial == null) return;
@@ -2922,12 +2968,30 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                                 const lojaConcluidaComFalta = lojaStatus === "concluido" && row.tem_falta;
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
                                 const colaboradorMat = row.colaborador_mat?.trim() || "";
+                                const startEtiqueta = routeStartEtiquetaByStore[buildRouteStoreKey(group.rota, row.filial)] ?? null;
                                 return (
                                   <div key={`${group.rota}-${row.filial ?? "na"}`} className="termo-route-store-row">
                                     <div>
                                       <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
                                       <p>Etiquetas: {row.conferidas}/{row.total_etiquetas}</p>
                                       <p>Status da loja: {routeStatusLabel(lojaStatus)}</p>
+                                      <button
+                                        className="btn btn-primary"
+                                        type="button"
+                                        onClick={() => {
+                                          if (!startEtiqueta) return;
+                                          setShowRoutesModal(false);
+                                          setEtiquetaInput(startEtiqueta);
+                                          void openVolumeFromEtiqueta(startEtiqueta);
+                                        }}
+                                        disabled={!startEtiqueta || busyOpenVolume || busyRouteStartTargets}
+                                      >
+                                        {busyRouteStartTargets
+                                          ? "Preparando..."
+                                          : lojaStatus === "pendente"
+                                            ? "Iniciar conferência"
+                                            : "Retomar conferência"}
+                                      </button>
                                       {lojaStatus === "em_andamento" && colaboradorNome ? (
                                         <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
                                       ) : null}
