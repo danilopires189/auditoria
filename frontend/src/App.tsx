@@ -670,6 +670,8 @@ export default function App() {
   const [globalCdOptions, setGlobalCdOptions] = useState<CdOption[]>([]);
   const [globalCdSelection, setGlobalCdSelection] = useState<number | null>(null);
   const [globalCdLoading, setGlobalCdLoading] = useState(false);
+  const [showGlobalCdSwitcher, setShowGlobalCdSwitcher] = useState(false);
+  const [pendingGlobalCdSelection, setPendingGlobalCdSelection] = useState<number | null>(null);
 
   const [registerMat, setRegisterMat] = useState("");
   const [registerDtNasc, setRegisterDtNasc] = useState("");
@@ -1361,6 +1363,20 @@ export default function App() {
 
     return (
       <div className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}`}>
+        {isGlobalProfile && globalCdOptions.length > 0 ? (
+          <button
+            type="button"
+            className="global-cd-switcher-trigger"
+            onClick={() => {
+              setPendingGlobalCdSelection(globalCdSelection);
+              setShowGlobalCdSwitcher(true);
+            }}
+            title="Trocar CD"
+          >
+            Trocar CD
+          </button>
+        ) : null}
+
         <Routes>
           <Route
             path="/inicio"
@@ -1465,6 +1481,72 @@ export default function App() {
                     </button>
                     <button className="btn btn-danger" type="button" onClick={onLogout} disabled={logoutBusy}>
                       {logoutBusy ? "Saindo..." : "Sair agora"}
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
+
+        {showGlobalCdSwitcher && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="confirm-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="global-cd-switch-title"
+                onClick={() => setShowGlobalCdSwitcher(false)}
+              >
+                <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <h3 id="global-cd-switch-title">Trocar CD</h3>
+                  <p>Selecione o CD para continuar sem sair da conta.</p>
+                  <div className="form-grid">
+                    <label>
+                      Centro de distribuição
+                      <select
+                        value={pendingGlobalCdSelection ?? ""}
+                        onChange={(event) => setPendingGlobalCdSelection(parseInteger(event.target.value))}
+                        disabled={globalCdLoading}
+                      >
+                        <option value="" disabled>
+                          {globalCdLoading ? "Carregando CDs..." : "Selecione um CD"}
+                        </option>
+                        {globalCdOptions.map((option) => (
+                          <option key={option.cd} value={option.cd}>
+                            {`CD ${String(option.cd).padStart(2, "0")} - ${option.cd_nome}`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="confirm-actions">
+                    <button
+                      className="btn btn-muted"
+                      type="button"
+                      onClick={() => setShowGlobalCdSwitcher(false)}
+                      disabled={globalCdLoading}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      disabled={pendingGlobalCdSelection == null || globalCdLoading}
+                      onClick={() => {
+                        if (!session || pendingGlobalCdSelection == null) return;
+                        setGlobalCdSelection(pendingGlobalCdSelection);
+                        if (typeof window !== "undefined") {
+                          window.localStorage.setItem(
+                            globalCdSelectionKey(session.user.id),
+                            String(pendingGlobalCdSelection)
+                          );
+                        }
+                        setShowGlobalCdSwitcher(false);
+                        navigate("/inicio", { replace: true });
+                      }}
+                    >
+                      Aplicar CD
                     </button>
                   </div>
                 </div>
