@@ -5293,7 +5293,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p className={getItemOcorrenciaTotal(item) > 0 ? "entrada-notas-qtd-ocorrencia" : undefined}>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5384,7 +5384,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p className={getItemOcorrenciaTotal(item) > 0 ? "entrada-notas-qtd-ocorrencia" : undefined}>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5474,7 +5474,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p className={getItemOcorrenciaTotal(item) > 0 ? "entrada-notas-qtd-ocorrencia" : undefined}>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -5543,7 +5543,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
             {groupedOcorrencias.length > 0 ? (
               <div className="termo-list-block">
-                <h4>Ocorrências ({groupedOcorrencias.length})</h4>
+                <h4 className="entrada-notas-ocorrencias-title">Ocorrências ({groupedOcorrencias.length})</h4>
                 {groupedOcorrencias.map(({ item, qtd_falta, qtd_sobra }) => {
                   const itemKey = item.item_key ?? String(item.coddv);
                   const isItemLocked = item.is_locked === true;
@@ -5561,7 +5561,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p className={getItemOcorrenciaTotal(item) > 0 ? "entrada-notas-qtd-ocorrencia" : undefined}>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
                       </div>
                       <div className="termo-item-side">
                         <span className="termo-divergencia ocorrencia">{formatItemOcorrenciaTipo(item)}</span>
@@ -6048,3 +6048,4 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     </>
   );
 }
+
