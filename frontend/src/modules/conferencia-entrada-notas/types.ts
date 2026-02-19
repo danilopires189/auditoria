@@ -227,6 +227,8 @@ export interface EntradaNotasLocalItem {
   descricao: string;
   qtd_esperada: number;
   qtd_conferida: number;
+  ocorrencia_avariado_qtd?: number;
+  ocorrencia_vencido_qtd?: number;
   updated_at: string;
   seq_entrada?: number | null;
   nf?: number | null;
