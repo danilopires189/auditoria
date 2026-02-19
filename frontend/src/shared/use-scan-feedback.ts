@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const SCAN_FEEDBACK_SUCCESS_MS = 1500;
 const SCAN_FEEDBACK_ERROR_MS = 2200;
+const SCAN_ERROR_SOUND_DURATION_SECONDS = 1.5;
+const SCAN_ERROR_SOUND_CLOSE_DELAY_MS = 1900;
 
 export type ScanFeedbackTone = "success" | "error";
 
@@ -23,39 +25,45 @@ function playScanErrorSound(): void {
   try {
     const ctx = new audioCtor();
     void ctx.resume().catch(() => undefined);
-    const baseTime = ctx.currentTime + 0.01;
+    const start = ctx.currentTime + 0.01;
+    const end = start + SCAN_ERROR_SOUND_DURATION_SECONDS;
+
     const master = ctx.createGain();
-    master.gain.setValueAtTime(0.85, baseTime);
+    master.gain.setValueAtTime(0.0001, start);
+    master.gain.exponentialRampToValueAtTime(1, start + 0.02);
+    master.gain.setValueAtTime(1, end - 0.05);
+    master.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    const highPass = ctx.createBiquadFilter();
+    highPass.type = "highpass";
+    highPass.frequency.setValueAtTime(950, start);
+    highPass.Q.setValueAtTime(1.1, start);
+
+    highPass.connect(master);
     master.connect(ctx.destination);
 
-    const playBeep = (
-      start: number,
-      frequency: number,
-      duration: number
-    ) => {
+    const playLayer = (type: OscillatorType, frequency: number, gainValue: number) => {
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
-      oscillator.type = "square";
-      oscillator.frequency.setValueAtTime(frequency, start);
 
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.4, start + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(gainValue, start);
 
       oscillator.connect(gain);
-      gain.connect(master);
+      gain.connect(highPass);
 
       oscillator.start(start);
-      oscillator.stop(start + duration + 0.02);
+      oscillator.stop(end + 0.02);
     };
 
-    // Bip de erro curto (duplo), menos agressivo que o som anterior.
-    playBeep(baseTime, 880, 0.1);
-    playBeep(baseTime + 0.15, 620, 0.14);
+    // Tom de erro continuo e estridente por 1,5s.
+    playLayer("square", 1260, 0.62);
+    playLayer("sawtooth", 1740, 0.38);
 
     window.setTimeout(() => {
       void ctx.close().catch(() => undefined);
-    }, 700);
+    }, SCAN_ERROR_SOUND_CLOSE_DELAY_MS);
   } catch {
     // Browser pode bloquear audio programatico.
   }
