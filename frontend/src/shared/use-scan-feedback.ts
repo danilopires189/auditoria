@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const SCAN_FEEDBACK_SUCCESS_MS = 1500;
 const SCAN_FEEDBACK_ERROR_MS = 2200;
-const SCAN_ERROR_SOUND_DURATION_SECONDS = 1.5;
-const SCAN_ERROR_SOUND_CLOSE_DELAY_MS = 1900;
+const SCAN_ERROR_SOUND_DURATION_SECONDS = 1;
+const SCAN_ERROR_SOUND_CLOSE_DELAY_MS = 1400;
 
 export type ScanFeedbackTone = "success" | "error";
 
