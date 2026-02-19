@@ -608,7 +608,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     inputMode: barcodeInputMode,
     enableSoftKeyboard: enableBarcodeSoftKeyboard,
     disableSoftKeyboard: disableBarcodeSoftKeyboard
-  } = useOnDemandSoftKeyboard("text");
+  } = useOnDemandSoftKeyboard("numeric");
 
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -2789,6 +2789,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                       value={barcodeInput}
                       onChange={onBarcodeInputChange}
                       onKeyDown={onBarcodeKeyDown}
+                      onFocus={enableBarcodeSoftKeyboard}
                       onPointerDown={enableBarcodeSoftKeyboard}
                       onBlur={disableBarcodeSoftKeyboard}
                       autoComplete="off"

@@ -606,7 +606,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     inputMode: barcodeInputMode,
     enableSoftKeyboard: enableBarcodeSoftKeyboard,
     disableSoftKeyboard: disableBarcodeSoftKeyboard
-  } = useOnDemandSoftKeyboard("text");
+  } = useOnDemandSoftKeyboard("numeric");
 
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -2794,6 +2794,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       value={barcodeInput}
                       onChange={onBarcodeInputChange}
                       onKeyDown={onBarcodeKeyDown}
+                      onFocus={enableBarcodeSoftKeyboard}
                       onPointerDown={enableBarcodeSoftKeyboard}
                       onBlur={disableBarcodeSoftKeyboard}
                       autoComplete="off"

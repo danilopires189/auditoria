@@ -876,7 +876,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     inputMode: barcodeInputMode,
     enableSoftKeyboard: enableBarcodeSoftKeyboard,
     disableSoftKeyboard: disableBarcodeSoftKeyboard
-  } = useOnDemandSoftKeyboard("text");
+  } = useOnDemandSoftKeyboard("numeric");
   const activeVolumeRef = useRef<EntradaNotasLocalVolume | null>(null);
   const routeContributorsInFlightRef = useRef<Set<string>>(new Set());
   const routeBatchDispatchingRef = useRef(false);
@@ -5184,6 +5184,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       value={barcodeInput}
                       onChange={onBarcodeInputChange}
                       onKeyDown={onBarcodeKeyDown}
+                      onFocus={enableBarcodeSoftKeyboard}
                       onPointerDown={enableBarcodeSoftKeyboard}
                       onBlur={disableBarcodeSoftKeyboard}
                       autoComplete="off"
