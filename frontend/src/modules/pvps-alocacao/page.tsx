@@ -202,6 +202,28 @@ function selectFilteredIcon() {
   );
 }
 
+type HistoryStatusTone = "ok" | "bad" | "warn";
+
+function pvpsHistoryStatus(row: PvpsCompletedRow): { label: string; emoticon: string; tone: HistoryStatusTone } {
+  if (row.end_sit === "vazio" || row.end_sit === "obstruido") {
+    return { label: "Ocorrência", emoticon: ":/", tone: "warn" };
+  }
+  if (row.status === "nao_conforme") {
+    return { label: "Não conforme", emoticon: ":(", tone: "bad" };
+  }
+  return { label: "Conforme", emoticon: ":)", tone: "ok" };
+}
+
+function alocHistoryStatus(row: AlocacaoCompletedRow): { label: string; emoticon: string; tone: HistoryStatusTone } {
+  if (row.aud_sit === "ocorrencia") {
+    return { label: "Ocorrência", emoticon: ":/", tone: "warn" };
+  }
+  if (row.aud_sit === "nao_conforme") {
+    return { label: "Não conforme", emoticon: ":(", tone: "bad" };
+  }
+  return { label: "Conforme", emoticon: ":)", tone: "ok" };
+}
+
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
@@ -1353,6 +1375,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const previous = index > 0 ? sortedPvpsCompletedRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const canEdit = canEditAudit(row.auditor_id);
+                  const statusInfo = pvpsHistoryStatus(row);
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
                       {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
@@ -1361,6 +1384,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong>{row.end_sep}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
+                            <span className={`pvps-history-status ${statusInfo.tone}`}>
+                              {statusInfo.emoticon} {statusInfo.label}
+                            </span>
                           </div>
                           <div className="pvps-row-actions">
                             <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openPvpsCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
@@ -1373,7 +1399,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
-                            <small>{row.status} | Auditor: {row.auditor_nome}</small>
+                            <small>Auditor: {row.auditor_nome}</small>
                             <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
                           </div>
                         ) : null}
@@ -1392,6 +1418,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const previous = index > 0 ? sortedAlocCompletedRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const canEdit = canEditAudit(row.auditor_id);
+                  const statusInfo = alocHistoryStatus(row);
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
                       {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
@@ -1400,6 +1427,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
+                            <span className={`pvps-history-status ${statusInfo.tone}`}>
+                              {statusInfo.emoticon} {statusInfo.label}
+                            </span>
                           </div>
                           <div className="pvps-row-actions">
                             <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
@@ -1412,7 +1442,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
-                            <small>{row.aud_sit} | Andar {formatAndar(row.nivel)} | Auditor: {row.auditor_nome}</small>
+                            <small>Andar {formatAndar(row.nivel)} | Auditor: {row.auditor_nome}</small>
                             <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
                           </div>
                         ) : null}
