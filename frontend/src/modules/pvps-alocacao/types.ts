@@ -62,6 +62,37 @@ export interface AlocacaoSubmitResult {
   val_conf: string | null;
 }
 
+export interface PvpsCompletedRow {
+  audit_id: string;
+  cd: number;
+  zona: string;
+  coddv: number;
+  descricao: string;
+  end_sep: string;
+  status: PvpsStatus;
+  end_sit: PvpsEndSit | null;
+  val_sep: string | null;
+  dt_hr: string;
+  auditor_nome: string;
+}
+
+export interface AlocacaoCompletedRow {
+  audit_id: string;
+  queue_id: string;
+  cd: number;
+  zona: string;
+  coddv: number;
+  descricao: string;
+  endereco: string;
+  nivel: string | null;
+  end_sit: PvpsEndSit | null;
+  val_sist: string;
+  val_conf: string | null;
+  aud_sit: "conforme" | "nao_conforme" | "ocorrencia";
+  dt_hr: string;
+  auditor_nome: string;
+}
+
 export interface PvpsAlocacaoModuleProfile {
   user_id: string;
   nome: string;

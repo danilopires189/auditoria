@@ -1,10 +1,12 @@
 import { supabase } from "../../lib/supabase";
 import type {
+  AlocacaoCompletedRow,
   AlocacaoManifestRow,
   AlocacaoSubmitResult,
   PvpsAdminBlacklistRow,
   PvpsAdminClearZoneResult,
   PvpsAdminPriorityZoneRow,
+  PvpsCompletedRow,
   PvpsModulo,
   PvpsManifestRow,
   PvpsPulItemRow,
@@ -63,6 +65,13 @@ function parseEndSit(value: unknown): PvpsEndSit | null {
   return null;
 }
 
+function parseAudSit(value: unknown): "conforme" | "nao_conforme" | "ocorrencia" {
+  const normalized = parseString(value).toLowerCase();
+  if (normalized === "conforme") return "conforme";
+  if (normalized === "ocorrencia") return "ocorrencia";
+  return "nao_conforme";
+}
+
 function mapPvpsManifest(raw: Record<string, unknown>): PvpsManifestRow {
   return {
     cd: parseInteger(raw.cd),
@@ -104,9 +113,45 @@ function mapAlocacaoManifest(raw: Record<string, unknown>): AlocacaoManifestRow 
   };
 }
 
-export async function fetchPvpsManifest(params?: { zona?: string | null }): Promise<PvpsManifestRow[]> {
+function mapPvpsCompleted(raw: Record<string, unknown>): PvpsCompletedRow {
+  return {
+    audit_id: parseString(raw.audit_id),
+    cd: parseInteger(raw.cd),
+    zona: parseString(raw.zona, "SEM ZONA").toUpperCase(),
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao),
+    end_sep: parseString(raw.end_sep).toUpperCase(),
+    status: parsePvpsStatus(raw.status),
+    end_sit: parseEndSit(raw.end_sit),
+    val_sep: parseNullableString(raw.val_sep),
+    dt_hr: parseString(raw.dt_hr),
+    auditor_nome: parseString(raw.auditor_nome, "USUARIO")
+  };
+}
+
+function mapAlocacaoCompleted(raw: Record<string, unknown>): AlocacaoCompletedRow {
+  return {
+    audit_id: parseString(raw.audit_id),
+    queue_id: parseString(raw.queue_id),
+    cd: parseInteger(raw.cd),
+    zona: parseString(raw.zona, "SEM ZONA").toUpperCase(),
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao),
+    endereco: parseString(raw.endereco).toUpperCase(),
+    nivel: parseNullableString(raw.nivel),
+    end_sit: parseEndSit(raw.end_sit),
+    val_sist: parseString(raw.val_sist),
+    val_conf: parseNullableString(raw.val_conf),
+    aud_sit: parseAudSit(raw.aud_sit),
+    dt_hr: parseString(raw.dt_hr),
+    auditor_nome: parseString(raw.auditor_nome, "USUARIO")
+  };
+}
+
+export async function fetchPvpsManifest(params?: { p_cd?: number | null; zona?: string | null }): Promise<PvpsManifestRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_manifest_items_page", {
+    p_cd: params?.p_cd ?? null,
     p_zona: params?.zona ?? null,
     p_offset: 0,
     p_limit: 500
@@ -116,9 +161,10 @@ export async function fetchPvpsManifest(params?: { zona?: string | null }): Prom
   return data.map((row) => mapPvpsManifest(row as Record<string, unknown>));
 }
 
-export async function fetchPvpsPulItems(coddv: number, endSep: string): Promise<PvpsPulItemRow[]> {
+export async function fetchPvpsPulItems(coddv: number, endSep: string, pCd?: number | null): Promise<PvpsPulItemRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_pul_items", {
+    p_cd: pCd ?? null,
     p_coddv: coddv,
     p_end_sep: endSep
   });
@@ -128,6 +174,7 @@ export async function fetchPvpsPulItems(coddv: number, endSep: string): Promise<
 }
 
 export async function submitPvpsSep(params: {
+  p_cd?: number | null;
   coddv: number;
   end_sep: string;
   end_sit?: PvpsEndSit | null;
@@ -135,6 +182,7 @@ export async function submitPvpsSep(params: {
 }): Promise<PvpsSepSubmitResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_submit_sep", {
+    p_cd: params.p_cd ?? null,
     p_coddv: params.coddv,
     p_end_sep: params.end_sep,
     p_end_sit: params.end_sit ?? null,
@@ -160,9 +208,10 @@ function parseModulo(value: unknown): PvpsModulo {
   return "ambos";
 }
 
-export async function fetchAdminBlacklist(modulo: PvpsModulo = "ambos"): Promise<PvpsAdminBlacklistRow[]> {
+export async function fetchAdminBlacklist(modulo: PvpsModulo = "ambos", pCd?: number | null): Promise<PvpsAdminBlacklistRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_admin_blacklist_list", {
+    p_cd: pCd ?? null,
     p_modulo: modulo
   });
   if (error) throw new Error(toErrorMessage(error));
@@ -181,12 +230,14 @@ export async function fetchAdminBlacklist(modulo: PvpsModulo = "ambos"): Promise
 }
 
 export async function upsertAdminBlacklist(params: {
+  p_cd?: number | null;
   modulo: PvpsModulo;
   zona: string;
   coddv: number;
 }): Promise<PvpsAdminBlacklistRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_admin_blacklist_upsert", {
+    p_cd: params.p_cd ?? null,
     p_modulo: params.modulo,
     p_zona: params.zona,
     p_coddv: params.coddv
@@ -213,9 +264,10 @@ export async function removeAdminBlacklist(blacklistId: string): Promise<boolean
   return parseBoolean(data);
 }
 
-export async function fetchAdminPriorityZones(modulo: PvpsModulo = "ambos"): Promise<PvpsAdminPriorityZoneRow[]> {
+export async function fetchAdminPriorityZones(modulo: PvpsModulo = "ambos", pCd?: number | null): Promise<PvpsAdminPriorityZoneRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_admin_priority_zone_list", {
+    p_cd: pCd ?? null,
     p_modulo: modulo
   });
   if (error) throw new Error(toErrorMessage(error));
@@ -234,12 +286,14 @@ export async function fetchAdminPriorityZones(modulo: PvpsModulo = "ambos"): Pro
 }
 
 export async function upsertAdminPriorityZone(params: {
+  p_cd?: number | null;
   modulo: PvpsModulo;
   zona: string;
   prioridade: number;
 }): Promise<PvpsAdminPriorityZoneRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_admin_priority_zone_upsert", {
+    p_cd: params.p_cd ?? null,
     p_modulo: params.modulo,
     p_zona: params.zona,
     p_prioridade: Math.max(1, Math.trunc(params.prioridade))
@@ -267,12 +321,14 @@ export async function removeAdminPriorityZone(priorityId: string): Promise<boole
 }
 
 export async function clearZone(params: {
+  p_cd?: number | null;
   modulo: PvpsModulo;
   zona: string;
   repor_automatico: boolean;
 }): Promise<PvpsAdminClearZoneResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_admin_clear_zone", {
+    p_cd: params.p_cd ?? null,
     p_modulo: params.modulo,
     p_zona: params.zona,
     p_repor_automatico: params.repor_automatico
@@ -289,11 +345,13 @@ export async function clearZone(params: {
 }
 
 export async function reseedByZone(params: {
+  p_cd?: number | null;
   modulo: PvpsModulo;
   zona: string;
 }): Promise<PvpsAdminClearZoneResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_admin_reseed_zone", {
+    p_cd: params.p_cd ?? null,
     p_modulo: params.modulo,
     p_zona: params.zona
   });
@@ -309,12 +367,14 @@ export async function reseedByZone(params: {
 }
 
 export async function submitPvpsPul(params: {
+  p_cd?: number | null;
   audit_id: string;
   end_pul: string;
   val_pul: string;
 }): Promise<PvpsPulSubmitResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_submit_pul", {
+    p_cd: params.p_cd ?? null,
     p_audit_id: params.audit_id,
     p_end_pul: params.end_pul,
     p_val_pul: params.val_pul
@@ -332,9 +392,10 @@ export async function submitPvpsPul(params: {
   };
 }
 
-export async function fetchAlocacaoManifest(params?: { zona?: string | null }): Promise<AlocacaoManifestRow[]> {
+export async function fetchAlocacaoManifest(params?: { p_cd?: number | null; zona?: string | null }): Promise<AlocacaoManifestRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_alocacao_manifest_items_page", {
+    p_cd: params?.p_cd ?? null,
     p_zona: params?.zona ?? null,
     p_offset: 0,
     p_limit: 500
@@ -345,12 +406,14 @@ export async function fetchAlocacaoManifest(params?: { zona?: string | null }): 
 }
 
 export async function submitAlocacao(params: {
+  p_cd?: number | null;
   queue_id: string;
   end_sit?: PvpsEndSit | null;
   val_conf?: string | null;
 }): Promise<AlocacaoSubmitResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_alocacao_submit", {
+    p_cd: params.p_cd ?? null,
     p_queue_id: params.queue_id,
     p_end_sit: params.end_sit ?? null,
     p_val_conf: params.val_conf ?? null
@@ -359,16 +422,61 @@ export async function submitAlocacao(params: {
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) throw new Error("Falha ao salvar auditoria de alocação.");
 
-  const audSitRaw = parseString(first.aud_sit).toLowerCase();
-  const audSit = audSitRaw === "conforme"
-    ? "conforme"
-    : audSitRaw === "ocorrencia"
-      ? "ocorrencia"
-      : "nao_conforme";
   return {
     audit_id: parseString(first.audit_id),
-    aud_sit: audSit,
+    aud_sit: parseAudSit(first.aud_sit),
     val_sist: parseString(first.val_sist),
     val_conf: parseNullableString(first.val_conf)
   };
+}
+
+export async function fetchPvpsCompletedItemsDayAll(params?: {
+  p_cd?: number | null;
+  p_ref_date_brt?: string | null;
+  pageSize?: number;
+}): Promise<PvpsCompletedRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const pageSize = Math.max(1, Math.min(params?.pageSize ?? 1000, 1000));
+  const rows: PvpsCompletedRow[] = [];
+  let offset = 0;
+  // Technical pagination to satisfy "no functional limit".
+  for (;;) {
+    const { data, error } = await supabase.rpc("rpc_pvps_completed_items_day", {
+      p_cd: params?.p_cd ?? null,
+      p_ref_date_brt: params?.p_ref_date_brt ?? null,
+      p_offset: offset,
+      p_limit: pageSize
+    });
+    if (error) throw new Error(toErrorMessage(error));
+    const page = Array.isArray(data) ? data.map((row) => mapPvpsCompleted(row as Record<string, unknown>)) : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows;
+}
+
+export async function fetchAlocacaoCompletedItemsDayAll(params?: {
+  p_cd?: number | null;
+  p_ref_date_brt?: string | null;
+  pageSize?: number;
+}): Promise<AlocacaoCompletedRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const pageSize = Math.max(1, Math.min(params?.pageSize ?? 1000, 1000));
+  const rows: AlocacaoCompletedRow[] = [];
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await supabase.rpc("rpc_alocacao_completed_items_day", {
+      p_cd: params?.p_cd ?? null,
+      p_ref_date_brt: params?.p_ref_date_brt ?? null,
+      p_offset: offset,
+      p_limit: pageSize
+    });
+    if (error) throw new Error(toErrorMessage(error));
+    const page = Array.isArray(data) ? data.map((row) => mapAlocacaoCompleted(row as Record<string, unknown>)) : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows;
 }
