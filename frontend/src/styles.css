@@ -1456,6 +1456,20 @@ small {
   display: grid;
   gap: 9px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.coleta-inline-fields > label {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.coleta-inline-fields > label > input,
+.coleta-inline-fields > label > select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .coleta-form-grid select {
