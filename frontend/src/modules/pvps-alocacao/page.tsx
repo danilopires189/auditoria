@@ -88,6 +88,11 @@ function formatDateTime(value: string): string {
   }).format(parsed);
 }
 
+function normalizeMmaa(value: string | null | undefined): string | null {
+  const digits = (value ?? "").replace(/\D/g, "").slice(0, 4);
+  return digits.length === 4 ? digits : null;
+}
+
 function brtDayKey(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
@@ -362,6 +367,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     setEndSit(activePvps.end_sit ?? "");
     setValSep(activePvps.val_sep?.replace("/", "") ?? "");
+
+    if (activeCd != null && (activePvps.val_sep || activePvps.end_sit)) {
+      void upsertOfflineSepCache({
+        cd: activeCd,
+        coddv: activePvps.coddv,
+        end_sep: activePvps.end_sep,
+        end_sit: activePvps.end_sit ?? null,
+        val_sep: normalizeMmaa(activePvps.val_sep)
+      }).catch(() => {
+        // Cache offline é best-effort; não deve interromper o fluxo principal.
+      });
+    }
 
     if (activePvps.status === "pendente_sep") {
       setPulItems([]);
@@ -699,6 +716,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       } else {
         setStatusMessage(`SEP salva. PUL liberado: ${result.pul_auditados}/${result.pul_total} auditados.`);
       }
+      await upsertOfflineSepCache({
+        cd: activeCd,
+        coddv: activePvps.coddv,
+        end_sep: activePvps.end_sep,
+        end_sit: result.end_sit,
+        val_sep: normalizeMmaa(result.val_sep ?? normalizedValSep)
+      });
       await loadCurrent();
       if (isEditingCompleted) {
         setEditingPvpsCompleted(null);
@@ -728,7 +752,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
 
     if (!isOnline) {
-      const hasSep = await hasOfflineSepCache(activeCd, activePvps.coddv, activePvps.end_sep);
+      let hasSep = await hasOfflineSepCache(activeCd, activePvps.coddv, activePvps.end_sep);
+      if (!hasSep && (activePvps.val_sep || activePvps.end_sit)) {
+        await upsertOfflineSepCache({
+          cd: activeCd,
+          coddv: activePvps.coddv,
+          end_sep: activePvps.end_sep,
+          end_sit: activePvps.end_sit ?? null,
+          val_sep: normalizeMmaa(activePvps.val_sep)
+        });
+        hasSep = true;
+      }
       if (!hasSep) {
         setErrorMessage("Para informar PUL offline, salve primeiro a linha SEP no mesmo endereço.");
         return;
