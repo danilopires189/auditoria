@@ -1,7 +1,7 @@
 import type { DashboardModule, DashboardModuleKey } from "./types";
 
 export const DASHBOARD_MODULES: DashboardModule[] = [
-  { key: "pvps-alocacao", path: "/modulos/pvps-alocacao", title: "Auditoria de PVPs e Alocação", icon: "audit", tone: "blue" },
+  { key: "pvps-alocacao", path: "/modulos/pvps-alocacao", title: "Auditoria de PVPS e Alocação", icon: "audit", tone: "blue" },
   { key: "atividade-extra", path: "/modulos/atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
   { key: "coleta-mercadoria", path: "/modulos/coleta-mercadoria", title: "Coleta de Mercadoria", icon: "collect", tone: "teal" },
   { key: "check-list", path: "/modulos/check-list", title: "Check List", icon: "checklist", tone: "blue" },

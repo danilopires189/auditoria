@@ -1,3 +1,686 @@
-import { createModulePage } from "../createModulePage";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { getModuleByKeyOrThrow } from "../registry";
+import {
+  clearZone,
+  fetchAdminBlacklist,
+  fetchAdminPriorityZones,
+  fetchAlocacaoManifest,
+  fetchPvpsManifest,
+  fetchPvpsPulItems,
+  removeAdminBlacklist,
+  removeAdminPriorityZone,
+  reseedByZone,
+  submitAlocacao,
+  submitPvpsPul,
+  submitPvpsSep,
+  upsertAdminBlacklist,
+  upsertAdminPriorityZone
+} from "./sync";
+import type {
+  AlocacaoManifestRow,
+  AlocacaoSubmitResult,
+  PvpsAdminBlacklistRow,
+  PvpsAdminPriorityZoneRow,
+  PvpsEndSit,
+  PvpsManifestRow,
+  PvpsModulo,
+  PvpsAlocacaoModuleProfile,
+  PvpsPulItemRow
+} from "./types";
 
-export default createModulePage("pvps-alocacao");
+interface PvpsAlocacaoPageProps {
+  isOnline: boolean;
+  profile: PvpsAlocacaoModuleProfile;
+}
+
+type ModuleTab = "pvps" | "alocacao";
+
+const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
+
+function toDisplayName(value: string): string {
+  const compact = value.trim().replace(/\s+/g, " ");
+  if (!compact) return "Usuário";
+  return compact
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((chunk) => chunk.charAt(0).toLocaleUpperCase("pt-BR") + chunk.slice(1))
+    .join(" ");
+}
+
+function keyOfPvps(row: PvpsManifestRow): string {
+  return `${row.coddv}|${row.end_sep}`;
+}
+
+export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
+  const displayUserName = toDisplayName(profile.nome);
+  const isAdmin = profile.role === "admin";
+
+  const [tab, setTab] = useState<ModuleTab>("pvps");
+  const [zonaFiltro, setZonaFiltro] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const [pvpsRows, setPvpsRows] = useState<PvpsManifestRow[]>([]);
+  const [alocRows, setAlocRows] = useState<AlocacaoManifestRow[]>([]);
+
+  const [activePvpsKey, setActivePvpsKey] = useState<string | null>(null);
+  const activePvps = useMemo(
+    () => pvpsRows.find((row) => keyOfPvps(row) === activePvpsKey) ?? null,
+    [pvpsRows, activePvpsKey]
+  );
+
+  const [pulItems, setPulItems] = useState<PvpsPulItemRow[]>([]);
+  const [pulBusy, setPulBusy] = useState(false);
+
+  const [endSit, setEndSit] = useState<PvpsEndSit>("vazio");
+  const [valSep, setValSep] = useState("");
+  const [pulInputs, setPulInputs] = useState<Record<string, string>>({});
+
+  const [activeAlocQueue, setActiveAlocQueue] = useState<string | null>(null);
+  const activeAloc = useMemo(
+    () => alocRows.find((row) => row.queue_id === activeAlocQueue) ?? null,
+    [alocRows, activeAlocQueue]
+  );
+  const [alocEndSit, setAlocEndSit] = useState<PvpsEndSit>("vazio");
+  const [alocValConf, setAlocValConf] = useState("");
+  const [alocResult, setAlocResult] = useState<AlocacaoSubmitResult | null>(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminModulo, setAdminModulo] = useState<PvpsModulo>("ambos");
+  const [adminZona, setAdminZona] = useState("");
+  const [adminCoddv, setAdminCoddv] = useState("");
+  const [adminPrioridade, setAdminPrioridade] = useState("100");
+  const [adminAutoRepor, setAdminAutoRepor] = useState(true);
+  const [showClearZoneConfirm, setShowClearZoneConfirm] = useState(false);
+  const [blacklistRows, setBlacklistRows] = useState<PvpsAdminBlacklistRow[]>([]);
+  const [priorityRows, setPriorityRows] = useState<PvpsAdminPriorityZoneRow[]>([]);
+
+  async function loadAdminData(): Promise<void> {
+    if (!isAdmin) return;
+    setAdminBusy(true);
+    try {
+      const [blacklist, priority] = await Promise.all([
+        fetchAdminBlacklist("ambos"),
+        fetchAdminPriorityZones("ambos")
+      ]);
+      setBlacklistRows(blacklist);
+      setPriorityRows(priority);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar dados administrativos.");
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function loadCurrent(): Promise<void> {
+    setBusy(true);
+    setErrorMessage(null);
+    try {
+      if (tab === "pvps") {
+        const rows = await fetchPvpsManifest({ zona: zonaFiltro || null });
+        setPvpsRows(rows);
+        if (!rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
+          setActivePvpsKey(rows[0] ? keyOfPvps(rows[0]) : null);
+        }
+      } else {
+        const rows = await fetchAlocacaoManifest({ zona: zonaFiltro || null });
+        setAlocRows(rows);
+        if (!rows.some((row) => row.queue_id === activeAlocQueue)) {
+          setActiveAlocQueue(rows[0]?.queue_id ?? null);
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar dados.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadCurrent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, zonaFiltro]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void loadAdminData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!activePvps) {
+      setPulItems([]);
+      setPulInputs({});
+      return;
+    }
+
+    setEndSit(activePvps.end_sit ?? "vazio");
+    setValSep(activePvps.val_sep?.replace("/", "") ?? "");
+
+    if (!activePvps.audit_id) {
+      setPulItems([]);
+      setPulInputs({});
+      return;
+    }
+
+    setPulBusy(true);
+    void fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep)
+      .then((items) => {
+        setPulItems(items);
+        const mapped: Record<string, string> = {};
+        for (const item of items) {
+          mapped[item.end_pul] = item.val_pul?.replace("/", "") ?? "";
+        }
+        setPulInputs(mapped);
+      })
+      .catch((error) => {
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar PUL.");
+      })
+      .finally(() => setPulBusy(false));
+  }, [activePvps]);
+
+  const zones = useMemo(() => {
+    const source = tab === "pvps" ? pvpsRows.map((row) => row.zona) : alocRows.map((row) => row.zona);
+    return Array.from(new Set(source)).sort((a, b) => a.localeCompare(b));
+  }, [tab, pvpsRows, alocRows]);
+
+  async function handleSubmitSep(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (!activePvps) return;
+
+    setBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const result = await submitPvpsSep({
+        coddv: activePvps.coddv,
+        end_sep: activePvps.end_sep,
+        end_sit: endSit,
+        val_sep: valSep
+      });
+      setStatusMessage(`SEP salvo. PUL auditados: ${result.pul_auditados}/${result.pul_total}.`);
+      await loadCurrent();
+      const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep);
+      setPulItems(items);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa SEP.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSubmitPul(endPul: string): Promise<void> {
+    if (!activePvps?.audit_id) return;
+    const value = pulInputs[endPul] ?? "";
+
+    setBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const result = await submitPvpsPul({
+        audit_id: activePvps.audit_id,
+        end_pul: endPul,
+        val_pul: value
+      });
+      if (result.status === "concluido") {
+        setStatusMessage("PVPS concluído com conformidade (VAL_SEP <= VAL_PUL). Feed atualizado automaticamente.");
+      } else if (result.status === "nao_conforme") {
+        setStatusMessage("PVPS concluído sem conformidade: existe PUL com validade menor que SEP.");
+      } else {
+        setStatusMessage(`PUL salvo. ${result.pul_auditados}/${result.pul_total} auditados.`);
+      }
+      await loadCurrent();
+      if (result.status === "pendente_pul") {
+        const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep);
+        setPulItems(items);
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa PUL.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSubmitAlocacao(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (!activeAloc) return;
+
+    setBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const result = await submitAlocacao({
+        queue_id: activeAloc.queue_id,
+        end_sit: alocEndSit,
+        val_conf: alocValConf
+      });
+      setAlocResult(result);
+      setStatusMessage(`Alocação auditada: ${result.aud_sit}. Feed atualizado automaticamente.`);
+      await loadCurrent();
+      setAlocValConf("");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar auditoria de alocação.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAdminAddBlacklist(): Promise<void> {
+    setAdminBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      await upsertAdminBlacklist({
+        modulo: adminModulo,
+        zona: adminZona,
+        coddv: Number.parseInt(adminCoddv, 10)
+      });
+      await loadAdminData();
+      setStatusMessage("Blacklist atualizada.");
+      await loadCurrent();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar blacklist.");
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function handleAdminAddPriority(): Promise<void> {
+    setAdminBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      await upsertAdminPriorityZone({
+        modulo: adminModulo,
+        zona: adminZona,
+        prioridade: Number.parseInt(adminPrioridade, 10)
+      });
+      await loadAdminData();
+      setStatusMessage("Zonas prioritárias atualizadas.");
+      await loadCurrent();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar zona prioritária.");
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function handleAdminClearZone(): Promise<void> {
+    setAdminBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const result = await clearZone({
+        modulo: adminModulo,
+        zona: adminZona,
+        repor_automatico: adminAutoRepor
+      });
+      setStatusMessage(`Zona limpa. PVPS removidos: ${result.cleared_pvps}, Alocação removidos: ${result.cleared_alocacao}.`);
+      await loadAdminData();
+      await loadCurrent();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao limpar zona.");
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function handleAdminReseedZone(): Promise<void> {
+    setAdminBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const result = await reseedByZone({
+        modulo: adminModulo,
+        zona: adminZona
+      });
+      setStatusMessage(`Reposição concluída. PVPS: ${result.reposto_pvps}, Alocação: ${result.reposto_alocacao}.`);
+      await loadCurrent();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao repor zona.");
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function handleRemoveBlacklist(id: string): Promise<void> {
+    setAdminBusy(true);
+    try {
+      await removeAdminBlacklist(id);
+      await loadAdminData();
+      await loadCurrent();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao remover blacklist.");
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function handleRemovePriority(id: string): Promise<void> {
+    setAdminBusy(true);
+    try {
+      await removeAdminPriorityZone(id);
+      await loadAdminData();
+      await loadCurrent();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao remover zona prioritária.");
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <header className="module-topbar module-topbar-fixed">
+        <div className="module-topbar-line1">
+          <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
+            <span className="module-back-icon" aria-hidden="true">
+              <BackIcon />
+            </span>
+            <span>Início</span>
+          </Link>
+          <div className="module-topbar-user-side">
+            <span className="module-user-greeting">Olá, {displayUserName}</span>
+            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "Online" : "Offline"}</span>
+          </div>
+        </div>
+        <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
+          <span className="module-icon" aria-hidden="true">
+            <ModuleIcon name={MODULE_DEF.icon} />
+          </span>
+          <span className="module-title">Auditoria de PVPS e Alocação</span>
+        </div>
+      </header>
+
+      <section className="modules-shell">
+        <article className="module-screen surface-enter pvps-module-shell">
+          <div className="module-screen-header">
+            <div className="module-screen-title-row">
+              <div className="module-screen-title">
+                <h2>Auditoria por zona</h2>
+                <p>PVPS: regra de conformidade usa apenas validações informadas pelo auditor (SEP x PUL).</p>
+              </div>
+              <div className="pvps-actions">
+                <button type="button" className="btn btn-muted" onClick={() => setTab("pvps")} disabled={busy}>
+                  Iniciar PVPS
+                </button>
+                <button type="button" className="btn btn-muted" onClick={() => setTab("alocacao")} disabled={busy}>
+                  Iniciar Alocação
+                </button>
+                <button type="button" className="btn btn-muted" onClick={() => void loadCurrent()} disabled={busy}>
+                  {busy ? "Atualizando..." : "Atualizar"}
+                </button>
+              </div>
+            </div>
+
+            <div className="pvps-tabs">
+              <button type="button" className={`btn btn-muted${tab === "pvps" ? " is-active" : ""}`} onClick={() => setTab("pvps")}>PVPS</button>
+              <button type="button" className={`btn btn-muted${tab === "alocacao" ? " is-active" : ""}`} onClick={() => setTab("alocacao")}>Alocação</button>
+            </div>
+
+            {isAdmin ? (
+              <div className="pvps-tabs">
+                <button
+                  type="button"
+                  className={`btn btn-muted${showAdminPanel ? " is-active" : ""}`}
+                  onClick={() => setShowAdminPanel((prev) => !prev)}
+                >
+                  {showAdminPanel ? "Ocultar Admin" : "Admin: Regras de Zona"}
+                </button>
+              </div>
+            ) : null}
+
+            <div className="pvps-filter-row">
+              <label>
+                Zona
+                <select value={zonaFiltro} onChange={(event) => setZonaFiltro(event.target.value)}>
+                  <option value="">Todas</option>
+                  {zones.map((zone) => (
+                    <option key={zone} value={zone}>{zone}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
+            {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
+
+            {isAdmin && showAdminPanel ? (
+              <div className="pvps-admin-panel">
+                <h3>Painel Admin</h3>
+                <div className="pvps-admin-grid">
+                  <label>
+                    Módulo
+                    <select value={adminModulo} onChange={(event) => setAdminModulo(event.target.value as PvpsModulo)}>
+                      <option value="ambos">Ambos</option>
+                      <option value="pvps">PVPS</option>
+                      <option value="alocacao">Alocação</option>
+                    </select>
+                  </label>
+                  <label>
+                    Zona
+                    <input value={adminZona} onChange={(event) => setAdminZona(event.target.value.toUpperCase())} placeholder="Ex.: A001" />
+                  </label>
+                  <label>
+                    CODDV (blacklist)
+                    <input value={adminCoddv} onChange={(event) => setAdminCoddv(event.target.value.replace(/\D/g, ""))} placeholder="Código" />
+                  </label>
+                  <label>
+                    Prioridade zona
+                    <input value={adminPrioridade} onChange={(event) => setAdminPrioridade(event.target.value.replace(/\D/g, ""))} placeholder="1 = mais alta" />
+                  </label>
+                </div>
+                <div className="pvps-actions">
+                  <button className="btn btn-muted" type="button" disabled={adminBusy || !adminZona || !adminCoddv} onClick={() => void handleAdminAddBlacklist()}>
+                    Adicionar Blacklist
+                  </button>
+                  <button className="btn btn-muted" type="button" disabled={adminBusy || !adminZona || !adminPrioridade} onClick={() => void handleAdminAddPriority()}>
+                    Priorizar Zona
+                  </button>
+                  <button className="btn btn-muted" type="button" disabled={adminBusy || !adminZona} onClick={() => void handleAdminReseedZone()}>
+                    Repor Zona
+                  </button>
+                </div>
+                <div className="pvps-actions">
+                  <label className="pvps-checkbox">
+                    <input type="checkbox" checked={adminAutoRepor} onChange={(event) => setAdminAutoRepor(event.target.checked)} />
+                    Reposição automática ao limpar base
+                  </label>
+                  <button
+                    className="btn btn-danger"
+                    type="button"
+                    disabled={adminBusy || !adminZona}
+                    onClick={() => setShowClearZoneConfirm(true)}
+                  >
+                    Limpar base por zona
+                  </button>
+                </div>
+                <div className="pvps-admin-lists">
+                  <div>
+                    <h4>Blacklist</h4>
+                    {blacklistRows.map((row) => (
+                      <div key={row.blacklist_id} className="pvps-admin-row">
+                        <span>{row.modulo} | {row.zona} | {row.coddv}</span>
+                        <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => void handleRemoveBlacklist(row.blacklist_id)}>
+                          Remover
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <h4>Zonas Prioritárias</h4>
+                    {priorityRows.map((row) => (
+                      <div key={row.priority_id} className="pvps-admin-row">
+                        <span>{row.modulo} | {row.zona} | prioridade {row.prioridade}</span>
+                        <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => void handleRemovePriority(row.priority_id)}>
+                          Remover
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="module-screen-body pvps-module-body">
+            {tab === "pvps" ? (
+              <div className="pvps-grid">
+                <div className="pvps-list">
+                  {pvpsRows.length === 0 ? <p>Nenhum item PVPS pendente para os filtros atuais.</p> : null}
+                  {pvpsRows.map((row) => {
+                    const active = keyOfPvps(row) === activePvpsKey;
+                    return (
+                      <button key={keyOfPvps(row)} type="button" className={`pvps-row${active ? " is-active" : ""}`} onClick={() => setActivePvpsKey(keyOfPvps(row))}>
+                        <strong>{row.end_sep}</strong>
+                        <span>{row.coddv} - {row.descricao}</span>
+                        <small>{row.zona} | PUL {row.pul_auditados}/{row.pul_total} | {row.status}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="pvps-editor">
+                  {!activePvps ? <p>Selecione um item PVPS para auditar.</p> : (
+                    <>
+                      <h3>SEP: {activePvps.end_sep}</h3>
+                      <p>Produto: {activePvps.coddv} - {activePvps.descricao}</p>
+                      <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
+                        <label>
+                          Situação do endereço
+                          <select value={endSit} onChange={(event) => setEndSit(event.target.value as PvpsEndSit)}>
+                            <option value="vazio">Vazio</option>
+                            <option value="obstruido">Obstruído</option>
+                          </select>
+                        </label>
+                        <label>
+                          Validade SEP (mmaa)
+                          <input value={valSep} onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="mmaa" maxLength={4} />
+                        </label>
+                        <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa SEP</button>
+                      </form>
+
+                      {activePvps.audit_id ? (
+                        <div className="pvps-pul-box">
+                          <h4>Etapa PUL</h4>
+                          <p>Regra PVPS: a validade da SEP deve ser menor ou igual a todas as validades de PUL.</p>
+                          {pulBusy ? <p>Carregando endereços PUL...</p> : null}
+                          {pulItems.map((item) => (
+                            <div key={item.end_pul} className="pvps-pul-row">
+                              <div>
+                                <strong>{item.end_pul}</strong>
+                                <small>{item.auditado ? "Auditado" : "Pendente"}</small>
+                              </div>
+                              <input
+                                value={pulInputs[item.end_pul] ?? ""}
+                                onChange={(event) => setPulInputs((prev) => ({ ...prev, [item.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                                placeholder="mmaa"
+                                maxLength={4}
+                              />
+                              <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(item.end_pul)}>
+                                Salvar PUL
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="pvps-grid">
+                <div className="pvps-list">
+                  {alocRows.length === 0 ? <p>Nenhum item de Alocação pendente para os filtros atuais.</p> : null}
+                  {alocRows.map((row) => (
+                    <button key={row.queue_id} type="button" className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`} onClick={() => setActiveAlocQueue(row.queue_id)}>
+                      <strong>{row.endereco}</strong>
+                      <span>{row.coddv} - {row.descricao}</span>
+                      <small>{row.zona} | Nível {row.nivel ?? "-"}</small>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pvps-editor">
+                  {!activeAloc ? <p>Selecione um item de Alocação para auditar.</p> : (
+                    <>
+                      <h3>Alocação: {activeAloc.endereco}</h3>
+                      <p>Produto: {activeAloc.coddv} - {activeAloc.descricao}</p>
+                      <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
+                        <label>
+                          Situação do endereço
+                          <select value={alocEndSit} onChange={(event) => setAlocEndSit(event.target.value as PvpsEndSit)}>
+                            <option value="vazio">Vazio</option>
+                            <option value="obstruido">Obstruído</option>
+                          </select>
+                        </label>
+                        <label>
+                          Validade conferida (mmaa)
+                          <input value={alocValConf} onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="mmaa" maxLength={4} />
+                        </label>
+                        <button className="btn btn-primary" type="submit" disabled={busy}>Salvar Alocação</button>
+                      </form>
+                      {alocResult ? (
+                        <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : "bad"}`}>
+                          Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : "Não conforme"} | Sistema: {alocResult.val_sist} | Informado: {alocResult.val_conf}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </article>
+      </section>
+
+      {showClearZoneConfirm ? (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pvps-clear-zone-title"
+          onClick={() => {
+            if (adminBusy) return;
+            setShowClearZoneConfirm(false);
+          }}
+        >
+          <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+            <h3 id="pvps-clear-zone-title">Confirmar limpeza da base por zona</h3>
+            <p>
+              Esta ação irá remover os itens pendentes da zona <strong>{adminZona || "-"}</strong> para o módulo{" "}
+              <strong>{adminModulo.toUpperCase()}</strong>.
+            </p>
+            <p>
+              Reposição automática: <strong>{adminAutoRepor ? "ativada" : "desativada"}</strong>.
+            </p>
+            <div className="confirm-actions">
+              <button
+                className="btn btn-muted"
+                type="button"
+                disabled={adminBusy}
+                onClick={() => setShowClearZoneConfirm(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={adminBusy}
+                onClick={() => {
+                  void handleAdminClearZone();
+                  setShowClearZoneConfirm(false);
+                }}
+              >
+                {adminBusy ? "Limpando..." : "Confirmar limpeza"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
