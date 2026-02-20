@@ -1239,28 +1239,30 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const previous = index > 0 ? sortedPvpsRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   return (
-                    <div key={itemKey} className={`pvps-row${active ? " is-active" : ""}`}>
-                      {showZoneHeader ? <div className="pvps-zone-header">Zona {row.zona}</div> : null}
-                      <div className="pvps-row-head">
-                        <div className="pvps-row-main">
-                          <strong>{row.end_sep}</strong>
-                          <span>{row.coddv} - {row.descricao}</span>
+                    <div key={itemKey} className="pvps-zone-group">
+                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
+                      <div className={`pvps-row${active ? " is-active" : ""}`}>
+                        <div className="pvps-row-head">
+                          <div className="pvps-row-main">
+                            <strong>{row.end_sep}</strong>
+                            <span>{row.coddv} - {row.descricao}</span>
+                          </div>
+                          <div className="pvps-row-actions">
+                            <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openPvpsPopup(row)} title="Editar">
+                              {editIcon()}
+                            </button>
+                            <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedPvps(itemKey)} title="Expandir">
+                              {chevronIcon(open)}
+                            </button>
+                          </div>
                         </div>
-                        <div className="pvps-row-actions">
-                          <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openPvpsPopup(row)} title="Editar">
-                            {editIcon()}
-                          </button>
-                          <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedPvps(itemKey)} title="Expandir">
-                            {chevronIcon(open)}
-                          </button>
-                        </div>
+                        {open ? (
+                          <div className="pvps-row-details">
+                            <small>Status {row.status} | PUL {row.pul_auditados}/{row.pul_total}</small>
+                            <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
+                          </div>
+                        ) : null}
                       </div>
-                      {open ? (
-                        <div className="pvps-row-details">
-                          <small>{row.zona} | Status {row.status} | PUL {row.pul_auditados}/{row.pul_total}</small>
-                          <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
@@ -1284,28 +1286,30 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const previous = index > 0 ? sortedAlocRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   return (
-                    <div key={row.queue_id} className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`}>
-                      {showZoneHeader ? <div className="pvps-zone-header">Zona {row.zona}</div> : null}
-                      <div className="pvps-row-head">
-                        <div className="pvps-row-main">
-                          <strong>{row.endereco}</strong>
-                          <span>{row.coddv} - {row.descricao}</span>
+                    <div key={row.queue_id} className="pvps-zone-group">
+                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
+                      <div className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`}>
+                        <div className="pvps-row-head">
+                          <div className="pvps-row-main">
+                            <strong>{row.endereco}</strong>
+                            <span>{row.coddv} - {row.descricao}</span>
+                          </div>
+                          <div className="pvps-row-actions">
+                            <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocPopup(row)} title="Editar">
+                              {editIcon()}
+                            </button>
+                            <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedAloc(row.queue_id)} title="Expandir">
+                              {chevronIcon(open)}
+                            </button>
+                          </div>
                         </div>
-                        <div className="pvps-row-actions">
-                          <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocPopup(row)} title="Editar">
-                            {editIcon()}
-                          </button>
-                          <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedAloc(row.queue_id)} title="Expandir">
-                            {chevronIcon(open)}
-                          </button>
-                        </div>
+                        {open ? (
+                          <div className="pvps-row-details">
+                            <small>Andar {formatAndar(row.nivel)}</small>
+                            <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
+                          </div>
+                        ) : null}
                       </div>
-                      {open ? (
-                        <div className="pvps-row-details">
-                          <small>{row.zona} | Andar {formatAndar(row.nivel)}</small>
-                          <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
@@ -1330,28 +1334,30 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const canEdit = canEditAudit(row.auditor_id);
                   return (
-                    <div key={row.audit_id} className="pvps-row">
-                      {showZoneHeader ? <div className="pvps-zone-header">Zona {row.zona}</div> : null}
-                      <div className="pvps-row-head">
-                        <div className="pvps-row-main">
-                          <strong>{row.end_sep}</strong>
-                          <span>{row.coddv} - {row.descricao}</span>
+                    <div key={row.audit_id} className="pvps-zone-group">
+                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
+                      <div className="pvps-row">
+                        <div className="pvps-row-head">
+                          <div className="pvps-row-main">
+                            <strong>{row.end_sep}</strong>
+                            <span>{row.coddv} - {row.descricao}</span>
+                          </div>
+                          <div className="pvps-row-actions">
+                            <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openPvpsCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
+                              {doneIcon()}
+                            </button>
+                            <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedPvpsCompleted(row.audit_id)} title="Expandir">
+                              {chevronIcon(open)}
+                            </button>
+                          </div>
                         </div>
-                        <div className="pvps-row-actions">
-                          <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openPvpsCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
-                            {doneIcon()}
-                          </button>
-                          <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedPvpsCompleted(row.audit_id)} title="Expandir">
-                            {chevronIcon(open)}
-                          </button>
-                        </div>
+                        {open ? (
+                          <div className="pvps-row-details">
+                            <small>{row.status} | Auditor: {row.auditor_nome}</small>
+                            <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
+                          </div>
+                        ) : null}
                       </div>
-                      {open ? (
-                        <div className="pvps-row-details">
-                          <small>{row.status} | Auditor: {row.auditor_nome}</small>
-                          <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
@@ -1367,28 +1373,30 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const canEdit = canEditAudit(row.auditor_id);
                   return (
-                    <div key={row.audit_id} className="pvps-row">
-                      {showZoneHeader ? <div className="pvps-zone-header">Zona {row.zona}</div> : null}
-                      <div className="pvps-row-head">
-                        <div className="pvps-row-main">
-                          <strong>{row.endereco}</strong>
-                          <span>{row.coddv} - {row.descricao}</span>
+                    <div key={row.audit_id} className="pvps-zone-group">
+                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
+                      <div className="pvps-row">
+                        <div className="pvps-row-head">
+                          <div className="pvps-row-main">
+                            <strong>{row.endereco}</strong>
+                            <span>{row.coddv} - {row.descricao}</span>
+                          </div>
+                          <div className="pvps-row-actions">
+                            <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
+                              {doneIcon()}
+                            </button>
+                            <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedAlocCompleted(row.audit_id)} title="Expandir">
+                              {chevronIcon(open)}
+                            </button>
+                          </div>
                         </div>
-                        <div className="pvps-row-actions">
-                          <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
-                            {doneIcon()}
-                          </button>
-                          <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedAlocCompleted(row.audit_id)} title="Expandir">
-                            {chevronIcon(open)}
-                          </button>
-                        </div>
+                        {open ? (
+                          <div className="pvps-row-details">
+                            <small>{row.aud_sit} | Andar {formatAndar(row.nivel)} | Auditor: {row.auditor_nome}</small>
+                            <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
+                          </div>
+                        ) : null}
                       </div>
-                      {open ? (
-                        <div className="pvps-row-details">
-                          <small>{row.aud_sit} | Andar {formatAndar(row.nivel)} | Auditor: {row.auditor_nome}</small>
-                          <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}
