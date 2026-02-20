@@ -73,6 +73,11 @@ export interface PvpsCompletedRow {
   status: PvpsStatus;
   end_sit: PvpsEndSit | null;
   val_sep: string | null;
+  pul_total: number;
+  pul_auditados: number;
+  pul_has_lower: boolean;
+  pul_lower_end: string | null;
+  pul_lower_val: string | null;
   dt_hr: string;
   auditor_nome: string;
 }

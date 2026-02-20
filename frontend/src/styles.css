@@ -4628,6 +4628,12 @@ small {
   border-color: #f2d49a;
 }
 
+.pvps-history-status.wait {
+  color: #51627e;
+  background: #eef2f8;
+  border-color: #d3dceb;
+}
+
 .pvps-row-actions {
   display: flex;
   align-items: center;
