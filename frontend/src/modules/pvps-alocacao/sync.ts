@@ -130,28 +130,25 @@ export async function fetchPvpsPulItems(coddv: number, endSep: string): Promise<
 export async function submitPvpsSep(params: {
   coddv: number;
   end_sep: string;
-  end_sit: PvpsEndSit;
+  end_sit?: PvpsEndSit | null;
   val_sep: string;
 }): Promise<PvpsSepSubmitResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_submit_sep", {
     p_coddv: params.coddv,
     p_end_sep: params.end_sep,
-    p_end_sit: params.end_sit,
+    p_end_sit: params.end_sit ?? null,
     p_val_sep: params.val_sep
   });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) throw new Error("Falha ao salvar etapa SEP.");
 
-  const endSit = parseEndSit(first.end_sit);
-  if (endSit == null) throw new Error("END_SIT_INVALIDO");
-
   return {
     audit_id: parseString(first.audit_id),
     status: parsePvpsStatus(first.status),
     val_sep: parseString(first.val_sep),
-    end_sit: endSit,
+    end_sit: parseEndSit(first.end_sit),
     pul_total: Math.max(parseInteger(first.pul_total), 0),
     pul_auditados: Math.max(parseInteger(first.pul_auditados), 0)
   };
