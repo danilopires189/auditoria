@@ -4588,12 +4588,20 @@ small {
   gap: 2px;
 }
 
+.pvps-zone-group {
+  display: grid;
+  gap: 6px;
+}
+
+.pvps-zone-divider,
 .pvps-zone-header {
   font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: #2e63bc;
   text-transform: uppercase;
+  border-top: 1px dashed #d7dfed;
+  padding-top: 6px;
 }
 
 .pvps-editor {
