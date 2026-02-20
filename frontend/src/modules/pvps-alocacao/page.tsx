@@ -63,6 +63,16 @@ function formatDate(value: string): string {
   }).format(parsed);
 }
 
+function occurrenceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3l9 16H3z" />
+      <path d="M12 9v5" />
+      <circle cx="12" cy="17" r="1" />
+    </svg>
+  );
+}
+
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
@@ -97,7 +107,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => alocRows.find((row) => row.queue_id === activeAlocQueue) ?? null,
     [alocRows, activeAlocQueue]
   );
-  const [alocEndSit, setAlocEndSit] = useState<PvpsEndSit>("vazio");
+  const [alocEndSit, setAlocEndSit] = useState<PvpsEndSit | "">("");
   const [alocValConf, setAlocValConf] = useState("");
   const [alocResult, setAlocResult] = useState<AlocacaoSubmitResult | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -288,6 +298,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openAlocPopup(row: AlocacaoManifestRow): void {
     setActiveAlocQueue(row.queue_id);
+    setAlocEndSit("");
+    setAlocValConf("");
     setShowAlocPopup(true);
   }
 
@@ -321,15 +333,22 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setErrorMessage(null);
     setStatusMessage(null);
     const currentKey = keyOfPvps(activePvps);
+    const hasOcorrencia = endSit === "vazio" || endSit === "obstruido";
+    const normalizedValSep = valSep.trim();
+    if (!hasOcorrencia && normalizedValSep.length !== 4) {
+      setBusy(false);
+      setErrorMessage("Validade SEP obrigatória (mmaa) quando não houver ocorrência.");
+      return;
+    }
     try {
       const result = await submitPvpsSep({
         coddv: activePvps.coddv,
         end_sep: activePvps.end_sep,
         end_sit: endSit || null,
-        val_sep: valSep
+        val_sep: hasOcorrencia ? null : normalizedValSep
       });
       if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
-        setStatusMessage("SEP flagada (vazio/obstruído). Item removido do feed e não será enviado ao frontend.");
+        setStatusMessage("SEP com ocorrência. Item removido do feed e não será enviado ao frontend.");
       } else {
         setStatusMessage(`SEP salva. PUL liberado: ${result.pul_auditados}/${result.pul_total} auditados.`);
       }
@@ -388,15 +407,25 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setErrorMessage(null);
     setStatusMessage(null);
     const currentQueueId = activeAloc.queue_id;
+    const hasOcorrencia = alocEndSit === "vazio" || alocEndSit === "obstruido";
+    const normalizedValConf = alocValConf.trim();
+    if (!hasOcorrencia && normalizedValConf.length !== 4) {
+      setBusy(false);
+      setErrorMessage("Validade conferida obrigatória (mmaa) quando não houver ocorrência.");
+      return;
+    }
     try {
       const result = await submitAlocacao({
         queue_id: activeAloc.queue_id,
-        end_sit: alocEndSit,
-        val_conf: alocValConf
+        end_sit: alocEndSit || null,
+        val_conf: hasOcorrencia ? null : normalizedValConf
       });
       setAlocResult(result);
-      setStatusMessage(`Alocação auditada: ${result.aud_sit}. Feed atualizado automaticamente.`);
+      setStatusMessage(result.aud_sit === "ocorrencia"
+        ? "Alocação auditada com ocorrência. Feed atualizado automaticamente."
+        : `Alocação auditada: ${result.aud_sit}. Feed atualizado automaticamente.`);
       await loadCurrent();
+      setAlocEndSit("");
       setAlocValConf("");
       openNextAlocacaoFrom(currentQueueId);
     } catch (error) {
@@ -573,7 +602,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <div className="module-screen-title-row">
               <div className="module-screen-title">
                 <h2>Auditoria por zona</h2>
-                <p>PVPS: PUL só libera quando SEP for salva sem flag (vazio/obstruído).</p>
+                <p>PVPS: PUL só libera quando SEP for salva sem ocorrência.</p>
               </div>
               <div className="pvps-actions">
                 <button type="button" className="btn btn-muted" onClick={() => setTab("pvps")} disabled={busy}>
@@ -773,8 +802,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         Abrir popup para informar
                       </button>
                       {alocResult ? (
-                        <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : "bad"}`}>
-                          Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : "Não conforme"} | Sistema: {alocResult.val_sist} | Informado: {alocResult.val_conf}
+                        <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "" : "bad"}`}>
+                          Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}
+                          {alocResult.aud_sit === "ocorrencia"
+                            ? ""
+                            : ` | Sistema: ${alocResult.val_sist} | Informado: ${alocResult.val_conf ?? "-"}`}
                         </div>
                       ) : null}
                     </>
@@ -789,7 +821,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       {showPvpsPopup && activePvps && typeof document !== "undefined"
         ? createPortal(
         <div
-          className="confirm-overlay"
+          className="confirm-overlay pvps-popup-overlay"
           role="dialog"
           aria-modal="true"
           aria-labelledby="pvps-inform-title"
@@ -805,23 +837,36 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <p>Data última compra: <strong>{formatDate(activePvps.dat_ult_compra)}</strong></p>
 
             <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
+              {endSit !== "vazio" && endSit !== "obstruido" ? (
+                <label>
+                  Validade SEP (mmaa)
+                  <input
+                    value={valSep}
+                    onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="mmaa"
+                    maxLength={4}
+                    required
+                  />
+                </label>
+              ) : null}
               <label>
-                Situação do endereço
-                <select
-                  value={endSit}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setEndSit(next === "vazio" || next === "obstruido" ? next : "");
-                  }}
-                >
-                  <option value="">Sem flag (libera PUL)</option>
-                  <option value="vazio">Flag: Vazio</option>
-                  <option value="obstruido">Flag: Obstruído</option>
-                </select>
-              </label>
-              <label>
-                Validade SEP (mmaa)
-                <input value={valSep} onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="mmaa" maxLength={4} />
+                Ocorrência do endereço
+                <div className="pvps-occurrence-wrap">
+                  <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                  <select
+                    value={endSit}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                      setEndSit(parsed);
+                      if (parsed) setValSep("");
+                    }}
+                  >
+                    <option value="">Sem ocorrência</option>
+                    <option value="vazio">Vazio</option>
+                    <option value="obstruido">Obstruído</option>
+                  </select>
+                </div>
               </label>
               <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa SEP</button>
             </form>
@@ -864,7 +909,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       {showAlocPopup && activeAloc && typeof document !== "undefined"
         ? createPortal(
         <div
-          className="confirm-overlay"
+          className="confirm-overlay pvps-popup-overlay"
           role="dialog"
           aria-modal="true"
           aria-labelledby="aloc-inform-title"
@@ -880,23 +925,46 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <p>Data última compra: <strong>{formatDate(activeAloc.dat_ult_compra)}</strong></p>
 
             <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
+              {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
+                <label>
+                  Validade conferida (mmaa)
+                  <input
+                    value={alocValConf}
+                    onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="mmaa"
+                    maxLength={4}
+                    required
+                  />
+                </label>
+              ) : null}
               <label>
-                Situação do endereço
-                <select value={alocEndSit} onChange={(event) => setAlocEndSit(event.target.value as PvpsEndSit)}>
-                  <option value="vazio">Vazio</option>
-                  <option value="obstruido">Obstruído</option>
-                </select>
-              </label>
-              <label>
-                Validade conferida (mmaa)
-                <input value={alocValConf} onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="mmaa" maxLength={4} />
+                Ocorrência do endereço
+                <div className="pvps-occurrence-wrap">
+                  <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                  <select
+                    value={alocEndSit}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                      setAlocEndSit(parsed);
+                      if (parsed) setAlocValConf("");
+                    }}
+                  >
+                    <option value="">Sem ocorrência</option>
+                    <option value="vazio">Vazio</option>
+                    <option value="obstruido">Obstruído</option>
+                  </select>
+                </div>
               </label>
               <button className="btn btn-primary" type="submit" disabled={busy}>Salvar Alocação</button>
             </form>
 
             {alocResult ? (
-              <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : "bad"}`}>
-                Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : "Não conforme"} | Sistema: {alocResult.val_sist} | Informado: {alocResult.val_conf}
+              <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "" : "bad"}`}>
+                Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}
+                {alocResult.aud_sit === "ocorrencia"
+                  ? ""
+                  : ` | Sistema: ${alocResult.val_sist} | Informado: ${alocResult.val_conf ?? "-"}`}
               </div>
             ) : null}
 

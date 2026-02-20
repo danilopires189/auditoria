@@ -4359,12 +4359,49 @@ small {
   width: min(760px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pvps-zone-popup-card {
   width: min(620px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pvps-popup-overlay {
+  align-content: start;
+  justify-items: center;
+  overflow: auto;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+}
+
+.pvps-occurrence-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pvps-occurrence-icon {
+  width: 18px;
+  height: 18px;
+  color: #c37b00;
+  flex: 0 0 auto;
+}
+
+.pvps-occurrence-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pvps-occurrence-wrap select {
+  flex: 1 1 auto;
 }
 
 .pvps-zone-picker-actions {
@@ -4519,5 +4556,16 @@ small {
 
   .pvps-pul-row {
     grid-template-columns: 1fr;
+  }
+
+  .pvps-popup-card,
+  .pvps-zone-popup-card {
+    width: min(100%, calc(100vw - 12px));
+    max-height: calc(100dvh - 12px);
+  }
+
+  .pvps-popup-overlay {
+    padding-left: 6px;
+    padding-right: 6px;
   }
 }
