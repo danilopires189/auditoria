@@ -1147,25 +1147,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <span>Filtrar zonas {selectedZones.length > 0 ? `(${selectedZones.length})` : "(todas)"}</span>
               </button>
             </div>
-            <div className="pvps-zone-separator">
-              <button
-                type="button"
-                className={`btn btn-muted${selectedZones.length === 0 ? " is-active" : ""}`}
-                onClick={() => setSelectedZones([])}
-              >
-                Todas
-              </button>
-              {zones.map((zone) => (
-                <button
-                  key={`zone-chip-${zone}`}
-                  type="button"
-                  className={`btn btn-muted${selectedZones.includes(zone) ? " is-active" : ""}`}
-                  onClick={() => setSelectedZones([zone])}
-                >
-                  {zone}
-                </button>
-              ))}
-            </div>
 
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
