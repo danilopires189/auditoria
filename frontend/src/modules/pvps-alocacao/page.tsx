@@ -36,6 +36,15 @@ interface PvpsAlocacaoPageProps {
 }
 
 type ModuleTab = "pvps" | "alocacao";
+type RecentFeedItem = {
+  key: string;
+  tab: ModuleTab;
+  coddv: number;
+  descricao: string;
+  endereco: string;
+  dat_ult_compra: string;
+  added_at: string;
+};
 
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 
@@ -51,6 +60,16 @@ function toDisplayName(value: string): string {
 
 function keyOfPvps(row: PvpsManifestRow): string {
   return `${row.coddv}|${row.end_sep}`;
+}
+
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value || "-";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(parsed);
 }
 
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
@@ -97,6 +116,23 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [showClearZoneConfirm, setShowClearZoneConfirm] = useState(false);
   const [blacklistRows, setBlacklistRows] = useState<PvpsAdminBlacklistRow[]>([]);
   const [priorityRows, setPriorityRows] = useState<PvpsAdminPriorityZoneRow[]>([]);
+  const [showPvpsPopup, setShowPvpsPopup] = useState(false);
+  const [showAlocPopup, setShowAlocPopup] = useState(false);
+  const [recentFeedItems, setRecentFeedItems] = useState<RecentFeedItem[]>([]);
+
+  function appendRecentItems(items: RecentFeedItem[]): void {
+    if (!items.length) return;
+    setRecentFeedItems((previous) => {
+      const merged = [...items, ...previous];
+      const unique = new Map<string, RecentFeedItem>();
+      for (const item of merged) {
+        if (!unique.has(item.key)) unique.set(item.key, item);
+      }
+      return Array.from(unique.values())
+        .sort((a, b) => Date.parse(b.added_at) - Date.parse(a.added_at))
+        .slice(0, 5);
+    });
+  }
 
   async function loadAdminData(): Promise<void> {
     if (!isAdmin) return;
@@ -121,15 +157,43 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     try {
       if (tab === "pvps") {
         const rows = await fetchPvpsManifest({ zona: zonaFiltro || null });
+        const previousKeys = new Set(pvpsRows.map((row) => keyOfPvps(row)));
+        const added = rows
+          .filter((row) => !previousKeys.has(keyOfPvps(row)))
+          .map((row) => ({
+            key: `pvps:${keyOfPvps(row)}`,
+            tab: "pvps" as const,
+            coddv: row.coddv,
+            descricao: row.descricao,
+            endereco: row.end_sep,
+            dat_ult_compra: row.dat_ult_compra,
+            added_at: new Date().toISOString()
+          }));
+        appendRecentItems(added);
         setPvpsRows(rows);
         if (!rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
           setActivePvpsKey(rows[0] ? keyOfPvps(rows[0]) : null);
+          if (!rows[0]) setShowPvpsPopup(false);
         }
       } else {
         const rows = await fetchAlocacaoManifest({ zona: zonaFiltro || null });
+        const previousKeys = new Set(alocRows.map((row) => row.queue_id));
+        const added = rows
+          .filter((row) => !previousKeys.has(row.queue_id))
+          .map((row) => ({
+            key: `aloc:${row.queue_id}`,
+            tab: "alocacao" as const,
+            coddv: row.coddv,
+            descricao: row.descricao,
+            endereco: row.endereco,
+            dat_ult_compra: row.dat_ult_compra,
+            added_at: new Date().toISOString()
+          }));
+        appendRecentItems(added);
         setAlocRows(rows);
         if (!rows.some((row) => row.queue_id === activeAlocQueue)) {
           setActiveAlocQueue(rows[0]?.queue_id ?? null);
+          if (!rows[0]) setShowAlocPopup(false);
         }
       }
     } catch (error) {
@@ -186,6 +250,21 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const source = tab === "pvps" ? pvpsRows.map((row) => row.zona) : alocRows.map((row) => row.zona);
     return Array.from(new Set(source)).sort((a, b) => a.localeCompare(b));
   }, [tab, pvpsRows, alocRows]);
+
+  const recentForCurrentTab = useMemo(
+    () => recentFeedItems.filter((item) => item.tab === tab).slice(0, 5),
+    [recentFeedItems, tab]
+  );
+
+  function openPvpsPopup(row: PvpsManifestRow): void {
+    setActivePvpsKey(keyOfPvps(row));
+    setShowPvpsPopup(true);
+  }
+
+  function openAlocPopup(row: AlocacaoManifestRow): void {
+    setActiveAlocQueue(row.queue_id);
+    setShowAlocPopup(true);
+  }
 
   async function handleSubmitSep(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -447,6 +526,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
+            <div className="pvps-recent-box">
+              <h4>Recém adicionados no feed (últimos 5)</h4>
+              {recentForCurrentTab.length === 0 ? (
+                <p>Nenhum item novo detectado nesta sessão.</p>
+              ) : (
+                recentForCurrentTab.map((item) => (
+                  <div key={item.key} className="pvps-recent-row">
+                    <span>{item.coddv} - {item.descricao}</span>
+                    <small>{item.endereco} | Última compra: {formatDate(item.dat_ult_compra)}</small>
+                  </div>
+                ))
+              )}
+            </div>
 
             {isAdmin && showAdminPanel ? (
               <div className="pvps-admin-panel">
@@ -534,11 +626,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {pvpsRows.map((row) => {
                     const active = keyOfPvps(row) === activePvpsKey;
                     return (
-                      <button key={keyOfPvps(row)} type="button" className={`pvps-row${active ? " is-active" : ""}`} onClick={() => setActivePvpsKey(keyOfPvps(row))}>
+                      <div key={keyOfPvps(row)} className={`pvps-row${active ? " is-active" : ""}`}>
                         <strong>{row.end_sep}</strong>
                         <span>{row.coddv} - {row.descricao}</span>
                         <small>{row.zona} | PUL {row.pul_auditados}/{row.pul_total} | {row.status}</small>
-                      </button>
+                        <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
+                        <button className="btn btn-primary pvps-inform-btn" type="button" onClick={() => openPvpsPopup(row)}>
+                          Informar
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -546,47 +642,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <div className="pvps-editor">
                   {!activePvps ? <p>Selecione um item PVPS para auditar.</p> : (
                     <>
-                      <h3>SEP: {activePvps.end_sep}</h3>
+                      <h3>Item selecionado: SEP {activePvps.end_sep}</h3>
                       <p>Produto: {activePvps.coddv} - {activePvps.descricao}</p>
-                      <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
-                        <label>
-                          Situação do endereço
-                          <select value={endSit} onChange={(event) => setEndSit(event.target.value as PvpsEndSit)}>
-                            <option value="vazio">Vazio</option>
-                            <option value="obstruido">Obstruído</option>
-                          </select>
-                        </label>
-                        <label>
-                          Validade SEP (mmaa)
-                          <input value={valSep} onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="mmaa" maxLength={4} />
-                        </label>
-                        <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa SEP</button>
-                      </form>
-
-                      {activePvps.audit_id ? (
-                        <div className="pvps-pul-box">
-                          <h4>Etapa PUL</h4>
-                          <p>Regra PVPS: a validade da SEP deve ser menor ou igual a todas as validades de PUL.</p>
-                          {pulBusy ? <p>Carregando endereços PUL...</p> : null}
-                          {pulItems.map((item) => (
-                            <div key={item.end_pul} className="pvps-pul-row">
-                              <div>
-                                <strong>{item.end_pul}</strong>
-                                <small>{item.auditado ? "Auditado" : "Pendente"}</small>
-                              </div>
-                              <input
-                                value={pulInputs[item.end_pul] ?? ""}
-                                onChange={(event) => setPulInputs((prev) => ({ ...prev, [item.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
-                                placeholder="mmaa"
-                                maxLength={4}
-                              />
-                              <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(item.end_pul)}>
-                                Salvar PUL
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
+                      <p>Última compra: {formatDate(activePvps.dat_ult_compra)}</p>
+                      <button className="btn btn-primary" type="button" onClick={() => setShowPvpsPopup(true)}>
+                        Abrir popup para informar
+                      </button>
                     </>
                   )}
                 </div>
@@ -596,11 +657,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <div className="pvps-list">
                   {alocRows.length === 0 ? <p>Nenhum item de Alocação pendente para os filtros atuais.</p> : null}
                   {alocRows.map((row) => (
-                    <button key={row.queue_id} type="button" className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`} onClick={() => setActiveAlocQueue(row.queue_id)}>
+                    <div key={row.queue_id} className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`}>
                       <strong>{row.endereco}</strong>
                       <span>{row.coddv} - {row.descricao}</span>
                       <small>{row.zona} | Nível {row.nivel ?? "-"}</small>
-                    </button>
+                      <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
+                      <button className="btn btn-primary pvps-inform-btn" type="button" onClick={() => openAlocPopup(row)}>
+                        Informar
+                      </button>
+                    </div>
                   ))}
                 </div>
 
@@ -609,20 +674,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     <>
                       <h3>Alocação: {activeAloc.endereco}</h3>
                       <p>Produto: {activeAloc.coddv} - {activeAloc.descricao}</p>
-                      <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
-                        <label>
-                          Situação do endereço
-                          <select value={alocEndSit} onChange={(event) => setAlocEndSit(event.target.value as PvpsEndSit)}>
-                            <option value="vazio">Vazio</option>
-                            <option value="obstruido">Obstruído</option>
-                          </select>
-                        </label>
-                        <label>
-                          Validade conferida (mmaa)
-                          <input value={alocValConf} onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="mmaa" maxLength={4} />
-                        </label>
-                        <button className="btn btn-primary" type="submit" disabled={busy}>Salvar Alocação</button>
-                      </form>
+                      <p>Última compra: {formatDate(activeAloc.dat_ult_compra)}</p>
+                      <button className="btn btn-primary" type="button" onClick={() => setShowAlocPopup(true)}>
+                        Abrir popup para informar
+                      </button>
                       {alocResult ? (
                         <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : "bad"}`}>
                           Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : "Não conforme"} | Sistema: {alocResult.val_sist} | Informado: {alocResult.val_conf}
@@ -636,6 +691,119 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           </div>
         </article>
       </section>
+
+      {showPvpsPopup && activePvps ? (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pvps-inform-title"
+          onClick={() => {
+            if (busy) return;
+            setShowPvpsPopup(false);
+          }}
+        >
+          <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
+            <h3 id="pvps-inform-title">Informar PVPS</h3>
+            <p>SEP: <strong>{activePvps.end_sep}</strong> | CODDV: <strong>{activePvps.coddv}</strong></p>
+            <p>Produto: {activePvps.descricao}</p>
+            <p>Data última compra: <strong>{formatDate(activePvps.dat_ult_compra)}</strong></p>
+
+            <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
+              <label>
+                Situação do endereço
+                <select value={endSit} onChange={(event) => setEndSit(event.target.value as PvpsEndSit)}>
+                  <option value="vazio">Vazio</option>
+                  <option value="obstruido">Obstruído</option>
+                </select>
+              </label>
+              <label>
+                Validade SEP (mmaa)
+                <input value={valSep} onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="mmaa" maxLength={4} />
+              </label>
+              <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa SEP</button>
+            </form>
+
+            {activePvps.audit_id ? (
+              <div className="pvps-pul-box">
+                <h4>Etapa PUL</h4>
+                <p>Regra PVPS: a validade da SEP deve ser menor ou igual a todas as validades de PUL.</p>
+                {pulBusy ? <p>Carregando endereços PUL...</p> : null}
+                {pulItems.map((item) => (
+                  <div key={item.end_pul} className="pvps-pul-row">
+                    <div>
+                      <strong>{item.end_pul}</strong>
+                      <small>{item.auditado ? "Auditado" : "Pendente"}</small>
+                    </div>
+                    <input
+                      value={pulInputs[item.end_pul] ?? ""}
+                      onChange={(event) => setPulInputs((prev) => ({ ...prev, [item.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                      placeholder="mmaa"
+                      maxLength={4}
+                    />
+                    <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(item.end_pul)}>
+                      Salvar PUL
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="confirm-actions">
+              <button className="btn btn-muted" type="button" disabled={busy} onClick={() => setShowPvpsPopup(false)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showAlocPopup && activeAloc ? (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="aloc-inform-title"
+          onClick={() => {
+            if (busy) return;
+            setShowAlocPopup(false);
+          }}
+        >
+          <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
+            <h3 id="aloc-inform-title">Informar Alocação</h3>
+            <p>Endereço: <strong>{activeAloc.endereco}</strong> | CODDV: <strong>{activeAloc.coddv}</strong></p>
+            <p>Produto: {activeAloc.descricao}</p>
+            <p>Data última compra: <strong>{formatDate(activeAloc.dat_ult_compra)}</strong></p>
+
+            <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
+              <label>
+                Situação do endereço
+                <select value={alocEndSit} onChange={(event) => setAlocEndSit(event.target.value as PvpsEndSit)}>
+                  <option value="vazio">Vazio</option>
+                  <option value="obstruido">Obstruído</option>
+                </select>
+              </label>
+              <label>
+                Validade conferida (mmaa)
+                <input value={alocValConf} onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="mmaa" maxLength={4} />
+              </label>
+              <button className="btn btn-primary" type="submit" disabled={busy}>Salvar Alocação</button>
+            </form>
+
+            {alocResult ? (
+              <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : "bad"}`}>
+                Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : "Não conforme"} | Sistema: {alocResult.val_sist} | Informado: {alocResult.val_conf}
+              </div>
+            ) : null}
+
+            <div className="confirm-actions">
+              <button className="btn btn-muted" type="button" disabled={busy} onClick={() => setShowAlocPopup(false)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showClearZoneConfirm ? (
         <div
