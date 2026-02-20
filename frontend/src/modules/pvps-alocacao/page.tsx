@@ -181,6 +181,27 @@ function doneIcon() {
   );
 }
 
+function clearSelectionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="M8 7l1 12h6l1-12" />
+      <path d="M10 10v7" />
+      <path d="M14 10v7" />
+    </svg>
+  );
+}
+
+function selectFilteredIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 12l2 2 4-4" />
+      <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
+    </svg>
+  );
+}
+
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
@@ -1659,11 +1680,23 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             </div>
 
             <div className="pvps-zone-picker-actions">
-              <button className="btn btn-muted" type="button" onClick={() => setSelectedZones([])}>
-                Limpar seleção
+              <button
+                className="btn btn-muted pvps-zone-action-btn"
+                type="button"
+                onClick={() => setSelectedZones([])}
+                title="Limpar seleção"
+                aria-label="Limpar seleção"
+              >
+                <span className="pvps-btn-icon" aria-hidden="true">{clearSelectionIcon()}</span>
               </button>
-              <button className="btn btn-muted" type="button" onClick={() => setSelectedZones(filteredZones)}>
-                Selecionar filtradas
+              <button
+                className="btn btn-muted pvps-zone-action-btn"
+                type="button"
+                onClick={() => setSelectedZones(filteredZones)}
+                title="Selecionar filtradas"
+                aria-label="Selecionar filtradas"
+              >
+                <span className="pvps-btn-icon" aria-hidden="true">{selectFilteredIcon()}</span>
               </button>
             </div>
 
