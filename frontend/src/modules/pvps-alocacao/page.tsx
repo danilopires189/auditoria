@@ -1717,6 +1717,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 aria-label="Limpar seleção"
               >
                 <span className="pvps-btn-icon" aria-hidden="true">{clearSelectionIcon()}</span>
+                <span className="pvps-zone-action-label">Limpar</span>
               </button>
               <button
                 className="btn btn-muted pvps-zone-action-btn"
@@ -1726,6 +1727,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 aria-label="Selecionar filtradas"
               >
                 <span className="pvps-btn-icon" aria-hidden="true">{selectFilteredIcon()}</span>
+                <span className="pvps-zone-action-label">Selecionar</span>
               </button>
             </div>
 
