@@ -3023,6 +3023,19 @@ small {
   }
 }
 
+.module-test-pill {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(233, 189, 89, 0.9);
+  background: rgba(239, 179, 50, 0.22);
+  color: #8f5b00;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
 @keyframes termo-scan-feedback-in {
   from {
     opacity: 0;
@@ -4426,6 +4439,14 @@ small {
 .pvps-row small {
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.pvps-zone-header {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #2e63bc;
+  text-transform: uppercase;
 }
 
 .pvps-editor {

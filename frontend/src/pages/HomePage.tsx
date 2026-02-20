@@ -97,7 +97,11 @@ export default function HomePage({
                 || moduleDef.key === "conferencia-pedido-direto"
                 || moduleDef.key === "conferencia-entrada-notas"
                 || moduleDef.key === "zerados" ? (
-                  <span className="module-available-pill">Disponível</span>
+                  moduleDef.key === "pvps-alocacao" ? (
+                    <span className="module-test-pill">Em teste</span>
+                  ) : (
+                    <span className="module-available-pill">Disponível</span>
+                  )
                 ) : null}
               </div>
             </Link>
