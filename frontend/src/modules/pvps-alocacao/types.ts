@@ -28,7 +28,7 @@ export interface PvpsPulItemRow {
 export interface PvpsSepSubmitResult {
   audit_id: string;
   status: PvpsStatus;
-  val_sep: string;
+  val_sep: string | null;
   end_sit: PvpsEndSit | null;
   pul_total: number;
   pul_auditados: number;
@@ -57,9 +57,9 @@ export interface AlocacaoManifestRow {
 
 export interface AlocacaoSubmitResult {
   audit_id: string;
-  aud_sit: "conforme" | "nao_conforme";
+  aud_sit: "conforme" | "nao_conforme" | "ocorrencia";
   val_sist: string;
-  val_conf: string;
+  val_conf: string | null;
 }
 
 export interface PvpsAlocacaoModuleProfile {

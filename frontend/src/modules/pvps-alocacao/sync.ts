@@ -131,14 +131,14 @@ export async function submitPvpsSep(params: {
   coddv: number;
   end_sep: string;
   end_sit?: PvpsEndSit | null;
-  val_sep: string;
+  val_sep?: string | null;
 }): Promise<PvpsSepSubmitResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_submit_sep", {
     p_coddv: params.coddv,
     p_end_sep: params.end_sep,
     p_end_sit: params.end_sit ?? null,
-    p_val_sep: params.val_sep
+    p_val_sep: params.val_sep ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
@@ -147,7 +147,7 @@ export async function submitPvpsSep(params: {
   return {
     audit_id: parseString(first.audit_id),
     status: parsePvpsStatus(first.status),
-    val_sep: parseString(first.val_sep),
+    val_sep: parseNullableString(first.val_sep),
     end_sit: parseEndSit(first.end_sit),
     pul_total: Math.max(parseInteger(first.pul_total), 0),
     pul_auditados: Math.max(parseInteger(first.pul_auditados), 0)
@@ -346,25 +346,29 @@ export async function fetchAlocacaoManifest(params?: { zona?: string | null }): 
 
 export async function submitAlocacao(params: {
   queue_id: string;
-  end_sit: PvpsEndSit;
-  val_conf: string;
+  end_sit?: PvpsEndSit | null;
+  val_conf?: string | null;
 }): Promise<AlocacaoSubmitResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_alocacao_submit", {
     p_queue_id: params.queue_id,
-    p_end_sit: params.end_sit,
-    p_val_conf: params.val_conf
+    p_end_sit: params.end_sit ?? null,
+    p_val_conf: params.val_conf ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) throw new Error("Falha ao salvar auditoria de alocação.");
 
   const audSitRaw = parseString(first.aud_sit).toLowerCase();
-  const audSit = audSitRaw === "conforme" ? "conforme" : "nao_conforme";
+  const audSit = audSitRaw === "conforme"
+    ? "conforme"
+    : audSitRaw === "ocorrencia"
+      ? "ocorrencia"
+      : "nao_conforme";
   return {
     audit_id: parseString(first.audit_id),
     aud_sit: audSit,
     val_sist: parseString(first.val_sist),
-    val_conf: parseString(first.val_conf)
+    val_conf: parseNullableString(first.val_conf)
   };
 }
