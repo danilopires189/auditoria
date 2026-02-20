@@ -161,3 +161,74 @@ tables:
       qtd_separada: "integer"
       num_rota: "text"
       id_etiqueta: "text"
+
+  db_end:
+    file: "BD_END.xlsx"
+    sheet: "DB_END"
+    mode: "full_replace"
+    unique_keys: ["cd", "coddv", "endereco", "tipo"]
+    required_columns: ["cd", "coddv", "endereco"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      coddv: "integer"
+      descricao: "text"
+      endereco: "text"
+      andar: "text"
+      validade: "text"
+      tipo: "text"
+
+  db_estq_entr:
+    file: "DB_ESTQ_ENTR.xlsx"
+    sheet: "DB_ESTQ_ENTR"
+    mode: "full_replace"
+    unique_keys: ["cd", "coddv"]
+    required_columns: ["cd", "coddv"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      coddv: "integer"
+      qtd_est_atual: "integer"
+      qtd_est_disp: "integer"
+      dat_ult_compra: "date"
+
+  db_log_end:
+    file: "DB_LOG_END.xlsx"
+    sheet: "DB_LOG_END"
+    mode: "full_replace"
+    unique_keys: ["cd", "coddv", "endereco", "exclusao"]
+    required_columns: ["cd", "coddv", "endereco"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      coddv: "integer"
+      descricao: "text"
+      endereco: "text"
+      exclusao: "date"
+
+  db_prod_blitz:
+    file: "DB_PROD_BLITZ.xlsx"
+    sheet: "DB_PROD_BLITZ"
+    mode: "full_replace"
+    unique_keys: ["cd", "filial", "nr_pedido", "dt_conf", "auditor"]
+    required_columns: ["cd", "filial", "nr_pedido", "dt_conf"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      filial: "bigint"
+      nr_pedido: "bigint"
+      dt_conf: "timestamp"
+      auditor: "text"
+      qtd_un: "integer"
+
+  db_prod_vol:
+    file: "DB_PROD_VOL.xlsx"
+    sheet: "DB_PROD_VOL"
+    mode: "full_replace"
+    unique_keys: ["cd", "aud"]
+    required_columns: ["cd", "aud"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      aud: "text"
+      vol_conf: "integer"
