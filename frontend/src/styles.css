@@ -4473,16 +4473,29 @@ small {
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 8px;
+  justify-content: center;
 }
 
 .pvps-zone-action-btn {
-  min-width: 38px;
-  width: 38px;
+  min-width: 118px;
+  width: auto;
   height: 34px;
-  padding: 0;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   justify-content: center;
+  white-space: nowrap;
+}
+
+.pvps-zone-action-btn .pvps-btn-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.pvps-zone-action-label {
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .pvps-zone-list {
@@ -4494,15 +4507,24 @@ small {
   gap: 4px;
   max-height: min(320px, 44dvh);
   overflow: auto;
+  justify-items: center;
+}
+
+.pvps-zone-list p {
+  margin: 0;
+  text-align: center;
 }
 
 .pvps-zone-item {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   font-weight: 600;
   min-height: 30px;
   font-size: 0.95rem;
+  width: fit-content;
+  margin: 0 auto;
 }
 
 .pvps-filter-row {
@@ -4755,9 +4777,10 @@ small {
   }
 
   .pvps-zone-action-btn {
-    min-width: 34px;
-    width: 34px;
+    min-width: 106px;
+    width: auto;
     height: 32px;
+    padding: 0 8px;
   }
 
   .pvps-zone-list {
