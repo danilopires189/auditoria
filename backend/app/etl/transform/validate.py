@@ -8,6 +8,8 @@ import pandas as pd
 from app.etl.transform.dedupe import deduplicate_frame
 from app.utils.json_safe import to_json_safe
 
+MAX_DETAILED_DUPLICATE_REJECTIONS = 200
+
 
 @dataclass
 class ValidationOutcome:
@@ -71,7 +73,13 @@ def validate_frame(
     valid_frame = dedupe_result.frame
 
     if not duplicates.empty:
-        for _, row in duplicates.iterrows():
+        detailed_duplicates = duplicates
+        skipped_duplicates = 0
+        if len(duplicates) > MAX_DETAILED_DUPLICATE_REJECTIONS:
+            detailed_duplicates = duplicates.head(MAX_DETAILED_DUPLICATE_REJECTIONS)
+            skipped_duplicates = len(duplicates) - len(detailed_duplicates)
+
+        for _, row in detailed_duplicates.iterrows():
             rejection_records.append(
                 {
                     "table_name": table_name,
@@ -79,6 +87,23 @@ def validate_frame(
                     "reason_code": "duplicate_unique_key",
                     "reason_detail": f"Duplicate row for unique keys {unique_keys}; kept last occurrence",
                     "payload": _safe_payload(row),
+                }
+            )
+        if skipped_duplicates > 0:
+            rejection_records.append(
+                {
+                    "table_name": table_name,
+                    "source_row_number": 0,
+                    "reason_code": "duplicate_unique_key_summary",
+                    "reason_detail": (
+                        f"Suppressed {skipped_duplicates} duplicate rows "
+                        f"for unique keys {unique_keys}"
+                    ),
+                    "payload": {
+                        "total_duplicates": int(len(duplicates)),
+                        "detailed_reported": int(len(detailed_duplicates)),
+                        "suppressed": int(skipped_duplicates),
+                    },
                 }
             )
 
