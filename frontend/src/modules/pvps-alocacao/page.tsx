@@ -221,13 +221,16 @@ function selectFilteredIcon() {
   );
 }
 
-type HistoryStatusTone = "ok" | "bad" | "warn";
+type HistoryStatusTone = "ok" | "bad" | "warn" | "wait";
 
 function pvpsHistoryStatus(row: PvpsCompletedRow): { label: string; emoticon: string; tone: HistoryStatusTone } {
   if (row.end_sit === "vazio" || row.end_sit === "obstruido") {
     return { label: "Ocorrência", emoticon: ":/", tone: "warn" };
   }
-  if (row.status === "nao_conforme") {
+  if (row.pul_auditados < 1) {
+    return { label: "Aguardando validade Pulmão", emoticon: "...", tone: "wait" };
+  }
+  if (row.pul_has_lower || row.status === "nao_conforme") {
     return { label: "Não conforme", emoticon: ":(", tone: "bad" };
   }
   return { label: "Conforme", emoticon: ":)", tone: "ok" };
@@ -749,8 +752,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         coddv: row.coddv,
         descricao: row.descricao,
         end_sep: row.end_sep,
-        pul_total: 0,
-        pul_auditados: 0,
+        pul_total: row.pul_total,
+        pul_auditados: row.pul_auditados,
         status: row.status,
         end_sit: row.end_sit,
         val_sep: row.val_sep,
@@ -1576,6 +1579,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
+                            <small>PUL auditados: {row.pul_auditados}/{row.pul_total}</small>
+                            {row.pul_has_lower ? (
+                              <small>
+                                PUL com validade menor: {row.pul_lower_end ?? "-"} ({row.pul_lower_val ?? "-"})
+                              </small>
+                            ) : null}
                             <small>Auditor: {row.auditor_nome}</small>
                             <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
                           </div>

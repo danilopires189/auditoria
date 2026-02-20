@@ -125,6 +125,11 @@ function mapPvpsCompleted(raw: Record<string, unknown>): PvpsCompletedRow {
     status: parsePvpsStatus(raw.status),
     end_sit: parseEndSit(raw.end_sit),
     val_sep: parseNullableString(raw.val_sep),
+    pul_total: Math.max(parseInteger(raw.pul_total), 0),
+    pul_auditados: Math.max(parseInteger(raw.pul_auditados), 0),
+    pul_has_lower: parseBoolean(raw.pul_has_lower),
+    pul_lower_end: parseNullableString(raw.pul_lower_end),
+    pul_lower_val: parseNullableString(raw.pul_lower_val),
     dt_hr: parseString(raw.dt_hr),
     auditor_nome: parseString(raw.auditor_nome, "USUARIO")
   };
