@@ -1076,7 +1076,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="module-screen-title">
                 <h2>Auditoria por zona</h2>
                 <p>PVPS: PUL só libera quando SEP for salva sem ocorrência.</p>
-                <p className="pvps-cd-active">CD ativo: <strong>{activeCd ?? "-"}</strong></p>
               </div>
               <div className="pvps-toolbar">
                 <div className="pvps-toolbar-group">
