@@ -163,7 +163,7 @@ tables:
       id_etiqueta: "text"
 
   db_end:
-    file: "BD_END.csv"
+    file: "convertido/BD_END.csv"
     mode: "full_replace"
     unique_keys: ["cd", "coddv", "endereco", "tipo"]
     required_columns: ["cd", "coddv", "endereco"]
@@ -178,7 +178,7 @@ tables:
       tipo: "text"
 
   db_estq_entr:
-    file: "DB_ESTQ_ENTR.csv"
+    file: "convertido/DB_ESTQ_ENTR.csv"
     mode: "full_replace"
     unique_keys: ["cd", "coddv"]
     required_columns: ["cd", "coddv"]
@@ -191,7 +191,7 @@ tables:
       dat_ult_compra: "date"
 
   db_log_end:
-    file: "DB_LOG_END.csv"
+    file: "convertido/DB_LOG_END.csv"
     mode: "full_replace"
     unique_keys: []
     required_columns: ["cd", "coddv", "endereco"]

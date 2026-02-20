@@ -1569,7 +1569,7 @@ export default function App() {
           {authMode === "login" && (
             <form className="form-grid" autoComplete="off" onSubmit={onLogin}>
               <label>
-                Matrícula ou login
+                Matrícula
                 <div className="input-icon-wrap">
                   <span className="field-icon" aria-hidden="true">
                     <UserIcon />
@@ -1577,7 +1577,8 @@ export default function App() {
                   <input
                     name="login_mat_no_store"
                     type="text"
-                    inputMode="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     autoComplete="off"
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -1586,7 +1587,7 @@ export default function App() {
                     data-1p-ignore="true"
                     data-form-type="other"
                     value={loginMat}
-                    onChange={(event) => setLoginMat(event.target.value)}
+                    onChange={(event) => setLoginMat(event.target.value.replace(/\D/g, ""))}
                     required
                   />
                 </div>

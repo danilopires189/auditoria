@@ -20,15 +20,16 @@ SOURCES: tuple[tuple[str, str, str, list[str]], ...] = (
 
 def convert_one(data_dir: Path, source_file: str, sheet: str, target_file: str, usecols: list[str]) -> None:
     source = data_dir / source_file
-    target = data_dir / target_file
+    target = data_dir / "convertido" / target_file
     if not source.exists():
         raise FileNotFoundError(f"Source file not found: {source}")
+    target.parent.mkdir(parents=True, exist_ok=True)
 
     start = perf_counter()
     frame = pd.read_excel(source, sheet_name=sheet, dtype=object, engine="openpyxl", usecols=usecols)
     frame.to_csv(target, index=False, encoding="utf-8")
     elapsed = perf_counter() - start
-    print(f"{source_file} -> {target_file}: rows={len(frame)} elapsed={elapsed:.2f}s")
+    print(f"{source_file} -> convertido/{target_file}: rows={len(frame)} elapsed={elapsed:.2f}s")
 
 
 def main() -> None:
