@@ -4418,7 +4418,7 @@ small {
 }
 
 .pvps-zone-popup-card {
-  width: min(620px, calc(100vw - 24px));
+  width: min(560px, calc(100vw - 18px));
   max-height: calc(100dvh - 24px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
@@ -4466,14 +4466,24 @@ small {
   margin-top: 8px;
 }
 
+.pvps-zone-action-btn {
+  min-width: 38px;
+  width: 38px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .pvps-zone-list {
   margin-top: 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 8px;
+  padding: 6px 8px;
   display: grid;
-  gap: 6px;
-  max-height: 320px;
+  gap: 4px;
+  max-height: min(320px, 44dvh);
   overflow: auto;
 }
 
@@ -4482,6 +4492,8 @@ small {
   align-items: center;
   gap: 8px;
   font-weight: 600;
+  min-height: 30px;
+  font-size: 0.95rem;
 }
 
 .pvps-filter-row {
@@ -4682,6 +4694,10 @@ small {
     max-height: calc(100dvh - 12px);
   }
 
+  .pvps-zone-popup-card {
+    width: min(100%, calc(100vw - 10px));
+  }
+
   .pvps-popup-overlay {
     align-content: end;
     padding-top: max(20vh, calc(env(safe-area-inset-top, 0px) + 12px));
@@ -4692,5 +4708,19 @@ small {
 
   .pvps-row-head {
     align-items: center;
+  }
+
+  .pvps-zone-picker-actions {
+    gap: 6px;
+  }
+
+  .pvps-zone-action-btn {
+    min-width: 34px;
+    width: 34px;
+    height: 32px;
+  }
+
+  .pvps-zone-list {
+    max-height: min(280px, 38dvh);
   }
 }
