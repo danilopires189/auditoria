@@ -163,8 +163,7 @@ tables:
       id_etiqueta: "text"
 
   db_end:
-    file: "BD_END.xlsx"
-    sheet: "DB_END"
+    file: "BD_END.csv"
     mode: "full_replace"
     unique_keys: ["cd", "coddv", "endereco", "tipo"]
     required_columns: ["cd", "coddv", "endereco"]
@@ -179,8 +178,7 @@ tables:
       tipo: "text"
 
   db_estq_entr:
-    file: "DB_ESTQ_ENTR.xlsx"
-    sheet: "DB_ESTQ_ENTR"
+    file: "DB_ESTQ_ENTR.csv"
     mode: "full_replace"
     unique_keys: ["cd", "coddv"]
     required_columns: ["cd", "coddv"]
@@ -193,8 +191,7 @@ tables:
       dat_ult_compra: "date"
 
   db_log_end:
-    file: "DB_LOG_END.xlsx"
-    sheet: "DB_LOG_END"
+    file: "DB_LOG_END.csv"
     mode: "full_replace"
     unique_keys: ["cd", "coddv", "endereco", "exclusao"]
     required_columns: ["cd", "coddv", "endereco"]
@@ -202,7 +199,6 @@ tables:
     types:
       cd: "integer"
       coddv: "integer"
-      descricao: "text"
       endereco: "text"
       exclusao: "date"
 
