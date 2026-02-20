@@ -218,6 +218,98 @@ TABLE_SPECS: dict[str, TableSpec] = {
         },
         has_cd=True,
     ),
+    "db_end": TableSpec(
+        name="db_end",
+        business_columns=[
+            "cd",
+            "coddv",
+            "descricao",
+            "endereco",
+            "andar",
+            "validade",
+            "tipo",
+        ],
+        sql_types={
+            "cd": "integer",
+            "coddv": "integer",
+            "descricao": "text",
+            "endereco": "text",
+            "andar": "text",
+            "validade": "text",
+            "tipo": "text",
+        },
+        has_cd=True,
+    ),
+    "db_estq_entr": TableSpec(
+        name="db_estq_entr",
+        business_columns=[
+            "cd",
+            "coddv",
+            "qtd_est_atual",
+            "qtd_est_disp",
+            "dat_ult_compra",
+        ],
+        sql_types={
+            "cd": "integer",
+            "coddv": "integer",
+            "qtd_est_atual": "integer",
+            "qtd_est_disp": "integer",
+            "dat_ult_compra": "date",
+        },
+        has_cd=True,
+    ),
+    "db_log_end": TableSpec(
+        name="db_log_end",
+        business_columns=[
+            "cd",
+            "coddv",
+            "descricao",
+            "endereco",
+            "exclusao",
+        ],
+        sql_types={
+            "cd": "integer",
+            "coddv": "integer",
+            "descricao": "text",
+            "endereco": "text",
+            "exclusao": "date",
+        },
+        has_cd=True,
+    ),
+    "db_prod_blitz": TableSpec(
+        name="db_prod_blitz",
+        business_columns=[
+            "cd",
+            "filial",
+            "nr_pedido",
+            "dt_conf",
+            "auditor",
+            "qtd_un",
+        ],
+        sql_types={
+            "cd": "integer",
+            "filial": "bigint",
+            "nr_pedido": "bigint",
+            "dt_conf": "timestamp",
+            "auditor": "text",
+            "qtd_un": "integer",
+        },
+        has_cd=True,
+    ),
+    "db_prod_vol": TableSpec(
+        name="db_prod_vol",
+        business_columns=[
+            "cd",
+            "aud",
+            "vol_conf",
+        ],
+        sql_types={
+            "cd": "integer",
+            "aud": "text",
+            "vol_conf": "integer",
+        },
+        has_cd=True,
+    ),
 }
 
 
