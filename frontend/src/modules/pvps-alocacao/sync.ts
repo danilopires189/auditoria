@@ -116,6 +116,7 @@ function mapAlocacaoManifest(raw: Record<string, unknown>): AlocacaoManifestRow 
 function mapPvpsCompleted(raw: Record<string, unknown>): PvpsCompletedRow {
   return {
     audit_id: parseString(raw.audit_id),
+    auditor_id: parseString(raw.auditor_id),
     cd: parseInteger(raw.cd),
     zona: parseString(raw.zona, "SEM ZONA").toUpperCase(),
     coddv: parseInteger(raw.coddv),
@@ -132,6 +133,7 @@ function mapPvpsCompleted(raw: Record<string, unknown>): PvpsCompletedRow {
 function mapAlocacaoCompleted(raw: Record<string, unknown>): AlocacaoCompletedRow {
   return {
     audit_id: parseString(raw.audit_id),
+    auditor_id: parseString(raw.auditor_id),
     queue_id: parseString(raw.queue_id),
     cd: parseInteger(raw.cd),
     zona: parseString(raw.zona, "SEM ZONA").toUpperCase(),
@@ -479,4 +481,28 @@ export async function fetchAlocacaoCompletedItemsDayAll(params?: {
     offset += pageSize;
   }
   return rows;
+}
+
+export async function submitAlocacaoCompletedEdit(params: {
+  p_cd?: number | null;
+  audit_id: string;
+  end_sit?: PvpsEndSit | null;
+  val_conf?: string | null;
+}): Promise<AlocacaoSubmitResult> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_alocacao_edit_completed", {
+    p_cd: params.p_cd ?? null,
+    p_audit_id: params.audit_id,
+    p_end_sit: params.end_sit ?? null,
+    p_val_conf: params.val_conf ?? null
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao editar auditoria de alocação.");
+  return {
+    audit_id: parseString(first.audit_id),
+    aud_sit: parseAudSit(first.aud_sit),
+    val_sist: parseString(first.val_sist),
+    val_conf: parseNullableString(first.val_conf)
+  };
 }
