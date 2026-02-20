@@ -50,6 +50,24 @@ interface PvpsAlocacaoPageProps {
 
 type ModuleTab = "pvps" | "alocacao";
 type FeedView = "pendentes" | "concluidos";
+
+type PvpsFeedItem =
+  | {
+    kind: "sep";
+    feedKey: string;
+    row: PvpsManifestRow;
+    zone: string;
+    endereco: string;
+  }
+  | {
+    kind: "pul";
+    feedKey: string;
+    row: PvpsManifestRow;
+    zone: string;
+    endereco: string;
+    endPul: string;
+  };
+
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 
 function toDisplayName(value: string): string {
@@ -250,9 +268,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => pvpsRows.find((row) => keyOfPvps(row) === activePvpsKey) ?? null,
     [pvpsRows, activePvpsKey]
   );
+  const [activePvpsMode, setActivePvpsMode] = useState<"sep" | "pul">("sep");
+  const [activePulEnd, setActivePulEnd] = useState<string | null>(null);
+  const [feedPulBySepKey, setFeedPulBySepKey] = useState<Record<string, PvpsPulItemRow[]>>({});
 
   const [pulItems, setPulItems] = useState<PvpsPulItemRow[]>([]);
   const [pulBusy, setPulBusy] = useState(false);
+  const activePulItem = useMemo(
+    () => (activePulEnd ? pulItems.find((item) => item.end_pul === activePulEnd) ?? null : null),
+    [pulItems, activePulEnd]
+  );
 
   const [endSit, setEndSit] = useState<PvpsEndSit | "">("");
   const [valSep, setValSep] = useState("");
@@ -317,7 +342,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setPvpsCompletedRows(completed);
         if (!rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
           setActivePvpsKey(rows[0] ? keyOfPvps(rows[0]) : null);
-          if (!rows[0]) setShowPvpsPopup(false);
+          if (!rows[0]) closePvpsPopup();
         }
       } else {
         const [rows, completed] = await Promise.all([
@@ -342,6 +367,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     void loadCurrent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, activeCd, todayBrt]);
+
+  useEffect(() => {
+    setFeedPulBySepKey({});
+    setActivePvpsMode("sep");
+    setActivePulEnd(null);
+  }, [activeCd]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -433,6 +464,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setPulBusy(true);
     void fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd)
       .then((items) => {
+        setFeedPulBySepKey((current) => ({ ...current, [keyOfPvps(activePvps)]: items }));
         setPulItems(items);
         const mapped: Record<string, string> = {};
         for (const item of items) {
@@ -445,6 +477,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       })
       .finally(() => setPulBusy(false));
   }, [activePvps, activeCd]);
+
+  useEffect(() => {
+    if (activePvpsMode !== "pul") return;
+    if (!pulItems.length) return;
+    if (activePulEnd && pulItems.some((item) => item.end_pul === activePulEnd)) return;
+    const next = pulItems.find((item) => !item.auditado) ?? pulItems[0];
+    setActivePulEnd(next?.end_pul ?? null);
+  }, [activePvpsMode, pulItems, activePulEnd]);
 
   const zones = useMemo(() => {
     const source = tab === "pvps" ? pvpsRows.map((row) => row.zona) : alocRows.map((row) => row.zona);
@@ -525,6 +565,71 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     [filteredAlocCompletedRows]
   );
 
+  const pvpsFeedItems = useMemo<PvpsFeedItem[]>(() => {
+    const items: PvpsFeedItem[] = [];
+    for (const row of sortedPvpsRows) {
+      const baseKey = keyOfPvps(row);
+      if (row.status === "pendente_sep") {
+        items.push({
+          kind: "sep",
+          feedKey: `sep:${baseKey}`,
+          row,
+          zone: row.zona,
+          endereco: row.end_sep
+        });
+        continue;
+      }
+      const pulItemsByRow = feedPulBySepKey[baseKey];
+      if (!pulItemsByRow) continue;
+      const pendingPulItems = pulItemsByRow.filter((item) => !item.auditado);
+      for (const item of pendingPulItems) {
+        items.push({
+          kind: "pul",
+          feedKey: `pul:${baseKey}:${item.end_pul}`,
+          row,
+          zone: row.zona,
+          endereco: item.end_pul,
+          endPul: item.end_pul
+        });
+      }
+    }
+    return items;
+  }, [sortedPvpsRows, feedPulBySepKey]);
+
+  const activePvpsFeedKey = useMemo(() => {
+    if (!activePvpsKey) return null;
+    if (activePvpsMode === "pul" && activePulEnd) {
+      return `pul:${activePvpsKey}:${activePulEnd}`;
+    }
+    return `sep:${activePvpsKey}`;
+  }, [activePvpsKey, activePvpsMode, activePulEnd]);
+
+  useEffect(() => {
+    if (tab !== "pvps" || feedView !== "pendentes" || activeCd == null) return;
+    const pendingPulRows = sortedPvpsRows.filter((row) => row.status === "pendente_pul");
+    const missingRows = pendingPulRows.filter((row) => feedPulBySepKey[keyOfPvps(row)] == null);
+    if (!missingRows.length) return;
+
+    let cancelled = false;
+    const loadMissing = async () => {
+      const updates: Record<string, PvpsPulItemRow[]> = {};
+      await Promise.all(missingRows.map(async (row) => {
+        try {
+          const items = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
+          updates[keyOfPvps(row)] = items;
+        } catch {
+          updates[keyOfPvps(row)] = [];
+        }
+      }));
+      if (cancelled || !Object.keys(updates).length) return;
+      setFeedPulBySepKey((current) => ({ ...current, ...updates }));
+    };
+    void loadMissing();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, feedView, sortedPvpsRows, activeCd, feedPulBySepKey]);
+
   useEffect(() => {
     if (tab === "pvps") {
       if (!sortedPvpsRows.some((row) => keyOfPvps(row) === activePvpsKey)) {
@@ -539,15 +644,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const nextQueueItems = useMemo(() => {
     if (tab === "pvps") {
-      const start = activePvpsKey
-        ? Math.max(sortedPvpsRows.findIndex((row) => keyOfPvps(row) === activePvpsKey), 0) + 1
+      const start = activePvpsFeedKey
+        ? Math.max(pvpsFeedItems.findIndex((item) => item.feedKey === activePvpsFeedKey), 0) + 1
         : 0;
-      return sortedPvpsRows.slice(start, start + 5).map((row) => ({
-        key: `pvps:${keyOfPvps(row)}`,
-        coddv: row.coddv,
-        descricao: row.descricao,
-        endereco: row.end_sep,
-        dat_ult_compra: row.dat_ult_compra
+      return pvpsFeedItems.slice(start, start + 5).map((item) => ({
+        key: item.feedKey,
+        coddv: item.row.coddv,
+        descricao: item.row.descricao,
+        endereco: item.endereco,
+        dat_ult_compra: item.row.dat_ult_compra
       }));
     }
     const start = activeAlocQueue
@@ -560,10 +665,28 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       endereco: row.endereco,
       dat_ult_compra: row.dat_ult_compra
     }));
-  }, [tab, sortedPvpsRows, sortedAlocRows, activePvpsKey, activeAlocQueue]);
+  }, [tab, pvpsFeedItems, sortedAlocRows, activePvpsFeedKey, activeAlocQueue]);
 
   function openPvpsPopup(row: PvpsManifestRow): void {
+    if (row.status === "pendente_pul") {
+      const pendingPulItems = (feedPulBySepKey[keyOfPvps(row)] ?? []).filter((item) => !item.auditado);
+      const firstPendingPul = pendingPulItems[0];
+      if (firstPendingPul) {
+        openPvpsPulPopup(row, firstPendingPul.end_pul);
+        return;
+      }
+    }
     setEditingPvpsCompleted(null);
+    setActivePvpsMode("sep");
+    setActivePulEnd(null);
+    setActivePvpsKey(keyOfPvps(row));
+    setShowPvpsPopup(true);
+  }
+
+  function openPvpsPulPopup(row: PvpsManifestRow, endPul: string): void {
+    setEditingPvpsCompleted(null);
+    setActivePvpsMode("pul");
+    setActivePulEnd(endPul);
     setActivePvpsKey(keyOfPvps(row));
     setShowPvpsPopup(true);
   }
@@ -575,6 +698,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setAlocValConf("");
     setAlocResult(null);
     setShowAlocPopup(true);
+  }
+
+  function closePvpsPopup(): void {
+    setActivePvpsMode("sep");
+    setActivePulEnd(null);
+    setShowPvpsPopup(false);
   }
 
   function canEditAudit(auditorId: string): boolean {
@@ -600,6 +729,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   function openPvpsCompletedEdit(row: PvpsCompletedRow): void {
     if (!canEditAudit(row.auditor_id)) return;
     setEditingPvpsCompleted(row);
+    setActivePvpsMode("sep");
+    setActivePulEnd(null);
     const key = `${row.coddv}|${row.end_sep}`;
     setPvpsRows((current) => {
       const existing = current.find((item) => keyOfPvps(item) === key);
@@ -668,10 +799,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       next = sortedPvpsRows.find((row, rowIndex) => rowIndex >= startAt && row.zona === targetZone);
     }
     if (next) {
-      setActivePvpsKey(keyOfPvps(next));
-      setShowPvpsPopup(true);
+      const nextKey = keyOfPvps(next);
+      if (next.status === "pendente_pul") {
+        const pendingPulItems = (feedPulBySepKey[nextKey] ?? []).filter((item) => !item.auditado);
+        const firstPendingPul = pendingPulItems[0];
+        if (firstPendingPul) {
+          openPvpsPulPopup(next, firstPendingPul.end_pul);
+          return;
+        }
+      }
+      openPvpsPopup(next);
     } else {
-      setShowPvpsPopup(false);
+      closePvpsPopup();
     }
   }
 
@@ -728,7 +867,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (hasOcorrencia) {
           setPvpsRows((current) => current.filter((row) => keyOfPvps(row) !== currentKey));
           setStatusMessage("SEP com ocorrência salva offline. Item retirado localmente e será sincronizado ao reconectar.");
-          setShowPvpsPopup(false);
+          closePvpsPopup();
         } else {
           const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
           setPvpsRows((current) => current.map((row) => (
@@ -770,9 +909,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       await loadCurrent();
       if (isEditingCompleted) {
         setEditingPvpsCompleted(null);
-        setShowPvpsPopup(false);
+        closePvpsPopup();
       } else {
         const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
+        setFeedPulBySepKey((current) => ({ ...current, [currentKey]: items }));
         setPulItems(items);
         openNextPvpsFrom(currentKey, currentZone);
       }
@@ -860,11 +1000,21 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       await loadCurrent();
       if (isEditingCompleted) {
         setEditingPvpsCompleted(null);
-        setShowPvpsPopup(false);
+        closePvpsPopup();
       } else if (result.status === "pendente_pul") {
         const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
+        setFeedPulBySepKey((current) => ({ ...current, [currentKey]: items }));
         setPulItems(items);
-        setShowPvpsPopup(true);
+        const pendingPulItems = items.filter((item) => !item.auditado);
+        if (pendingPulItems.length === 0) {
+          closePvpsPopup();
+        } else {
+          const currentPulIndex = pendingPulItems.findIndex((item) => item.end_pul === endPul);
+          const nextPul = pendingPulItems[currentPulIndex + 1] ?? pendingPulItems[0];
+          setActivePvpsMode("pul");
+          setActivePulEnd(nextPul.end_pul);
+          setShowPvpsPopup(true);
+        }
       } else {
         openNextPvpsFrom(currentKey, currentZone);
       }
@@ -1274,24 +1424,43 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           <div className="module-screen-body pvps-module-body">
             {feedView === "pendentes" && tab === "pvps" ? (
               <div className="pvps-list">
-                {sortedPvpsRows.length === 0 ? <p>Nenhum item PVPS pendente para os filtros atuais.</p> : null}
-                {sortedPvpsRows.map((row, index) => {
-                  const itemKey = keyOfPvps(row);
-                  const active = itemKey === activePvpsKey;
+                {pvpsFeedItems.length === 0
+                  ? (sortedPvpsRows.length === 0
+                    ? <p>Nenhum item PVPS pendente para os filtros atuais.</p>
+                    : <p>Carregando endereços PUL pendentes...</p>)
+                  : null}
+                {pvpsFeedItems.map((item, index) => {
+                  const itemKey = item.feedKey;
+                  const active = item.kind === "pul"
+                    ? (activePvpsMode === "pul" && keyOfPvps(item.row) === activePvpsKey && activePulEnd === item.endPul)
+                    : (activePvpsMode === "sep" && keyOfPvps(item.row) === activePvpsKey);
                   const open = Boolean(expandedPvps[itemKey]);
-                  const previous = index > 0 ? sortedPvpsRows[index - 1] : null;
-                  const showZoneHeader = !previous || previous.zona !== row.zona;
+                  const previous = index > 0 ? pvpsFeedItems[index - 1] : null;
+                  const showZoneHeader = !previous || previous.zone !== item.zone;
+                  const row = item.row;
                   return (
                     <div key={itemKey} className="pvps-zone-group">
-                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
+                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {item.zone}</div> : null}
                       <div className={`pvps-row${active ? " is-active" : ""}`}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
-                            <strong>{row.end_sep}</strong>
+                            <strong>{item.endereco}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
+                            {item.kind === "pul" ? <small>PUL pendente</small> : null}
                           </div>
                           <div className="pvps-row-actions">
-                            <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openPvpsPopup(row)} title="Editar">
+                            <button
+                              className="btn btn-primary pvps-icon-btn"
+                              type="button"
+                              onClick={() => {
+                                if (item.kind === "pul") {
+                                  openPvpsPulPopup(row, item.endPul);
+                                } else {
+                                  openPvpsPopup(row);
+                                }
+                              }}
+                              title="Editar"
+                            >
                               {editIcon()}
                             </button>
                             <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedPvps(itemKey)} title="Expandir">
@@ -1301,7 +1470,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
-                            <small>Status {row.status} | PUL {row.pul_auditados}/{row.pul_total}</small>
+                            {item.kind === "pul" ? (
+                              <small>Linha SEP {row.end_sep} | Validade linha {row.val_sep ?? "-"}</small>
+                            ) : (
+                              <small>Status {row.status} | PUL {row.pul_auditados}/{row.pul_total}</small>
+                            )}
+                            {item.kind === "pul" ? (
+                              <small>Ocorrência linha: {row.end_sit ?? "sem ocorrência"}</small>
+                            ) : null}
                             <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
                           </div>
                         ) : null}
@@ -1467,85 +1643,95 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           onClick={() => {
             if (busy) return;
             setEditingPvpsCompleted(null);
-            setShowPvpsPopup(false);
+            closePvpsPopup();
           }}
         >
           <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
-            <h3 id="pvps-inform-title">{editingPvpsCompleted ? "Editar PVPS concluído" : "Informar PVPS"}</h3>
+            <h3 id="pvps-inform-title">
+              {editingPvpsCompleted
+                ? "Editar PVPS concluído"
+                : activePvpsMode === "pul"
+                  ? "Informar PVPS - PUL"
+                  : "Informar PVPS - SEP"}
+            </h3>
             <p>SEP: <strong>{activePvps.end_sep}</strong> | CODDV: <strong>{activePvps.coddv}</strong></p>
             <p>Produto: {activePvps.descricao}</p>
             <p>Zona: <strong>{activePvps.zona}</strong> | Status: <strong>{activePvps.status}</strong></p>
             <p>Data última compra: <strong>{formatDate(activePvps.dat_ult_compra)}</strong></p>
             {editingPvpsCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong></p> : null}
 
-            <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
-              {endSit !== "vazio" && endSit !== "obstruido" ? (
+            {activePvpsMode === "sep" ? (
+              <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
+                {endSit !== "vazio" && endSit !== "obstruido" ? (
+                  <label>
+                    Validade SEP (mmaa)
+                    <input
+                      value={valSep}
+                      onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                      placeholder="mmaa"
+                      maxLength={4}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      required
+                    />
+                  </label>
+                ) : null}
                 <label>
-                  Validade SEP (mmaa)
-                  <input
-                    value={valSep}
-                    onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                    placeholder="mmaa"
-                    maxLength={4}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    required
-                  />
+                  Ocorrência do endereço
+                  <div className="pvps-occurrence-wrap">
+                    <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                    <select
+                      value={endSit}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                        setEndSit(parsed);
+                        if (parsed) setValSep("");
+                      }}
+                    >
+                      <option value="">Sem ocorrência</option>
+                      <option value="vazio">Vazio</option>
+                      <option value="obstruido">Obstruído</option>
+                    </select>
+                  </div>
                 </label>
-              ) : null}
-              <label>
-                Ocorrência do endereço
-                <div className="pvps-occurrence-wrap">
-                  <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
-                  <select
-                    value={endSit}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                      setEndSit(parsed);
-                      if (parsed) setValSep("");
-                    }}
-                  >
-                    <option value="">Sem ocorrência</option>
-                    <option value="vazio">Vazio</option>
-                    <option value="obstruido">Obstruído</option>
-                  </select>
-                </div>
-              </label>
-              <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa SEP</button>
-            </form>
+                <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa SEP</button>
+              </form>
+            ) : null}
 
-            {activePvps.status !== "pendente_sep" ? (
+            {activePvpsMode === "pul" ? (
               <div className="pvps-pul-box">
-                <h4>Etapa PUL</h4>
-                <p>Regra PVPS: validade SEP {"<="} validade de todos os PUL. Se SEP for flagada, o item sai do feed.</p>
+                <h4>Etapa PUL individual</h4>
+                <p>Linha SEP: <strong>{activePvps.end_sep}</strong> | Validade linha: <strong>{activePvps.val_sep ?? "-"}</strong></p>
+                <p>Ocorrência linha: <strong>{activePvps.end_sit ?? "sem ocorrência"}</strong></p>
                 {pulBusy ? <p>Carregando endereços PUL...</p> : null}
-                {pulItems.map((item) => (
-                  <div key={item.end_pul} className="pvps-pul-row">
+                {!pulBusy && !activePulItem ? <p>Endereço PUL não encontrado no feed atual.</p> : null}
+                {activePulItem ? (
+                  <div className="pvps-pul-row">
                     <div>
-                      <strong>{item.end_pul}</strong>
-                      <small>{item.auditado ? "Auditado" : "Pendente"}</small>
+                      <strong>{activePulItem.end_pul}</strong>
+                      <small>{activePulItem.auditado ? "Auditado" : "Pendente"}</small>
                     </div>
                     <input
-                      value={pulInputs[item.end_pul] ?? ""}
-                      onChange={(event) => setPulInputs((prev) => ({ ...prev, [item.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                      value={pulInputs[activePulItem.end_pul] ?? ""}
+                      onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
                       placeholder="mmaa"
                       maxLength={4}
                       inputMode="numeric"
                       pattern="[0-9]*"
                     />
-                    <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(item.end_pul)}>
+                    <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
                       Salvar PUL
                     </button>
                   </div>
-                ))}
+                ) : null}
               </div>
             ) : null}
 
             <div className="confirm-actions">
               <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
                 setEditingPvpsCompleted(null);
-                setShowPvpsPopup(false);
+                closePvpsPopup();
               }}>
                 Fechar
               </button>
