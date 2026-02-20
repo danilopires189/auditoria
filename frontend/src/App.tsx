@@ -34,6 +34,7 @@ import type { VolumeAvulsoModuleProfile } from "./modules/conferencia-volume-avu
 import { clearUserVolumeAvulsoSessionCache } from "./modules/conferencia-volume-avulso/storage";
 import type { InventarioModuleProfile } from "./modules/zerados/types";
 import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
+import type { PvpsAlocacaoModuleProfile } from "./modules/pvps-alocacao/types";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
@@ -1305,6 +1306,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const pvpsAlocacaoProfile = useMemo<PvpsAlocacaoModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const displayContext = useMemo(() => {
     if (!session || !effectiveProfileWithCd) return null;
     const merged = effectiveProfileWithCd;
@@ -1357,7 +1370,16 @@ export default function App() {
               />
             )}
           />
-          <Route path="/modulos/pvps-alocacao" element={<PvpsAlocacaoPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/pvps-alocacao"
+            element={
+              pvpsAlocacaoProfile ? (
+                <PvpsAlocacaoPage isOnline={isOnline} profile={pvpsAlocacaoProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="/modulos/atividade-extra" element={<AtividadeExtraPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/check-list" element={<CheckListPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
@@ -1540,7 +1562,7 @@ export default function App() {
           <h1>{authMode === "login" ? "Login" : authMode === "register" ? "Cadastro" : "Redefinir senha"}</h1>
           <p className="subtitle">
             {authMode === "login"
-              ? "Entre com matrícula (ou login) e senha."
+              ? "Entre com matrícula e senha."
               : authMode === "register"
                 ? "Cadastro por matrícula, nascimento e admissão."
                 : "Recupere a senha com matrícula, nascimento e admissão."}
