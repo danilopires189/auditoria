@@ -4411,8 +4411,8 @@ small {
 }
 
 .pvps-popup-card {
-  width: min(760px, calc(100vw - 24px));
-  max-height: calc(100dvh - 24px);
+  width: min(760px, calc(100vw - 20px));
+  max-height: calc(100dvh - 20px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -4425,10 +4425,10 @@ small {
 }
 
 .pvps-popup-overlay {
-  align-content: start;
+  align-content: end;
   justify-items: center;
   overflow: auto;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  padding-top: max(14vh, calc(env(safe-area-inset-top, 0px) + 14px));
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
 }
 
@@ -4489,6 +4489,14 @@ small {
   max-width: 330px;
 }
 
+.pvps-zone-separator {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px dashed #d4deee;
+  padding-top: 8px;
+}
+
 .pvps-grid {
   display: grid;
   gap: 12px;
@@ -4511,13 +4519,25 @@ small {
   padding: 10px 12px;
   text-align: left;
   display: grid;
-  gap: 2px;
-  cursor: pointer;
+  gap: 6px;
 }
 
 .pvps-row.is-active {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px rgba(22, 63, 135, 0.24);
+}
+
+.pvps-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pvps-row-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .pvps-row strong {
@@ -4526,11 +4546,46 @@ small {
 
 .pvps-row span {
   font-size: 0.9rem;
+  word-break: break-word;
 }
 
 .pvps-row small {
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.pvps-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.pvps-icon-btn {
+  min-width: 40px;
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pvps-icon-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pvps-row-details {
+  border-top: 1px dashed #d7dfed;
+  padding-top: 6px;
+  display: grid;
+  gap: 2px;
 }
 
 .pvps-zone-header {
@@ -4620,7 +4675,14 @@ small {
   }
 
   .pvps-popup-overlay {
+    align-content: end;
+    padding-top: max(20vh, calc(env(safe-area-inset-top, 0px) + 12px));
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
     padding-left: 6px;
     padding-right: 6px;
+  }
+
+  .pvps-row-head {
+    align-items: center;
   }
 }

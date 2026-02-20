@@ -64,6 +64,7 @@ export interface AlocacaoSubmitResult {
 
 export interface PvpsCompletedRow {
   audit_id: string;
+  auditor_id: string;
   cd: number;
   zona: string;
   coddv: number;
@@ -78,6 +79,7 @@ export interface PvpsCompletedRow {
 
 export interface AlocacaoCompletedRow {
   audit_id: string;
+  auditor_id: string;
   queue_id: string;
   cd: number;
   zona: string;
