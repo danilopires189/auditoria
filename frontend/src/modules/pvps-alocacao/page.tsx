@@ -21,6 +21,13 @@ import {
   upsertAdminBlacklist,
   upsertAdminPriorityZone
 } from "./sync";
+import { syncPvpsOfflineQueue } from "./offline-sync";
+import {
+  hasOfflineSepCache,
+  saveOfflinePulEvent,
+  saveOfflineSepEvent,
+  upsertOfflineSepCache
+} from "./storage";
 import type {
   AlocacaoCompletedRow,
   AlocacaoManifestRow,
@@ -174,6 +181,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [alocResult, setAlocResult] = useState<AlocacaoSubmitResult | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminBusy, setAdminBusy] = useState(false);
+  const [offlineSyncBusy, setOfflineSyncBusy] = useState(false);
   const [adminModulo, setAdminModulo] = useState<PvpsModulo>("ambos");
   const [adminZona, setAdminZona] = useState("");
   const [adminCoddv, setAdminCoddv] = useState("");
@@ -257,6 +265,35 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, []);
 
   useEffect(() => {
+    if (!isOnline || activeCd == null || offlineSyncBusy) return;
+    let cancelled = false;
+    const runSync = async () => {
+      setOfflineSyncBusy(true);
+      try {
+        const result = await syncPvpsOfflineQueue(activeCd);
+        if (cancelled) return;
+        if (result.synced > 0) {
+          setStatusMessage(`Sincronização offline PVPS concluída: ${result.synced} evento(s) enviados.`);
+          await loadCurrent();
+        } else if (result.remaining > 0 && result.failed > 0) {
+          setStatusMessage(`Sincronização offline parcial: ${result.failed} pendente(s) para nova tentativa.`);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(error instanceof Error ? error.message : "Falha na sincronização offline PVPS.");
+        }
+      } finally {
+        if (!cancelled) setOfflineSyncBusy(false);
+      }
+    };
+    void runSync();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline, activeCd]);
+
+  useEffect(() => {
     if (!activePvps) {
       setPulItems([]);
       setPulInputs({});
@@ -266,7 +303,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setEndSit(activePvps.end_sit ?? "");
     setValSep(activePvps.val_sep?.replace("/", "") ?? "");
 
-    if (!activePvps.audit_id) {
+    if (activePvps.status === "pendente_sep") {
       setPulItems([]);
       setPulInputs({});
       return;
@@ -441,18 +478,56 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   async function handleSubmitSep(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!activePvps) return;
+    if (activeCd == null) {
+      setErrorMessage("CD ativo obrigatório para auditoria PVPS.");
+      return;
+    }
+
+    const hasOcorrencia = endSit === "vazio" || endSit === "obstruido";
+    const normalizedValSep = valSep.trim();
+    if (!hasOcorrencia && normalizedValSep.length !== 4) {
+      setErrorMessage("Validade SEP obrigatória (mmaa) quando não houver ocorrência.");
+      return;
+    }
+    const currentKey = keyOfPvps(activePvps);
+    if (!isOnline) {
+      try {
+        await saveOfflineSepEvent({
+          cd: activeCd,
+          coddv: activePvps.coddv,
+          end_sep: activePvps.end_sep,
+          end_sit: endSit || null,
+          val_sep: hasOcorrencia ? null : normalizedValSep
+        });
+        await upsertOfflineSepCache({
+          cd: activeCd,
+          coddv: activePvps.coddv,
+          end_sep: activePvps.end_sep,
+          end_sit: endSit || null,
+          val_sep: hasOcorrencia ? null : normalizedValSep
+        });
+        if (hasOcorrencia) {
+          setPvpsRows((current) => current.filter((row) => keyOfPvps(row) !== currentKey));
+          setStatusMessage("SEP com ocorrência salva offline. Item retirado localmente e será sincronizado ao reconectar.");
+          setShowPvpsPopup(false);
+        } else {
+          const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
+          setPvpsRows((current) => current.map((row) => (
+            keyOfPvps(row) === currentKey
+              ? { ...row, status: "pendente_pul", val_sep: localVal, end_sit: null }
+              : row
+          )));
+          setStatusMessage("SEP salva offline. PUL liberado localmente e será sincronizado ao reconectar.");
+        }
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar SEP offline.");
+      }
+      return;
+    }
 
     setBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
-    const currentKey = keyOfPvps(activePvps);
-    const hasOcorrencia = endSit === "vazio" || endSit === "obstruido";
-    const normalizedValSep = valSep.trim();
-    if (!hasOcorrencia && normalizedValSep.length !== 4) {
-      setBusy(false);
-      setErrorMessage("Validade SEP obrigatória (mmaa) quando não houver ocorrência.");
-      return;
-    }
     try {
       const result = await submitPvpsSep({
         p_cd: activeCd,
@@ -478,17 +553,57 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   async function handleSubmitPul(endPul: string): Promise<void> {
-    if (!activePvps?.audit_id) return;
+    if (!activePvps) return;
+    if (activeCd == null) {
+      setErrorMessage("CD ativo obrigatório para auditoria PVPS.");
+      return;
+    }
     const value = pulInputs[endPul] ?? "";
+    if (value.trim().length !== 4) {
+      setErrorMessage("Validade PUL obrigatória (mmaa).");
+      return;
+    }
+
+    if (!isOnline) {
+      const hasSep = await hasOfflineSepCache(activeCd, activePvps.coddv, activePvps.end_sep);
+      if (!hasSep) {
+        setErrorMessage("Para informar PUL offline, salve primeiro a linha SEP no mesmo endereço.");
+        return;
+      }
+      try {
+        await saveOfflinePulEvent({
+          cd: activeCd,
+          coddv: activePvps.coddv,
+          end_sep: activePvps.end_sep,
+          end_pul: endPul,
+          val_pul: value.trim(),
+          audit_id: activePvps.audit_id
+        });
+        setPulInputs((prev) => ({ ...prev, [endPul]: "" }));
+        setStatusMessage("PUL salvo localmente (offline). Será sincronizado automaticamente ao reconectar.");
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar PUL offline.");
+      }
+      return;
+    }
 
     setBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
     const currentKey = keyOfPvps(activePvps);
     try {
+      let auditId = activePvps.audit_id;
+      if (!auditId) {
+        const rows = await fetchPvpsManifest({ p_cd: activeCd, zona: null });
+        auditId = rows.find((row) => row.coddv === activePvps.coddv && row.end_sep === activePvps.end_sep)?.audit_id ?? null;
+      }
+      if (!auditId) {
+        setErrorMessage("AUDIT_ID_PVPS_NAO_DISPONIVEL. Sincronize a SEP antes de salvar PUL online.");
+        return;
+      }
       const result = await submitPvpsPul({
         p_cd: activeCd,
-        audit_id: activePvps.audit_id,
+        audit_id: auditId,
         end_pul: endPul,
         val_pul: value
       });
@@ -1085,7 +1200,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa SEP</button>
             </form>
 
-            {activePvps.audit_id ? (
+            {activePvps.status !== "pendente_sep" ? (
               <div className="pvps-pul-box">
                 <h4>Etapa PUL</h4>
                 <p>Regra PVPS: validade SEP {"<="} validade de todos os PUL. Se SEP for flagada, o item sai do feed.</p>
