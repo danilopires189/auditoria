@@ -73,6 +73,43 @@ function occurrenceIcon() {
   );
 }
 
+function playIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 6l10 6-10 6z" />
+    </svg>
+  );
+}
+
+function refreshIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.6-6.4" />
+      <path d="M21 4v6h-6" />
+    </svg>
+  );
+}
+
+function listIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+    </svg>
+  );
+}
+
+function filterIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 6h16" />
+      <path d="M7 12h10" />
+      <path d="M10 18h4" />
+    </svg>
+  );
+}
+
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
@@ -604,22 +641,49 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <h2>Auditoria por zona</h2>
                 <p>PVPS: PUL só libera quando SEP for salva sem ocorrência.</p>
               </div>
-              <div className="pvps-actions">
-                <button type="button" className="btn btn-muted" onClick={() => setTab("pvps")} disabled={busy}>
-                  Iniciar PVPS
-                </button>
-                <button type="button" className="btn btn-muted" onClick={() => setTab("alocacao")} disabled={busy}>
-                  Iniciar Alocação
-                </button>
-                <button type="button" className="btn btn-muted" onClick={() => void loadCurrent()} disabled={busy}>
-                  {busy ? "Atualizando..." : "Atualizar"}
-                </button>
+              <div className="pvps-toolbar">
+                <div className="pvps-toolbar-group">
+                  <small className="pvps-toolbar-label">Ações</small>
+                  <div className="pvps-actions">
+                    <button
+                      type="button"
+                      className={`btn btn-muted pvps-toolbar-btn${tab === "pvps" ? " is-active" : ""}`}
+                      onClick={() => setTab("pvps")}
+                      disabled={busy}
+                    >
+                      <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
+                      <span>Iniciar PVPS</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-muted pvps-toolbar-btn${tab === "alocacao" ? " is-active" : ""}`}
+                      onClick={() => setTab("alocacao")}
+                      disabled={busy}
+                    >
+                      <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
+                      <span>Iniciar Alocação</span>
+                    </button>
+                    <button type="button" className="btn btn-muted pvps-toolbar-btn" onClick={() => void loadCurrent()} disabled={busy}>
+                      <span className="pvps-btn-icon" aria-hidden="true">{refreshIcon()}</span>
+                      <span>{busy ? "Atualizando..." : "Atualizar"}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="pvps-tabs">
-              <button type="button" className={`btn btn-muted${tab === "pvps" ? " is-active" : ""}`} onClick={() => setTab("pvps")}>PVPS</button>
-              <button type="button" className={`btn btn-muted${tab === "alocacao" ? " is-active" : ""}`} onClick={() => setTab("alocacao")}>Alocação</button>
+            <div className="pvps-toolbar-group">
+              <small className="pvps-toolbar-label">Tipo</small>
+              <div className="pvps-tabs">
+                <button type="button" className={`btn btn-muted pvps-toolbar-btn${tab === "pvps" ? " is-active" : ""}`} onClick={() => setTab("pvps")}>
+                  <span className="pvps-btn-icon" aria-hidden="true">{listIcon()}</span>
+                  <span>PVPS</span>
+                </button>
+                <button type="button" className={`btn btn-muted pvps-toolbar-btn${tab === "alocacao" ? " is-active" : ""}`} onClick={() => setTab("alocacao")}>
+                  <span className="pvps-btn-icon" aria-hidden="true">{listIcon()}</span>
+                  <span>Alocação</span>
+                </button>
+              </div>
             </div>
 
             {isAdmin ? (
@@ -634,9 +698,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               </div>
             ) : null}
 
-            <div className="pvps-filter-row">
-              <button className="btn btn-muted" type="button" onClick={() => setShowZoneFilterPopup(true)}>
-                Filtrar zonas {selectedZones.length > 0 ? `(${selectedZones.length})` : "(todas)"}
+            <div className="pvps-toolbar-group pvps-filter-row">
+              <small className="pvps-toolbar-label">Filtro</small>
+              <button
+                className={`btn btn-muted pvps-toolbar-btn${selectedZones.length > 0 || showZoneFilterPopup ? " is-active" : ""}`}
+                type="button"
+                onClick={() => setShowZoneFilterPopup(true)}
+              >
+                <span className="pvps-btn-icon" aria-hidden="true">{filterIcon()}</span>
+                <span>Filtrar zonas {selectedZones.length > 0 ? `(${selectedZones.length})` : "(todas)"}</span>
               </button>
             </div>
 
