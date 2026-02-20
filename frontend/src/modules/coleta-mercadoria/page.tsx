@@ -2043,22 +2043,24 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
               </select>
             </label>
 
-            <label>
-              Lote
-              <input type="text" value={loteInput} onChange={(event) => setLoteInput(event.target.value)} placeholder="Opcional" />
-            </label>
+            <div className="coleta-inline-fields">
+              <label>
+                Lote
+                <input type="text" value={loteInput} onChange={(event) => setLoteInput(event.target.value)} placeholder="Opcional" />
+              </label>
 
-            <label>
-              Validade (MM/AA)
-              <input
-                type="text"
-                inputMode="numeric"
-                value={validadeInput}
-                onChange={(event) => setValidadeInput(formatValidadeInput(event.target.value))}
-                placeholder="MM/AA"
-                maxLength={5}
-              />
-            </label>
+              <label>
+                Validade (MM/AA)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={validadeInput}
+                  onChange={(event) => setValidadeInput(formatValidadeInput(event.target.value))}
+                  placeholder="MM/AA"
+                  maxLength={5}
+                />
+              </label>
+            </div>
           </div>
 
           <button

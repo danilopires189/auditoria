@@ -1452,6 +1452,12 @@ small {
   min-width: 0;
 }
 
+.coleta-inline-fields {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .coleta-form-grid select {
   border: 1px solid var(--line);
   border-radius: 12px;
