@@ -743,7 +743,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           audit_id: row.audit_id,
           end_sit: row.end_sit,
           val_sep: row.val_sep,
-          status: row.status
+          status: row.status,
+          pul_total: row.pul_total,
+          pul_auditados: row.pul_auditados
         } : item);
       }
       return [{
