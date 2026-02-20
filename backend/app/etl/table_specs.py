@@ -263,14 +263,12 @@ TABLE_SPECS: dict[str, TableSpec] = {
         business_columns=[
             "cd",
             "coddv",
-            "descricao",
             "endereco",
             "exclusao",
         ],
         sql_types={
             "cd": "integer",
             "coddv": "integer",
-            "descricao": "text",
             "endereco": "text",
             "exclusao": "date",
         },
