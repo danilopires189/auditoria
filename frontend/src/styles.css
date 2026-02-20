@@ -4312,6 +4312,7 @@ small {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  color: #446188;
 }
 
 .pvps-btn-icon svg {
@@ -4329,6 +4330,14 @@ small {
   background: #dce8f9;
   color: #173a70;
   box-shadow: inset 0 0 0 1px rgba(23, 58, 112, 0.2);
+}
+
+.pvps-toolbar-btn.is-active .pvps-btn-icon {
+  color: #0f4fb0;
+}
+
+.pvps-toolbar-btn.is-active .pvps-btn-icon svg {
+  stroke-width: 2.35;
 }
 
 .pvps-admin-panel {
