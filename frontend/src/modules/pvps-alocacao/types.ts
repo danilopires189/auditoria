@@ -29,7 +29,7 @@ export interface PvpsSepSubmitResult {
   audit_id: string;
   status: PvpsStatus;
   val_sep: string;
-  end_sit: PvpsEndSit;
+  end_sit: PvpsEndSit | null;
   pul_total: number;
   pul_auditados: number;
 }

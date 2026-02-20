@@ -77,7 +77,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const isAdmin = profile.role === "admin";
 
   const [tab, setTab] = useState<ModuleTab>("pvps");
-  const [zonaFiltro, setZonaFiltro] = useState<string>("");
+  const [selectedZones, setSelectedZones] = useState<string[]>([]);
+  const [showZoneFilterPopup, setShowZoneFilterPopup] = useState(false);
+  const [zoneSearch, setZoneSearch] = useState("");
+  const [showDiscardZonesConfirm, setShowDiscardZonesConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -94,7 +97,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [pulItems, setPulItems] = useState<PvpsPulItemRow[]>([]);
   const [pulBusy, setPulBusy] = useState(false);
 
-  const [endSit, setEndSit] = useState<PvpsEndSit>("vazio");
+  const [endSit, setEndSit] = useState<PvpsEndSit | "">("");
   const [valSep, setValSep] = useState("");
   const [pulInputs, setPulInputs] = useState<Record<string, string>>({});
 
@@ -156,7 +159,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setErrorMessage(null);
     try {
       if (tab === "pvps") {
-        const rows = await fetchPvpsManifest({ zona: zonaFiltro || null });
+        const rows = await fetchPvpsManifest({ zona: null });
         const previousKeys = new Set(pvpsRows.map((row) => keyOfPvps(row)));
         const added = rows
           .filter((row) => !previousKeys.has(keyOfPvps(row)))
@@ -176,7 +179,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           if (!rows[0]) setShowPvpsPopup(false);
         }
       } else {
-        const rows = await fetchAlocacaoManifest({ zona: zonaFiltro || null });
+        const rows = await fetchAlocacaoManifest({ zona: null });
         const previousKeys = new Set(alocRows.map((row) => row.queue_id));
         const added = rows
           .filter((row) => !previousKeys.has(row.queue_id))
@@ -206,7 +209,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   useEffect(() => {
     void loadCurrent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, zonaFiltro]);
+  }, [tab]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -221,7 +224,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       return;
     }
 
-    setEndSit(activePvps.end_sit ?? "vazio");
+    setEndSit(activePvps.end_sit ?? "");
     setValSep(activePvps.val_sep?.replace("/", "") ?? "");
 
     if (!activePvps.audit_id) {
@@ -251,6 +254,36 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return Array.from(new Set(source)).sort((a, b) => a.localeCompare(b));
   }, [tab, pvpsRows, alocRows]);
 
+  const filteredZones = useMemo(() => {
+    const q = zoneSearch.trim().toLocaleLowerCase("pt-BR");
+    if (!q) return zones;
+    return zones.filter((zone) => zone.toLocaleLowerCase("pt-BR").includes(q));
+  }, [zones, zoneSearch]);
+
+  const filteredPvpsRows = useMemo(() => {
+    if (!selectedZones.length) return pvpsRows;
+    const selected = new Set(selectedZones);
+    return pvpsRows.filter((row) => selected.has(row.zona));
+  }, [pvpsRows, selectedZones]);
+
+  const filteredAlocRows = useMemo(() => {
+    if (!selectedZones.length) return alocRows;
+    const selected = new Set(selectedZones);
+    return alocRows.filter((row) => selected.has(row.zona));
+  }, [alocRows, selectedZones]);
+
+  useEffect(() => {
+    if (tab === "pvps") {
+      if (!filteredPvpsRows.some((row) => keyOfPvps(row) === activePvpsKey)) {
+        setActivePvpsKey(filteredPvpsRows[0] ? keyOfPvps(filteredPvpsRows[0]) : null);
+      }
+      return;
+    }
+    if (!filteredAlocRows.some((row) => row.queue_id === activeAlocQueue)) {
+      setActiveAlocQueue(filteredAlocRows[0]?.queue_id ?? null);
+    }
+  }, [tab, filteredPvpsRows, filteredAlocRows, activePvpsKey, activeAlocQueue]);
+
   const recentForCurrentTab = useMemo(
     () => recentFeedItems.filter((item) => item.tab === tab).slice(0, 5),
     [recentFeedItems, tab]
@@ -277,10 +310,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const result = await submitPvpsSep({
         coddv: activePvps.coddv,
         end_sep: activePvps.end_sep,
-        end_sit: endSit,
+        end_sit: endSit || null,
         val_sep: valSep
       });
-      setStatusMessage(`SEP salvo. PUL auditados: ${result.pul_auditados}/${result.pul_total}.`);
+      if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
+        setStatusMessage("SEP flagada (vazio/obstruído). Item removido do feed e não será enviado ao frontend.");
+        setShowPvpsPopup(false);
+      } else {
+        setStatusMessage(`SEP salva. PUL liberado: ${result.pul_auditados}/${result.pul_total} auditados.`);
+      }
       await loadCurrent();
       const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep);
       setPulItems(items);
@@ -451,6 +489,40 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
   }
 
+  function toggleZone(zone: string): void {
+    setSelectedZones((previous) => (
+      previous.includes(zone) ? previous.filter((z) => z !== zone) : [...previous, zone]
+    ));
+  }
+
+  async function handleDiscardSelectedZones(): Promise<void> {
+    if (!selectedZones.length) return;
+    setAdminBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      let totalPvps = 0;
+      let totalAloc = 0;
+      for (const zone of selectedZones) {
+        const result = await clearZone({
+          modulo: tab,
+          zona: zone,
+          repor_automatico: true
+        });
+        totalPvps += result.cleared_pvps;
+        totalAloc += result.cleared_alocacao;
+      }
+      await loadCurrent();
+      setStatusMessage(`Zonas descartadas (${selectedZones.length}). Removidos: PVPS ${totalPvps}, Alocação ${totalAloc}. Fila reposta automaticamente.`);
+      setShowDiscardZonesConfirm(false);
+      setShowZoneFilterPopup(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao descartar zonas selecionadas.");
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
   return (
     <>
       <header className="module-topbar module-topbar-fixed">
@@ -480,7 +552,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <div className="module-screen-title-row">
               <div className="module-screen-title">
                 <h2>Auditoria por zona</h2>
-                <p>PVPS: regra de conformidade usa apenas validações informadas pelo auditor (SEP x PUL).</p>
+                <p>PVPS: PUL só libera quando SEP for salva sem flag (vazio/obstruído).</p>
               </div>
               <div className="pvps-actions">
                 <button type="button" className="btn btn-muted" onClick={() => setTab("pvps")} disabled={busy}>
@@ -513,15 +585,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             ) : null}
 
             <div className="pvps-filter-row">
-              <label>
-                Zona
-                <select value={zonaFiltro} onChange={(event) => setZonaFiltro(event.target.value)}>
-                  <option value="">Todas</option>
-                  {zones.map((zone) => (
-                    <option key={zone} value={zone}>{zone}</option>
-                  ))}
-                </select>
-              </label>
+              <button className="btn btn-muted" type="button" onClick={() => setShowZoneFilterPopup(true)}>
+                Filtrar zonas {selectedZones.length > 0 ? `(${selectedZones.length})` : "(todas)"}
+              </button>
             </div>
 
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
@@ -622,8 +688,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             {tab === "pvps" ? (
               <div className="pvps-grid">
                 <div className="pvps-list">
-                  {pvpsRows.length === 0 ? <p>Nenhum item PVPS pendente para os filtros atuais.</p> : null}
-                  {pvpsRows.map((row) => {
+                  {filteredPvpsRows.length === 0 ? <p>Nenhum item PVPS pendente para os filtros atuais.</p> : null}
+                  {filteredPvpsRows.map((row) => {
                     const active = keyOfPvps(row) === activePvpsKey;
                     return (
                       <div key={keyOfPvps(row)} className={`pvps-row${active ? " is-active" : ""}`}>
@@ -655,8 +721,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             ) : (
               <div className="pvps-grid">
                 <div className="pvps-list">
-                  {alocRows.length === 0 ? <p>Nenhum item de Alocação pendente para os filtros atuais.</p> : null}
-                  {alocRows.map((row) => (
+                  {filteredAlocRows.length === 0 ? <p>Nenhum item de Alocação pendente para os filtros atuais.</p> : null}
+                  {filteredAlocRows.map((row) => (
                     <div key={row.queue_id} className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`}>
                       <strong>{row.endereco}</strong>
                       <span>{row.coddv} - {row.descricao}</span>
@@ -712,9 +778,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
               <label>
                 Situação do endereço
-                <select value={endSit} onChange={(event) => setEndSit(event.target.value as PvpsEndSit)}>
-                  <option value="vazio">Vazio</option>
-                  <option value="obstruido">Obstruído</option>
+                <select
+                  value={endSit}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setEndSit(next === "vazio" || next === "obstruido" ? next : "");
+                  }}
+                >
+                  <option value="">Sem flag (libera PUL)</option>
+                  <option value="vazio">Flag: Vazio</option>
+                  <option value="obstruido">Flag: Obstruído</option>
                 </select>
               </label>
               <label>
@@ -727,7 +800,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             {activePvps.audit_id ? (
               <div className="pvps-pul-box">
                 <h4>Etapa PUL</h4>
-                <p>Regra PVPS: a validade da SEP deve ser menor ou igual a todas as validades de PUL.</p>
+                <p>Regra PVPS: validade SEP {"<="} validade de todos os PUL. Se SEP for flagada, o item sai do feed.</p>
                 {pulBusy ? <p>Carregando endereços PUL...</p> : null}
                 {pulItems.map((item) => (
                   <div key={item.end_pul} className="pvps-pul-row">
@@ -844,6 +917,98 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 }}
               >
                 {adminBusy ? "Limpando..." : "Confirmar limpeza"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showZoneFilterPopup ? (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pvps-zone-filter-title"
+          onClick={() => {
+            if (adminBusy) return;
+            setShowZoneFilterPopup(false);
+          }}
+        >
+          <div className="confirm-dialog surface-enter pvps-zone-popup-card" onClick={(event) => event.stopPropagation()}>
+            <h3 id="pvps-zone-filter-title">Filtro de zonas ({tab.toUpperCase()})</h3>
+            <div className="form-grid">
+              <label>
+                Pesquisar zona
+                <input
+                  value={zoneSearch}
+                  onChange={(event) => setZoneSearch(event.target.value.toUpperCase())}
+                  placeholder="Ex.: A001"
+                />
+              </label>
+            </div>
+
+            <div className="pvps-zone-picker-actions">
+              <button className="btn btn-muted" type="button" onClick={() => setSelectedZones([])}>
+                Limpar seleção
+              </button>
+              <button className="btn btn-muted" type="button" onClick={() => setSelectedZones(filteredZones)}>
+                Selecionar filtradas
+              </button>
+            </div>
+
+            <div className="pvps-zone-list">
+              {filteredZones.length === 0 ? <p>Sem zonas para este filtro.</p> : null}
+              {filteredZones.map((zone) => (
+                <label key={zone} className="pvps-zone-item">
+                  <input type="checkbox" checked={selectedZones.includes(zone)} onChange={() => toggleZone(zone)} />
+                  <span>{zone}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="confirm-actions">
+              {isAdmin ? (
+                <button
+                  className="btn btn-danger"
+                  type="button"
+                  disabled={adminBusy || selectedZones.length === 0}
+                  onClick={() => setShowDiscardZonesConfirm(true)}
+                >
+                  Descartar zonas selecionadas (repos. auto)
+                </button>
+              ) : null}
+              <button className="btn btn-primary" type="button" onClick={() => setShowZoneFilterPopup(false)}>
+                Aplicar filtro
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDiscardZonesConfirm ? (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pvps-discard-zones-title"
+          onClick={() => {
+            if (adminBusy) return;
+            setShowDiscardZonesConfirm(false);
+          }}
+        >
+          <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+            <h3 id="pvps-discard-zones-title">Descartar zonas selecionadas</h3>
+            <p>
+              Esta ação remove da fila atual da aba <strong>{tab.toUpperCase()}</strong> as zonas selecionadas:
+              <strong> {selectedZones.join(", ") || "-"}</strong>.
+            </p>
+            <p>A reposição será automática com os próximos itens previstos.</p>
+            <div className="confirm-actions">
+              <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => setShowDiscardZonesConfirm(false)}>
+                Cancelar
+              </button>
+              <button className="btn btn-danger" type="button" disabled={adminBusy} onClick={() => void handleDiscardSelectedZones()}>
+                {adminBusy ? "Descartando..." : "Confirmar descarte"}
               </button>
             </div>
           </div>
