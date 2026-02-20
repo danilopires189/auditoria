@@ -4345,6 +4345,11 @@ small {
   margin: 0;
 }
 
+.pvps-cd-active {
+  font-weight: 700;
+  color: #2f4f7f !important;
+}
+
 .pvps-admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
