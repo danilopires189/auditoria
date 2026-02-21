@@ -1964,6 +1964,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         {open ? (
                           <div className="pvps-row-details">
                             <small>Andar {formatAndar(row.nivel)} | Auditor: {row.auditor_nome}</small>
+                            <small>Validade Sistema: {row.val_sist} | Informada: {row.val_conf ?? "-"}</small>
                             <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
                           </div>
                         ) : null}
