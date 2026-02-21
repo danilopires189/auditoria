@@ -760,21 +760,26 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   useEffect(() => {
     if (tab !== "pvps" || feedView !== "pendentes" || activeCd == null || !isOnline) return;
-    const pendingPulRows = sortedPvpsAllRows.filter((row) => row.status === "pendente_pul");
+    const activeCoddvSet = new Set(pvpsActiveCoddvList);
+    const pendingPulRows = sortedPvpsAllRows.filter(
+      (row) => row.status === "pendente_pul" && activeCoddvSet.has(row.coddv)
+    );
     const missingRows = pendingPulRows.filter((row) => feedPulBySepKey[keyOfPvps(row)] == null);
     if (!missingRows.length) return;
 
     let cancelled = false;
     const loadMissing = async () => {
       const updates: Record<string, PvpsPulItemRow[]> = {};
-      await Promise.all(missingRows.map(async (row) => {
+      // Avoid overloading RPC; load a small batch and retry remaining on next cycle.
+      for (const row of missingRows.slice(0, 20)) {
+        if (cancelled) return;
         try {
           const items = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
           updates[keyOfPvps(row)] = items;
         } catch {
-          updates[keyOfPvps(row)] = [];
+          // Keep row as "missing" to retry automatically.
         }
-      }));
+      }
       if (cancelled || !Object.keys(updates).length) return;
       setFeedPulBySepKey((current) => ({ ...current, ...updates }));
     };
@@ -782,7 +787,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return () => {
       cancelled = true;
     };
-  }, [tab, feedView, sortedPvpsAllRows, activeCd, feedPulBySepKey, isOnline]);
+  }, [tab, feedView, sortedPvpsAllRows, pvpsActiveCoddvList, activeCd, feedPulBySepKey, isOnline]);
 
   useEffect(() => {
     if (tab === "pvps") {
@@ -828,9 +833,20 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }));
   }, [tab, pvpsQueueProducts, pvpsEligibleCoddv, alocQueueProducts, alocEligibleCoddv]);
 
-  function openPvpsPopup(row: PvpsManifestRow): void {
+  async function openPvpsPopup(row: PvpsManifestRow): Promise<void> {
     if (row.status === "pendente_pul") {
-      const pendingPulItems = (feedPulBySepKey[keyOfPvps(row)] ?? []).filter((item) => !item.auditado);
+      const rowKey = keyOfPvps(row);
+      const cachedPulItems = feedPulBySepKey[rowKey];
+      let pulItemsByRow: PvpsPulItemRow[] | null = Array.isArray(cachedPulItems) ? cachedPulItems : null;
+      if (!pulItemsByRow && isOnline && activeCd != null) {
+        try {
+          pulItemsByRow = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
+          setFeedPulBySepKey((current) => ({ ...current, [rowKey]: pulItemsByRow ?? [] }));
+        } catch {
+          pulItemsByRow = null;
+        }
+      }
+      const pendingPulItems = (pulItemsByRow ?? []).filter((item) => !item.auditado);
       const firstPendingPul = pendingPulItems[0];
       if (firstPendingPul) {
         openPvpsPulPopup(row, firstPendingPul.end_pul);
@@ -969,7 +985,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       openPvpsPulPopup(next.row, next.endPul);
       return;
     }
-    openPvpsPopup(next.row);
+    void openPvpsPopup(next.row);
   }
 
   function openNextAlocacaoFrom(currentQueueId: string, currentZone?: string | null): void {
@@ -1642,7 +1658,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 if (item.kind === "pul") {
                                   openPvpsPulPopup(row, item.endPul);
                                 } else {
-                                  openPvpsPopup(row);
+                                  void openPvpsPopup(row);
                                 }
                               }}
                               title="Editar"
