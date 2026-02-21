@@ -69,6 +69,8 @@ type PvpsFeedItem =
   };
 
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
+const FEED_ACTIVE_CODDV_LIMIT = 50;
+const FEED_NEXT_PREVIEW_LIMIT = 5;
 
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
@@ -682,7 +684,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     for (const item of pvpsQueueProducts) {
       if (!pvpsEligibleCoddv.has(item.coddv)) continue;
       list.push(item.coddv);
-      if (list.length >= 5) break;
+      if (list.length >= FEED_ACTIVE_CODDV_LIMIT) break;
     }
     return list;
   }, [pvpsQueueProducts, pvpsEligibleCoddv]);
@@ -692,7 +694,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     for (const item of alocQueueProducts) {
       if (!alocEligibleCoddv.has(item.coddv)) continue;
       list.push(item.coddv);
-      if (list.length >= 5) break;
+      if (list.length >= FEED_ACTIVE_CODDV_LIMIT) break;
     }
     return list;
   }, [alocQueueProducts, alocEligibleCoddv]);
@@ -865,7 +867,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (tab === "pvps") {
       return pvpsQueueProducts
         .filter((item) => pvpsEligibleCoddv.has(item.coddv))
-        .slice(5, 10)
+        .slice(FEED_ACTIVE_CODDV_LIMIT, FEED_ACTIVE_CODDV_LIMIT + FEED_NEXT_PREVIEW_LIMIT)
         .map((item) => ({
           key: `pvps-next:${item.coddv}`,
           coddv: item.coddv,
@@ -875,7 +877,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
     return alocQueueProducts
       .filter((item) => alocEligibleCoddv.has(item.coddv))
-      .slice(5, 10)
+      .slice(FEED_ACTIVE_CODDV_LIMIT, FEED_ACTIVE_CODDV_LIMIT + FEED_NEXT_PREVIEW_LIMIT)
       .map((item) => ({
         key: `aloc-next:${item.coddv}`,
         coddv: item.coddv,
@@ -2028,13 +2030,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     </select>
                   </div>
                 </label>
-                <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa Separação</button>
+                <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
               </form>
             ) : null}
 
             {activePvpsMode === "pul" ? (
               <div className="pvps-pul-box">
-                <h4>Etapa Pulmão individual</h4>
                 <p>Linha Separação: <strong>{activePvps.end_sep}</strong> | Validade linha: <strong>{activePvps.val_sep ?? "-"}</strong></p>
                 {activePvps.end_sit ? <p>Ocorrência linha: <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong></p> : null}
                 {pulBusy ? <p>Carregando endereços de Pulmão...</p> : null}
@@ -2074,7 +2075,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       </select>
                     </div>
                     <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
-                      Salvar Pulmão
+                      Salvar
                     </button>
                   </div>
                 ) : null}
@@ -2164,7 +2165,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 </div>
               </label>
               <button className="btn btn-primary" type="submit" disabled={busy || Boolean(alocFeedback && !editingAlocCompleted)}>
-                Salvar Alocação
+                Salvar
               </button>
             </form>
 

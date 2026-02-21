@@ -4428,6 +4428,19 @@ small {
   max-height: calc(100dvh - 20px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  gap: 8px;
+  padding: 14px;
+}
+
+.pvps-popup-card > p {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+  line-height: 1.25;
+}
+
+.pvps-popup-card .form-grid {
+  gap: 8px;
 }
 
 .pvps-zone-popup-card {
@@ -4731,17 +4744,23 @@ small {
 }
 
 .pvps-pul-box {
-  margin-top: 4px;
+  margin-top: 0;
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
+}
+
+.pvps-pul-box p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.25;
 }
 
 .pvps-pul-row {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 6px;
   align-items: stretch;
 }
 
