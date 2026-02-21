@@ -1964,7 +1964,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         {open ? (
                           <div className="pvps-row-details">
                             <small>Andar {formatAndar(row.nivel)} | Auditor: {row.auditor_nome}</small>
-                            <small>Validade Sistema: {row.val_sist} | Informada: {row.val_conf ?? "-"}</small>
+                            <small>Validade Sistema: {row.val_sist}</small>
+                            <small>Informada: {row.val_conf ?? "-"}</small>
                             <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
                           </div>
                         ) : null}
@@ -2180,10 +2181,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
             {alocResult ? (
               <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "warn" : "bad"}`}>
-                Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}
-                {alocResult.aud_sit === "ocorrencia"
-                  ? ""
-                  : ` | Sistema: ${alocResult.val_sist} | Informado: ${alocResult.val_conf ?? "-"}`}
+                <div>Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}</div>
+                {alocResult.aud_sit === "ocorrencia" ? null : (
+                  <>
+                    <div>Sistema: {alocResult.val_sist}</div>
+                    <div>Informada: {alocResult.val_conf ?? "-"}</div>
+                  </>
+                )}
               </div>
             ) : null}
             {alocFeedback ? (
