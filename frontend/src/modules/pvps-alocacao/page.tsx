@@ -557,6 +557,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setPulItems([]);
       setPulInputs({});
       setPulEndSits({});
+      setShowSepOccurrence(false);
       return;
     }
 
@@ -608,7 +609,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (activePulEnd && pulItems.some((item) => item.end_pul === activePulEnd)) return;
     const next = pulItems.find((item) => !item.auditado) ?? pulItems[0];
     setActivePulEnd(next?.end_pul ?? null);
+    setShowPulOccurrence(false);
   }, [activePvpsMode, pulItems, activePulEnd]);
+
+  useEffect(() => {
+    setShowAlocOccurrence(false);
+    setAlocEndSit("");
+    setAlocValConf("");
+  }, [activeAlocQueue]);
 
   const zoneFilterSet = useMemo(() => new Set(selectedZones), [selectedZones]);
 
@@ -2046,38 +2054,45 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
               {activePvpsMode === "sep" ? (
                 <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
-                  {endSit !== "vazio" && endSit !== "obstruido" ? (
-                    <label>
-                      Validade do Produto
-                      <input
-                        value={valSep}
-                        onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                        placeholder="MMAA"
-                        maxLength={4}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        required
-                        autoFocus
-                      />
-                    </label>
-                  ) : null}
-                  <div className={`pvps-occurrence-minimal${endSit ? " has-value" : ""}`}>
-                    <button
-                      type="button"
-                      className={`pvps-occurrence-toggle${showSepOccurrence || endSit ? " is-open" : ""}`}
-                      onClick={() => setShowSepOccurrence((v) => !v)}
-                      title="Ocorrência do endereço"
-                      aria-expanded={showSepOccurrence || Boolean(endSit)}
-                      aria-label="Registrar ocorrência"
-                    >
-                      ⚠️
-                    </button>
+                  <label>
+                    Validade do Produto
+                    <div className="pvps-validity-row">
+                      <button
+                        type="button"
+                        className={`pvps-occurrence-toggle${showSepOccurrence || endSit ? " is-open" : ""}`}
+                        onClick={() => {
+                          if (!showSepOccurrence) {
+                            setShowSepOccurrence(true);
+                            if (!endSit) { setEndSit("vazio"); setValSep(""); }
+                          } else {
+                            setShowSepOccurrence(false);
+                          }
+                        }}
+                        title="Registrar ocorrência"
+                        aria-label="Registrar ocorrência"
+                      >
+                        ⚠️
+                      </button>
+                      {endSit !== "vazio" && endSit !== "obstruido" ? (
+                        <input
+                          value={valSep}
+                          onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                          placeholder="MMAA"
+                          maxLength={4}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          required
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(endSit as PvpsEndSit)}</span>
+                      )}
+                    </div>
                     {showSepOccurrence || endSit ? (
                       <select
                         className="pvps-occurrence-select-minimal"
                         value={endSit}
                         aria-label="Ocorrência do endereço"
-                        autoFocus
                         onChange={(event) => {
                           const next = event.target.value;
                           const parsed = next === "vazio" || next === "obstruido" ? next : "";
@@ -2091,7 +2106,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <option value="obstruido">Obstruído</option>
                       </select>
                     ) : null}
-                  </div>
+                  </label>
                   <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
                 </form>
               ) : null}
@@ -2109,33 +2124,46 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <strong>{activePulItem.end_pul}</strong>
                         <small>{activePulItem.auditado ? "Auditado" : "Pendente"}</small>
                       </div>
-                      {(pulEndSits[activePulItem.end_pul] ?? "") !== "vazio" && (pulEndSits[activePulItem.end_pul] ?? "") !== "obstruido" ? (
-                        <input
-                          value={pulInputs[activePulItem.end_pul] ?? ""}
-                          onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
-                          placeholder="MMAA"
-                          maxLength={4}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                        />
-                      ) : null}
-                      <div className={`pvps-occurrence-minimal${pulEndSits[activePulItem.end_pul] ? " has-value" : ""}`}>
-                        <button
-                          type="button"
-                          className={`pvps-occurrence-toggle${showPulOccurrence || pulEndSits[activePulItem.end_pul] ? " is-open" : ""}`}
-                          onClick={() => setShowPulOccurrence((v) => !v)}
-                          title="Ocorrência do endereço"
-                          aria-expanded={showPulOccurrence || Boolean(pulEndSits[activePulItem.end_pul])}
-                          aria-label="Registrar ocorrência"
-                        >
-                          ⚠️
-                        </button>
+                      <label>
+                        Validade do Pulmão
+                        <div className="pvps-validity-row">
+                          <button
+                            type="button"
+                            className={`pvps-occurrence-toggle${showPulOccurrence || pulEndSits[activePulItem.end_pul] ? " is-open" : ""}`}
+                            onClick={() => {
+                              if (!showPulOccurrence) {
+                                setShowPulOccurrence(true);
+                                if (!pulEndSits[activePulItem.end_pul]) {
+                                  setPulEndSits((prev) => ({ ...prev, [activePulItem.end_pul]: "vazio" }));
+                                  setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: "" }));
+                                }
+                              } else {
+                                setShowPulOccurrence(false);
+                              }
+                            }}
+                            title="Registrar ocorrência"
+                            aria-label="Registrar ocorrência"
+                          >
+                            ⚠️
+                          </button>
+                          {(pulEndSits[activePulItem.end_pul] ?? "") !== "vazio" && (pulEndSits[activePulItem.end_pul] ?? "") !== "obstruido" ? (
+                            <input
+                              value={pulInputs[activePulItem.end_pul] ?? ""}
+                              onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                              placeholder="MMAA"
+                              maxLength={4}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                            />
+                          ) : (
+                            <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(pulEndSits[activePulItem.end_pul] as PvpsEndSit)}</span>
+                          )}
+                        </div>
                         {showPulOccurrence || pulEndSits[activePulItem.end_pul] ? (
                           <select
                             className="pvps-occurrence-select-minimal"
                             value={pulEndSits[activePulItem.end_pul] ?? ""}
                             aria-label="Ocorrência do endereço"
-                            autoFocus
                             onChange={(event) => {
                               const next = event.target.value;
                               const parsed = next === "vazio" || next === "obstruido" ? next : "";
@@ -2151,7 +2179,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <option value="obstruido">Obstruído</option>
                           </select>
                         ) : null}
-                      </div>
+                      </label>
                       <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
                         Salvar
                       </button>
@@ -2210,38 +2238,45 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
               {!alocFeedback ? (
                 <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
-                  {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
-                    <label>
-                      Validade do Produto
-                      <input
-                        value={alocValConf}
-                        onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                        placeholder="MMAA"
-                        maxLength={4}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        required
-                        autoFocus
-                      />
-                    </label>
-                  ) : null}
-                  <div className={`pvps-occurrence-minimal${alocEndSit ? " has-value" : ""}`}>
-                    <button
-                      type="button"
-                      className={`pvps-occurrence-toggle${showAlocOccurrence || alocEndSit ? " is-open" : ""}`}
-                      onClick={() => setShowAlocOccurrence((v) => !v)}
-                      title="Ocorrência do endereço"
-                      aria-expanded={showAlocOccurrence || Boolean(alocEndSit)}
-                      aria-label="Registrar ocorrência"
-                    >
-                      ⚠️
-                    </button>
+                  <label>
+                    Validade do Produto
+                    <div className="pvps-validity-row">
+                      <button
+                        type="button"
+                        className={`pvps-occurrence-toggle${showAlocOccurrence || alocEndSit ? " is-open" : ""}`}
+                        onClick={() => {
+                          if (!showAlocOccurrence) {
+                            setShowAlocOccurrence(true);
+                            if (!alocEndSit) { setAlocEndSit("vazio"); setAlocValConf(""); }
+                          } else {
+                            setShowAlocOccurrence(false);
+                          }
+                        }}
+                        title="Registrar ocorrência"
+                        aria-label="Registrar ocorrência"
+                      >
+                        ⚠️
+                      </button>
+                      {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
+                        <input
+                          value={alocValConf}
+                          onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                          placeholder="MMAA"
+                          maxLength={4}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          required
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(alocEndSit as PvpsEndSit)}</span>
+                      )}
+                    </div>
                     {showAlocOccurrence || alocEndSit ? (
                       <select
                         className="pvps-occurrence-select-minimal"
                         value={alocEndSit}
                         aria-label="Ocorrência do endereço"
-                        autoFocus
                         onChange={(event) => {
                           const next = event.target.value;
                           const parsed = next === "vazio" || next === "obstruido" ? next : "";
@@ -2255,7 +2290,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <option value="obstruido">Obstruído</option>
                       </select>
                     ) : null}
-                  </div>
+                  </label>
                   <button className="btn btn-primary" type="submit" disabled={busy}>
                     Salvar
                   </button>
