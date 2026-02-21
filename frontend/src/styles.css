@@ -4606,7 +4606,7 @@ small {
   padding: 18px 16px;
 }
 
-/* Occurrence Select */
+/* Occurrence Select — legacy wrap (kept for fallback) */
 .pvps-occurrence-wrap {
   display: flex;
   align-items: center;
@@ -4636,6 +4636,58 @@ small {
   border-radius: 12px;
   font-size: 15px;
   padding: 10px 12px;
+}
+
+/* Occurrence Select — minimal inline version */
+.pvps-occurrence-minimal {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 0 2px;
+  border-top: 1px dashed #dde6f3;
+  margin-top: 2px;
+}
+
+.pvps-occurrence-emoji {
+  font-size: 1.05rem;
+  line-height: 1;
+  flex: 0 0 auto;
+  opacity: 0.75;
+  cursor: default;
+  user-select: none;
+  transition: opacity 150ms ease;
+}
+
+.pvps-occurrence-minimal:has(.pvps-occurrence-select-minimal:not([value=""])) .pvps-occurrence-emoji,
+.pvps-occurrence-minimal:focus-within .pvps-occurrence-emoji {
+  opacity: 1;
+}
+
+.pvps-occurrence-select-minimal {
+  flex: 1 1 auto;
+  min-height: 36px !important;
+  height: 36px;
+  border-radius: 8px !important;
+  font-size: 0.88rem !important;
+  padding: 5px 10px !important;
+  border: 1px solid #d4dce9;
+  background: #f8fafd;
+  color: #3d5278;
+  appearance: auto;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.pvps-occurrence-select-minimal:focus {
+  outline: none;
+  border-color: #7aa4da;
+  background: #fff;
+}
+
+.pvps-occurrence-select-minimal:not([value=""]) {
+  border-color: #f0b94a;
+  background: #fffbf0;
+  color: #7a4f00;
+  font-weight: 600;
 }
 
 /* Zone Picker */
