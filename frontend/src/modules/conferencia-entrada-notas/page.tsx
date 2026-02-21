@@ -5174,7 +5174,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
             <form className="termo-form termo-scan-form" onSubmit={onSubmitBarras}>
               <h4>Conferência de produtos</h4>
-              <div className="termo-scan-grid">
+              <div className="termo-scan-grid termo-scan-grid-stack">
                 <label className="termo-scan-field termo-scan-field-barcode">
                   Código de barras
                   <div className="input-icon-wrap with-action">
