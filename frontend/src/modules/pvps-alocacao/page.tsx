@@ -544,13 +544,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const sortedPvpsAllRows = useMemo(
     () => [...pvpsRows].sort((a, b) => {
-      const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
-      if (byDate !== 0) return byDate;
-      const byCoddv = a.coddv - b.coddv;
-      if (byCoddv !== 0) return byCoddv;
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
-      return a.end_sep.localeCompare(b.end_sep);
+      const byEndereco = a.end_sep.localeCompare(b.end_sep);
+      if (byEndereco !== 0) return byEndereco;
+      const byCoddv = a.coddv - b.coddv;
+      if (byCoddv !== 0) return byCoddv;
+      return dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
     }),
     [pvpsRows]
   );
@@ -679,20 +679,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const alocActiveCoddvSet = useMemo(() => new Set(alocActiveCoddvList), [alocActiveCoddvList]);
 
   const pvpsFeedItems = useMemo<PvpsFeedItem[]>(() => {
-    const coddvOrder = new Map<number, number>();
-    pvpsActiveCoddvList.forEach((coddv, index) => coddvOrder.set(coddv, index));
     return pvpsFeedItemsAll
       .filter((item) => pvpsActiveCoddvSet.has(item.row.coddv))
       .filter((item) => !selectedZones.length || zoneFilterSet.has(item.zone))
       .sort((a, b) => {
-        const byCoddv = (coddvOrder.get(a.row.coddv) ?? 999) - (coddvOrder.get(b.row.coddv) ?? 999);
-        if (byCoddv !== 0) return byCoddv;
-        if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
         const byZone = a.zone.localeCompare(b.zone);
         if (byZone !== 0) return byZone;
+        if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
         return a.endereco.localeCompare(b.endereco);
       });
-  }, [pvpsFeedItemsAll, pvpsActiveCoddvSet, selectedZones, zoneFilterSet, pvpsActiveCoddvList]);
+  }, [pvpsFeedItemsAll, pvpsActiveCoddvSet, selectedZones, zoneFilterSet]);
 
   const visibleAlocRows = useMemo(() => {
     const coddvOrder = new Map<number, number>();
@@ -968,15 +964,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setShowAlocPopup(true);
   }
 
-  function openNextPvpsFrom(currentFeedKey: string, currentZone?: string | null): void {
+  function openNextPvpsFrom(currentFeedKey: string): void {
     const index = pvpsFeedItems.findIndex((item) => item.feedKey === currentFeedKey);
-    const fallbackZone = index >= 0 ? pvpsFeedItems[index]?.zone ?? null : null;
-    const targetZone = currentZone ?? fallbackZone;
     const startAt = index >= 0 ? index + 1 : 0;
-    let next: PvpsFeedItem | undefined;
-    if (targetZone) {
-      next = pvpsFeedItems.find((item, itemIndex) => itemIndex >= startAt && item.zone === targetZone);
-    }
+    const next = pvpsFeedItems.find((_, itemIndex) => itemIndex >= startAt);
     if (!next) {
       closePvpsPopup();
       return;
@@ -986,6 +977,25 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       return;
     }
     void openPvpsPopup(next.row);
+  }
+
+  function openNextPvpsSepFrom(currentFeedKey: string): void {
+    const sepItems = pvpsFeedItems.filter((item): item is Extract<PvpsFeedItem, { kind: "sep" }> => item.kind === "sep");
+    if (!sepItems.length) {
+      closePvpsPopup();
+      return;
+    }
+    const index = sepItems.findIndex((item) => item.feedKey === currentFeedKey);
+    const next = index >= 0 ? sepItems[index + 1] : sepItems[0];
+    if (!next) {
+      closePvpsPopup();
+      return;
+    }
+    setEditingPvpsCompleted(null);
+    setActivePvpsMode("sep");
+    setActivePulEnd(null);
+    setActivePvpsKey(keyOfPvps(next.row));
+    setShowPvpsPopup(true);
   }
 
   function openNextAlocacaoFrom(currentQueueId: string, currentZone?: string | null): void {
@@ -1021,7 +1031,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
     const currentKey = keyOfPvps(activePvps);
     const currentFeedKey = `sep:${currentKey}`;
-    const currentZone = activePvps.zona;
     const isEditingCompleted = Boolean(editingPvpsCompleted);
     if (!isOnline) {
       try {
@@ -1042,7 +1051,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (hasOcorrencia) {
           setPvpsRows((current) => current.filter((row) => keyOfPvps(row) !== currentKey));
           setStatusMessage("Separação com ocorrência salva offline. Item retirado localmente e será sincronizado ao reconectar.");
-          openNextPvpsFrom(currentFeedKey, currentZone);
+          openNextPvpsSepFrom(currentFeedKey);
         } else {
           const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
           setPvpsRows((current) => current.map((row) => (
@@ -1050,7 +1059,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               ? { ...row, status: "pendente_pul", val_sep: localVal, end_sit: null }
               : row
           )));
-          setStatusMessage("Separação salva offline. Pulmão liberado localmente e será sincronizado ao reconectar.");
+          setStatusMessage("Separação salva offline. Pulmão ficará pendente para auditoria separada.");
+          openNextPvpsSepFrom(currentFeedKey);
         }
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Separação offline.");
@@ -1072,7 +1082,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
         setStatusMessage("Separação com ocorrência. Item removido do feed e não será enviado ao frontend.");
       } else {
-        setStatusMessage(`Separação salva. Pulmão liberado: ${result.pul_auditados}/${result.pul_total} auditados.`);
+        setStatusMessage(`Separação salva. Pulmão liberado e ficará pendente para auditoria separada (${result.pul_auditados}/${result.pul_total} auditados).`);
       }
       await upsertOfflineSepCache({
         cd: activeCd,
@@ -1086,19 +1096,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setEditingPvpsCompleted(null);
         closePvpsPopup();
       } else {
-        if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
-          openNextPvpsFrom(currentFeedKey, currentZone);
-        } else {
-          const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
-          setFeedPulBySepKey((current) => ({ ...current, [currentKey]: items }));
-          setPulItems(items);
-          const firstPendingPul = items.find((item) => !item.auditado);
-          if (firstPendingPul) {
-            openPvpsPulPopup(activePvps, firstPendingPul.end_pul);
-          } else {
-            openNextPvpsFrom(currentFeedKey, currentZone);
-          }
-        }
+        openNextPvpsSepFrom(currentFeedKey);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Separação.");
@@ -1122,7 +1120,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
     const currentKey = keyOfPvps(activePvps);
     const currentFeedKey = `pul:${currentKey}:${endPul}`;
-    const currentZone = zoneFromEndereco(endPul);
 
     if (!isOnline) {
       let hasSep = await hasOfflineSepCache(activeCd, activePvps.coddv, activePvps.end_sep);
@@ -1161,7 +1158,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           setActivePulEnd(nextPul.end_pul);
           setShowPvpsPopup(true);
         } else {
-          openNextPvpsFrom(currentFeedKey, currentZone);
+          openNextPvpsFrom(currentFeedKey);
         }
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Pulmão offline.");
@@ -1218,7 +1215,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           setShowPvpsPopup(true);
         }
       } else {
-        openNextPvpsFrom(currentFeedKey, currentZone);
+        openNextPvpsFrom(currentFeedKey);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Pulmão.");
