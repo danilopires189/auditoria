@@ -4267,6 +4267,9 @@ small {
 .pvps-module-body {
   display: grid;
   gap: 14px;
+  width: 100%;
+  justify-self: stretch;
+  align-self: start;
 }
 
 .pvps-tabs {
@@ -4549,9 +4552,11 @@ small {
 .pvps-list {
   display: grid;
   gap: 8px;
-  max-height: 62dvh;
-  overflow: auto;
-  padding-right: 4px;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+  align-content: start;
 }
 
 .pvps-row {
@@ -4671,6 +4676,7 @@ small {
 .pvps-zone-group {
   display: grid;
   gap: 6px;
+  width: 100%;
 }
 
 .pvps-zone-divider,
