@@ -165,6 +165,8 @@ export async function syncPvpsOfflineQueue(params: {
       if (isOtherUserConflict(code)) {
         try {
           await registerDiscard(event, code ?? "CONFLICT_OTHER_USER");
+        } catch {
+          // Registro auditável é best effort; o evento local deve ser descartado mesmo assim.
         } finally {
           await removeOfflineEvent(event.event_id);
         }
