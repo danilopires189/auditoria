@@ -1432,7 +1432,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <span>Início</span>
           </Link>
           <div className="module-topbar-user-side">
-            <span className="module-user-greeting">Olá, {displayUserName}</span>
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "🟢 Online" : "🔴 Offline"}</span>
           </div>
         </div>
@@ -1449,7 +1448,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           <div className="module-screen-header">
             <div className="module-screen-title-row">
               <div className="module-screen-title">
-                <h2>Auditoria por zona</h2>
+                <h2>Olá, {displayUserName}</h2>
+                <p>Auditoria por zona.</p>
                 <p>PVPS: Pulmão só libera quando a Separação for salva sem ocorrência.</p>
               </div>
               <div className="pvps-toolbar">
