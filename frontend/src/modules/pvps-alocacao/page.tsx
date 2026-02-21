@@ -1484,20 +1484,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             </div>
 
             <div className="pvps-toolbar-group">
-              <small className="pvps-toolbar-label">Tipo</small>
-              <div className="pvps-tabs">
-                <button type="button" className={`btn btn-muted pvps-toolbar-btn${tab === "pvps" ? " is-active" : ""}`} onClick={() => setTab("pvps")}>
-                  <span className="pvps-btn-icon" aria-hidden="true">{listIcon()}</span>
-                  <span>PVPS</span>
-                </button>
-                <button type="button" className={`btn btn-muted pvps-toolbar-btn${tab === "alocacao" ? " is-active" : ""}`} onClick={() => setTab("alocacao")}>
-                  <span className="pvps-btn-icon" aria-hidden="true">{listIcon()}</span>
-                  <span>Alocação</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="pvps-toolbar-group">
               <small className="pvps-toolbar-label">Visualização</small>
               <div className="pvps-tabs">
                 <button
