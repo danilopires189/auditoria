@@ -319,7 +319,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
 
-  const [tab, setTab] = useState<ModuleTab>("pvps");
+  const [tab, setTab] = useState<ModuleTab>(() => {
+    try {
+      const saved = window.localStorage.getItem("pvps-alocacao:tab");
+      return saved === "alocacao" ? "alocacao" : "pvps";
+    } catch {
+      return "pvps";
+    }
+  });
   const [feedView, setFeedView] = useState<FeedView>("pendentes");
   const [selectedZones, setSelectedZones] = useState<string[]>([]);
   const [showZoneFilterPopup, setShowZoneFilterPopup] = useState(false);
@@ -1626,7 +1633,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   <button
                     type="button"
                     className={`btn btn-muted pvps-toolbar-btn${tab === "pvps" ? " is-active" : ""}`}
-                    onClick={() => setTab("pvps")}
+                    onClick={() => { setTab("pvps"); try { window.localStorage.setItem("pvps-alocacao:tab", "pvps"); } catch { /**/ } }}
                     disabled={busy}
                     aria-pressed={tab === "pvps"}
                   >
@@ -1636,7 +1643,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   <button
                     type="button"
                     className={`btn btn-muted pvps-toolbar-btn${tab === "alocacao" ? " is-active" : ""}`}
-                    onClick={() => setTab("alocacao")}
+                    onClick={() => { setTab("alocacao"); try { window.localStorage.setItem("pvps-alocacao:tab", "alocacao"); } catch { /**/ } }}
                     disabled={busy}
                     aria-pressed={tab === "alocacao"}
                   >
