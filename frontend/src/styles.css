@@ -4571,8 +4571,8 @@ small {
 }
 
 .pvps-row.is-active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(22, 63, 135, 0.24);
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 .pvps-row-head {
