@@ -1450,33 +1450,34 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="module-screen-title">
                 <h2>Olá, {displayUserName}</h2>
               </div>
-              <div className="pvps-toolbar">
-                <div className="pvps-toolbar-group">
-                  <small className="pvps-toolbar-label">Ações</small>
-                  <div className="pvps-actions">
-                    <button
-                      type="button"
-                      className={`btn btn-muted pvps-toolbar-btn${tab === "pvps" ? " is-active" : ""}`}
-                      onClick={() => setTab("pvps")}
-                      disabled={busy}
-                    >
-                      <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
-                      <span>Iniciar PVPS</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn btn-muted pvps-toolbar-btn${tab === "alocacao" ? " is-active" : ""}`}
-                      onClick={() => setTab("alocacao")}
-                      disabled={busy}
-                    >
-                      <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
-                      <span>Iniciar Alocação</span>
-                    </button>
-                    <button type="button" className="btn btn-muted pvps-toolbar-btn" onClick={() => void loadCurrent()} disabled={busy}>
-                      <span className="pvps-btn-icon" aria-hidden="true">{refreshIcon()}</span>
-                      <span>{busy ? "Atualizando..." : "Atualizar"}</span>
-                    </button>
-                  </div>
+              <button type="button" className="btn btn-muted pvps-toolbar-btn" onClick={() => void loadCurrent()} disabled={busy}>
+                <span className="pvps-btn-icon" aria-hidden="true">{refreshIcon()}</span>
+                <span>{busy ? "Atualizando..." : "Atualizar"}</span>
+              </button>
+            </div>
+
+            <div className="pvps-toolbar">
+              <div className="pvps-toolbar-group">
+                <small className="pvps-toolbar-label">Ações</small>
+                <div className="pvps-actions">
+                  <button
+                    type="button"
+                    className={`btn btn-muted pvps-toolbar-btn${tab === "pvps" ? " is-active" : ""}`}
+                    onClick={() => setTab("pvps")}
+                    disabled={busy}
+                  >
+                    <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
+                    <span>Iniciar PVPS</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-muted pvps-toolbar-btn${tab === "alocacao" ? " is-active" : ""}`}
+                    onClick={() => setTab("alocacao")}
+                    disabled={busy}
+                  >
+                    <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
+                    <span>Iniciar Alocação</span>
+                  </button>
                 </div>
               </div>
             </div>
