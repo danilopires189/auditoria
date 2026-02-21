@@ -139,6 +139,12 @@ function dateSortValue(value: string | null | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function normalizeMmaaText(value: string | null | undefined): string | null {
+  const digits = (value ?? "").replace(/\D/g, "").slice(0, 4);
+  if (digits.length !== 4) return null;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
 function occurrenceIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -211,6 +217,14 @@ function doneIcon() {
   );
 }
 
+function nextIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
 function clearSelectionIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -233,6 +247,7 @@ function selectFilteredIcon() {
 }
 
 type HistoryStatusTone = "ok" | "bad" | "warn" | "wait";
+type PulFeedbackTone = "ok" | "bad" | "warn";
 
 function pvpsHistoryStatus(row: PvpsCompletedRow): { label: string; emoticon: string; tone: HistoryStatusTone } {
   if (row.end_sit === "vazio" || row.end_sit === "obstruido") {
@@ -304,6 +319,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [valSep, setValSep] = useState("");
   const [pulInputs, setPulInputs] = useState<Record<string, string>>({});
   const [pulEndSits, setPulEndSits] = useState<Record<string, PvpsEndSit | "">>({});
+  const [pulFeedback, setPulFeedback] = useState<{ tone: PulFeedbackTone; text: string; feedKey: string } | null>(null);
 
   const [activeAlocQueue, setActiveAlocQueue] = useState<string | null>(null);
   const activeAloc = useMemo(
@@ -858,6 +874,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [tab, pvpsQueueProducts, pvpsEligibleCoddv, alocQueueProducts, alocEligibleCoddv]);
 
   async function openPvpsPopup(row: PvpsManifestRow): Promise<void> {
+    setPulFeedback(null);
     if (row.status === "pendente_pul") {
       const rowKey = keyOfPvps(row);
       const cachedPulItems = feedPulBySepKey[rowKey];
@@ -885,6 +902,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openPvpsPulPopup(row: PvpsManifestRow, endPul: string): void {
+    setPulFeedback(null);
     setEditingPvpsCompleted(null);
     setActivePvpsMode("pul");
     setActivePulEnd(endPul);
@@ -902,6 +920,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function closePvpsPopup(): void {
+    setPulFeedback(null);
     setActivePvpsMode("sep");
     setActivePulEnd(null);
     setShowPvpsPopup(false);
@@ -1148,6 +1167,40 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
     const currentKey = keyOfPvps(activePvps);
     const currentFeedKey = `pul:${currentKey}:${endPul}`;
+    const valPul = hasPulOcorrencia ? null : normalizeMmaaText(value);
+
+    const applyLocalPulSave = (params?: {
+      status?: PvpsManifestRow["status"];
+      pul_total?: number;
+      pul_auditados?: number;
+    }): void => {
+      setPulItems((current) => current.map((item) => (
+        item.end_pul === endPul
+          ? { ...item, auditado: true, end_sit: hasPulOcorrencia ? pulEndSit : null, val_pul: valPul }
+          : item
+      )));
+      setFeedPulBySepKey((current) => {
+        const source = current[currentKey] ?? pulItems;
+        if (!source.length) return current;
+        const nextItems = source.map((item) => (
+          item.end_pul === endPul
+            ? { ...item, auditado: true, end_sit: hasPulOcorrencia ? pulEndSit : null, val_pul: valPul }
+            : item
+        ));
+        return { ...current, [currentKey]: nextItems };
+      });
+      setPvpsRows((current) => current.map((row) => {
+        if (keyOfPvps(row) !== currentKey) return row;
+        return {
+          ...row,
+          status: params?.status ?? row.status,
+          pul_total: params?.pul_total ?? row.pul_total,
+          pul_auditados: params?.pul_auditados ?? Math.min(row.pul_auditados + 1, Math.max(row.pul_total, row.pul_auditados + 1))
+        };
+      }));
+      setPulInputs((prev) => ({ ...prev, [endPul]: "" }));
+      setPulEndSits((prev) => ({ ...prev, [endPul]: "" }));
+    };
 
     if (!isOnline) {
       let hasSep = await hasOfflineSepCache(activeCd, activePvps.coddv, activePvps.end_sep);
@@ -1175,19 +1228,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           val_pul: hasPulOcorrencia ? null : value.trim(),
           audit_id: activePvps.audit_id
         });
-        setPulInputs((prev) => ({ ...prev, [endPul]: "" }));
-        setPulEndSits((prev) => ({ ...prev, [endPul]: "" }));
-        setStatusMessage(hasPulOcorrencia
-          ? "Pulmão com ocorrência salvo localmente (offline). Será sincronizado automaticamente ao reconectar."
-          : "Pulmão salvo localmente (offline). Será sincronizado automaticamente ao reconectar.");
-        const nextPul = pulItems.find((item) => item.end_pul !== endPul && !item.auditado);
-        if (nextPul) {
-          setActivePvpsMode("pul");
-          setActivePulEnd(nextPul.end_pul);
-          setShowPvpsPopup(true);
-        } else {
-          openNextPvpsFrom(currentFeedKey);
-        }
+        applyLocalPulSave();
+        const feedbackText = hasPulOcorrencia
+          ? "Pulmão com ocorrência salvo (offline). Use o ícone à direita para ir ao próximo."
+          : "Pulmão salvo (offline). Use o ícone à direita para ir ao próximo.";
+        setPulFeedback({ tone: "warn", text: feedbackText, feedKey: currentFeedKey });
+        setStatusMessage(feedbackText);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Pulmão offline.");
       }
@@ -1215,41 +1261,44 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         end_sit: hasPulOcorrencia ? pulEndSit : null,
         val_pul: hasPulOcorrencia ? null : value
       });
+      applyLocalPulSave({
+        status: result.status,
+        pul_total: result.pul_total,
+        pul_auditados: result.pul_auditados
+      });
+      let feedbackTone: PulFeedbackTone = "warn";
+      let feedbackText = "";
       if (result.status === "concluido") {
-        setStatusMessage("PVPS concluído com conformidade (validade da Separação <= validade do Pulmão). Feed atualizado automaticamente.");
+        feedbackTone = "ok";
+        feedbackText = "PVPS concluído com conformidade. Use o ícone à direita para ir ao próximo.";
       } else if (result.status === "nao_conforme") {
-        setStatusMessage("PVPS concluído sem conformidade: existe Pulmão com validade menor que a Separação.");
+        feedbackTone = "bad";
+        feedbackText = "PVPS concluído sem conformidade. Use o ícone à direita para ir ao próximo.";
       } else {
-        setStatusMessage(hasPulOcorrencia
-          ? `Pulmão com ocorrência salvo. ${result.pul_auditados}/${result.pul_total} auditados.`
-          : `Pulmão salvo. ${result.pul_auditados}/${result.pul_total} auditados.`);
+        feedbackTone = "warn";
+        feedbackText = hasPulOcorrencia
+          ? `Pulmão com ocorrência salvo (${result.pul_auditados}/${result.pul_total}). Use o ícone à direita para ir ao próximo.`
+          : `Pulmão salvo (${result.pul_auditados}/${result.pul_total}). Use o ícone à direita para ir ao próximo.`;
       }
-      await loadCurrent();
+      setPulFeedback({ tone: feedbackTone, text: feedbackText, feedKey: currentFeedKey });
+      setStatusMessage(feedbackText);
       if (isEditingCompleted) {
         setEditingPvpsCompleted(null);
         closePvpsPopup();
-      } else if (result.status === "pendente_pul") {
-        const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
-        setFeedPulBySepKey((current) => ({ ...current, [currentKey]: items }));
-        setPulItems(items);
-        const pendingPulItems = items.filter((item) => !item.auditado);
-        if (pendingPulItems.length === 0) {
-          closePvpsPopup();
-        } else {
-          const currentPulIndex = pendingPulItems.findIndex((item) => item.end_pul === endPul);
-          const nextPul = pendingPulItems[currentPulIndex + 1] ?? pendingPulItems[0];
-          setActivePvpsMode("pul");
-          setActivePulEnd(nextPul.end_pul);
-          setShowPvpsPopup(true);
-        }
-      } else {
-        openNextPvpsFrom(currentFeedKey);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Pulmão.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function handlePulGoNext(): void {
+    if (!pulFeedback) return;
+    const currentFeedKey = pulFeedback.feedKey;
+    setPulFeedback(null);
+    openNextPvpsFrom(currentFeedKey);
+    void loadCurrent({ silent: true });
   }
 
   async function handleSubmitAlocacao(event: FormEvent): Promise<void> {
@@ -1960,6 +2009,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     </div>
                     <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
                       Salvar Pulmão
+                    </button>
+                  </div>
+                ) : null}
+                {pulFeedback ? (
+                  <div className={`pvps-pul-feedback pvps-result-chip ${pulFeedback.tone === "ok" ? "ok" : pulFeedback.tone === "bad" ? "bad" : "warn"}`}>
+                    <span>{pulFeedback.text}</span>
+                    <button
+                      className="btn btn-primary pvps-icon-btn pvps-pul-next-btn"
+                      type="button"
+                      onClick={handlePulGoNext}
+                      title="Ir para o próximo"
+                    >
+                      {nextIcon()}
                     </button>
                   </div>
                 ) : null}

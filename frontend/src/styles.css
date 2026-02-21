@@ -4749,6 +4749,27 @@ small {
   color: #a42e2a;
 }
 
+.pvps-result-chip.warn {
+  border: 1px solid #f2d49b;
+  background: #fff6e2;
+  color: #8a5d10;
+}
+
+.pvps-pul-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pvps-pul-feedback span {
+  min-width: 0;
+}
+
+.pvps-pul-next-btn {
+  flex: 0 0 auto;
+}
+
 @media (max-width: 980px) {
   .pvps-grid {
     grid-template-columns: 1fr;
