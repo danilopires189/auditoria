@@ -4674,6 +4674,25 @@ small {
   gap: 2px;
 }
 
+.pvps-pul-completed-group {
+  margin-top: 4px;
+  border: 1px solid #e2e9f5;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 6px 8px;
+  display: grid;
+  gap: 3px;
+}
+
+.pvps-pul-completed-title {
+  color: #2f5faa;
+  font-weight: 700;
+}
+
+.pvps-pul-completed-item {
+  color: #4d5f7f;
+}
+
 .pvps-zone-group {
   display: grid;
   gap: 6px;
