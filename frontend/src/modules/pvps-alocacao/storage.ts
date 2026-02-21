@@ -114,7 +114,8 @@ export async function saveOfflinePulEvent(params: {
   coddv: number;
   end_sep: string;
   end_pul: string;
-  val_pul: string;
+  val_pul?: string | null;
+  end_sit?: string | null;
   audit_id?: string | null;
 }): Promise<PvpsOfflineEventRow> {
   const cd = Math.trunc(params.cd);
@@ -129,7 +130,8 @@ export async function saveOfflinePulEvent(params: {
     coddv,
     end_sep: endSep,
     end_pul: endPul,
-    val_pul: params.val_pul,
+    end_sit: params.end_sit ?? null,
+    val_pul: params.val_pul ?? null,
     audit_id: params.audit_id ?? null,
     created_at: nowIso
   };

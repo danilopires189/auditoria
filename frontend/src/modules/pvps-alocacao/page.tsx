@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -285,6 +285,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [endSit, setEndSit] = useState<PvpsEndSit | "">("");
   const [valSep, setValSep] = useState("");
   const [pulInputs, setPulInputs] = useState<Record<string, string>>({});
+  const [pulEndSits, setPulEndSits] = useState<Record<string, PvpsEndSit | "">>({});
 
   const [activeAlocQueue, setActiveAlocQueue] = useState<string | null>(null);
   const activeAloc = useMemo(
@@ -313,6 +314,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [expandedAlocCompleted, setExpandedAlocCompleted] = useState<Record<string, boolean>>({});
   const [editingPvpsCompleted, setEditingPvpsCompleted] = useState<PvpsCompletedRow | null>(null);
   const [editingAlocCompleted, setEditingAlocCompleted] = useState<AlocacaoCompletedRow | null>(null);
+  const silentRefreshInFlightRef = useRef(false);
   const activeCd = profile.cd_default ?? null;
 
   async function loadAdminData(): Promise<void> {
@@ -332,9 +334,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
   }
 
-  async function loadCurrent(): Promise<void> {
-    setBusy(true);
-    setErrorMessage(null);
+  async function loadCurrent(options?: { silent?: boolean }): Promise<void> {
+    const silent = options?.silent === true;
+    if (!silent) {
+      setBusy(true);
+      setErrorMessage(null);
+    }
     try {
       if (tab === "pvps") {
         const [rows, completed] = await Promise.all([
@@ -360,9 +365,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         }
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar dados.");
+      if (!silent) {
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar dados.");
+      }
     } finally {
-      setBusy(false);
+      if (!silent) {
+        setBusy(false);
+      }
     }
   }
 
@@ -393,19 +402,33 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   useEffect(() => {
     if (!isOnline) return;
+    const refreshSilently = () => {
+      if (document.visibilityState !== "visible") return;
+      if (showPvpsPopup || showAlocPopup) return;
+      if (silentRefreshInFlightRef.current) return;
+      silentRefreshInFlightRef.current = true;
+      void loadCurrent({ silent: true }).finally(() => {
+        silentRefreshInFlightRef.current = false;
+      });
+    };
     const interval = window.setInterval(() => {
-      void loadCurrent();
+      refreshSilently();
     }, 10000);
-    const onFocus = () => { void loadCurrent(); };
+    const onFocus = () => { refreshSilently(); };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshSilently();
+      }
+    };
     window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOnline, tab, activeCd, todayBrt, feedView]);
+  }, [isOnline, tab, activeCd, todayBrt, feedView, showPvpsPopup, showAlocPopup]);
 
   useEffect(() => {
     if (!isOnline || activeCd == null || offlineSyncBusy) return;
@@ -417,7 +440,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (cancelled) return;
         if (result.synced > 0) {
           setStatusMessage(`Sincronização offline PVPS concluída: ${result.synced} evento(s) enviados.`);
-          await loadCurrent();
+          await loadCurrent({ silent: true });
         } else if (result.remaining > 0 && result.failed > 0) {
           setStatusMessage(`Sincronização offline parcial: ${result.failed} pendente(s) para nova tentativa.`);
         }
@@ -440,6 +463,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (!activePvps) {
       setPulItems([]);
       setPulInputs({});
+      setPulEndSits({});
       return;
     }
 
@@ -461,6 +485,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (activePvps.status === "pendente_sep") {
       setPulItems([]);
       setPulInputs({});
+      setPulEndSits({});
       return;
     }
 
@@ -470,10 +495,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setFeedPulBySepKey((current) => ({ ...current, [keyOfPvps(activePvps)]: items }));
         setPulItems(items);
         const mapped: Record<string, string> = {};
+        const mappedEndSit: Record<string, PvpsEndSit | ""> = {};
         for (const item of items) {
           mapped[item.end_pul] = item.val_pul?.replace("/", "") ?? "";
+          mappedEndSit[item.end_pul] = item.end_sit ?? "";
         }
         setPulInputs(mapped);
+        setPulEndSits(mappedEndSit);
       })
       .catch((error) => {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar PUL.");
@@ -934,8 +962,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setErrorMessage("CD ativo obrigatório para auditoria PVPS.");
       return;
     }
+    const pulEndSit = pulEndSits[endPul] ?? "";
+    const hasPulOcorrencia = pulEndSit === "vazio" || pulEndSit === "obstruido";
     const value = pulInputs[endPul] ?? "";
-    if (value.trim().length !== 4) {
+    if (!hasPulOcorrencia && value.trim().length !== 4) {
       setErrorMessage("Validade PUL obrigatória (mmaa).");
       return;
     }
@@ -962,11 +992,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           coddv: activePvps.coddv,
           end_sep: activePvps.end_sep,
           end_pul: endPul,
-          val_pul: value.trim(),
+          end_sit: hasPulOcorrencia ? pulEndSit : null,
+          val_pul: hasPulOcorrencia ? null : value.trim(),
           audit_id: activePvps.audit_id
         });
         setPulInputs((prev) => ({ ...prev, [endPul]: "" }));
-        setStatusMessage("PUL salvo localmente (offline). Será sincronizado automaticamente ao reconectar.");
+        setPulEndSits((prev) => ({ ...prev, [endPul]: "" }));
+        setStatusMessage(hasPulOcorrencia
+          ? "PUL com ocorrência salvo localmente (offline). Será sincronizado automaticamente ao reconectar."
+          : "PUL salvo localmente (offline). Será sincronizado automaticamente ao reconectar.");
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar PUL offline.");
       }
@@ -993,14 +1027,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         p_cd: activeCd,
         audit_id: auditId,
         end_pul: endPul,
-        val_pul: value
+        end_sit: hasPulOcorrencia ? pulEndSit : null,
+        val_pul: hasPulOcorrencia ? null : value
       });
       if (result.status === "concluido") {
         setStatusMessage("PVPS concluído com conformidade (VAL_SEP <= VAL_PUL). Feed atualizado automaticamente.");
       } else if (result.status === "nao_conforme") {
         setStatusMessage("PVPS concluído sem conformidade: existe PUL com validade menor que SEP.");
       } else {
-        setStatusMessage(`PUL salvo. ${result.pul_auditados}/${result.pul_total} auditados.`);
+        setStatusMessage(hasPulOcorrencia
+          ? `PUL com ocorrência salvo. ${result.pul_auditados}/${result.pul_total} auditados.`
+          : `PUL salvo. ${result.pul_auditados}/${result.pul_total} auditados.`);
       }
       await loadCurrent();
       if (isEditingCompleted) {
@@ -1723,14 +1760,34 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       <strong>{activePulItem.end_pul}</strong>
                       <small>{activePulItem.auditado ? "Auditado" : "Pendente"}</small>
                     </div>
-                    <input
-                      value={pulInputs[activePulItem.end_pul] ?? ""}
-                      onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
-                      placeholder="mmaa"
-                      maxLength={4}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                    />
+                    {(pulEndSits[activePulItem.end_pul] ?? "") !== "vazio" && (pulEndSits[activePulItem.end_pul] ?? "") !== "obstruido" ? (
+                      <input
+                        value={pulInputs[activePulItem.end_pul] ?? ""}
+                        onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                        placeholder="mmaa"
+                        maxLength={4}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                      />
+                    ) : null}
+                    <div className="pvps-occurrence-wrap">
+                      <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                      <select
+                        value={pulEndSits[activePulItem.end_pul] ?? ""}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                          setPulEndSits((prev) => ({ ...prev, [activePulItem.end_pul]: parsed }));
+                          if (parsed) {
+                            setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: "" }));
+                          }
+                        }}
+                      >
+                        <option value="">Sem ocorrência</option>
+                        <option value="vazio">Vazio</option>
+                        <option value="obstruido">Obstruído</option>
+                      </select>
+                    </div>
                     <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
                       Salvar PUL
                     </button>
