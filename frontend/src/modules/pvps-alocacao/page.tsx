@@ -87,6 +87,7 @@ type PvpsFeedItem =
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 const FEED_ACTIVE_CODDV_LIMIT = 50;
 const FEED_NEXT_PREVIEW_LIMIT = 5;
+const ADMIN_HISTORY_VIEW_LIMIT = 20;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
 function toDisplayName(value: string): string {
@@ -331,6 +332,29 @@ function pvpsStatusLabel(status: PvpsManifestRow["status"]): string {
   return "Concluído";
 }
 
+function ruleKindLabel(value: PvpsRuleKind): string {
+  return value === "blacklist" ? "Blacklist" : "Prioridade";
+}
+
+function moduloLabel(value: PvpsModulo): string {
+  if (value === "pvps") return "PVPS";
+  if (value === "alocacao") return "Alocação";
+  return "Ambos";
+}
+
+function ruleTargetLabel(targetType: PvpsRuleTargetType, targetValue: string): string {
+  return targetType === "zona" ? `Zona ${targetValue}` : `CODDV ${targetValue}`;
+}
+
+function historyActionLabel(value: "create" | "remove"): string {
+  return value === "create" ? "Criação" : "Remoção";
+}
+
+function applyModeLabel(value: PvpsRuleApplyMode | null): string | null {
+  if (value == null) return null;
+  return value === "apply_now" ? "Agir agora" : "Próximas inclusões";
+}
+
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
@@ -433,10 +457,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     try {
       const [activeRows, historyRows] = await Promise.all([
         fetchAdminRulesActive("ambos", activeCd),
-        fetchAdminRulesHistory({ p_cd: activeCd, modulo: "ambos", limit: 300, offset: 0 })
+        fetchAdminRulesHistory({ p_cd: activeCd, modulo: "ambos", limit: ADMIN_HISTORY_VIEW_LIMIT, offset: 0 })
       ]);
       setActiveRuleRows(activeRows);
-      setHistoryRuleRows(historyRows);
+      setHistoryRuleRows(historyRows.slice(0, ADMIN_HISTORY_VIEW_LIMIT));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar dados administrativos.");
     } finally {
@@ -1865,12 +1889,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       {activeRuleRows.length === 0 ? <p>Nenhuma regra ativa.</p> : null}
                       {activeRuleRows.map((row) => (
                         <div key={row.rule_id} className="pvps-admin-row">
-                          <span>
-                            {row.rule_kind === "blacklist" ? "Blacklist" : "Prioridade"} | {row.modulo} |{" "}
-                            {row.target_type === "zona" ? `Zona ${row.target_value}` : `CODDV ${row.target_value}`}
-                            {row.rule_kind === "priority" ? ` | nível ${row.priority_value ?? 9999}` : ""}
-                            {` | autor ${row.created_by_mat ?? "-"} - ${row.created_by_nome ?? "-"} | ${formatDateTime(row.created_at)}`}
-                          </span>
+                          <div className="pvps-admin-row-body">
+                            <strong className="pvps-admin-row-title">
+                              {ruleKindLabel(row.rule_kind)} | {ruleTargetLabel(row.target_type, row.target_value)}
+                              {row.rule_kind === "priority" ? ` | nível ${row.priority_value ?? 9999}` : ""}
+                            </strong>
+                            <small className="pvps-admin-row-meta">
+                              {moduloLabel(row.modulo)} | {row.created_by_mat ?? "-"} - {row.created_by_nome ?? "-"} | {formatDateTime(row.created_at)}
+                            </small>
+                          </div>
                           <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => void handleRemoveRule(row.rule_id)}>
                             Remover
                           </button>
@@ -1881,18 +1908,22 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 ) : (
                   <div className="pvps-admin-lists">
                     <div>
-                      <h4>Solicitações</h4>
+                      <h4>Solicitações (últimos 20)</h4>
                       {historyRuleRows.length === 0 ? <p>Sem histórico.</p> : null}
                       {historyRuleRows.map((row) => (
                         <div key={row.history_id} className="pvps-admin-row">
-                          <span>
-                            {row.action_type === "create" ? "Criação" : "Remoção"} | {row.modulo} |{" "}
-                            {row.rule_kind === "blacklist" ? "Blacklist" : "Prioridade"} |{" "}
-                            {row.target_type === "zona" ? `Zona ${row.target_value}` : `CODDV ${row.target_value}`}
-                            {row.rule_kind === "priority" ? ` | nível ${row.priority_value ?? 9999}` : ""}
-                            {row.apply_mode ? ` | modo ${row.apply_mode}` : ""}
-                            {` | PVPS ${row.affected_pvps} | ALOC ${row.affected_alocacao} | autor ${row.actor_user_mat ?? "-"} - ${row.actor_user_nome ?? "-"} | ${formatDateTime(row.created_at)}`}
-                          </span>
+                          <div className="pvps-admin-row-body">
+                            <strong className="pvps-admin-row-title">
+                              {historyActionLabel(row.action_type)} | {ruleKindLabel(row.rule_kind)} | {ruleTargetLabel(row.target_type, row.target_value)}
+                              {row.rule_kind === "priority" ? ` | nível ${row.priority_value ?? 9999}` : ""}
+                            </strong>
+                            <small className="pvps-admin-row-meta">
+                              {moduloLabel(row.modulo)}
+                              {applyModeLabel(row.apply_mode) ? ` | ${applyModeLabel(row.apply_mode)}` : ""}
+                              {" | "}
+                              {row.actor_user_mat ?? "-"} - {row.actor_user_nome ?? "-"} | {formatDateTime(row.created_at)}
+                            </small>
+                          </div>
                         </div>
                       ))}
                     </div>
