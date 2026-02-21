@@ -1796,7 +1796,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         {open ? (
                           <div className="pvps-row-details">
                             {item.kind === "pul" ? (
-                              <small>Separação {row.end_sep} | Validade linha {row.val_sep ?? "-"}</small>
+                              <>
+                                <small>Endereço separação: {row.end_sep}</small>
+                                <small>Validade Separação: {row.val_sep ?? "-"}</small>
+                              </>
                             ) : (
                               <small>Status {pvpsStatusLabel(row.status)} | Pulmão {row.pul_auditados}/{row.pul_total}</small>
                             )}
@@ -2046,7 +2049,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
             {activePvpsMode === "pul" ? (
               <div className="pvps-pul-box">
-                <p>Linha Separação: <strong>{activePvps.end_sep}</strong> | Validade linha: <strong>{activePvps.val_sep ?? "-"}</strong></p>
+                <p>Endereço separação: <strong>{activePvps.end_sep}</strong></p>
+                <p>Validade Separação: <strong>{activePvps.val_sep ?? "-"}</strong></p>
                 {activePvps.end_sit ? <p>Ocorrência linha: <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong></p> : null}
                 {pulBusy ? <p>Carregando endereços de Pulmão...</p> : null}
                 {!pulBusy && !activePulItem ? <p>Endereço de Pulmão não encontrado no feed atual.</p> : null}
