@@ -803,7 +803,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       if (byZone !== 0) return byZone;
       const byEndereco = a.end_sep.localeCompare(b.end_sep);
       if (byEndereco !== 0) return byEndereco;
-      return new Date(b.dt_hr).getTime() - new Date(a.dt_hr).getTime();
+      return new Date(a.dt_hr).getTime() - new Date(b.dt_hr).getTime();
     }),
     [filteredPvpsCompletedRows]
   );
@@ -814,7 +814,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       if (byZone !== 0) return byZone;
       const byEndereco = a.endereco.localeCompare(b.endereco);
       if (byEndereco !== 0) return byEndereco;
-      return new Date(b.dt_hr).getTime() - new Date(a.dt_hr).getTime();
+      return new Date(a.dt_hr).getTime() - new Date(b.dt_hr).getTime();
     }),
     [filteredAlocCompletedRows]
   );
