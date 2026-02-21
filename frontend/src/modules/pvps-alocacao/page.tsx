@@ -407,7 +407,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     rule_kind: "blacklist",
     target_type: "zona",
     target_value: "",
-    priority_value: "100"
+    priority_value: ""
   });
   const [adminApplyMode, setAdminApplyMode] = useState<PvpsRuleApplyMode>("apply_now");
   const [pendingRulePreview, setPendingRulePreview] = useState<AdminRuleApplyPreview | null>(null);
@@ -982,8 +982,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           key: `pvps-next:${item.coddv}`,
           coddv: item.coddv,
           descricao: item.descricao,
-          dat_ult_compra: item.dat_ult_compra,
-          priority_score: item.minPriority
+          dat_ult_compra: item.dat_ult_compra
         }));
     }
     return alocQueueProducts
@@ -993,8 +992,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         key: `aloc-next:${item.coddv}`,
         coddv: item.coddv,
         descricao: item.descricao,
-        dat_ult_compra: item.dat_ult_compra,
-        priority_score: item.minPriority
+        dat_ult_compra: item.dat_ult_compra
       }));
   }, [tab, pvpsQueueProducts, pvpsEligibleCoddv, alocQueueProducts, alocEligibleCoddv]);
 
@@ -1563,18 +1561,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setPendingRulePreview(null);
       await loadAdminData();
       await loadCurrent();
-      const createdLabel = created.rule_kind === "blacklist" ? "Blacklist" : "Prioridade";
+      const createdLabel = created.rule_kind === "blacklist" ? "Blacklist" : "Regra";
       const targetLabel = `${draft.target_type === "zona" ? "Zona" : "CODDV"} ${normalizedTarget}`;
       const effectLabel = applyMode === "next_inclusions"
         ? "Somente próximas inclusões serão afetadas; pendentes atuais foram preservados."
         : (created.rule_kind === "blacklist"
           ? "Pendentes afetados foram removidos da fila imediatamente."
-          : "Pendentes afetados foram reordenados imediatamente pela nova prioridade.");
+          : "Pendentes afetados foram reordenados imediatamente.");
       setStatusMessage(
         `${createdLabel} criada em ${targetLabel}. ` +
         `${effectLabel} Impacto: PVPS ${created.affected_pvps}, Alocação ${created.affected_alocacao}.`
       );
-      setAdminDraft((current) => ({ ...current, target_value: "", priority_value: current.rule_kind === "priority" ? current.priority_value : "100" }));
+      setAdminDraft((current) => ({ ...current, target_value: "", priority_value: current.rule_kind === "priority" ? current.priority_value : "" }));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao criar regra administrativa.");
     } finally {
@@ -1871,7 +1869,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             {row.rule_kind === "blacklist" ? "Blacklist" : "Prioridade"} | {row.modulo} |{" "}
                             {row.target_type === "zona" ? `Zona ${row.target_value}` : `CODDV ${row.target_value}`}
                             {row.rule_kind === "priority" ? ` | nível ${row.priority_value ?? 9999}` : ""}
-                            {` | criada em ${formatDateTime(row.created_at)}`}
+                            {` | autor ${row.created_by_mat ?? "-"} - ${row.created_by_nome ?? "-"} | ${formatDateTime(row.created_at)}`}
                           </span>
                           <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => void handleRemoveRule(row.rule_id)}>
                             Remover
@@ -1893,7 +1891,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             {row.target_type === "zona" ? `Zona ${row.target_value}` : `CODDV ${row.target_value}`}
                             {row.rule_kind === "priority" ? ` | nível ${row.priority_value ?? 9999}` : ""}
                             {row.apply_mode ? ` | modo ${row.apply_mode}` : ""}
-                            {` | PVPS ${row.affected_pvps} | ALOC ${row.affected_alocacao} | ${formatDateTime(row.created_at)}`}
+                            {` | PVPS ${row.affected_pvps} | ALOC ${row.affected_alocacao} | autor ${row.actor_user_mat ?? "-"} - ${row.actor_user_nome ?? "-"} | ${formatDateTime(row.created_at)}`}
                           </span>
                         </div>
                       ))}
@@ -1929,7 +1927,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong>{item.endereco}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
-                            <small>Prioridade {row.priority_score}</small>
                             {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
                           </div>
                           <div className="pvps-row-actions">
@@ -1977,7 +1974,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
                       <span>{item.coddv} - {item.descricao}</span>
-                      <small>Prioridade {item.priority_score}</small>
                       <small>Última compra: {formatDate(item.dat_ult_compra)}</small>
                     </div>
                   ))}
@@ -2000,7 +1996,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
-                            <small>Prioridade {row.priority_score}</small>
                           </div>
                           <div className="pvps-row-actions">
                             <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocPopup(row)} title="Editar">
@@ -2026,7 +2021,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
                       <span>{item.coddv} - {item.descricao}</span>
-                      <small>Prioridade {item.priority_score}</small>
                       <small>Última compra: {formatDate(item.dat_ult_compra)}</small>
                     </div>
                   ))}
