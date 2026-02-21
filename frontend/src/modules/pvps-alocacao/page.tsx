@@ -2088,7 +2088,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(endSit as PvpsEndSit)}</span>
                       )}
                     </div>
-                    {showSepOccurrence || endSit ? (
+                    {showSepOccurrence ? (
                       <select
                         className="pvps-occurrence-select-minimal"
                         value={endSit}
@@ -2159,7 +2159,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(pulEndSits[activePulItem.end_pul] as PvpsEndSit)}</span>
                           )}
                         </div>
-                        {showPulOccurrence || pulEndSits[activePulItem.end_pul] ? (
+                        {showPulOccurrence ? (
                           <select
                             className="pvps-occurrence-select-minimal"
                             value={pulEndSits[activePulItem.end_pul] ?? ""}
@@ -2272,7 +2272,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(alocEndSit as PvpsEndSit)}</span>
                       )}
                     </div>
-                    {showAlocOccurrence || alocEndSit ? (
+                    {showAlocOccurrence ? (
                       <select
                         className="pvps-occurrence-select-minimal"
                         value={alocEndSit}
