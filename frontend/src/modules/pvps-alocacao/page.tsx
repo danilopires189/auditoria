@@ -982,7 +982,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           key: `pvps-next:${item.coddv}`,
           coddv: item.coddv,
           descricao: item.descricao,
-          dat_ult_compra: item.dat_ult_compra
+          dat_ult_compra: item.dat_ult_compra,
+          priority_score: item.minPriority
         }));
     }
     return alocQueueProducts
@@ -992,7 +993,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         key: `aloc-next:${item.coddv}`,
         coddv: item.coddv,
         descricao: item.descricao,
-        dat_ult_compra: item.dat_ult_compra
+        dat_ult_compra: item.dat_ult_compra,
+        priority_score: item.minPriority
       }));
   }, [tab, pvpsQueueProducts, pvpsEligibleCoddv, alocQueueProducts, alocEligibleCoddv]);
 
@@ -1927,6 +1929,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong>{item.endereco}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
+                            <small>Prioridade {row.priority_score}</small>
                             {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
                           </div>
                           <div className="pvps-row-actions">
@@ -1974,6 +1977,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
                       <span>{item.coddv} - {item.descricao}</span>
+                      <small>Prioridade {item.priority_score}</small>
                       <small>Última compra: {formatDate(item.dat_ult_compra)}</small>
                     </div>
                   ))}
@@ -1996,6 +2000,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
+                            <small>Prioridade {row.priority_score}</small>
                           </div>
                           <div className="pvps-row-actions">
                             <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocPopup(row)} title="Editar">
@@ -2021,6 +2026,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
                       <span>{item.coddv} - {item.descricao}</span>
+                      <small>Prioridade {item.priority_score}</small>
                       <small>Última compra: {formatDate(item.dat_ult_compra)}</small>
                     </div>
                   ))}
