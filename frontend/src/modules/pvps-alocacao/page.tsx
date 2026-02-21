@@ -2149,44 +2149,46 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <p>Zona: <strong>{activeAloc.zona}</strong> | Andar: <strong>{formatAndar(activeAloc.nivel)}</strong></p>
             {editingAlocCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong></p> : null}
 
-            <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
-              {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
+            {!alocFeedback ? (
+              <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
+                {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
+                  <label>
+                    Validade do Produto
+                    <input
+                      value={alocValConf}
+                      onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                      placeholder="MMAA"
+                      maxLength={4}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      required
+                    />
+                  </label>
+                ) : null}
                 <label>
-                  Validade do Produto
-                  <input
-                    value={alocValConf}
-                    onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                    placeholder="MMAA"
-                    maxLength={4}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    required
-                  />
+                  Ocorrência do endereço
+                  <div className="pvps-occurrence-wrap">
+                    <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                    <select
+                      value={alocEndSit}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                        setAlocEndSit(parsed);
+                        if (parsed) setAlocValConf("");
+                      }}
+                    >
+                      <option value="">Sem ocorrência</option>
+                      <option value="vazio">Vazio</option>
+                      <option value="obstruido">Obstruído</option>
+                    </select>
+                  </div>
                 </label>
-              ) : null}
-              <label>
-                Ocorrência do endereço
-                <div className="pvps-occurrence-wrap">
-                  <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
-                  <select
-                    value={alocEndSit}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                      setAlocEndSit(parsed);
-                      if (parsed) setAlocValConf("");
-                    }}
-                  >
-                    <option value="">Sem ocorrência</option>
-                    <option value="vazio">Vazio</option>
-                    <option value="obstruido">Obstruído</option>
-                  </select>
-                </div>
-              </label>
-              <button className="btn btn-primary" type="submit" disabled={busy || Boolean(alocFeedback && !editingAlocCompleted)}>
-                Salvar
-              </button>
-            </form>
+                <button className="btn btn-primary" type="submit" disabled={busy}>
+                  Salvar
+                </button>
+              </form>
+            ) : null}
 
             {alocResult ? (
               <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "warn" : "bad"}`}>
