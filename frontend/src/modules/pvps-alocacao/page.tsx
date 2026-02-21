@@ -249,27 +249,33 @@ function selectFilteredIcon() {
 type HistoryStatusTone = "ok" | "bad" | "warn" | "wait";
 type PulFeedbackTone = "ok" | "bad" | "warn";
 
+function formatOcorrenciaLabel(value: PvpsEndSit | null): string {
+  if (value === "vazio") return "Vazio";
+  if (value === "obstruido") return "Obstruído";
+  return "Não informada";
+}
+
 function pvpsHistoryStatus(row: PvpsCompletedRow): { label: string; emoticon: string; tone: HistoryStatusTone } {
   if (row.end_sit === "vazio" || row.end_sit === "obstruido") {
-    return { label: "Ocorrência", emoticon: ":/", tone: "warn" };
+    return { label: `Ocorrência: ${formatOcorrenciaLabel(row.end_sit)}`, emoticon: "⚠️", tone: "warn" };
   }
   if (row.pul_auditados < 1) {
-    return { label: "Aguardando validade Pulmão", emoticon: "...", tone: "wait" };
+    return { label: "Aguardando validade Pulmão", emoticon: "⏳", tone: "wait" };
   }
   if (row.pul_has_lower || row.status === "nao_conforme") {
-    return { label: "Não conforme", emoticon: ":(", tone: "bad" };
+    return { label: "Não conforme", emoticon: "❌", tone: "bad" };
   }
-  return { label: "Conforme", emoticon: ":)", tone: "ok" };
+  return { label: "Conforme", emoticon: "✅", tone: "ok" };
 }
 
 function alocHistoryStatus(row: AlocacaoCompletedRow): { label: string; emoticon: string; tone: HistoryStatusTone } {
   if (row.aud_sit === "ocorrencia") {
-    return { label: "Ocorrência", emoticon: ":/", tone: "warn" };
+    return { label: `Ocorrência: ${formatOcorrenciaLabel(row.end_sit)}`, emoticon: "⚠️", tone: "warn" };
   }
   if (row.aud_sit === "nao_conforme") {
-    return { label: "Não conforme", emoticon: ":(", tone: "bad" };
+    return { label: "Não conforme", emoticon: "❌", tone: "bad" };
   }
-  return { label: "Conforme", emoticon: ":)", tone: "ok" };
+  return { label: "Conforme", emoticon: "✅", tone: "ok" };
 }
 
 function pvpsStatusLabel(status: PvpsManifestRow["status"]): string {
