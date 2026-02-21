@@ -329,6 +329,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [alocEndSit, setAlocEndSit] = useState<PvpsEndSit | "">("");
   const [alocValConf, setAlocValConf] = useState("");
   const [alocResult, setAlocResult] = useState<AlocacaoSubmitResult | null>(null);
+  const [alocFeedback, setAlocFeedback] = useState<{ tone: PulFeedbackTone; text: string; queueId: string; zone: string | null } | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminBusy, setAdminBusy] = useState(false);
   const [offlineSyncBusy, setOfflineSyncBusy] = useState(false);
@@ -911,6 +912,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openAlocPopup(row: AlocacaoManifestRow): void {
+    setAlocFeedback(null);
     setEditingAlocCompleted(null);
     setActiveAlocQueue(row.queue_id);
     setAlocEndSit("");
@@ -987,6 +989,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openAlocCompletedEdit(row: AlocacaoCompletedRow): void {
     if (!canEditAudit(row.auditor_id)) return;
+    setAlocFeedback(null);
     setEditingAlocCompleted(row);
     setAlocEndSit(row.end_sit ?? "");
     setAlocValConf(row.val_conf?.replace("/", "") ?? "");
@@ -1333,23 +1336,43 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           val_conf: hasOcorrencia ? null : normalizedValConf
         });
       setAlocResult(result);
-      setStatusMessage(result.aud_sit === "ocorrencia"
-        ? "Alocação auditada com ocorrência. Feed atualizado automaticamente."
-        : `Alocação auditada: ${result.aud_sit}. Feed atualizado automaticamente.`);
-      await loadCurrent();
+      let feedbackTone: PulFeedbackTone = "warn";
+      let feedbackText = "";
+      if (result.aud_sit === "conforme") {
+        feedbackTone = "ok";
+        feedbackText = "Alocação auditada conforme. Use o ícone à direita para ir ao próximo.";
+      } else if (result.aud_sit === "nao_conforme") {
+        feedbackTone = "bad";
+        feedbackText = "Alocação auditada não conforme. Use o ícone à direita para ir ao próximo.";
+      } else {
+        feedbackTone = "warn";
+        feedbackText = "Alocação auditada com ocorrência. Use o ícone à direita para ir ao próximo.";
+      }
+      setStatusMessage(feedbackText);
       setEditingAlocCompleted(null);
       setAlocEndSit("");
       setAlocValConf("");
       if (isEditingCompleted) {
+        setAlocFeedback(null);
+        await loadCurrent();
         setShowAlocPopup(false);
       } else {
-        openNextAlocacaoFrom(currentQueueId, currentZone);
+        setAlocFeedback({ tone: feedbackTone, text: feedbackText, queueId: currentQueueId, zone: currentZone });
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar auditoria de alocação.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleAlocGoNext(): void {
+    if (!alocFeedback) return;
+    const { queueId, zone } = alocFeedback;
+    setAlocFeedback(null);
+    setAlocResult(null);
+    openNextAlocacaoFrom(queueId, zone);
+    void loadCurrent({ silent: true });
   }
 
   async function handleAdminAddBlacklist(): Promise<void> {
@@ -1747,7 +1770,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   );
                 })}
                 <div className="pvps-recent-box">
-                  <h4>Próximos a entrar na lista (até 5)</h4>
+                  <h4>Próximos a entrar na lista</h4>
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
                       <span>{item.coddv} - {item.descricao}</span>
@@ -1794,7 +1817,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   );
                 })}
                 <div className="pvps-recent-box">
-                  <h4>Próximos a entrar na lista (até 5)</h4>
+                  <h4>Próximos a entrar na lista</h4>
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
                       <span>{item.coddv} - {item.descricao}</span>
@@ -2052,6 +2075,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             if (busy) return;
             setEditingAlocCompleted(null);
             setAlocResult(null);
+            setAlocFeedback(null);
             setShowAlocPopup(false);
           }}
         >
@@ -2097,15 +2121,30 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   </select>
                 </div>
               </label>
-              <button className="btn btn-primary" type="submit" disabled={busy}>Salvar Alocação</button>
+              <button className="btn btn-primary" type="submit" disabled={busy || Boolean(alocFeedback && !editingAlocCompleted)}>
+                Salvar Alocação
+              </button>
             </form>
 
             {alocResult ? (
-              <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "" : "bad"}`}>
+              <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "warn" : "bad"}`}>
                 Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}
                 {alocResult.aud_sit === "ocorrencia"
                   ? ""
                   : ` | Sistema: ${alocResult.val_sist} | Informado: ${alocResult.val_conf ?? "-"}`}
+              </div>
+            ) : null}
+            {alocFeedback ? (
+              <div className={`pvps-pul-feedback pvps-result-chip ${alocFeedback.tone === "ok" ? "ok" : alocFeedback.tone === "bad" ? "bad" : "warn"}`}>
+                <span>{alocFeedback.text}</span>
+                <button
+                  className="btn btn-primary pvps-icon-btn pvps-pul-next-btn"
+                  type="button"
+                  onClick={handleAlocGoNext}
+                  title="Ir para o próximo"
+                >
+                  {nextIcon()}
+                </button>
               </div>
             ) : null}
 
@@ -2113,6 +2152,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
                 setEditingAlocCompleted(null);
                 setAlocResult(null);
+                setAlocFeedback(null);
                 setShowAlocPopup(false);
               }}>
                 Fechar
