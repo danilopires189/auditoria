@@ -155,9 +155,9 @@ function normalizeMmaaText(value: string | null | undefined): string | null {
 function occurrenceIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3l9 16H3z" />
-      <path d="M12 9v5" />
-      <circle cx="12" cy="17" r="1" />
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      <path d="M12 9v4" />
+      <circle cx="12" cy="17" r="0.5" fill="currentColor" />
     </svg>
   );
 }
@@ -165,7 +165,8 @@ function occurrenceIcon() {
 function playIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8 6l10 6-10 6z" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M10 8l6 4-6 4z" />
     </svg>
   );
 }
@@ -173,8 +174,10 @@ function playIcon() {
 function refreshIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M21 12a9 9 0 1 1-2.6-6.4" />
-      <path d="M21 4v6h-6" />
+      <path d="M1 4v6h6" />
+      <path d="M23 20v-6h-6" />
+      <path d="M20.49 9A9 9 0 005.64 5.64L1 10" />
+      <path d="M3.51 15A9 9 0 0018.36 18.36L23 14" />
     </svg>
   );
 }
@@ -182,9 +185,12 @@ function refreshIcon() {
 function listIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 7h16" />
-      <path d="M4 12h16" />
-      <path d="M4 17h16" />
+      <path d="M8 6h13" />
+      <path d="M8 12h13" />
+      <path d="M8 18h13" />
+      <circle cx="4" cy="6" r="1" fill="currentColor" />
+      <circle cx="4" cy="12" r="1" fill="currentColor" />
+      <circle cx="4" cy="18" r="1" fill="currentColor" />
     </svg>
   );
 }
@@ -192,9 +198,7 @@ function listIcon() {
 function filterIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 6h16" />
-      <path d="M7 12h10" />
-      <path d="M10 18h4" />
+      <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
     </svg>
   );
 }
@@ -202,8 +206,8 @@ function filterIcon() {
 function editIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 20h4l10-10-4-4L4 16z" />
-      <path d="M13 7l4 4" />
+      <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+      <path d="M15 5l4 4" />
     </svg>
   );
 }
@@ -211,7 +215,7 @@ function editIcon() {
 function chevronIcon(open: boolean) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      {open ? <path d="M6 14l6-6 6 6" /> : <path d="M6 10l6 6 6-6" />}
+      {open ? <path d="M18 15l-6-6-6 6" /> : <path d="M6 9l6 6 6-6" />}
     </svg>
   );
 }
@@ -219,7 +223,8 @@ function chevronIcon(open: boolean) {
 function doneIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M20 7L9 18l-5-5" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9 12l2 2 4-4" />
     </svg>
   );
 }
@@ -227,7 +232,9 @@ function doneIcon() {
 function nextIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 6l6 6-6 6" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 8l4 4-4 4" />
+      <path d="M8 12h8" />
     </svg>
   );
 }
