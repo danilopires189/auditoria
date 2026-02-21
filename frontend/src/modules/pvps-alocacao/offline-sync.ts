@@ -57,8 +57,9 @@ export async function syncPvpsOfflineQueue(cd: number): Promise<PvpsOfflineSyncR
           failed += 1;
           continue;
         }
+        const endSit = event.end_sit === "vazio" || event.end_sit === "obstruido" ? event.end_sit : null;
         const valPul = (event.val_pul ?? "").trim();
-        if (valPul.length !== 4) {
+        if (!endSit && valPul.length !== 4) {
           failed += 1;
           continue;
         }
@@ -66,7 +67,8 @@ export async function syncPvpsOfflineQueue(cd: number): Promise<PvpsOfflineSyncR
           p_cd: event.cd,
           audit_id: auditId,
           end_pul: event.end_pul ?? "",
-          val_pul: valPul
+          end_sit: endSit,
+          val_pul: endSit ? null : valPul
         });
       }
       await deleteOfflinePvpsEvent(event.event_id);

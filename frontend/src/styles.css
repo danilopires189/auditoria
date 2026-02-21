@@ -4714,9 +4714,9 @@ small {
 
 .pvps-pul-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) 110px auto;
+  grid-template-columns: 1fr;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .pvps-pul-row small {

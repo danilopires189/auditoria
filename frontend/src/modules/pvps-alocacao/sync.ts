@@ -94,6 +94,7 @@ function mapPvpsPul(raw: Record<string, unknown>): PvpsPulItemRow {
   return {
     end_pul: parseString(raw.end_pul).toUpperCase(),
     val_pul: parseNullableString(raw.val_pul),
+    end_sit: parseEndSit(raw.end_sit),
     auditado: parseBoolean(raw.auditado)
   };
 }
@@ -377,14 +378,16 @@ export async function submitPvpsPul(params: {
   p_cd?: number | null;
   audit_id: string;
   end_pul: string;
-  val_pul: string;
+  val_pul?: string | null;
+  end_sit?: PvpsEndSit | null;
 }): Promise<PvpsPulSubmitResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_pvps_submit_pul", {
     p_cd: params.p_cd ?? null,
     p_audit_id: params.audit_id,
     p_end_pul: params.end_pul,
-    p_val_pul: params.val_pul
+    p_val_pul: params.val_pul ?? null,
+    p_end_sit: params.end_sit ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
