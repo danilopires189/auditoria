@@ -1593,7 +1593,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="module-screen-title">
                 <h2>Olá, {displayUserName}</h2>
               </div>
-              <button type="button" className="btn btn-muted pvps-toolbar-btn" onClick={() => void loadCurrent()} disabled={busy}>
+              <button type="button" className="btn btn-muted pvps-toolbar-btn" onClick={() => void loadCurrent()} disabled={busy} aria-label="Atualizar dados">
                 <span className="pvps-btn-icon" aria-hidden="true">{refreshIcon()}</span>
                 <span>{busy ? "Atualizando..." : "Atualizar"}</span>
               </button>
@@ -1602,12 +1602,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <div className="pvps-toolbar">
               <div className="pvps-toolbar-group">
                 <small className="pvps-toolbar-label">Ações</small>
-                <div className="pvps-actions">
+                <nav className="pvps-actions" aria-label="Módulo de auditoria">
                   <button
                     type="button"
                     className={`btn btn-muted pvps-toolbar-btn${tab === "pvps" ? " is-active" : ""}`}
                     onClick={() => setTab("pvps")}
                     disabled={busy}
+                    aria-pressed={tab === "pvps"}
                   >
                     <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
                     <span>Iniciar PVPS</span>
@@ -1617,21 +1618,23 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     className={`btn btn-muted pvps-toolbar-btn${tab === "alocacao" ? " is-active" : ""}`}
                     onClick={() => setTab("alocacao")}
                     disabled={busy}
+                    aria-pressed={tab === "alocacao"}
                   >
                     <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
                     <span>Iniciar Alocação</span>
                   </button>
-                </div>
+                </nav>
               </div>
             </div>
 
             <div className="pvps-toolbar-group">
               <small className="pvps-toolbar-label">Visualização</small>
-              <div className="pvps-tabs">
+              <nav className="pvps-tabs" aria-label="Visualização">
                 <button
                   type="button"
                   className={`btn btn-muted pvps-toolbar-btn${feedView === "pendentes" ? " is-active" : ""}`}
                   onClick={() => setFeedView("pendentes")}
+                  aria-pressed={feedView === "pendentes"}
                 >
                   <span className="pvps-btn-icon" aria-hidden="true">{listIcon()}</span>
                   <span>Pendentes</span>
@@ -1640,11 +1643,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   type="button"
                   className={`btn btn-muted pvps-toolbar-btn${feedView === "concluidos" ? " is-active" : ""}`}
                   onClick={() => setFeedView("concluidos")}
+                  aria-pressed={feedView === "concluidos"}
                 >
                   <span className="pvps-btn-icon" aria-hidden="true">{doneIcon()}</span>
                   <span>Concluídos do dia</span>
                 </button>
-              </div>
+              </nav>
             </div>
 
             {isAdmin ? (
@@ -2026,6 +2030,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       inputMode="numeric"
                       pattern="[0-9]*"
                       required
+                      autoFocus
                     />
                   </label>
                 ) : null}
@@ -2162,6 +2167,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       inputMode="numeric"
                       pattern="[0-9]*"
                       required
+                      autoFocus
                     />
                   </label>
                 ) : null}
