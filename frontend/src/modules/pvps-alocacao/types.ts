@@ -1,5 +1,8 @@
 export type PvpsEndSit = "vazio" | "obstruido";
 export type PvpsModulo = "pvps" | "alocacao" | "ambos";
+export type PvpsRuleKind = "blacklist" | "priority";
+export type PvpsRuleTargetType = "zona" | "coddv";
+export type PvpsRuleApplyMode = "apply_now" | "next_inclusions";
 
 export type PvpsStatus = "pendente_sep" | "pendente_pul" | "concluido" | "nao_conforme";
 
@@ -17,6 +20,7 @@ export interface PvpsManifestRow {
   audit_id: string | null;
   dat_ult_compra: string;
   qtd_est_disp: number;
+  priority_score: number;
 }
 
 export interface PvpsPulItemRow {
@@ -54,6 +58,7 @@ export interface AlocacaoManifestRow {
   val_sist: string;
   dat_ult_compra: string;
   qtd_est_disp: number;
+  priority_score: number;
 }
 
 export interface AlocacaoSubmitResult {
@@ -133,4 +138,53 @@ export interface PvpsAdminClearZoneResult {
   cleared_alocacao: number;
   reposto_pvps: number;
   reposto_alocacao: number;
+}
+
+export interface PvpsAdminRuleActiveRow {
+  rule_id: string;
+  cd: number;
+  modulo: PvpsModulo;
+  rule_kind: PvpsRuleKind;
+  target_type: PvpsRuleTargetType;
+  target_value: string;
+  priority_value: number | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface PvpsAdminRuleHistoryRow {
+  history_id: string;
+  rule_id: string | null;
+  cd: number;
+  modulo: PvpsModulo;
+  rule_kind: PvpsRuleKind;
+  target_type: PvpsRuleTargetType;
+  target_value: string;
+  priority_value: number | null;
+  action_type: "create" | "remove";
+  apply_mode: PvpsRuleApplyMode | null;
+  affected_pvps: number;
+  affected_alocacao: number;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
+export interface PvpsAdminRulePreviewResult {
+  affected_pvps: number;
+  affected_alocacao: number;
+  affected_total: number;
+}
+
+export interface PvpsAdminRuleCreateResult {
+  rule_id: string;
+  cd: number;
+  modulo: PvpsModulo;
+  rule_kind: PvpsRuleKind;
+  target_type: PvpsRuleTargetType;
+  target_value: string;
+  priority_value: number | null;
+  apply_mode: PvpsRuleApplyMode;
+  affected_pvps: number;
+  affected_alocacao: number;
+  created_at: string;
 }

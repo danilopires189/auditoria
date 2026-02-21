@@ -4,6 +4,13 @@ import type {
   AlocacaoManifestRow,
   AlocacaoSubmitResult,
   PvpsAdminBlacklistRow,
+  PvpsAdminRuleActiveRow,
+  PvpsAdminRuleCreateResult,
+  PvpsAdminRuleHistoryRow,
+  PvpsAdminRulePreviewResult,
+  PvpsRuleApplyMode,
+  PvpsRuleKind,
+  PvpsRuleTargetType,
   PvpsAdminClearZoneResult,
   PvpsAdminPriorityZoneRow,
   PvpsCompletedRow,
@@ -17,13 +24,20 @@ import type {
 } from "./types";
 
 function toErrorMessage(error: unknown): string {
+  const translate = (raw: string): string => {
+    const normalized = raw.trim().toUpperCase();
+    if (normalized.includes("ITEM_BLOQUEADO_BLACKLIST")) {
+      return "Item bloqueado por blacklist ativa. Atualize a fila para continuar.";
+    }
+    return raw;
+  };
   if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
+  if (typeof error === "string") return translate(error);
   if (error && typeof error === "object") {
     const candidate = error as Record<string, unknown>;
-    if (typeof candidate.message === "string") return candidate.message;
-    if (typeof candidate.error_description === "string") return candidate.error_description;
-    if (typeof candidate.details === "string") return candidate.details;
+    if (typeof candidate.message === "string") return translate(candidate.message);
+    if (typeof candidate.error_description === "string") return translate(candidate.error_description);
+    if (typeof candidate.details === "string") return translate(candidate.details);
   }
   return "Erro inesperado.";
 }
@@ -86,7 +100,8 @@ function mapPvpsManifest(raw: Record<string, unknown>): PvpsManifestRow {
     val_sep: parseNullableString(raw.val_sep),
     audit_id: parseNullableString(raw.audit_id),
     dat_ult_compra: parseString(raw.dat_ult_compra),
-    qtd_est_disp: Math.max(parseInteger(raw.qtd_est_disp), 0)
+    qtd_est_disp: Math.max(parseInteger(raw.qtd_est_disp), 0),
+    priority_score: Math.max(parseInteger(raw.priority_score, 9999), 1)
   };
 }
 
@@ -110,7 +125,8 @@ function mapAlocacaoManifest(raw: Record<string, unknown>): AlocacaoManifestRow 
     nivel: parseNullableString(raw.nivel),
     val_sist: parseString(raw.val_sist),
     dat_ult_compra: parseString(raw.dat_ult_compra),
-    qtd_est_disp: Math.max(parseInteger(raw.qtd_est_disp), 0)
+    qtd_est_disp: Math.max(parseInteger(raw.qtd_est_disp), 0),
+    priority_score: Math.max(parseInteger(raw.priority_score, 9999), 1)
   };
 }
 
@@ -235,6 +251,164 @@ function parseModulo(value: unknown): PvpsModulo {
   const normalized = parseString(value).toLowerCase();
   if (normalized === "pvps" || normalized === "alocacao") return normalized;
   return "ambos";
+}
+
+function parseRuleKind(value: unknown): PvpsRuleKind {
+  return parseString(value).toLowerCase() === "priority" ? "priority" : "blacklist";
+}
+
+function parseRuleTargetType(value: unknown): PvpsRuleTargetType {
+  return parseString(value).toLowerCase() === "coddv" ? "coddv" : "zona";
+}
+
+function parseRuleApplyMode(value: unknown): PvpsRuleApplyMode {
+  return parseString(value).toLowerCase() === "next_inclusions" ? "next_inclusions" : "apply_now";
+}
+
+function parseRuleActionType(value: unknown): "create" | "remove" {
+  return parseString(value).toLowerCase() === "remove" ? "remove" : "create";
+}
+
+export async function fetchAdminRulesActive(modulo: PvpsModulo = "ambos", pCd?: number | null): Promise<PvpsAdminRuleActiveRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_pvps_admin_rules_active_list", {
+    p_cd: pCd ?? null,
+    p_modulo: modulo
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => {
+    const raw = row as Record<string, unknown>;
+    return {
+      rule_id: parseString(raw.rule_id),
+      cd: parseInteger(raw.cd),
+      modulo: parseModulo(raw.modulo),
+      rule_kind: parseRuleKind(raw.rule_kind),
+      target_type: parseRuleTargetType(raw.target_type),
+      target_value: parseString(raw.target_value),
+      priority_value: parseNullableString(raw.priority_value) == null ? null : parseInteger(raw.priority_value),
+      created_by: parseNullableString(raw.created_by),
+      created_at: parseString(raw.created_at)
+    };
+  });
+}
+
+export async function fetchAdminRulesHistory(params?: {
+  p_cd?: number | null;
+  modulo?: PvpsModulo;
+  limit?: number;
+  offset?: number;
+}): Promise<PvpsAdminRuleHistoryRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_pvps_admin_rules_history_list", {
+    p_cd: params?.p_cd ?? null,
+    p_modulo: params?.modulo ?? "ambos",
+    p_limit: Math.max(1, Math.min(params?.limit ?? 250, 1000)),
+    p_offset: Math.max(0, params?.offset ?? 0)
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => {
+    const raw = row as Record<string, unknown>;
+    return {
+      history_id: parseString(raw.history_id),
+      rule_id: parseNullableString(raw.rule_id),
+      cd: parseInteger(raw.cd),
+      modulo: parseModulo(raw.modulo),
+      rule_kind: parseRuleKind(raw.rule_kind),
+      target_type: parseRuleTargetType(raw.target_type),
+      target_value: parseString(raw.target_value),
+      priority_value: parseNullableString(raw.priority_value) == null ? null : parseInteger(raw.priority_value),
+      action_type: parseRuleActionType(raw.action_type),
+      apply_mode: raw.apply_mode == null ? null : parseRuleApplyMode(raw.apply_mode),
+      affected_pvps: Math.max(parseInteger(raw.affected_pvps), 0),
+      affected_alocacao: Math.max(parseInteger(raw.affected_alocacao), 0),
+      actor_user_id: parseNullableString(raw.actor_user_id),
+      created_at: parseString(raw.created_at)
+    };
+  });
+}
+
+export async function previewAdminRuleImpact(params: {
+  p_cd?: number | null;
+  modulo: PvpsModulo;
+  rule_kind: PvpsRuleKind;
+  target_type: PvpsRuleTargetType;
+  target_value: string;
+  priority_value?: number | null;
+}): Promise<PvpsAdminRulePreviewResult> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_pvps_admin_rule_preview", {
+    p_cd: params.p_cd ?? null,
+    p_modulo: params.modulo,
+    p_rule_kind: params.rule_kind,
+    p_target_type: params.target_type,
+    p_target_value: params.target_value,
+    p_priority_value: params.priority_value ?? null
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao pré-visualizar impacto da regra.");
+  const affectedPvps = Math.max(parseInteger(first.affected_pvps), 0);
+  const affectedAlocacao = Math.max(parseInteger(first.affected_alocacao), 0);
+  const affectedTotal = Math.max(parseInteger(first.affected_total, affectedPvps + affectedAlocacao), 0);
+  return {
+    affected_pvps: affectedPvps,
+    affected_alocacao: affectedAlocacao,
+    affected_total: affectedTotal
+  };
+}
+
+export async function createAdminRule(params: {
+  p_cd?: number | null;
+  modulo: PvpsModulo;
+  rule_kind: PvpsRuleKind;
+  target_type: PvpsRuleTargetType;
+  target_value: string;
+  priority_value?: number | null;
+  apply_mode: PvpsRuleApplyMode;
+}): Promise<PvpsAdminRuleCreateResult> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_pvps_admin_rule_create", {
+    p_cd: params.p_cd ?? null,
+    p_modulo: params.modulo,
+    p_rule_kind: params.rule_kind,
+    p_target_type: params.target_type,
+    p_target_value: params.target_value,
+    p_priority_value: params.priority_value ?? null,
+    p_apply_mode: params.apply_mode
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao criar regra administrativa.");
+  return {
+    rule_id: parseString(first.rule_id),
+    cd: parseInteger(first.cd),
+    modulo: parseModulo(first.modulo),
+    rule_kind: parseRuleKind(first.rule_kind),
+    target_type: parseRuleTargetType(first.target_type),
+    target_value: parseString(first.target_value),
+    priority_value: parseNullableString(first.priority_value) == null ? null : parseInteger(first.priority_value),
+    apply_mode: parseRuleApplyMode(first.apply_mode),
+    affected_pvps: Math.max(parseInteger(first.affected_pvps), 0),
+    affected_alocacao: Math.max(parseInteger(first.affected_alocacao), 0),
+    created_at: parseString(first.created_at)
+  };
+}
+
+export async function removeAdminRule(params: {
+  p_cd?: number | null;
+  rule_id: string;
+}): Promise<boolean> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_pvps_admin_rule_remove", {
+    p_cd: params.p_cd ?? null,
+    p_rule_id: params.rule_id
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) return false;
+  return parseBoolean(first.removed);
 }
 
 export async function fetchAdminBlacklist(modulo: PvpsModulo = "ambos", pCd?: number | null): Promise<PvpsAdminBlacklistRow[]> {
