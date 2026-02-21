@@ -71,6 +71,7 @@ type PvpsFeedItem =
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 const FEED_ACTIVE_CODDV_LIMIT = 50;
 const FEED_NEXT_PREVIEW_LIMIT = 5;
+const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
@@ -134,6 +135,10 @@ function zoneFromEndereco(value: string | null | undefined): string {
   const normalized = (value ?? "").trim().toUpperCase();
   if (!normalized) return "SEM ZONA";
   return normalized.slice(0, 4);
+}
+
+function compareEndereco(a: string | null | undefined, b: string | null | undefined): number {
+  return ENDERECO_COLLATOR.compare((a ?? "").trim().toUpperCase(), (b ?? "").trim().toUpperCase());
 }
 
 function dateSortValue(value: string | null | undefined): number {
@@ -578,7 +583,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => [...pvpsRows].sort((a, b) => {
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
-      const byEndereco = a.end_sep.localeCompare(b.end_sep);
+      const byEndereco = compareEndereco(a.end_sep, b.end_sep);
       if (byEndereco !== 0) return byEndereco;
       const byCoddv = a.coddv - b.coddv;
       if (byCoddv !== 0) return byCoddv;
@@ -595,7 +600,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       if (byCoddv !== 0) return byCoddv;
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
-      return a.endereco.localeCompare(b.endereco);
+      return compareEndereco(a.endereco, b.endereco);
     }),
     [alocRows]
   );
@@ -718,7 +723,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         const byZone = a.zone.localeCompare(b.zone);
         if (byZone !== 0) return byZone;
         if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
-        return a.endereco.localeCompare(b.endereco);
+        return compareEndereco(a.endereco, b.endereco);
       });
   }, [pvpsFeedItemsAll, pvpsActiveCoddvSet, selectedZones, zoneFilterSet]);
 
@@ -731,9 +736,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       .sort((a, b) => {
         const byZone = a.zona.localeCompare(b.zona);
         if (byZone !== 0) return byZone;
-        const byCoddv = (coddvOrder.get(a.coddv) ?? 999) - (coddvOrder.get(b.coddv) ?? 999);
-        if (byCoddv !== 0) return byCoddv;
-        return a.endereco.localeCompare(b.endereco);
+        const byEndereco = compareEndereco(a.endereco, b.endereco);
+        if (byEndereco !== 0) return byEndereco;
+        return (coddvOrder.get(a.coddv) ?? 999) - (coddvOrder.get(b.coddv) ?? 999);
       });
   }, [sortedAlocAllRows, alocActiveCoddvSet, selectedZones, zoneFilterSet, alocActiveCoddvList]);
 
@@ -801,7 +806,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => [...filteredPvpsCompletedRows].sort((a, b) => {
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
-      const byEndereco = a.end_sep.localeCompare(b.end_sep);
+      const byEndereco = compareEndereco(a.end_sep, b.end_sep);
       if (byEndereco !== 0) return byEndereco;
       return new Date(a.dt_hr).getTime() - new Date(b.dt_hr).getTime();
     }),
@@ -812,7 +817,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => [...filteredAlocCompletedRows].sort((a, b) => {
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
-      const byEndereco = a.endereco.localeCompare(b.endereco);
+      const byEndereco = compareEndereco(a.endereco, b.endereco);
       if (byEndereco !== 0) return byEndereco;
       return new Date(a.dt_hr).getTime() - new Date(b.dt_hr).getTime();
     }),
