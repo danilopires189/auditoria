@@ -2051,25 +2051,24 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       />
                     </label>
                   ) : null}
-                  <label>
-                    Ocorrência do endereço
-                    <div className="pvps-occurrence-wrap">
-                      <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
-                      <select
-                        value={endSit}
-                        onChange={(event) => {
-                          const next = event.target.value;
-                          const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                          setEndSit(parsed);
-                          if (parsed) setValSep("");
-                        }}
-                      >
-                        <option value="">Sem ocorrência</option>
-                        <option value="vazio">Vazio</option>
-                        <option value="obstruido">Obstruído</option>
-                      </select>
-                    </div>
-                  </label>
+                  <div className="pvps-occurrence-minimal">
+                    <span className="pvps-occurrence-emoji" title="Ocorrência do endereço" aria-label="Ocorrência">⚠️</span>
+                    <select
+                      className="pvps-occurrence-select-minimal"
+                      value={endSit}
+                      aria-label="Ocorrência do endereço"
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                        setEndSit(parsed);
+                        if (parsed) setValSep("");
+                      }}
+                    >
+                      <option value="">—</option>
+                      <option value="vazio">Vazio</option>
+                      <option value="obstruido">Obstruído</option>
+                    </select>
+                  </div>
                   <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
                 </form>
               ) : null}
@@ -2097,10 +2096,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           pattern="[0-9]*"
                         />
                       ) : null}
-                      <div className="pvps-occurrence-wrap">
-                        <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                      <div className="pvps-occurrence-minimal">
+                        <span className="pvps-occurrence-emoji" title="Ocorrência do endereço" aria-label="Ocorrência">⚠️</span>
                         <select
+                          className="pvps-occurrence-select-minimal"
                           value={pulEndSits[activePulItem.end_pul] ?? ""}
+                          aria-label="Ocorrência do endereço"
                           onChange={(event) => {
                             const next = event.target.value;
                             const parsed = next === "vazio" || next === "obstruido" ? next : "";
@@ -2110,7 +2111,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             }
                           }}
                         >
-                          <option value="">Sem ocorrência</option>
+                          <option value="">—</option>
                           <option value="vazio">Vazio</option>
                           <option value="obstruido">Obstruído</option>
                         </select>
@@ -2188,25 +2189,24 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       />
                     </label>
                   ) : null}
-                  <label>
-                    Ocorrência do endereço
-                    <div className="pvps-occurrence-wrap">
-                      <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
-                      <select
-                        value={alocEndSit}
-                        onChange={(event) => {
-                          const next = event.target.value;
-                          const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                          setAlocEndSit(parsed);
-                          if (parsed) setAlocValConf("");
-                        }}
-                      >
-                        <option value="">Sem ocorrência</option>
-                        <option value="vazio">Vazio</option>
-                        <option value="obstruido">Obstruído</option>
-                      </select>
-                    </div>
-                  </label>
+                  <div className="pvps-occurrence-minimal">
+                    <span className="pvps-occurrence-emoji" title="Ocorrência do endereço" aria-label="Ocorrência">⚠️</span>
+                    <select
+                      className="pvps-occurrence-select-minimal"
+                      value={alocEndSit}
+                      aria-label="Ocorrência do endereço"
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                        setAlocEndSit(parsed);
+                        if (parsed) setAlocValConf("");
+                      }}
+                    >
+                      <option value="">—</option>
+                      <option value="vazio">Vazio</option>
+                      <option value="obstruido">Obstruído</option>
+                    </select>
+                  </div>
                   <button className="btn btn-primary" type="submit" disabled={busy}>
                     Salvar
                   </button>
