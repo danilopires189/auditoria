@@ -1449,8 +1449,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <div className="module-screen-title-row">
               <div className="module-screen-title">
                 <h2>Olá, {displayUserName}</h2>
-                <p>Auditoria por zona.</p>
-                <p>PVPS: Pulmão só libera quando a Separação for salva sem ocorrência.</p>
               </div>
               <div className="pvps-toolbar">
                 <div className="pvps-toolbar-group">
