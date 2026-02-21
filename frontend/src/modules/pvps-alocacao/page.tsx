@@ -1796,7 +1796,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         {open ? (
                           <div className="pvps-row-details">
                             {item.kind === "pul" ? (
-                              <small>Linha Separação {row.end_sep} | Validade linha {row.val_sep ?? "-"}</small>
+                              <small>Separação {row.end_sep} | Validade linha {row.val_sep ?? "-"}</small>
                             ) : (
                               <small>Status {pvpsStatusLabel(row.status)} | Pulmão {row.pul_auditados}/{row.pul_total}</small>
                             )}
