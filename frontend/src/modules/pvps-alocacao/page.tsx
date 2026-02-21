@@ -558,11 +558,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setPulInputs({});
       setPulEndSits({});
       setShowSepOccurrence(false);
+      setShowPulOccurrence(false);
       return;
     }
 
     setEndSit(activePvps.end_sit ?? "");
     setValSep(activePvps.val_sep?.replace("/", "") ?? "");
+    setShowSepOccurrence(false);
 
     if (activeCd != null && (activePvps.val_sep || activePvps.end_sit)) {
       void upsertOfflineSepCache({
@@ -936,6 +938,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   async function openPvpsPopup(row: PvpsManifestRow): Promise<void> {
     setPulFeedback(null);
+    setShowSepOccurrence(false);
+    setShowPulOccurrence(false);
     if (row.status === "pendente_pul") {
       const rowKey = keyOfPvps(row);
       const cachedPulItems = feedPulBySepKey[rowKey];
@@ -964,6 +968,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openPvpsPulPopup(row: PvpsManifestRow, endPul: string): void {
     setPulFeedback(null);
+    setShowSepOccurrence(false);
+    setShowPulOccurrence(false);
     setEditingPvpsCompleted(null);
     setActivePvpsMode("pul");
     setActivePulEnd(endPul);
@@ -983,6 +989,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function closePvpsPopup(): void {
     setPulFeedback(null);
+    setShowSepOccurrence(false);
+    setShowPulOccurrence(false);
     setActivePvpsMode("sep");
     setActivePulEnd(null);
     setShowPvpsPopup(false);
@@ -1031,6 +1039,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openPvpsCompletedEdit(row: PvpsCompletedRow): void {
     if (!canEditAudit(row.auditor_id)) return;
+    setShowSepOccurrence(false);
+    setShowPulOccurrence(false);
     setEditingPvpsCompleted(row);
     setActivePvpsMode("sep");
     setActivePulEnd(null);
@@ -1123,6 +1133,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       return;
     }
     setEditingPvpsCompleted(null);
+    setShowSepOccurrence(false);
     setActivePvpsMode("sep");
     setActivePulEnd(null);
     setActivePvpsKey(keyOfPvps(next.row));
@@ -2084,9 +2095,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           required
                           autoFocus
                         />
-                      ) : (
+                      ) : !showSepOccurrence ? (
                         <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(endSit as PvpsEndSit)}</span>
-                      )}
+                      ) : null}
                     </div>
                     {showSepOccurrence ? (
                       <select
@@ -2155,9 +2166,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                               inputMode="numeric"
                               pattern="[0-9]*"
                             />
-                          ) : (
+                          ) : !showPulOccurrence ? (
                             <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(pulEndSits[activePulItem.end_pul] as PvpsEndSit)}</span>
-                          )}
+                          ) : null}
                         </div>
                         {showPulOccurrence ? (
                           <select
@@ -2268,9 +2279,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           required
                           autoFocus
                         />
-                      ) : (
+                      ) : !showAlocOccurrence ? (
                         <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(alocEndSit as PvpsEndSit)}</span>
-                      )}
+                      ) : null}
                     </div>
                     {showAlocOccurrence ? (
                       <select
