@@ -322,6 +322,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => (activePulEnd ? pulItems.find((item) => item.end_pul === activePulEnd) ?? null : null),
     [pulItems, activePulEnd]
   );
+  const activePvpsEnderecoAuditado = useMemo(
+    () => (activePvpsMode === "pul" ? (activePulItem?.end_pul ?? activePvps?.end_sep ?? "") : (activePvps?.end_sep ?? "")),
+    [activePvpsMode, activePulItem, activePvps]
+  );
+  const activePvpsZonaAuditada = useMemo(
+    () => zoneFromEndereco(activePvpsEnderecoAuditado),
+    [activePvpsEnderecoAuditado]
+  );
 
   const [endSit, setEndSit] = useState<PvpsEndSit | "">("");
   const [valSep, setValSep] = useState("");
@@ -721,10 +729,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       .filter((row) => alocActiveCoddvSet.has(row.coddv))
       .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
       .sort((a, b) => {
-        const byCoddv = (coddvOrder.get(a.coddv) ?? 999) - (coddvOrder.get(b.coddv) ?? 999);
-        if (byCoddv !== 0) return byCoddv;
         const byZone = a.zona.localeCompare(b.zona);
         if (byZone !== 0) return byZone;
+        const byCoddv = (coddvOrder.get(a.coddv) ?? 999) - (coddvOrder.get(b.coddv) ?? 999);
+        if (byCoddv !== 0) return byCoddv;
         return a.endereco.localeCompare(b.endereco);
       });
   }, [sortedAlocAllRows, alocActiveCoddvSet, selectedZones, zoneFilterSet, alocActiveCoddvList]);
@@ -1990,9 +1998,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   ? "PVPS - Pulmão"
                   : "PVPS - Separação"}
             </h3>
-            <p><strong>{activePvpsMode === "pul" ? (activePulItem?.end_pul ?? activePvps.end_sep) : activePvps.end_sep}</strong></p>
+            <p><strong>{activePvpsEnderecoAuditado}</strong></p>
             <p>{activePvps.coddv} - {activePvps.descricao}</p>
-            <p>Zona: <strong>{activePvps.zona}</strong></p>
+            <p>Zona: <strong>{activePvpsZonaAuditada}</strong></p>
             {editingPvpsCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong></p> : null}
 
             {activePvpsMode === "sep" ? (
