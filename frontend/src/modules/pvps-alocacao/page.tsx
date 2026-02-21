@@ -799,22 +799,22 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const sortedPvpsCompletedRows = useMemo(
     () => [...filteredPvpsCompletedRows].sort((a, b) => {
-      const byDt = new Date(b.dt_hr).getTime() - new Date(a.dt_hr).getTime();
-      if (!Number.isNaN(byDt) && byDt !== 0) return byDt;
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
-      return a.end_sep.localeCompare(b.end_sep);
+      const byEndereco = a.end_sep.localeCompare(b.end_sep);
+      if (byEndereco !== 0) return byEndereco;
+      return new Date(b.dt_hr).getTime() - new Date(a.dt_hr).getTime();
     }),
     [filteredPvpsCompletedRows]
   );
 
   const sortedAlocCompletedRows = useMemo(
     () => [...filteredAlocCompletedRows].sort((a, b) => {
-      const byDt = new Date(b.dt_hr).getTime() - new Date(a.dt_hr).getTime();
-      if (!Number.isNaN(byDt) && byDt !== 0) return byDt;
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
-      return a.endereco.localeCompare(b.endereco);
+      const byEndereco = a.endereco.localeCompare(b.endereco);
+      if (byEndereco !== 0) return byEndereco;
+      return new Date(b.dt_hr).getTime() - new Date(a.dt_hr).getTime();
     }),
     [filteredAlocCompletedRows]
   );
