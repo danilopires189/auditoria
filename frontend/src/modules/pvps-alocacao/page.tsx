@@ -347,6 +347,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [expandedAloc, setExpandedAloc] = useState<Record<string, boolean>>({});
   const [expandedPvpsCompleted, setExpandedPvpsCompleted] = useState<Record<string, boolean>>({});
   const [expandedAlocCompleted, setExpandedAlocCompleted] = useState<Record<string, boolean>>({});
+  const [pvpsCompletedPulByAuditId, setPvpsCompletedPulByAuditId] = useState<Record<string, PvpsPulItemRow[]>>({});
+  const [pvpsCompletedPulLoading, setPvpsCompletedPulLoading] = useState<Record<string, boolean>>({});
   const [editingPvpsCompleted, setEditingPvpsCompleted] = useState<PvpsCompletedRow | null>(null);
   const [editingAlocCompleted, setEditingAlocCompleted] = useState<AlocacaoCompletedRow | null>(null);
   const silentRefreshInFlightRef = useRef(false);
@@ -419,6 +421,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setFeedPulBySepKey({});
     setActivePvpsMode("sep");
     setActivePulEnd(null);
+    setPvpsCompletedPulByAuditId({});
+    setPvpsCompletedPulLoading({});
   }, [activeCd]);
 
   useEffect(() => {
@@ -940,8 +944,29 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setExpandedAloc((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  function toggleExpandedPvpsCompleted(key: string): void {
+  async function loadPvpsCompletedPulItems(row: PvpsCompletedRow): Promise<void> {
+    const key = row.audit_id;
+    if (pvpsCompletedPulLoading[key] || pvpsCompletedPulByAuditId[key]) return;
+    if (!isOnline) return;
+    setPvpsCompletedPulLoading((prev) => ({ ...prev, [key]: true }));
+    try {
+      const items = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd ?? row.cd);
+      const onlyAudited = items.filter((item) => item.auditado);
+      setPvpsCompletedPulByAuditId((prev) => ({ ...prev, [key]: onlyAudited }));
+    } catch {
+      setPvpsCompletedPulByAuditId((prev) => ({ ...prev, [key]: [] }));
+    } finally {
+      setPvpsCompletedPulLoading((prev) => ({ ...prev, [key]: false }));
+    }
+  }
+
+  function toggleExpandedPvpsCompleted(row: PvpsCompletedRow): void {
+    const key = row.audit_id;
+    const willOpen = !expandedPvpsCompleted[key];
     setExpandedPvpsCompleted((prev) => ({ ...prev, [key]: !prev[key] }));
+    if (willOpen && row.pul_auditados > 0 && !pvpsCompletedPulByAuditId[key] && !pvpsCompletedPulLoading[key]) {
+      void loadPvpsCompletedPulItems(row);
+    }
   }
 
   function toggleExpandedAlocCompleted(key: string): void {
@@ -1837,6 +1862,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const canEdit = canEditAudit(row.auditor_id);
                   const statusInfo = pvpsHistoryStatus(row);
+                  const pulItemsCompleted = pvpsCompletedPulByAuditId[row.audit_id] ?? [];
+                  const pulItemsLoading = Boolean(pvpsCompletedPulLoading[row.audit_id]);
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
                       {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
@@ -1853,7 +1880,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openPvpsCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
                               {doneIcon()}
                             </button>
-                            <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedPvpsCompleted(row.audit_id)} title="Expandir">
+                            <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedPvpsCompleted(row)} title="Expandir">
                               {chevronIcon(open)}
                             </button>
                           </div>
@@ -1861,6 +1888,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         {open ? (
                           <div className="pvps-row-details">
                             <small>Pulmão auditados: {row.pul_auditados}/{row.pul_total}</small>
+                            {pulItemsLoading ? <small>Carregando endereços de Pulmão...</small> : null}
+                            {!pulItemsLoading ? pulItemsCompleted.map((item) => (
+                              <small key={`${row.audit_id}:${item.end_pul}`}>
+                                Pulmão {item.end_pul} | Validade {item.val_pul ?? "-"} | Ocorrência {item.end_sit ?? "sem ocorrência"}
+                              </small>
+                            )) : null}
                             {row.pul_has_lower ? (
                               <small>
                                 Pulmão com validade menor: {row.pul_lower_end ?? "-"} ({row.pul_lower_val ?? "-"})
