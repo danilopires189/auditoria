@@ -858,21 +858,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   useEffect(() => {
     if (tab === "pvps") {
       const visibleKeys = new Set(pvpsFeedItems.map((item) => keyOfPvps(item.row)));
-      if (!activePvpsKey || !visibleKeys.has(activePvpsKey)) {
-        const first = pvpsFeedItems[0];
-        setActivePvpsKey(first ? keyOfPvps(first.row) : null);
-        if (first?.kind === "pul") {
-          setActivePvpsMode("pul");
-          setActivePulEnd(first.endPul);
-        } else {
-          setActivePvpsMode("sep");
-          setActivePulEnd(null);
-        }
+      if (activePvpsKey && !visibleKeys.has(activePvpsKey)) {
+        setActivePvpsKey(null);
+        setActivePvpsMode("sep");
+        setActivePulEnd(null);
       }
       return;
     }
-    if (!visibleAlocRows.some((row) => row.queue_id === activeAlocQueue)) {
-      setActiveAlocQueue(visibleAlocRows[0]?.queue_id ?? null);
+    if (activeAlocQueue && !visibleAlocRows.some((row) => row.queue_id === activeAlocQueue)) {
+      setActiveAlocQueue(null);
     }
   }, [tab, pvpsFeedItems, visibleAlocRows, activePvpsKey, activeAlocQueue]);
 
@@ -1993,104 +1987,58 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
       {showPvpsPopup && activePvps && typeof document !== "undefined"
         ? createPortal(
-        <div
-          className="confirm-overlay pvps-popup-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pvps-inform-title"
-          onClick={() => {
-            if (busy) return;
-            setEditingPvpsCompleted(null);
-            closePvpsPopup();
-          }}
-        >
-          <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
-            <h3 id="pvps-inform-title">
-              {editingPvpsCompleted
-                ? "PVPS - Edição concluída"
-                : activePvpsMode === "pul"
-                  ? "PVPS - Pulmão"
-                  : "PVPS - Separação"}
-            </h3>
-            <p><strong>{activePvpsEnderecoAuditado}</strong></p>
-            <p>{activePvps.coddv} - {activePvps.descricao}</p>
-            <p>Zona: <strong>{activePvpsZonaAuditada}</strong></p>
-            {editingPvpsCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong></p> : null}
+          <div
+            className="confirm-overlay pvps-popup-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pvps-inform-title"
+            onClick={() => {
+              if (busy) return;
+              setEditingPvpsCompleted(null);
+              closePvpsPopup();
+            }}
+          >
+            <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
+              <h3 id="pvps-inform-title">
+                {editingPvpsCompleted
+                  ? "PVPS - Edição concluída"
+                  : activePvpsMode === "pul"
+                    ? "PVPS - Pulmão"
+                    : "PVPS - Separação"}
+              </h3>
+              <p><strong>{activePvpsEnderecoAuditado}</strong></p>
+              <p>{activePvps.coddv} - {activePvps.descricao}</p>
+              <p>Zona: <strong>{activePvpsZonaAuditada}</strong></p>
+              {editingPvpsCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong></p> : null}
 
-            {activePvpsMode === "sep" ? (
-              <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
-                {endSit !== "vazio" && endSit !== "obstruido" ? (
-                  <label>
-                    Validade do Produto
-                    <input
-                      value={valSep}
-                      onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                      placeholder="MMAA"
-                      maxLength={4}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      required
-                      autoFocus
-                    />
-                  </label>
-                ) : null}
-                <label>
-                  Ocorrência do endereço
-                  <div className="pvps-occurrence-wrap">
-                    <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
-                    <select
-                      value={endSit}
-                      onChange={(event) => {
-                        const next = event.target.value;
-                        const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                        setEndSit(parsed);
-                        if (parsed) setValSep("");
-                      }}
-                    >
-                      <option value="">Sem ocorrência</option>
-                      <option value="vazio">Vazio</option>
-                      <option value="obstruido">Obstruído</option>
-                    </select>
-                  </div>
-                </label>
-                <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
-              </form>
-            ) : null}
-
-            {activePvpsMode === "pul" ? (
-              <div className="pvps-pul-box">
-                <p>Endereço separação: <strong>{activePvps.end_sep}</strong></p>
-                <p>Validade Separação: <strong>{activePvps.val_sep ?? "-"}</strong></p>
-                {activePvps.end_sit ? <p>Ocorrência linha: <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong></p> : null}
-                {pulBusy ? <p>Carregando endereços de Pulmão...</p> : null}
-                {!pulBusy && !activePulItem ? <p>Endereço de Pulmão não encontrado no feed atual.</p> : null}
-                {activePulItem ? (
-                  <div className="pvps-pul-row">
-                    <div>
-                      <strong>{activePulItem.end_pul}</strong>
-                      <small>{activePulItem.auditado ? "Auditado" : "Pendente"}</small>
-                    </div>
-                    {(pulEndSits[activePulItem.end_pul] ?? "") !== "vazio" && (pulEndSits[activePulItem.end_pul] ?? "") !== "obstruido" ? (
+              {activePvpsMode === "sep" ? (
+                <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
+                  {endSit !== "vazio" && endSit !== "obstruido" ? (
+                    <label>
+                      Validade do Produto
                       <input
-                        value={pulInputs[activePulItem.end_pul] ?? ""}
-                        onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                        value={valSep}
+                        onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
                         placeholder="MMAA"
                         maxLength={4}
                         inputMode="numeric"
                         pattern="[0-9]*"
+                        required
+                        autoFocus
                       />
-                    ) : null}
+                    </label>
+                  ) : null}
+                  <label>
+                    Ocorrência do endereço
                     <div className="pvps-occurrence-wrap">
                       <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
                       <select
-                        value={pulEndSits[activePulItem.end_pul] ?? ""}
+                        value={endSit}
                         onChange={(event) => {
                           const next = event.target.value;
                           const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                          setPulEndSits((prev) => ({ ...prev, [activePulItem.end_pul]: parsed }));
-                          if (parsed) {
-                            setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: "" }));
-                          }
+                          setEndSit(parsed);
+                          if (parsed) setValSep("");
                         }}
                       >
                         <option value="">Sem ocorrência</option>
@@ -2098,300 +2046,346 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <option value="obstruido">Obstruído</option>
                       </select>
                     </div>
-                    <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
-                      Salvar
-                    </button>
-                  </div>
-                ) : null}
-                {pulFeedback ? (
-                  <div className={`pvps-pul-feedback pvps-result-chip ${pulFeedback.tone === "ok" ? "ok" : pulFeedback.tone === "bad" ? "bad" : "warn"}`}>
-                    <span>{pulFeedback.text}</span>
-                    <button
-                      className="btn btn-primary pvps-icon-btn pvps-pul-next-btn"
-                      type="button"
-                      onClick={handlePulGoNext}
-                      title="Ir para o próximo"
-                    >
-                      {nextIcon()}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                  </label>
+                  <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
+                </form>
+              ) : null}
 
-            <div className="confirm-actions">
-              <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
-                setEditingPvpsCompleted(null);
-                closePvpsPopup();
-              }}>
-                Fechar
-              </button>
+              {activePvpsMode === "pul" ? (
+                <div className="pvps-pul-box">
+                  <p>Endereço separação: <strong>{activePvps.end_sep}</strong></p>
+                  <p>Validade Separação: <strong>{activePvps.val_sep ?? "-"}</strong></p>
+                  {activePvps.end_sit ? <p>Ocorrência linha: <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong></p> : null}
+                  {pulBusy ? <p>Carregando endereços de Pulmão...</p> : null}
+                  {!pulBusy && !activePulItem ? <p>Endereço de Pulmão não encontrado no feed atual.</p> : null}
+                  {activePulItem ? (
+                    <div className="pvps-pul-row">
+                      <div>
+                        <strong>{activePulItem.end_pul}</strong>
+                        <small>{activePulItem.auditado ? "Auditado" : "Pendente"}</small>
+                      </div>
+                      {(pulEndSits[activePulItem.end_pul] ?? "") !== "vazio" && (pulEndSits[activePulItem.end_pul] ?? "") !== "obstruido" ? (
+                        <input
+                          value={pulInputs[activePulItem.end_pul] ?? ""}
+                          onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                          placeholder="MMAA"
+                          maxLength={4}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                        />
+                      ) : null}
+                      <div className="pvps-occurrence-wrap">
+                        <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                        <select
+                          value={pulEndSits[activePulItem.end_pul] ?? ""}
+                          onChange={(event) => {
+                            const next = event.target.value;
+                            const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                            setPulEndSits((prev) => ({ ...prev, [activePulItem.end_pul]: parsed }));
+                            if (parsed) {
+                              setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: "" }));
+                            }
+                          }}
+                        >
+                          <option value="">Sem ocorrência</option>
+                          <option value="vazio">Vazio</option>
+                          <option value="obstruido">Obstruído</option>
+                        </select>
+                      </div>
+                      <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
+                        Salvar
+                      </button>
+                    </div>
+                  ) : null}
+                  {pulFeedback ? (
+                    <div className={`pvps-pul-feedback pvps-result-chip ${pulFeedback.tone === "ok" ? "ok" : pulFeedback.tone === "bad" ? "bad" : "warn"}`}>
+                      <span>{pulFeedback.text}</span>
+                      <button
+                        className="btn btn-primary pvps-icon-btn pvps-pul-next-btn"
+                        type="button"
+                        onClick={handlePulGoNext}
+                        title="Ir para o próximo"
+                      >
+                        {nextIcon()}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="confirm-actions">
+                <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
+                  setEditingPvpsCompleted(null);
+                  closePvpsPopup();
+                }}>
+                  Fechar
+                </button>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      ) : null}
+          </div>,
+          document.body
+        ) : null}
 
       {showAlocPopup && activeAloc && typeof document !== "undefined"
         ? createPortal(
-        <div
-          className="confirm-overlay pvps-popup-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="aloc-inform-title"
-          onClick={() => {
-            if (busy) return;
-            setEditingAlocCompleted(null);
-            setAlocResult(null);
-            setAlocFeedback(null);
-            setShowAlocPopup(false);
-          }}
-        >
-          <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
-            <h3 id="aloc-inform-title">{editingAlocCompleted ? "Alocação - Edição concluída" : "Alocação"}</h3>
-            <p><strong>{activeAloc.endereco}</strong></p>
-            <p>{activeAloc.coddv} - {activeAloc.descricao}</p>
-            <p>Zona: <strong>{activeAloc.zona}</strong> | Andar: <strong>{formatAndar(activeAloc.nivel)}</strong></p>
-            {editingAlocCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong></p> : null}
+          <div
+            className="confirm-overlay pvps-popup-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="aloc-inform-title"
+            onClick={() => {
+              if (busy) return;
+              setEditingAlocCompleted(null);
+              setAlocResult(null);
+              setAlocFeedback(null);
+              setShowAlocPopup(false);
+            }}
+          >
+            <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
+              <h3 id="aloc-inform-title">{editingAlocCompleted ? "Alocação - Edição concluída" : "Alocação"}</h3>
+              <p><strong>{activeAloc.endereco}</strong></p>
+              <p>{activeAloc.coddv} - {activeAloc.descricao}</p>
+              <p>Zona: <strong>{activeAloc.zona}</strong> | Andar: <strong>{formatAndar(activeAloc.nivel)}</strong></p>
+              {editingAlocCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong></p> : null}
 
-            {!alocFeedback ? (
-              <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
-                {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
+              {!alocFeedback ? (
+                <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
+                  {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
+                    <label>
+                      Validade do Produto
+                      <input
+                        value={alocValConf}
+                        onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                        placeholder="MMAA"
+                        maxLength={4}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        required
+                        autoFocus
+                      />
+                    </label>
+                  ) : null}
                   <label>
-                    Validade do Produto
-                    <input
-                      value={alocValConf}
-                      onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                      placeholder="MMAA"
-                      maxLength={4}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      required
-                      autoFocus
-                    />
+                    Ocorrência do endereço
+                    <div className="pvps-occurrence-wrap">
+                      <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
+                      <select
+                        value={alocEndSit}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                          setAlocEndSit(parsed);
+                          if (parsed) setAlocValConf("");
+                        }}
+                      >
+                        <option value="">Sem ocorrência</option>
+                        <option value="vazio">Vazio</option>
+                        <option value="obstruido">Obstruído</option>
+                      </select>
+                    </div>
                   </label>
-                ) : null}
-                <label>
-                  Ocorrência do endereço
-                  <div className="pvps-occurrence-wrap">
-                    <span className="pvps-occurrence-icon" aria-hidden="true">{occurrenceIcon()}</span>
-                    <select
-                      value={alocEndSit}
-                      onChange={(event) => {
-                        const next = event.target.value;
-                        const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                        setAlocEndSit(parsed);
-                        if (parsed) setAlocValConf("");
-                      }}
-                    >
-                      <option value="">Sem ocorrência</option>
-                      <option value="vazio">Vazio</option>
-                      <option value="obstruido">Obstruído</option>
-                    </select>
-                  </div>
-                </label>
-                <button className="btn btn-primary" type="submit" disabled={busy}>
-                  Salvar
-                </button>
-              </form>
-            ) : null}
+                  <button className="btn btn-primary" type="submit" disabled={busy}>
+                    Salvar
+                  </button>
+                </form>
+              ) : null}
 
-            {alocResult ? (
-              <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "warn" : "bad"}`}>
-                <div>Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}</div>
-                {alocResult.aud_sit === "ocorrencia" ? null : (
-                  <>
-                    <div>Sistema: {alocResult.val_sist}</div>
-                    <div>Informada: {alocResult.val_conf ?? "-"}</div>
-                  </>
-                )}
-              </div>
-            ) : null}
-            {alocFeedback ? (
-              <div className={`pvps-pul-feedback pvps-result-chip ${alocFeedback.tone === "ok" ? "ok" : alocFeedback.tone === "bad" ? "bad" : "warn"}`}>
-                <span>{alocFeedback.text}</span>
-                <button
-                  className="btn btn-primary pvps-icon-btn pvps-pul-next-btn"
-                  type="button"
-                  onClick={handleAlocGoNext}
-                  title="Ir para o próximo"
-                >
-                  {nextIcon()}
+              {alocResult ? (
+                <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "warn" : "bad"}`}>
+                  <div>Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}</div>
+                  {alocResult.aud_sit === "ocorrencia" ? null : (
+                    <>
+                      <div>Sistema: {alocResult.val_sist}</div>
+                      <div>Informada: {alocResult.val_conf ?? "-"}</div>
+                    </>
+                  )}
+                </div>
+              ) : null}
+              {alocFeedback ? (
+                <div className={`pvps-pul-feedback pvps-result-chip ${alocFeedback.tone === "ok" ? "ok" : alocFeedback.tone === "bad" ? "bad" : "warn"}`}>
+                  <span>{alocFeedback.text}</span>
+                  <button
+                    className="btn btn-primary pvps-icon-btn pvps-pul-next-btn"
+                    type="button"
+                    onClick={handleAlocGoNext}
+                    title="Ir para o próximo"
+                  >
+                    {nextIcon()}
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="confirm-actions">
+                <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
+                  setEditingAlocCompleted(null);
+                  setAlocResult(null);
+                  setAlocFeedback(null);
+                  setShowAlocPopup(false);
+                }}>
+                  Fechar
                 </button>
               </div>
-            ) : null}
-
-            <div className="confirm-actions">
-              <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
-                setEditingAlocCompleted(null);
-                setAlocResult(null);
-                setAlocFeedback(null);
-                setShowAlocPopup(false);
-              }}>
-                Fechar
-              </button>
             </div>
-          </div>
-        </div>,
-        document.body
-      ) : null}
+          </div>,
+          document.body
+        ) : null}
 
       {showClearZoneConfirm && typeof document !== "undefined"
         ? createPortal(
-        <div
-          className="confirm-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pvps-clear-zone-title"
-          onClick={() => {
-            if (adminBusy) return;
-            setShowClearZoneConfirm(false);
-          }}
-        >
-          <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-            <h3 id="pvps-clear-zone-title">Confirmar limpeza da base por zona</h3>
-            <p>
-              Esta ação irá remover os itens pendentes da zona <strong>{adminZona || "-"}</strong> para o módulo{" "}
-              <strong>{adminModulo.toUpperCase()}</strong>.
-            </p>
-            <p>
-              Reposição automática: <strong>{adminAutoRepor ? "ativada" : "desativada"}</strong>.
-            </p>
-            <div className="confirm-actions">
-              <button
-                className="btn btn-muted"
-                type="button"
-                disabled={adminBusy}
-                onClick={() => setShowClearZoneConfirm(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                className="btn btn-danger"
-                type="button"
-                disabled={adminBusy}
-                onClick={() => {
-                  void handleAdminClearZone();
-                  setShowClearZoneConfirm(false);
-                }}
-              >
-                {adminBusy ? "Limpando..." : "Confirmar limpeza"}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      ) : null}
-
-      {showZoneFilterPopup && typeof document !== "undefined"
-        ? createPortal(
-        <div
-          className="confirm-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pvps-zone-filter-title"
-          onClick={() => {
-            if (adminBusy) return;
-            setShowZoneFilterPopup(false);
-          }}
-        >
-          <div className="confirm-dialog surface-enter pvps-zone-popup-card" onClick={(event) => event.stopPropagation()}>
-            <h3 id="pvps-zone-filter-title">Filtro de zonas ({tab.toUpperCase()})</h3>
-            <div className="form-grid">
-              <label>
-                Pesquisar zona
-                <input
-                  value={zoneSearch}
-                  onChange={(event) => setZoneSearch(event.target.value.toUpperCase())}
-                  placeholder="Ex.: A001"
-                />
-              </label>
-            </div>
-
-            <div className="pvps-zone-picker-actions">
-              <button
-                className="btn btn-muted pvps-zone-action-btn"
-                type="button"
-                onClick={() => setSelectedZones([])}
-                title="Limpar seleção"
-                aria-label="Limpar seleção"
-              >
-                <span className="pvps-btn-icon" aria-hidden="true">{clearSelectionIcon()}</span>
-                <span className="pvps-zone-action-label">Limpar</span>
-              </button>
-              <button
-                className="btn btn-muted pvps-zone-action-btn"
-                type="button"
-                onClick={() => setSelectedZones(filteredZones)}
-                title="Selecionar filtradas"
-                aria-label="Selecionar filtradas"
-              >
-                <span className="pvps-btn-icon" aria-hidden="true">{selectFilteredIcon()}</span>
-                <span className="pvps-zone-action-label">Selecionar</span>
-              </button>
-            </div>
-
-            <div className="pvps-zone-list">
-              {filteredZones.length === 0 ? <p>Sem zonas para este filtro.</p> : null}
-              {filteredZones.map((zone) => (
-                <label key={zone} className="pvps-zone-item">
-                  <input type="checkbox" checked={selectedZones.includes(zone)} onChange={() => toggleZone(zone)} />
-                  <span>{zone}</span>
-                </label>
-              ))}
-            </div>
-
-            <div className="confirm-actions">
-              {isAdmin ? (
+          <div
+            className="confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pvps-clear-zone-title"
+            onClick={() => {
+              if (adminBusy) return;
+              setShowClearZoneConfirm(false);
+            }}
+          >
+            <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+              <h3 id="pvps-clear-zone-title">Confirmar limpeza da base por zona</h3>
+              <p>
+                Esta ação irá remover os itens pendentes da zona <strong>{adminZona || "-"}</strong> para o módulo{" "}
+                <strong>{adminModulo.toUpperCase()}</strong>.
+              </p>
+              <p>
+                Reposição automática: <strong>{adminAutoRepor ? "ativada" : "desativada"}</strong>.
+              </p>
+              <div className="confirm-actions">
+                <button
+                  className="btn btn-muted"
+                  type="button"
+                  disabled={adminBusy}
+                  onClick={() => setShowClearZoneConfirm(false)}
+                >
+                  Cancelar
+                </button>
                 <button
                   className="btn btn-danger"
                   type="button"
-                  disabled={adminBusy || selectedZones.length === 0}
-                  onClick={() => setShowDiscardZonesConfirm(true)}
+                  disabled={adminBusy}
+                  onClick={() => {
+                    void handleAdminClearZone();
+                    setShowClearZoneConfirm(false);
+                  }}
                 >
-                  Descartar zonas selecionadas (repos. auto)
+                  {adminBusy ? "Limpando..." : "Confirmar limpeza"}
                 </button>
-              ) : null}
-              <button className="btn btn-primary" type="button" onClick={() => setShowZoneFilterPopup(false)}>
-                Aplicar filtro
-              </button>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      ) : null}
+          </div>,
+          document.body
+        ) : null}
+
+      {showZoneFilterPopup && typeof document !== "undefined"
+        ? createPortal(
+          <div
+            className="confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pvps-zone-filter-title"
+            onClick={() => {
+              if (adminBusy) return;
+              setShowZoneFilterPopup(false);
+            }}
+          >
+            <div className="confirm-dialog surface-enter pvps-zone-popup-card" onClick={(event) => event.stopPropagation()}>
+              <h3 id="pvps-zone-filter-title">Filtro de zonas ({tab.toUpperCase()})</h3>
+              <div className="form-grid">
+                <label>
+                  Pesquisar zona
+                  <input
+                    value={zoneSearch}
+                    onChange={(event) => setZoneSearch(event.target.value.toUpperCase())}
+                    placeholder="Ex.: A001"
+                  />
+                </label>
+              </div>
+
+              <div className="pvps-zone-picker-actions">
+                <button
+                  className="btn btn-muted pvps-zone-action-btn"
+                  type="button"
+                  onClick={() => setSelectedZones([])}
+                  title="Limpar seleção"
+                  aria-label="Limpar seleção"
+                >
+                  <span className="pvps-btn-icon" aria-hidden="true">{clearSelectionIcon()}</span>
+                  <span className="pvps-zone-action-label">Limpar</span>
+                </button>
+                <button
+                  className="btn btn-muted pvps-zone-action-btn"
+                  type="button"
+                  onClick={() => setSelectedZones(filteredZones)}
+                  title="Selecionar filtradas"
+                  aria-label="Selecionar filtradas"
+                >
+                  <span className="pvps-btn-icon" aria-hidden="true">{selectFilteredIcon()}</span>
+                  <span className="pvps-zone-action-label">Selecionar</span>
+                </button>
+              </div>
+
+              <div className="pvps-zone-list">
+                {filteredZones.length === 0 ? <p>Sem zonas para este filtro.</p> : null}
+                {filteredZones.map((zone) => (
+                  <label key={zone} className="pvps-zone-item">
+                    <input type="checkbox" checked={selectedZones.includes(zone)} onChange={() => toggleZone(zone)} />
+                    <span>{zone}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="confirm-actions">
+                {isAdmin ? (
+                  <button
+                    className="btn btn-danger"
+                    type="button"
+                    disabled={adminBusy || selectedZones.length === 0}
+                    onClick={() => setShowDiscardZonesConfirm(true)}
+                  >
+                    Descartar zonas selecionadas (repos. auto)
+                  </button>
+                ) : null}
+                <button className="btn btn-primary" type="button" onClick={() => setShowZoneFilterPopup(false)}>
+                  Aplicar filtro
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        ) : null}
 
       {showDiscardZonesConfirm && typeof document !== "undefined"
         ? createPortal(
-        <div
-          className="confirm-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pvps-discard-zones-title"
-          onClick={() => {
-            if (adminBusy) return;
-            setShowDiscardZonesConfirm(false);
-          }}
-        >
-          <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-            <h3 id="pvps-discard-zones-title">Descartar zonas selecionadas</h3>
-            <p>
-              Esta ação remove da fila atual da aba <strong>{tab.toUpperCase()}</strong> as zonas selecionadas:
-              <strong> {selectedZones.join(", ") || "-"}</strong>.
-            </p>
-            <p>A reposição será automática com os próximos itens previstos.</p>
-            <div className="confirm-actions">
-              <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => setShowDiscardZonesConfirm(false)}>
-                Cancelar
-              </button>
-              <button className="btn btn-danger" type="button" disabled={adminBusy} onClick={() => void handleDiscardSelectedZones()}>
-                {adminBusy ? "Descartando..." : "Confirmar descarte"}
-              </button>
+          <div
+            className="confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pvps-discard-zones-title"
+            onClick={() => {
+              if (adminBusy) return;
+              setShowDiscardZonesConfirm(false);
+            }}
+          >
+            <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+              <h3 id="pvps-discard-zones-title">Descartar zonas selecionadas</h3>
+              <p>
+                Esta ação remove da fila atual da aba <strong>{tab.toUpperCase()}</strong> as zonas selecionadas:
+                <strong> {selectedZones.join(", ") || "-"}</strong>.
+              </p>
+              <p>A reposição será automática com os próximos itens previstos.</p>
+              <div className="confirm-actions">
+                <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => setShowDiscardZonesConfirm(false)}>
+                  Cancelar
+                </button>
+                <button className="btn btn-danger" type="button" disabled={adminBusy} onClick={() => void handleDiscardSelectedZones()}>
+                  {adminBusy ? "Descartando..." : "Confirmar descarte"}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      ) : null}
+          </div>,
+          document.body
+        ) : null}
     </>
   );
 }
