@@ -1107,7 +1107,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const hasOcorrencia = endSit === "vazio" || endSit === "obstruido";
     const normalizedValSep = valSep.trim();
     if (!hasOcorrencia && normalizedValSep.length !== 4) {
-      setErrorMessage("Validade de Separação obrigatória (mmaa) quando não houver ocorrência.");
+      setErrorMessage("Validade do Produto obrigatória (MMAA) quando não houver ocorrência.");
       return;
     }
     const currentKey = keyOfPvps(activePvps);
@@ -1196,7 +1196,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const hasPulOcorrencia = pulEndSit === "vazio" || pulEndSit === "obstruido";
     const value = pulInputs[endPul] ?? "";
     if (!hasPulOcorrencia && value.trim().length !== 4) {
-      setErrorMessage("Validade de Pulmão obrigatória (mmaa).");
+      setErrorMessage("Validade do Produto obrigatória (MMAA).");
       return;
     }
     const currentKey = keyOfPvps(activePvps);
@@ -1349,7 +1349,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const normalizedValConf = alocValConf.trim();
     if (!hasOcorrencia && normalizedValConf.length !== 4) {
       setBusy(false);
-      setErrorMessage("Validade conferida obrigatória (mmaa) quando não houver ocorrência.");
+      setErrorMessage("Validade do Produto obrigatória (MMAA) quando não houver ocorrência.");
       return;
     }
     try {
@@ -1983,26 +1983,25 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
             <h3 id="pvps-inform-title">
               {editingPvpsCompleted
-                ? "Editar PVPS concluído"
+                ? "PVPS - Edição concluída"
                 : activePvpsMode === "pul"
-                  ? "Informar PVPS - Pulmão"
-                  : "Informar PVPS - Separação"}
+                  ? "PVPS - Pulmão"
+                  : "PVPS - Separação"}
             </h3>
-            <p>Separação: <strong>{activePvps.end_sep}</strong> | CODDV: <strong>{activePvps.coddv}</strong></p>
-            <p>Produto: {activePvps.descricao}</p>
-            <p>Zona: <strong>{activePvps.zona}</strong> | Status: <strong>{pvpsStatusLabel(activePvps.status)}</strong></p>
-            <p>Data última compra: <strong>{formatDate(activePvps.dat_ult_compra)}</strong></p>
+            <p><strong>{activePvpsMode === "pul" ? (activePulItem?.end_pul ?? activePvps.end_sep) : activePvps.end_sep}</strong></p>
+            <p>{activePvps.coddv} - {activePvps.descricao}</p>
+            <p>Zona: <strong>{activePvps.zona}</strong></p>
             {editingPvpsCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong></p> : null}
 
             {activePvpsMode === "sep" ? (
               <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
                 {endSit !== "vazio" && endSit !== "obstruido" ? (
                   <label>
-                    Validade da Separação (mmaa)
+                    Validade do Produto
                     <input
                       value={valSep}
                       onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                      placeholder="mmaa"
+                      placeholder="MMAA"
                       maxLength={4}
                       inputMode="numeric"
                       pattern="[0-9]*"
@@ -2050,7 +2049,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       <input
                         value={pulInputs[activePulItem.end_pul] ?? ""}
                         onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
-                        placeholder="mmaa"
+                        placeholder="MMAA"
                         maxLength={4}
                         inputMode="numeric"
                         pattern="[0-9]*"
@@ -2124,21 +2123,20 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           }}
         >
           <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
-            <h3 id="aloc-inform-title">{editingAlocCompleted ? "Editar Alocação concluída" : "Informar Alocação"}</h3>
-            <p>Endereço: <strong>{activeAloc.endereco}</strong> | CODDV: <strong>{activeAloc.coddv}</strong></p>
-            <p>Produto: {activeAloc.descricao}</p>
+            <h3 id="aloc-inform-title">{editingAlocCompleted ? "Alocação - Edição concluída" : "Alocação"}</h3>
+            <p><strong>{activeAloc.endereco}</strong></p>
+            <p>{activeAloc.coddv} - {activeAloc.descricao}</p>
             <p>Zona: <strong>{activeAloc.zona}</strong> | Andar: <strong>{formatAndar(activeAloc.nivel)}</strong></p>
-            <p>Data última compra: <strong>{formatDate(activeAloc.dat_ult_compra)}</strong></p>
             {editingAlocCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong></p> : null}
 
             <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
               {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
                 <label>
-                  Validade conferida (mmaa)
+                  Validade do Produto
                   <input
                     value={alocValConf}
                     onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                    placeholder="mmaa"
+                    placeholder="MMAA"
                     maxLength={4}
                     inputMode="numeric"
                     pattern="[0-9]*"
