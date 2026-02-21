@@ -1433,7 +1433,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           </Link>
           <div className="module-topbar-user-side">
             <span className="module-user-greeting">Olá, {displayUserName}</span>
-            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "Online" : "Offline"}</span>
+            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "🟢 Online" : "🔴 Offline"}</span>
           </div>
         </div>
         <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
