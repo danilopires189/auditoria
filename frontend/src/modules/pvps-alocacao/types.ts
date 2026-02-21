@@ -149,6 +149,8 @@ export interface PvpsAdminRuleActiveRow {
   target_value: string;
   priority_value: number | null;
   created_by: string | null;
+  created_by_mat: string | null;
+  created_by_nome: string | null;
   created_at: string;
 }
 
@@ -166,6 +168,8 @@ export interface PvpsAdminRuleHistoryRow {
   affected_pvps: number;
   affected_alocacao: number;
   actor_user_id: string | null;
+  actor_user_mat: string | null;
+  actor_user_nome: string | null;
   created_at: string;
 }
 

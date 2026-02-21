@@ -288,6 +288,8 @@ export async function fetchAdminRulesActive(modulo: PvpsModulo = "ambos", pCd?: 
       target_value: parseString(raw.target_value),
       priority_value: parseNullableString(raw.priority_value) == null ? null : parseInteger(raw.priority_value),
       created_by: parseNullableString(raw.created_by),
+      created_by_mat: parseNullableString(raw.created_by_mat),
+      created_by_nome: parseNullableString(raw.created_by_nome),
       created_at: parseString(raw.created_at)
     };
   });
@@ -324,6 +326,8 @@ export async function fetchAdminRulesHistory(params?: {
       affected_pvps: Math.max(parseInteger(raw.affected_pvps), 0),
       affected_alocacao: Math.max(parseInteger(raw.affected_alocacao), 0),
       actor_user_id: parseNullableString(raw.actor_user_id),
+      actor_user_mat: parseNullableString(raw.actor_user_mat),
+      actor_user_nome: parseNullableString(raw.actor_user_nome),
       created_at: parseString(raw.created_at)
     };
   });
