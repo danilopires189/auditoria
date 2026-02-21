@@ -4638,43 +4638,79 @@ small {
   padding: 10px 12px;
 }
 
-/* Occurrence Select — minimal inline version */
+/* Occurrence Select — minimal toggle version */
+@keyframes pvps-occ-reveal {
+  from {
+    opacity: 0;
+    transform: scaleX(0.85);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
 .pvps-occurrence-minimal {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 0 2px;
+  gap: 6px;
+  padding: 4px 0 2px;
   border-top: 1px dashed #dde6f3;
   margin-top: 2px;
 }
 
-.pvps-occurrence-emoji {
-  font-size: 1.05rem;
+/* Botão emoji — só aparece o ⚠️, nada mais */
+.pvps-occurrence-toggle {
+  all: unset;
+  cursor: pointer;
+  font-size: 1rem;
   line-height: 1;
   flex: 0 0 auto;
-  opacity: 0.75;
-  cursor: default;
+  opacity: 0.45;
+  border-radius: 6px;
+  padding: 3px 5px;
+  transition: opacity 150ms ease, background 150ms ease, transform 120ms ease;
   user-select: none;
-  transition: opacity 150ms ease;
 }
 
-.pvps-occurrence-minimal:has(.pvps-occurrence-select-minimal:not([value=""])) .pvps-occurrence-emoji,
-.pvps-occurrence-minimal:focus-within .pvps-occurrence-emoji {
+.pvps-occurrence-toggle:hover {
+  opacity: 0.85;
+  background: rgba(240, 185, 74, 0.12);
+}
+
+.pvps-occurrence-toggle:active {
+  transform: scale(0.9);
+}
+
+/* Quando aberto ou tem valor: emoji fica mais visível */
+.pvps-occurrence-toggle.is-open {
   opacity: 1;
+  background: rgba(240, 185, 74, 0.15);
 }
 
+/* Quando tem valor selecionado: badge de alerta */
+.pvps-occurrence-minimal.has-value .pvps-occurrence-toggle {
+  opacity: 1;
+  background: #fff3cd;
+  outline: 1.5px solid #f0b94a;
+}
+
+/* Select que aparece ao clicar */
 .pvps-occurrence-select-minimal {
   flex: 1 1 auto;
-  min-height: 36px !important;
-  height: 36px;
+  min-height: 34px !important;
+  height: 34px;
   border-radius: 8px !important;
-  font-size: 0.88rem !important;
-  padding: 5px 10px !important;
+  font-size: 0.85rem !important;
+  padding: 4px 8px !important;
   border: 1px solid #d4dce9;
   background: #f8fafd;
   color: #3d5278;
   appearance: auto;
   transition: border-color 150ms ease, background 150ms ease;
+  transform-origin: left center;
+  animation: pvps-occ-reveal 150ms ease both;
 }
 
 .pvps-occurrence-select-minimal:focus {
@@ -4683,12 +4719,14 @@ small {
   background: #fff;
 }
 
-.pvps-occurrence-select-minimal:not([value=""]) {
+.pvps-occurrence-select-minimal[value="vazio"],
+.pvps-occurrence-select-minimal[value="obstruido"] {
   border-color: #f0b94a;
   background: #fffbf0;
   color: #7a4f00;
   font-weight: 600;
 }
+
 
 /* Zone Picker */
 .pvps-zone-picker-actions {
