@@ -4,23 +4,20 @@ import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
-  clearZone,
+  createAdminRule,
   fetchAlocacaoCompletedItemsDayAll,
-  fetchAdminBlacklist,
-  fetchAdminPriorityZones,
+  fetchAdminRulesActive,
+  fetchAdminRulesHistory,
   fetchAlocacaoManifest,
   fetchPvpsCompletedItemsDayAll,
   fetchPvpsManifest,
   fetchPvpsPulItems,
-  removeAdminBlacklist,
-  removeAdminPriorityZone,
-  reseedByZone,
+  previewAdminRuleImpact,
+  removeAdminRule,
   submitAlocacao,
   submitAlocacaoCompletedEdit,
   submitPvpsPul,
-  submitPvpsSep,
-  upsertAdminBlacklist,
-  upsertAdminPriorityZone
+  submitPvpsSep
 } from "./sync";
 import { syncPvpsOfflineQueue } from "./offline-sync";
 import {
@@ -33,9 +30,12 @@ import type {
   AlocacaoCompletedRow,
   AlocacaoManifestRow,
   AlocacaoSubmitResult,
+  PvpsAdminRuleActiveRow,
+  PvpsAdminRuleHistoryRow,
   PvpsCompletedRow,
-  PvpsAdminBlacklistRow,
-  PvpsAdminPriorityZoneRow,
+  PvpsRuleApplyMode,
+  PvpsRuleKind,
+  PvpsRuleTargetType,
   PvpsEndSit,
   PvpsManifestRow,
   PvpsModulo,
@@ -50,6 +50,22 @@ interface PvpsAlocacaoPageProps {
 
 type ModuleTab = "pvps" | "alocacao";
 type FeedView = "pendentes" | "concluidos";
+type AdminRulesView = "active" | "history";
+
+interface AdminRuleDraft {
+  modulo: PvpsModulo;
+  rule_kind: PvpsRuleKind;
+  target_type: PvpsRuleTargetType;
+  target_value: string;
+  priority_value: string;
+}
+
+interface AdminRuleApplyPreview {
+  draft: AdminRuleDraft;
+  affected_pvps: number;
+  affected_alocacao: number;
+  affected_total: number;
+}
 
 type PvpsFeedItem =
   | {
@@ -331,7 +347,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [selectedZones, setSelectedZones] = useState<string[]>([]);
   const [showZoneFilterPopup, setShowZoneFilterPopup] = useState(false);
   const [zoneSearch, setZoneSearch] = useState("");
-  const [showDiscardZonesConfirm, setShowDiscardZonesConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -387,14 +402,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminBusy, setAdminBusy] = useState(false);
   const [offlineSyncBusy, setOfflineSyncBusy] = useState(false);
-  const [adminModulo, setAdminModulo] = useState<PvpsModulo>("ambos");
-  const [adminZona, setAdminZona] = useState("");
-  const [adminCoddv, setAdminCoddv] = useState("");
-  const [adminPrioridade, setAdminPrioridade] = useState("100");
-  const [adminAutoRepor, setAdminAutoRepor] = useState(true);
-  const [showClearZoneConfirm, setShowClearZoneConfirm] = useState(false);
-  const [blacklistRows, setBlacklistRows] = useState<PvpsAdminBlacklistRow[]>([]);
-  const [priorityRows, setPriorityRows] = useState<PvpsAdminPriorityZoneRow[]>([]);
+  const [adminDraft, setAdminDraft] = useState<AdminRuleDraft>({
+    modulo: "ambos",
+    rule_kind: "blacklist",
+    target_type: "zona",
+    target_value: "",
+    priority_value: "100"
+  });
+  const [adminApplyMode, setAdminApplyMode] = useState<PvpsRuleApplyMode>("apply_now");
+  const [pendingRulePreview, setPendingRulePreview] = useState<AdminRuleApplyPreview | null>(null);
+  const [adminRulesView, setAdminRulesView] = useState<AdminRulesView>("active");
+  const [activeRuleRows, setActiveRuleRows] = useState<PvpsAdminRuleActiveRow[]>([]);
+  const [historyRuleRows, setHistoryRuleRows] = useState<PvpsAdminRuleHistoryRow[]>([]);
   const [showPvpsPopup, setShowPvpsPopup] = useState(false);
   const [showAlocPopup, setShowAlocPopup] = useState(false);
   const [expandedPvps, setExpandedPvps] = useState<Record<string, boolean>>({});
@@ -412,12 +431,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (!isAdmin) return;
     setAdminBusy(true);
     try {
-      const [blacklist, priority] = await Promise.all([
-        fetchAdminBlacklist("ambos", activeCd),
-        fetchAdminPriorityZones("ambos", activeCd)
+      const [activeRows, historyRows] = await Promise.all([
+        fetchAdminRulesActive("ambos", activeCd),
+        fetchAdminRulesHistory({ p_cd: activeCd, modulo: "ambos", limit: 300, offset: 0 })
       ]);
-      setBlacklistRows(blacklist);
-      setPriorityRows(priority);
+      setActiveRuleRows(activeRows);
+      setHistoryRuleRows(historyRows);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar dados administrativos.");
     } finally {
@@ -624,6 +643,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const sortedPvpsAllRows = useMemo(
     () => [...pvpsRows].sort((a, b) => {
+      const byPriority = a.priority_score - b.priority_score;
+      if (byPriority !== 0) return byPriority;
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
       const byEndereco = compareEndereco(a.end_sep, b.end_sep);
@@ -637,6 +658,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const sortedAlocAllRows = useMemo(
     () => [...alocRows].sort((a, b) => {
+      const byPriority = a.priority_score - b.priority_score;
+      if (byPriority !== 0) return byPriority;
       const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
       if (byDate !== 0) return byDate;
       const byCoddv = a.coddv - b.coddv;
@@ -650,12 +673,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const pvpsFeedItemsAll = useMemo<PvpsFeedItem[]>(() => {
     const items: PvpsFeedItem[] = [];
+    const seen = new Set<string>();
     for (const row of sortedPvpsAllRows) {
       const baseKey = keyOfPvps(row);
       if (row.status === "pendente_sep") {
+        const feedKey = `sep:${baseKey}`;
+        if (seen.has(feedKey)) continue;
+        seen.add(feedKey);
         items.push({
           kind: "sep",
-          feedKey: `sep:${baseKey}`,
+          feedKey,
           row,
           zone: row.zona,
           endereco: row.end_sep
@@ -666,9 +693,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       if (!pulItemsByRow) continue;
       const pendingPulItems = pulItemsByRow.filter((item) => !item.auditado);
       for (const item of pendingPulItems) {
+        const feedKey = `pul:${baseKey}:${item.end_pul}`;
+        if (seen.has(feedKey)) continue;
+        seen.add(feedKey);
         items.push({
           kind: "pul",
-          feedKey: `pul:${baseKey}:${item.end_pul}`,
+          feedKey,
           row,
           zone: zoneFromEndereco(item.end_pul),
           endereco: item.end_pul,
@@ -680,37 +710,59 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [sortedPvpsAllRows, feedPulBySepKey]);
 
   const pvpsQueueProducts = useMemo(() => {
-    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number }>();
+    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number; minPriority: number }>();
     for (const row of sortedPvpsAllRows) {
       const ts = dateSortValue(row.dat_ult_compra);
       const current = byCoddv.get(row.coddv);
-      if (!current || ts > current.maxTs) {
+      if (!current) {
         byCoddv.set(row.coddv, {
           coddv: row.coddv,
           descricao: row.descricao,
           dat_ult_compra: row.dat_ult_compra,
-          maxTs: ts
+          maxTs: ts,
+          minPriority: row.priority_score
         });
+        continue;
       }
+      const nextMaxTs = Math.max(current.maxTs, ts);
+      const nextMinPriority = Math.min(current.minPriority, row.priority_score);
+      byCoddv.set(row.coddv, {
+        coddv: row.coddv,
+        descricao: ts >= current.maxTs ? row.descricao : current.descricao,
+        dat_ult_compra: ts >= current.maxTs ? row.dat_ult_compra : current.dat_ult_compra,
+        maxTs: nextMaxTs,
+        minPriority: nextMinPriority
+      });
     }
-    return Array.from(byCoddv.values()).sort((a, b) => (b.maxTs - a.maxTs) || (a.coddv - b.coddv));
+    return Array.from(byCoddv.values()).sort((a, b) => (a.minPriority - b.minPriority) || (b.maxTs - a.maxTs) || (a.coddv - b.coddv));
   }, [sortedPvpsAllRows]);
 
   const alocQueueProducts = useMemo(() => {
-    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number }>();
+    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number; minPriority: number }>();
     for (const row of sortedAlocAllRows) {
       const ts = dateSortValue(row.dat_ult_compra);
       const current = byCoddv.get(row.coddv);
-      if (!current || ts > current.maxTs) {
+      if (!current) {
         byCoddv.set(row.coddv, {
           coddv: row.coddv,
           descricao: row.descricao,
           dat_ult_compra: row.dat_ult_compra,
-          maxTs: ts
+          maxTs: ts,
+          minPriority: row.priority_score
         });
+        continue;
       }
+      const nextMaxTs = Math.max(current.maxTs, ts);
+      const nextMinPriority = Math.min(current.minPriority, row.priority_score);
+      byCoddv.set(row.coddv, {
+        coddv: row.coddv,
+        descricao: ts >= current.maxTs ? row.descricao : current.descricao,
+        dat_ult_compra: ts >= current.maxTs ? row.dat_ult_compra : current.dat_ult_compra,
+        maxTs: nextMaxTs,
+        minPriority: nextMinPriority
+      });
     }
-    return Array.from(byCoddv.values()).sort((a, b) => (b.maxTs - a.maxTs) || (a.coddv - b.coddv));
+    return Array.from(byCoddv.values()).sort((a, b) => (a.minPriority - b.minPriority) || (b.maxTs - a.maxTs) || (a.coddv - b.coddv));
   }, [sortedAlocAllRows]);
 
   const pvpsEligibleCoddv = useMemo(() => {
@@ -763,6 +815,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       .filter((item) => pvpsActiveCoddvSet.has(item.row.coddv))
       .filter((item) => !selectedZones.length || zoneFilterSet.has(item.zone))
       .sort((a, b) => {
+        const byPriority = a.row.priority_score - b.row.priority_score;
+        if (byPriority !== 0) return byPriority;
         const byZone = a.zone.localeCompare(b.zone);
         if (byZone !== 0) return byZone;
         if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
@@ -773,10 +827,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const visibleAlocRows = useMemo(() => {
     const coddvOrder = new Map<number, number>();
     alocActiveCoddvList.forEach((coddv, index) => coddvOrder.set(coddv, index));
-    return sortedAlocAllRows
+    const deduped = new Map<string, AlocacaoManifestRow>();
+    for (const row of sortedAlocAllRows) {
+      if (!deduped.has(row.queue_id)) deduped.set(row.queue_id, row);
+    }
+    return Array.from(deduped.values())
       .filter((row) => alocActiveCoddvSet.has(row.coddv))
       .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
       .sort((a, b) => {
+        const byPriority = a.priority_score - b.priority_score;
+        if (byPriority !== 0) return byPriority;
         const byZone = a.zona.localeCompare(b.zona);
         if (byZone !== 0) return byZone;
         const byEndereco = compareEndereco(a.endereco, b.endereco);
@@ -1071,7 +1131,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         val_sep: row.val_sep,
         audit_id: row.audit_id,
         dat_ult_compra: "",
-        qtd_est_disp: 0
+        qtd_est_disp: 0,
+        priority_score: 9999
       }, ...current];
     });
     setActivePvpsKey(key);
@@ -1098,7 +1159,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         nivel: row.nivel,
         val_sist: row.val_sist,
         dat_ult_compra: "",
-        qtd_est_disp: 0
+        qtd_est_disp: 0,
+        priority_score: 9999
       }, ...current];
     });
     setActiveAlocQueue(row.queue_id);
@@ -1467,109 +1529,131 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     void loadCurrent({ silent: true });
   }
 
-  async function handleAdminAddBlacklist(): Promise<void> {
+  async function executeCreateAdminRule(draft: AdminRuleDraft, applyMode: PvpsRuleApplyMode): Promise<void> {
+    const normalizedTarget = draft.target_type === "zona"
+      ? draft.target_value.trim().toUpperCase()
+      : draft.target_value.replace(/\D/g, "");
+    if (!normalizedTarget) {
+      setErrorMessage(draft.target_type === "zona" ? "Zona obrigatória para criar regra." : "CODDV obrigatório para criar regra.");
+      return;
+    }
+    const priorityValue = draft.rule_kind === "priority"
+      ? Number.parseInt(draft.priority_value.replace(/\D/g, ""), 10)
+      : null;
+    if (draft.rule_kind === "priority" && (!Number.isFinite(priorityValue) || priorityValue == null || priorityValue <= 0)) {
+      setErrorMessage("Prioridade obrigatória e deve ser maior que zero.");
+      return;
+    }
+
     setAdminBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      await upsertAdminBlacklist({
+      const created = await createAdminRule({
         p_cd: activeCd,
-        modulo: adminModulo,
-        zona: adminZona,
-        coddv: Number.parseInt(adminCoddv, 10)
+        modulo: draft.modulo,
+        rule_kind: draft.rule_kind,
+        target_type: draft.target_type,
+        target_value: normalizedTarget,
+        priority_value: priorityValue,
+        apply_mode: applyMode
       });
+      setPendingRulePreview(null);
       await loadAdminData();
-      setStatusMessage("Blacklist atualizada.");
       await loadCurrent();
+      const createdLabel = created.rule_kind === "blacklist" ? "Blacklist" : "Prioridade";
+      const targetLabel = `${draft.target_type === "zona" ? "Zona" : "CODDV"} ${normalizedTarget}`;
+      const effectLabel = applyMode === "next_inclusions"
+        ? "Somente próximas inclusões serão afetadas; pendentes atuais foram preservados."
+        : (created.rule_kind === "blacklist"
+          ? "Pendentes afetados foram removidos da fila imediatamente."
+          : "Pendentes afetados foram reordenados imediatamente pela nova prioridade.");
+      setStatusMessage(
+        `${createdLabel} criada em ${targetLabel}. ` +
+        `${effectLabel} Impacto: PVPS ${created.affected_pvps}, Alocação ${created.affected_alocacao}.`
+      );
+      setAdminDraft((current) => ({ ...current, target_value: "", priority_value: current.rule_kind === "priority" ? current.priority_value : "100" }));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar blacklist.");
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao criar regra administrativa.");
     } finally {
       setAdminBusy(false);
     }
   }
 
-  async function handleAdminAddPriority(): Promise<void> {
+  async function handleAdminPreviewCreate(): Promise<void> {
+    const normalizedTarget = adminDraft.target_type === "zona"
+      ? adminDraft.target_value.trim().toUpperCase()
+      : adminDraft.target_value.replace(/\D/g, "");
+    if (!normalizedTarget) {
+      setErrorMessage(adminDraft.target_type === "zona" ? "Zona obrigatória para criar regra." : "CODDV obrigatório para criar regra.");
+      return;
+    }
+    const priorityValue = adminDraft.rule_kind === "priority"
+      ? Number.parseInt(adminDraft.priority_value.replace(/\D/g, ""), 10)
+      : null;
+    if (adminDraft.rule_kind === "priority" && (!Number.isFinite(priorityValue) || priorityValue == null || priorityValue <= 0)) {
+      setErrorMessage("Prioridade obrigatória e deve ser maior que zero.");
+      return;
+    }
+
     setAdminBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      await upsertAdminPriorityZone({
+      const preview = await previewAdminRuleImpact({
         p_cd: activeCd,
-        modulo: adminModulo,
-        zona: adminZona,
-        prioridade: Number.parseInt(adminPrioridade, 10)
+        modulo: adminDraft.modulo,
+        rule_kind: adminDraft.rule_kind,
+        target_type: adminDraft.target_type,
+        target_value: normalizedTarget,
+        priority_value: priorityValue
       });
-      await loadAdminData();
-      setStatusMessage("Zonas prioritárias atualizadas.");
-      await loadCurrent();
+      if (preview.affected_total > 0) {
+        setPendingRulePreview({
+          draft: {
+            ...adminDraft,
+            target_value: normalizedTarget,
+            priority_value: priorityValue == null ? adminDraft.priority_value : String(priorityValue)
+          },
+          affected_pvps: preview.affected_pvps,
+          affected_alocacao: preview.affected_alocacao,
+          affected_total: preview.affected_total
+        });
+        setAdminApplyMode("apply_now");
+      } else {
+        await executeCreateAdminRule({
+          ...adminDraft,
+          target_value: normalizedTarget,
+          priority_value: priorityValue == null ? adminDraft.priority_value : String(priorityValue)
+        }, "apply_now");
+      }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar zona prioritária.");
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao calcular impacto da regra.");
     } finally {
       setAdminBusy(false);
     }
   }
 
-  async function handleAdminClearZone(): Promise<void> {
+  async function handleConfirmCreateRuleFromPreview(): Promise<void> {
+    if (!pendingRulePreview) return;
+    await executeCreateAdminRule(pendingRulePreview.draft, adminApplyMode);
+  }
+
+  async function handleRemoveRule(ruleId: string): Promise<void> {
     setAdminBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      const result = await clearZone({
-        p_cd: activeCd,
-        modulo: adminModulo,
-        zona: adminZona,
-        repor_automatico: adminAutoRepor
-      });
-      setStatusMessage(`Zona limpa. PVPS removidos: ${result.cleared_pvps}, Alocação removidos: ${result.cleared_alocacao}.`);
+      const removed = await removeAdminRule({ p_cd: activeCd, rule_id: ruleId });
+      if (!removed) {
+        setStatusMessage("Regra já estava inativa.");
+      } else {
+        setStatusMessage("Regra removida. O fluxo normal volta a valer para novas inclusões.");
+      }
       await loadAdminData();
       await loadCurrent();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao limpar zona.");
-    } finally {
-      setAdminBusy(false);
-    }
-  }
-
-  async function handleAdminReseedZone(): Promise<void> {
-    setAdminBusy(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
-    try {
-      const result = await reseedByZone({
-        p_cd: activeCd,
-        modulo: adminModulo,
-        zona: adminZona
-      });
-      setStatusMessage(`Reposição concluída. PVPS: ${result.reposto_pvps}, Alocação: ${result.reposto_alocacao}.`);
-      await loadCurrent();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao repor zona.");
-    } finally {
-      setAdminBusy(false);
-    }
-  }
-
-  async function handleRemoveBlacklist(id: string): Promise<void> {
-    setAdminBusy(true);
-    try {
-      await removeAdminBlacklist(id);
-      await loadAdminData();
-      await loadCurrent();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao remover blacklist.");
-    } finally {
-      setAdminBusy(false);
-    }
-  }
-
-  async function handleRemovePriority(id: string): Promise<void> {
-    setAdminBusy(true);
-    try {
-      await removeAdminPriorityZone(id);
-      await loadAdminData();
-      await loadCurrent();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao remover zona prioritária.");
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao remover regra.");
     } finally {
       setAdminBusy(false);
     }
@@ -1579,35 +1663,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setSelectedZones((previous) => (
       previous.includes(zone) ? previous.filter((z) => z !== zone) : [...previous, zone]
     ));
-  }
-
-  async function handleDiscardSelectedZones(): Promise<void> {
-    if (!selectedZones.length) return;
-    setAdminBusy(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
-    try {
-      let totalPvps = 0;
-      let totalAloc = 0;
-      for (const zone of selectedZones) {
-        const result = await clearZone({
-          p_cd: activeCd,
-          modulo: tab,
-          zona: zone,
-          repor_automatico: true
-        });
-        totalPvps += result.cleared_pvps;
-        totalAloc += result.cleared_alocacao;
-      }
-      await loadCurrent();
-      setStatusMessage(`Zonas descartadas (${selectedZones.length}). Removidos: PVPS ${totalPvps}, Alocação ${totalAloc}. Fila reposta automaticamente.`);
-      setShowDiscardZonesConfirm(false);
-      setShowZoneFilterPopup(false);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao descartar zonas selecionadas.");
-    } finally {
-      setAdminBusy(false);
-    }
   }
 
   return (
@@ -1704,7 +1759,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   className={`btn btn-muted${showAdminPanel ? " is-active" : ""}`}
                   onClick={() => setShowAdminPanel((prev) => !prev)}
                 >
-                  {showAdminPanel ? "Ocultar Admin" : "Admin: Regras de Zona"}
+                  {showAdminPanel ? "Ocultar Gestão" : "Admin: Gestão de Regras"}
                 </button>
               </div>
             ) : null}
@@ -1725,78 +1780,124 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
             {isAdmin && showAdminPanel ? (
               <div className="pvps-admin-panel">
-                <h3>Painel Admin</h3>
+                <h3>Gestão de Regras</h3>
                 <div className="pvps-admin-grid">
                   <label>
                     Módulo
-                    <select value={adminModulo} onChange={(event) => setAdminModulo(event.target.value as PvpsModulo)}>
+                    <select
+                      value={adminDraft.modulo}
+                      onChange={(event) => setAdminDraft((current) => ({ ...current, modulo: event.target.value as PvpsModulo }))}
+                    >
                       <option value="ambos">Ambos</option>
                       <option value="pvps">PVPS</option>
                       <option value="alocacao">Alocação</option>
                     </select>
                   </label>
                   <label>
-                    Zona
-                    <input value={adminZona} onChange={(event) => setAdminZona(event.target.value.toUpperCase())} placeholder="Ex.: A001" />
+                    Tipo da regra
+                    <select
+                      value={adminDraft.rule_kind}
+                      onChange={(event) => setAdminDraft((current) => ({ ...current, rule_kind: event.target.value as PvpsRuleKind }))}
+                    >
+                      <option value="blacklist">Blacklist</option>
+                      <option value="priority">Prioridade</option>
+                    </select>
                   </label>
                   <label>
-                    CODDV (blacklist)
-                    <input value={adminCoddv} onChange={(event) => setAdminCoddv(event.target.value.replace(/\D/g, ""))} placeholder="Código" />
+                    Alvo
+                    <select
+                      value={adminDraft.target_type}
+                      onChange={(event) => setAdminDraft((current) => ({ ...current, target_type: event.target.value as PvpsRuleTargetType }))}
+                    >
+                      <option value="zona">Zona</option>
+                      <option value="coddv">CODDV</option>
+                    </select>
                   </label>
                   <label>
-                    Prioridade zona
-                    <input value={adminPrioridade} onChange={(event) => setAdminPrioridade(event.target.value.replace(/\D/g, ""))} placeholder="1 = mais alta" />
+                    {adminDraft.target_type === "zona" ? "Zona" : "CODDV"}
+                    <input
+                      value={adminDraft.target_value}
+                      onChange={(event) => setAdminDraft((current) => ({
+                        ...current,
+                        target_value: current.target_type === "zona"
+                          ? event.target.value.toUpperCase()
+                          : event.target.value.replace(/\D/g, "")
+                      }))}
+                      placeholder={adminDraft.target_type === "zona" ? "Ex.: PG01" : "Código"}
+                    />
                   </label>
+                  {adminDraft.rule_kind === "priority" ? (
+                    <label>
+                      Prioridade
+                      <input
+                        value={adminDraft.priority_value}
+                        onChange={(event) => setAdminDraft((current) => ({ ...current, priority_value: event.target.value.replace(/\D/g, "") }))}
+                        placeholder="1 = mais alta"
+                      />
+                    </label>
+                  ) : null}
                 </div>
                 <div className="pvps-actions">
-                  <button className="btn btn-muted" type="button" disabled={adminBusy || !adminZona || !adminCoddv} onClick={() => void handleAdminAddBlacklist()}>
-                    Adicionar Blacklist
-                  </button>
-                  <button className="btn btn-muted" type="button" disabled={adminBusy || !adminZona || !adminPrioridade} onClick={() => void handleAdminAddPriority()}>
-                    Priorizar Zona
-                  </button>
-                  <button className="btn btn-muted" type="button" disabled={adminBusy || !adminZona} onClick={() => void handleAdminReseedZone()}>
-                    Repor Zona
+                  <button className="btn btn-primary" type="button" disabled={adminBusy} onClick={() => void handleAdminPreviewCreate()}>
+                    {adminBusy ? "Processando..." : "Criar regra"}
                   </button>
                 </div>
-                <div className="pvps-actions">
-                  <label className="pvps-checkbox">
-                    <input type="checkbox" checked={adminAutoRepor} onChange={(event) => setAdminAutoRepor(event.target.checked)} />
-                    Reposição automática ao limpar base
-                  </label>
+                <div className="pvps-tabs">
                   <button
-                    className="btn btn-danger"
                     type="button"
-                    disabled={adminBusy || !adminZona}
-                    onClick={() => setShowClearZoneConfirm(true)}
+                    className={`btn btn-muted pvps-toolbar-btn${adminRulesView === "active" ? " is-active" : ""}`}
+                    onClick={() => setAdminRulesView("active")}
                   >
-                    Limpar base por zona
+                    Regras ativas ({activeRuleRows.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-muted pvps-toolbar-btn${adminRulesView === "history" ? " is-active" : ""}`}
+                    onClick={() => setAdminRulesView("history")}
+                  >
+                    Histórico ({historyRuleRows.length})
                   </button>
                 </div>
-                <div className="pvps-admin-lists">
-                  <div>
-                    <h4>Blacklist</h4>
-                    {blacklistRows.map((row) => (
-                      <div key={row.blacklist_id} className="pvps-admin-row">
-                        <span>{row.modulo} | {row.zona} | {row.coddv}</span>
-                        <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => void handleRemoveBlacklist(row.blacklist_id)}>
-                          Remover
-                        </button>
-                      </div>
-                    ))}
+                {adminRulesView === "active" ? (
+                  <div className="pvps-admin-lists">
+                    <div>
+                      <h4>Ativas</h4>
+                      {activeRuleRows.length === 0 ? <p>Nenhuma regra ativa.</p> : null}
+                      {activeRuleRows.map((row) => (
+                        <div key={row.rule_id} className="pvps-admin-row">
+                          <span>
+                            {row.rule_kind === "blacklist" ? "Blacklist" : "Prioridade"} | {row.modulo} |{" "}
+                            {row.target_type === "zona" ? `Zona ${row.target_value}` : `CODDV ${row.target_value}`}
+                            {row.rule_kind === "priority" ? ` | nível ${row.priority_value ?? 9999}` : ""}
+                            {` | criada em ${formatDateTime(row.created_at)}`}
+                          </span>
+                          <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => void handleRemoveRule(row.rule_id)}>
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <h4>Zonas Prioritárias</h4>
-                    {priorityRows.map((row) => (
-                      <div key={row.priority_id} className="pvps-admin-row">
-                        <span>{row.modulo} | {row.zona} | prioridade {row.prioridade}</span>
-                        <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => void handleRemovePriority(row.priority_id)}>
-                          Remover
-                        </button>
-                      </div>
-                    ))}
+                ) : (
+                  <div className="pvps-admin-lists">
+                    <div>
+                      <h4>Solicitações</h4>
+                      {historyRuleRows.length === 0 ? <p>Sem histórico.</p> : null}
+                      {historyRuleRows.map((row) => (
+                        <div key={row.history_id} className="pvps-admin-row">
+                          <span>
+                            {row.action_type === "create" ? "Criação" : "Remoção"} | {row.modulo} |{" "}
+                            {row.rule_kind === "blacklist" ? "Blacklist" : "Prioridade"} |{" "}
+                            {row.target_type === "zona" ? `Zona ${row.target_value}` : `CODDV ${row.target_value}`}
+                            {row.rule_kind === "priority" ? ` | nível ${row.priority_value ?? 9999}` : ""}
+                            {row.apply_mode ? ` | modo ${row.apply_mode}` : ""}
+                            {` | PVPS ${row.affected_pvps} | ALOC ${row.affected_alocacao} | ${formatDateTime(row.created_at)}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ) : null}
           </div>
@@ -2348,46 +2449,58 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           document.body
         ) : null}
 
-      {showClearZoneConfirm && typeof document !== "undefined"
+      {pendingRulePreview && typeof document !== "undefined"
         ? createPortal(
           <div
             className="confirm-overlay"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="pvps-clear-zone-title"
+            aria-labelledby="pvps-rule-apply-title"
             onClick={() => {
               if (adminBusy) return;
-              setShowClearZoneConfirm(false);
+              setPendingRulePreview(null);
             }}
           >
             <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-              <h3 id="pvps-clear-zone-title">Confirmar limpeza da base por zona</h3>
+              <h3 id="pvps-rule-apply-title">Aplicação da nova regra</h3>
               <p>
-                Esta ação irá remover os itens pendentes da zona <strong>{adminZona || "-"}</strong> para o módulo{" "}
-                <strong>{adminModulo.toUpperCase()}</strong>.
+                Regra proposta: <strong>{pendingRulePreview.draft.rule_kind === "blacklist" ? "Blacklist" : "Prioridade"}</strong>{" "}
+                em <strong>{pendingRulePreview.draft.modulo.toUpperCase()}</strong>, alvo{" "}
+                <strong>
+                  {pendingRulePreview.draft.target_type === "zona"
+                    ? `ZONA ${pendingRulePreview.draft.target_value}`
+                    : `CODDV ${pendingRulePreview.draft.target_value}`}
+                </strong>.
               </p>
               <p>
-                Reposição automática: <strong>{adminAutoRepor ? "ativada" : "desativada"}</strong>.
+                Impacto atual: PVPS <strong>{pendingRulePreview.affected_pvps}</strong>, Alocação{" "}
+                <strong>{pendingRulePreview.affected_alocacao}</strong>.
               </p>
+              <div className="pvps-admin-grid">
+                <label>
+                  Aplicar regra em
+                  <select value={adminApplyMode} onChange={(event) => setAdminApplyMode(event.target.value as PvpsRuleApplyMode)}>
+                    <option value="apply_now">Agir agora (fila atual)</option>
+                    <option value="next_inclusions">Somente próximas inclusões</option>
+                  </select>
+                </label>
+              </div>
               <div className="confirm-actions">
                 <button
                   className="btn btn-muted"
                   type="button"
                   disabled={adminBusy}
-                  onClick={() => setShowClearZoneConfirm(false)}
+                  onClick={() => setPendingRulePreview(null)}
                 >
                   Cancelar
                 </button>
                 <button
-                  className="btn btn-danger"
+                  className="btn btn-primary"
                   type="button"
                   disabled={adminBusy}
-                  onClick={() => {
-                    void handleAdminClearZone();
-                    setShowClearZoneConfirm(false);
-                  }}
+                  onClick={() => void handleConfirmCreateRuleFromPreview()}
                 >
-                  {adminBusy ? "Limpando..." : "Confirmar limpeza"}
+                  {adminBusy ? "Aplicando..." : "Confirmar regra"}
                 </button>
               </div>
             </div>
@@ -2481,16 +2594,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               </div>
 
               <div className="pvps-zone-popup-footer">
-                {isAdmin ? (
-                  <button
-                    className="btn btn-danger pvps-zone-footer-btn"
-                    type="button"
-                    disabled={adminBusy || selectedZones.length === 0}
-                    onClick={() => setShowDiscardZonesConfirm(true)}
-                  >
-                    Descartar zonas selecionadas
-                  </button>
-                ) : null}
                 <button className="btn btn-primary pvps-zone-footer-btn" type="button" onClick={() => setShowZoneFilterPopup(false)}>
                   Aplicar filtro{selectedZones.length > 0 ? ` (${selectedZones.length})` : ""}
                 </button>
@@ -2500,37 +2603,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           document.body
         ) : null}
 
-      {showDiscardZonesConfirm && typeof document !== "undefined"
-        ? createPortal(
-          <div
-            className="confirm-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pvps-discard-zones-title"
-            onClick={() => {
-              if (adminBusy) return;
-              setShowDiscardZonesConfirm(false);
-            }}
-          >
-            <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-              <h3 id="pvps-discard-zones-title">Descartar zonas selecionadas</h3>
-              <p>
-                Esta ação remove da fila atual da aba <strong>{tab.toUpperCase()}</strong> as zonas selecionadas:
-                <strong> {selectedZones.join(", ") || "-"}</strong>.
-              </p>
-              <p>A reposição será automática com os próximos itens previstos.</p>
-              <div className="confirm-actions">
-                <button className="btn btn-muted" type="button" disabled={adminBusy} onClick={() => setShowDiscardZonesConfirm(false)}>
-                  Cancelar
-                </button>
-                <button className="btn btn-danger" type="button" disabled={adminBusy} onClick={() => void handleDiscardSelectedZones()}>
-                  {adminBusy ? "Descartando..." : "Confirmar descarte"}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        ) : null}
     </>
   );
 }
