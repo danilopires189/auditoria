@@ -4465,7 +4465,7 @@ small {
 
 .pvps-admin-lists {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -4474,9 +4474,9 @@ small {
   border-radius: 12px;
   padding: 10px 12px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   margin-top: 6px;
   background: #fff;
   transition: box-shadow 200ms ease;
@@ -4484,6 +4484,25 @@ small {
 
 .pvps-admin-row:hover {
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.pvps-admin-row-body {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pvps-admin-row-title {
+  font-size: 0.98rem;
+  color: #1f2d43;
+  line-height: 1.3;
+}
+
+.pvps-admin-row-meta {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.2;
+  word-break: break-word;
 }
 
 .pvps-inform-btn {
