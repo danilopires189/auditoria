@@ -1791,7 +1791,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                               <small>Status {pvpsStatusLabel(row.status)} | Pulmão {row.pul_auditados}/{row.pul_total}</small>
                             )}
                             {item.kind === "pul" ? (
-                              <small>Ocorrência linha: {row.end_sit ?? "sem ocorrência"}</small>
+                              row.end_sit ? <small>Ocorrência linha: {formatOcorrenciaLabel(row.end_sit)}</small> : null
                             ) : null}
                             <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
                           </div>
@@ -1900,7 +1900,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 {pulItemsLoading ? <small>Carregando endereços de Pulmão...</small> : null}
                                 {!pulItemsLoading ? [...pulItemsCompleted].sort((a, b) => a.end_pul.localeCompare(b.end_pul)).map((item) => (
                                   <small key={`${row.audit_id}:${item.end_pul}`} className="pvps-pul-completed-item">
-                                    {item.end_pul} | Validade {item.val_pul ?? "-"} | Ocorrência {item.end_sit ?? "sem ocorrência"}
+                                    {item.end_pul} | Validade {item.val_pul ?? "-"}{item.end_sit ? ` | Ocorrência ${formatOcorrenciaLabel(item.end_sit)}` : ""}
                                   </small>
                                 )) : null}
                               </div>
@@ -2037,7 +2037,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="pvps-pul-box">
                 <h4>Etapa Pulmão individual</h4>
                 <p>Linha Separação: <strong>{activePvps.end_sep}</strong> | Validade linha: <strong>{activePvps.val_sep ?? "-"}</strong></p>
-                <p>Ocorrência linha: <strong>{activePvps.end_sit ?? "sem ocorrência"}</strong></p>
+                {activePvps.end_sit ? <p>Ocorrência linha: <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong></p> : null}
                 {pulBusy ? <p>Carregando endereços de Pulmão...</p> : null}
                 {!pulBusy && !activePulItem ? <p>Endereço de Pulmão não encontrado no feed atual.</p> : null}
                 {activePulItem ? (
