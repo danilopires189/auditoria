@@ -1888,12 +1888,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         {open ? (
                           <div className="pvps-row-details">
                             <small>Pulmão auditados: {row.pul_auditados}/{row.pul_total}</small>
-                            {pulItemsLoading ? <small>Carregando endereços de Pulmão...</small> : null}
-                            {!pulItemsLoading ? pulItemsCompleted.map((item) => (
-                              <small key={`${row.audit_id}:${item.end_pul}`}>
-                                Pulmão {item.end_pul} | Validade {item.val_pul ?? "-"} | Ocorrência {item.end_sit ?? "sem ocorrência"}
-                              </small>
-                            )) : null}
+                            {row.pul_auditados > 0 ? (
+                              <div className="pvps-pul-completed-group">
+                                <small className="pvps-pul-completed-title">Pulmões auditados</small>
+                                {pulItemsLoading ? <small>Carregando endereços de Pulmão...</small> : null}
+                                {!pulItemsLoading ? [...pulItemsCompleted].sort((a, b) => a.end_pul.localeCompare(b.end_pul)).map((item) => (
+                                  <small key={`${row.audit_id}:${item.end_pul}`} className="pvps-pul-completed-item">
+                                    {item.end_pul} | Validade {item.val_pul ?? "-"} | Ocorrência {item.end_sit ?? "sem ocorrência"}
+                                  </small>
+                                )) : null}
+                              </div>
+                            ) : null}
                             {row.pul_has_lower ? (
                               <small>
                                 Pulmão com validade menor: {row.pul_lower_end ?? "-"} ({row.pul_lower_val ?? "-"})
