@@ -3,6 +3,8 @@ export type PvpsModulo = "pvps" | "alocacao" | "ambos";
 export type PvpsRuleKind = "blacklist" | "priority";
 export type PvpsRuleTargetType = "zona" | "coddv";
 export type PvpsRuleApplyMode = "apply_now" | "next_inclusions";
+export type PvpsAlocOfflineEventKind = "sep" | "pul" | "alocacao";
+export type PvpsAlocOfflineEventStatus = "pending" | "error";
 
 export type PvpsStatus = "pendente_sep" | "pendente_pul" | "concluido" | "nao_conforme";
 
@@ -191,4 +193,47 @@ export interface PvpsAdminRuleCreateResult {
   affected_pvps: number;
   affected_alocacao: number;
   created_at: string;
+}
+
+export interface PvpsAlocOfflineEventRow {
+  event_id: string;
+  user_id: string;
+  cd: number;
+  kind: PvpsAlocOfflineEventKind;
+  status: PvpsAlocOfflineEventStatus;
+  attempt_count: number;
+  error_message: string | null;
+  coddv: number;
+  zona: string | null;
+  end_sep: string | null;
+  end_pul: string | null;
+  queue_id: string | null;
+  end_sit: PvpsEndSit | null;
+  val_sep: string | null;
+  val_pul: string | null;
+  val_conf: string | null;
+  audit_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PvpsAlocOfflinePreferences {
+  prefer_offline_mode: boolean;
+}
+
+export interface PvpsAlocOfflineSnapshot {
+  user_id: string;
+  cd: number;
+  pvps_rows: PvpsManifestRow[];
+  aloc_rows: AlocacaoManifestRow[];
+  pul_by_sep_key: Record<string, PvpsPulItemRow[]>;
+  cached_at: string;
+}
+
+export interface PvpsOfflineSyncResult {
+  synced: number;
+  failed: number;
+  discarded: number;
+  remaining: number;
+  conflicts: number;
 }

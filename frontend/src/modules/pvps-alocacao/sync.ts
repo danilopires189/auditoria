@@ -29,9 +29,24 @@ function toErrorMessage(error: unknown): string {
     if (normalized.includes("ITEM_BLOQUEADO_BLACKLIST")) {
       return "Item bloqueado por blacklist ativa. Atualize a fila para continuar.";
     }
+    if (normalized.includes("ITEM_PVPS_AUDITADO_POR_OUTRO_USUARIO")) {
+      return "ITEM_PVPS_AUDITADO_POR_OUTRO_USUARIO: Endereço já concluído por outro usuário.";
+    }
+    if (normalized.includes("ITEM_ALOCACAO_AUDITADO_POR_OUTRO_USUARIO")) {
+      return "ITEM_ALOCACAO_AUDITADO_POR_OUTRO_USUARIO: Endereço já concluído por outro usuário.";
+    }
+    if (normalized.includes("ITEM_PVPS_AUDITADO_PELO_USUARIO")) {
+      return "ITEM_PVPS_AUDITADO_PELO_USUARIO: Item já auditado por você.";
+    }
+    if (normalized.includes("ITEM_ALOCACAO_AUDITADO_PELO_USUARIO")) {
+      return "ITEM_ALOCACAO_AUDITADO_PELO_USUARIO: Item já auditado por você.";
+    }
+    if (normalized.includes("ITEM_ALOCACAO_JA_AUDITADO")) {
+      return "ITEM_ALOCACAO_AUDITADO_POR_OUTRO_USUARIO: Endereço já concluído por outro usuário.";
+    }
     return raw;
   };
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) return translate(error.message);
   if (typeof error === "string") return translate(error);
   if (error && typeof error === "object") {
     const candidate = error as Record<string, unknown>;
@@ -413,6 +428,41 @@ export async function removeAdminRule(params: {
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) return false;
   return parseBoolean(first.removed);
+}
+
+export async function registerOfflineDiscard(params: {
+  p_cd?: number | null;
+  modulo: "pvps" | "alocacao";
+  event_kind: "sep" | "pul" | "alocacao";
+  local_event_id: string;
+  local_event_created_at?: string | null;
+  local_payload?: Record<string, unknown> | null;
+  coddv?: number | null;
+  zona?: string | null;
+  end_sep?: string | null;
+  end_pul?: string | null;
+  queue_id?: string | null;
+  conflict_reason?: string | null;
+}): Promise<string> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_pvps_alocacao_offline_discard_register", {
+    p_cd: params.p_cd ?? null,
+    p_modulo: params.modulo,
+    p_event_kind: params.event_kind,
+    p_local_event_id: params.local_event_id,
+    p_local_event_created_at: params.local_event_created_at ?? null,
+    p_local_payload: params.local_payload ?? {},
+    p_coddv: params.coddv ?? null,
+    p_zona: params.zona ?? null,
+    p_end_sep: params.end_sep ?? null,
+    p_end_pul: params.end_pul ?? null,
+    p_queue_id: params.queue_id ?? null,
+    p_conflict_reason: params.conflict_reason ?? null
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao registrar descarte offline.");
+  return parseString(first.discard_id);
 }
 
 export async function fetchAdminBlacklist(modulo: PvpsModulo = "ambos", pCd?: number | null): Promise<PvpsAdminBlacklistRow[]> {

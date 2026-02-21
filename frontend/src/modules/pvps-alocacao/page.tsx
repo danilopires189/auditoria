@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   createAdminRule,
@@ -21,7 +22,16 @@ import {
 } from "./sync";
 import { syncPvpsOfflineQueue } from "./offline-sync";
 import {
+  countErrorOfflineEvents,
+  countPendingOfflineEvents,
+  getPvpsAlocPrefs,
+  hasOfflineSnapshot,
   hasOfflineSepCache,
+  listPendingOfflineEvents,
+  loadOfflineSnapshot,
+  saveOfflineAlocacaoEvent,
+  saveOfflineSnapshot,
+  savePvpsAlocPrefs,
   saveOfflinePulEvent,
   saveOfflineSepEvent,
   upsertOfflineSepCache
@@ -36,6 +46,7 @@ import type {
   PvpsRuleApplyMode,
   PvpsRuleKind,
   PvpsRuleTargetType,
+  PvpsAlocOfflineEventRow,
   PvpsEndSit,
   PvpsManifestRow,
   PvpsModulo,
@@ -102,6 +113,99 @@ function toDisplayName(value: string): string {
 
 function keyOfPvps(row: PvpsManifestRow): string {
   return `${row.coddv}|${row.end_sep}`;
+}
+
+function keyOfPvpsByValues(coddv: number, endSep: string): string {
+  return `${Math.trunc(coddv)}|${endSep.trim().toUpperCase()}`;
+}
+
+function formatMmaaDigits(value: string | null | undefined): string | null {
+  const digits = (value ?? "").replace(/\D/g, "").slice(0, 4);
+  if (digits.length !== 4) return null;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function applyPendingEventsToOfflineData(input: {
+  pvpsRows: PvpsManifestRow[];
+  alocRows: AlocacaoManifestRow[];
+  pulBySepKey: Record<string, PvpsPulItemRow[]>;
+  events: PvpsAlocOfflineEventRow[];
+}): {
+  pvpsRows: PvpsManifestRow[];
+  alocRows: AlocacaoManifestRow[];
+  pulBySepKey: Record<string, PvpsPulItemRow[]>;
+} {
+  const pvpsRows = [...input.pvpsRows];
+  const alocRows = [...input.alocRows];
+  const pulBySepKey: Record<string, PvpsPulItemRow[]> = {};
+  for (const [sepKey, items] of Object.entries(input.pulBySepKey)) {
+    pulBySepKey[sepKey] = Array.isArray(items) ? [...items] : [];
+  }
+
+  for (const event of input.events) {
+    if (event.kind === "sep") {
+      if (!event.end_sep) continue;
+      const rowKey = keyOfPvpsByValues(event.coddv, event.end_sep);
+      const rowIndex = pvpsRows.findIndex((row) => keyOfPvps(row) === rowKey);
+      if (rowIndex < 0) continue;
+      const hasOcorrencia = event.end_sit === "vazio" || event.end_sit === "obstruido";
+      if (hasOcorrencia) {
+        pvpsRows.splice(rowIndex, 1);
+        delete pulBySepKey[rowKey];
+      } else {
+        const current = pvpsRows[rowIndex];
+        pvpsRows[rowIndex] = {
+          ...current,
+          status: "pendente_pul",
+          end_sit: null,
+          val_sep: formatMmaaDigits(event.val_sep) ?? current.val_sep
+        };
+      }
+      continue;
+    }
+
+    if (event.kind === "pul") {
+      if (!event.end_sep || !event.end_pul) continue;
+      const rowKey = keyOfPvpsByValues(event.coddv, event.end_sep);
+      const cachedPul = pulBySepKey[rowKey];
+      if (Array.isArray(cachedPul) && cachedPul.length > 0) {
+        const normalizedValPul = formatMmaaDigits(event.val_pul);
+        const normalizedEndSit = event.end_sit === "vazio" || event.end_sit === "obstruido" ? event.end_sit : null;
+        pulBySepKey[rowKey] = cachedPul.map((item) => (
+          item.end_pul === event.end_pul
+            ? { ...item, auditado: true, end_sit: normalizedEndSit, val_pul: normalizedEndSit ? null : normalizedValPul }
+            : item
+        ));
+      }
+
+      const rowIndex = pvpsRows.findIndex((row) => keyOfPvps(row) === rowKey);
+      if (rowIndex >= 0) {
+        const row = pvpsRows[rowIndex];
+        const currentPul = pulBySepKey[rowKey] ?? [];
+        const auditedCount = currentPul.filter((item) => item.auditado).length;
+        if (auditedCount >= Math.max(row.pul_total, 1)) {
+          pvpsRows.splice(rowIndex, 1);
+          delete pulBySepKey[rowKey];
+        } else {
+          pvpsRows[rowIndex] = {
+            ...row,
+            status: "pendente_pul",
+            pul_auditados: Math.max(row.pul_auditados, auditedCount)
+          };
+        }
+      }
+      continue;
+    }
+
+    if (event.kind === "alocacao" && event.queue_id) {
+      const rowIndex = alocRows.findIndex((row) => row.queue_id === event.queue_id);
+      if (rowIndex >= 0) {
+        alocRows.splice(rowIndex, 1);
+      }
+    }
+  }
+
+  return { pvpsRows, alocRows, pulBySepKey };
 }
 
 function formatDate(value: string): string {
@@ -425,7 +529,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [showAlocOccurrence, setShowAlocOccurrence] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminBusy, setAdminBusy] = useState(false);
-  const [offlineSyncBusy, setOfflineSyncBusy] = useState(false);
+  const [preferOfflineMode, setPreferOfflineMode] = useState(false);
+  const [busyOfflineBase, setBusyOfflineBase] = useState(false);
+  const [busySync, setBusySync] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingErrors, setPendingErrors] = useState(0);
+  const [manifestReady, setManifestReady] = useState(false);
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const [offlineDiscardedInSession, setOfflineDiscardedInSession] = useState(0);
   const [adminDraft, setAdminDraft] = useState<AdminRuleDraft>({
     modulo: "ambos",
     rule_kind: "blacklist",
@@ -468,6 +579,95 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
   }
 
+  async function refreshPendingState(): Promise<void> {
+    if (activeCd == null) {
+      setPendingCount(0);
+      setPendingErrors(0);
+      return;
+    }
+    try {
+      const [pending, errors] = await Promise.all([
+        countPendingOfflineEvents(profile.user_id, activeCd),
+        countErrorOfflineEvents(profile.user_id, activeCd)
+      ]);
+      setPendingCount(pending);
+      setPendingErrors(errors);
+    } catch {
+      setPendingCount(0);
+      setPendingErrors(0);
+    }
+  }
+
+  async function downloadOfflineBase(): Promise<void> {
+    if (activeCd == null) {
+      throw new Error("CD ativo obrigatório para preparar base offline.");
+    }
+    const [pvpsManifest, alocManifest] = await Promise.all([
+      fetchPvpsManifest({ p_cd: activeCd, zona: null }),
+      fetchAlocacaoManifest({ p_cd: activeCd, zona: null })
+    ]);
+    const pulBySepKey: Record<string, PvpsPulItemRow[]> = {};
+    for (const row of pvpsManifest) {
+      const rowKey = keyOfPvps(row);
+      try {
+        pulBySepKey[rowKey] = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
+      } catch {
+        pulBySepKey[rowKey] = [];
+      }
+    }
+    await saveOfflineSnapshot({
+      user_id: profile.user_id,
+      cd: activeCd,
+      pvps_rows: pvpsManifest,
+      aloc_rows: alocManifest,
+      pul_by_sep_key: pulBySepKey
+    });
+    setManifestReady(true);
+  }
+
+  async function runPendingSync(options?: { manual?: boolean }): Promise<void> {
+    if (busySync || activeCd == null) return;
+    if (!isOnline) {
+      if (options?.manual) {
+        setErrorMessage("Sem internet para sincronizar agora.");
+      }
+      return;
+    }
+
+    setBusySync(true);
+    try {
+      const result = await syncPvpsOfflineQueue({
+        user_id: profile.user_id,
+        cd: activeCd
+      });
+      await refreshPendingState();
+
+      if (result.discarded > 0) {
+        setOfflineDiscardedInSession((current) => current + result.discarded);
+      }
+
+      if (result.synced > 0 || result.discarded > 0) {
+        await loadCurrent({ silent: true });
+      }
+
+      if (options?.manual || result.synced > 0 || result.failed > 0 || result.discarded > 0) {
+        if (result.discarded > 0) {
+          setStatusMessage(`${result.discarded} endereço(s) já concluído(s) por outro usuário e descartado(s).`);
+        } else if (result.failed > 0 && result.remaining > 0) {
+          setStatusMessage(`Sincronização parcial: ${result.failed} evento(s) com erro para nova tentativa.`);
+        } else if (result.synced > 0) {
+          setStatusMessage(`Sincronização concluída: ${result.synced} evento(s) enviado(s).`);
+        } else {
+          setStatusMessage("Sem pendências para sincronizar.");
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha na sincronização offline.");
+    } finally {
+      setBusySync(false);
+    }
+  }
+
   async function loadCurrent(options?: { silent?: boolean }): Promise<void> {
     const silent = options?.silent === true;
     if (!silent) {
@@ -475,6 +675,43 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setErrorMessage(null);
     }
     try {
+      if (!isOnline) {
+        if (!preferOfflineMode) {
+          throw new Error("Sem internet no momento. Ative 'Trabalhar offline' para usar a base local.");
+        }
+        if (activeCd == null) {
+          throw new Error("CD ativo obrigatório para uso offline.");
+        }
+        const snapshot = await loadOfflineSnapshot(profile.user_id, activeCd);
+        if (!snapshot) {
+          setManifestReady(false);
+          throw new Error("Base offline ainda não foi baixada. Conecte-se e clique em 'Trabalhar offline'.");
+        }
+
+        const pendingEvents = await listPendingOfflineEvents(profile.user_id, activeCd);
+        const localData = applyPendingEventsToOfflineData({
+          pvpsRows: snapshot.pvps_rows,
+          alocRows: snapshot.aloc_rows,
+          pulBySepKey: snapshot.pul_by_sep_key,
+          events: pendingEvents
+        });
+        setManifestReady(true);
+        setFeedPulBySepKey(localData.pulBySepKey);
+        setPvpsRows(localData.pvpsRows);
+        setAlocRows(localData.alocRows);
+        setPvpsCompletedRows([]);
+        setAlocCompletedRows([]);
+        if (!localData.pvpsRows.some((row) => keyOfPvps(row) === activePvpsKey)) {
+          setActivePvpsKey(localData.pvpsRows[0] ? keyOfPvps(localData.pvpsRows[0]) : null);
+          if (!localData.pvpsRows[0]) closePvpsPopup();
+        }
+        if (!localData.alocRows.some((row) => row.queue_id === activeAlocQueue)) {
+          setActiveAlocQueue(localData.alocRows[0]?.queue_id ?? null);
+          if (!localData.alocRows[0]) setShowAlocPopup(false);
+        }
+        return;
+      }
+
       if (tab === "pvps") {
         const [rows, completed] = await Promise.all([
           fetchPvpsManifest({ p_cd: activeCd, zona: null }),
@@ -509,10 +746,98 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
   }
 
+  async function handleToggleOfflineMode(): Promise<void> {
+    const nextMode = !preferOfflineMode;
+    if (activeCd == null) {
+      setErrorMessage("CD ativo obrigatório para modo offline.");
+      return;
+    }
+
+    setErrorMessage(null);
+    setStatusMessage(null);
+    if (!nextMode) {
+      setPreferOfflineMode(false);
+      setStatusMessage("Modo offline desativado.");
+      return;
+    }
+
+    if (!isOnline) {
+      const hasSnapshot = await hasOfflineSnapshot(profile.user_id, activeCd);
+      if (!hasSnapshot) {
+        setManifestReady(false);
+        setErrorMessage("Sem internet e sem base local. Conecte-se e clique em 'Trabalhar offline' para baixar a base.");
+        return;
+      }
+      setPreferOfflineMode(true);
+      setManifestReady(true);
+      setStatusMessage("Offline ativo usando base local já baixada.");
+      return;
+    }
+
+    setBusyOfflineBase(true);
+    try {
+      await downloadOfflineBase();
+      setPreferOfflineMode(true);
+      setStatusMessage("Offline ativo. Base local de PVPS e Alocação foi baixada neste dispositivo.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao baixar base offline.");
+    } finally {
+      setBusyOfflineBase(false);
+    }
+  }
+
   useEffect(() => {
+    let cancelled = false;
+    const loadPreferences = async () => {
+      setPreferencesReady(false);
+      if (activeCd == null) {
+        setPreferOfflineMode(false);
+        setManifestReady(false);
+        setPreferencesReady(true);
+        setPendingCount(0);
+        setPendingErrors(0);
+        return;
+      }
+      try {
+        const [prefs, snapshotReady] = await Promise.all([
+          getPvpsAlocPrefs(profile.user_id),
+          hasOfflineSnapshot(profile.user_id, activeCd)
+        ]);
+        if (cancelled) return;
+        setPreferOfflineMode(Boolean(prefs.prefer_offline_mode));
+        setManifestReady(snapshotReady);
+      } catch {
+        if (cancelled) return;
+        setPreferOfflineMode(false);
+        setManifestReady(false);
+      } finally {
+        if (!cancelled) {
+          setPreferencesReady(true);
+          void refreshPendingState();
+        }
+      }
+    };
+    void loadPreferences();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.user_id, activeCd]);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
+    void savePvpsAlocPrefs(profile.user_id, {
+      prefer_offline_mode: preferOfflineMode
+    }).catch(() => {
+      // Preferência local é best effort.
+    });
+  }, [preferencesReady, profile.user_id, preferOfflineMode]);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
     void loadCurrent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, activeCd, todayBrt]);
+  }, [tab, activeCd, todayBrt, isOnline, preferOfflineMode, preferencesReady]);
 
   useEffect(() => {
     setFeedPulBySepKey({});
@@ -564,36 +889,26 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOnline, tab, activeCd, todayBrt, feedView, showPvpsPopup, showAlocPopup]);
+  }, [isOnline, tab, activeCd, todayBrt, feedView, showPvpsPopup, showAlocPopup, preferOfflineMode]);
 
   useEffect(() => {
-    if (!isOnline || activeCd == null || offlineSyncBusy) return;
+    void refreshPendingState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCd]);
+
+  useEffect(() => {
+    if (!isOnline || activeCd == null || busySync || pendingCount <= 0) return;
     let cancelled = false;
-    const runSync = async () => {
-      setOfflineSyncBusy(true);
-      try {
-        const result = await syncPvpsOfflineQueue(activeCd);
-        if (cancelled) return;
-        if (result.synced > 0) {
-          setStatusMessage(`Sincronização offline PVPS concluída: ${result.synced} evento(s) enviados.`);
-          await loadCurrent({ silent: true });
-        } else if (result.remaining > 0 && result.failed > 0) {
-          setStatusMessage(`Sincronização offline parcial: ${result.failed} pendente(s) para nova tentativa.`);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setErrorMessage(error instanceof Error ? error.message : "Falha na sincronização offline PVPS.");
-        }
-      } finally {
-        if (!cancelled) setOfflineSyncBusy(false);
-      }
+    const runAutoSync = async () => {
+      await runPendingSync({ manual: false });
+      if (cancelled) return;
     };
-    void runSync();
+    void runAutoSync();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOnline, activeCd]);
+  }, [isOnline, activeCd, pendingCount]);
 
   useEffect(() => {
     if (!activePvps) {
@@ -611,6 +926,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     if (activeCd != null && (activePvps.val_sep || activePvps.end_sit)) {
       void upsertOfflineSepCache({
+        user_id: profile.user_id,
         cd: activeCd,
         coddv: activePvps.coddv,
         end_sep: activePvps.end_sep,
@@ -625,6 +941,20 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setPulItems([]);
       setPulInputs({});
       setPulEndSits({});
+      return;
+    }
+
+    if (!isOnline && preferOfflineMode) {
+      const cachedItems = feedPulBySepKey[keyOfPvps(activePvps)] ?? [];
+      setPulItems(cachedItems);
+      const mapped: Record<string, string> = {};
+      const mappedEndSit: Record<string, PvpsEndSit | ""> = {};
+      for (const item of cachedItems) {
+        mapped[item.end_pul] = item.val_pul?.replace("/", "") ?? "";
+        mappedEndSit[item.end_pul] = item.end_sit ?? "";
+      }
+      setPulInputs(mapped);
+      setPulEndSits(mappedEndSit);
       return;
     }
 
@@ -646,7 +976,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar Pulmão.");
       })
       .finally(() => setPulBusy(false));
-  }, [activePvps, activeCd]);
+  }, [activePvps, activeCd, feedPulBySepKey, isOnline, preferOfflineMode, profile.user_id]);
 
   useEffect(() => {
     if (activePvpsMode !== "pul") return;
@@ -1261,8 +1591,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const currentFeedKey = `sep:${currentKey}`;
     const isEditingCompleted = Boolean(editingPvpsCompleted);
     if (!isOnline) {
+      if (!preferOfflineMode) {
+        setErrorMessage("Sem internet no momento. Ative 'Trabalhar offline' para usar a base local.");
+        return;
+      }
+      if (!manifestReady) {
+        setErrorMessage("Base offline indisponível. Conecte-se e baixe a base antes de auditar sem rede.");
+        return;
+      }
       try {
         await saveOfflineSepEvent({
+          user_id: profile.user_id,
           cd: activeCd,
           coddv: activePvps.coddv,
           end_sep: activePvps.end_sep,
@@ -1270,12 +1609,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           val_sep: hasOcorrencia ? null : normalizedValSep
         });
         await upsertOfflineSepCache({
+          user_id: profile.user_id,
           cd: activeCd,
           coddv: activePvps.coddv,
           end_sep: activePvps.end_sep,
           end_sit: endSit || null,
           val_sep: hasOcorrencia ? null : normalizedValSep
         });
+        await refreshPendingState();
         if (hasOcorrencia) {
           setPvpsRows((current) => current.filter((row) => keyOfPvps(row) !== currentKey));
           setStatusMessage("Separação com ocorrência salva offline. Item retirado localmente e será sincronizado ao reconectar.");
@@ -1313,6 +1654,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setStatusMessage(`Separação salva. Pulmão liberado e ficará pendente para auditoria separada (${result.pul_auditados}/${result.pul_total} auditados).`);
       }
       await upsertOfflineSepCache({
+        user_id: profile.user_id,
         cd: activeCd,
         coddv: activePvps.coddv,
         end_sep: activePvps.end_sep,
@@ -1384,9 +1726,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     };
 
     if (!isOnline) {
-      let hasSep = await hasOfflineSepCache(activeCd, activePvps.coddv, activePvps.end_sep);
+      if (!preferOfflineMode) {
+        setErrorMessage("Sem internet no momento. Ative 'Trabalhar offline' para usar a base local.");
+        return;
+      }
+      if (!manifestReady) {
+        setErrorMessage("Base offline indisponível. Conecte-se e baixe a base antes de auditar sem rede.");
+        return;
+      }
+      let hasSep = await hasOfflineSepCache(profile.user_id, activeCd, activePvps.coddv, activePvps.end_sep);
       if (!hasSep && (activePvps.val_sep || activePvps.end_sit)) {
         await upsertOfflineSepCache({
+          user_id: profile.user_id,
           cd: activeCd,
           coddv: activePvps.coddv,
           end_sep: activePvps.end_sep,
@@ -1401,6 +1752,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }
       try {
         await saveOfflinePulEvent({
+          user_id: profile.user_id,
           cd: activeCd,
           coddv: activePvps.coddv,
           end_sep: activePvps.end_sep,
@@ -1409,6 +1761,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           val_pul: hasPulOcorrencia ? null : value.trim(),
           audit_id: activePvps.audit_id
         });
+        await refreshPendingState();
         applyLocalPulSave();
         const feedbackText = hasPulOcorrencia
           ? "Pulmão com ocorrência salvo (offline). Use o ícone à direita para ir ao próximo."
@@ -1485,20 +1838,58 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   async function handleSubmitAlocacao(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!activeAloc) return;
-
-    setBusy(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
     const currentQueueId = activeAloc.queue_id;
     const currentZone = activeAloc.zona;
     const isEditingCompleted = Boolean(editingAlocCompleted);
     const hasOcorrencia = alocEndSit === "vazio" || alocEndSit === "obstruido";
     const normalizedValConf = alocValConf.trim();
     if (!hasOcorrencia && normalizedValConf.length !== 4) {
-      setBusy(false);
       setErrorMessage("Validade do Produto obrigatória (MMAA) quando não houver ocorrência.");
       return;
     }
+
+    if (!isOnline) {
+      if (isEditingCompleted) {
+        setErrorMessage("Edição de concluído requer conexão com o servidor.");
+        return;
+      }
+      if (!preferOfflineMode) {
+        setErrorMessage("Sem internet no momento. Ative 'Trabalhar offline' para usar a base local.");
+        return;
+      }
+      if (!manifestReady) {
+        setErrorMessage("Base offline indisponível. Conecte-se e baixe a base antes de auditar sem rede.");
+        return;
+      }
+      try {
+        await saveOfflineAlocacaoEvent({
+          user_id: profile.user_id,
+          cd: activeCd ?? activeAloc.cd,
+          queue_id: activeAloc.queue_id,
+          coddv: activeAloc.coddv,
+          zona: activeAloc.zona,
+          end_sit: hasOcorrencia ? alocEndSit : null,
+          val_conf: hasOcorrencia ? null : normalizedValConf
+        });
+        await refreshPendingState();
+        setAlocRows((current) => current.filter((row) => row.queue_id !== currentQueueId));
+        const feedbackText = hasOcorrencia
+          ? "Alocação com ocorrência salva offline. Use o ícone à direita para ir ao próximo."
+          : "Alocação salva offline. Use o ícone à direita para ir ao próximo.";
+        setStatusMessage(feedbackText);
+        setAlocFeedback({ tone: "warn", text: feedbackText, queueId: currentQueueId, zone: currentZone });
+        setAlocResult(null);
+        setAlocEndSit("");
+        setAlocValConf("");
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar alocação offline.");
+      }
+      return;
+    }
+
+    setBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
     try {
       const result = editingAlocCompleted
         ? await submitAlocacaoCompletedEdit({
@@ -1700,6 +2091,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <span>Início</span>
           </Link>
           <div className="module-topbar-user-side">
+            <PendingSyncBadge
+              pendingCount={pendingCount}
+              errorCount={pendingErrors}
+              title="Eventos offline pendentes de sincronização"
+            />
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "🟢 Online" : "🔴 Offline"}</span>
           </div>
         </div>
@@ -1722,6 +2118,29 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <span className="pvps-btn-icon" aria-hidden="true">{refreshIcon()}</span>
                 <span>{busy ? "Atualizando..." : "Atualizar"}</span>
               </button>
+            </div>
+
+            <div className="pvps-toolbar-group">
+              <small className="pvps-toolbar-label">Offline</small>
+              <div className="pvps-actions">
+                <button
+                  type="button"
+                  className="btn btn-muted termo-sync-btn"
+                  onClick={() => void runPendingSync({ manual: true })}
+                  disabled={!isOnline || busySync}
+                >
+                  <span aria-hidden="true">{refreshIcon()}</span>
+                  {busySync ? "Sincronizando..." : "Sincronizar agora"}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-muted termo-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
+                  onClick={() => void handleToggleOfflineMode()}
+                  disabled={busyOfflineBase}
+                >
+                  {busyOfflineBase ? "Baixando base..." : preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
+                </button>
+              </div>
             </div>
 
             <div className="pvps-toolbar">
@@ -1802,6 +2221,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
+            {preferOfflineMode && !manifestReady ? (
+              <div className="alert error">Modo offline ativo sem base local. Conecte-se para baixar a base.</div>
+            ) : null}
+            {offlineDiscardedInSession > 0 ? (
+              <div className="alert success">
+                Descartes por conflito nesta sessão: {offlineDiscardedInSession}.
+              </div>
+            ) : null}
             {isAdmin && showAdminPanel ? (
               <div className="pvps-admin-panel">
                 <h3>Gestão de Regras</h3>
