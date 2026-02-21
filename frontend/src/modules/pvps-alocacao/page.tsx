@@ -11,7 +11,6 @@ import {
   fetchAlocacaoManifest,
   fetchPvpsCompletedItemsDayAll,
   fetchPvpsManifest,
-  fetchPvpsZoneOptions,
   fetchPvpsPulItems,
   removeAdminBlacklist,
   removeAdminPriorityZone,
@@ -280,7 +279,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const [pvpsRows, setPvpsRows] = useState<PvpsManifestRow[]>([]);
-  const [pvpsZoneOptions, setPvpsZoneOptions] = useState<string[]>([]);
   const [alocRows, setAlocRows] = useState<AlocacaoManifestRow[]>([]);
   const [pvpsCompletedRows, setPvpsCompletedRows] = useState<PvpsCompletedRow[]>([]);
   const [alocCompletedRows, setAlocCompletedRows] = useState<AlocacaoCompletedRow[]>([]);
@@ -362,14 +360,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
     try {
       if (tab === "pvps") {
-        const [rows, completed, zoneOptions] = await Promise.all([
+        const [rows, completed] = await Promise.all([
           fetchPvpsManifest({ p_cd: activeCd, zona: null }),
-          fetchPvpsCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt }),
-          fetchPvpsZoneOptions({ p_cd: activeCd })
+          fetchPvpsCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt })
         ]);
         setPvpsRows(rows);
         setPvpsCompletedRows(completed);
-        setPvpsZoneOptions(zoneOptions);
         if (!rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
           setActivePvpsKey(rows[0] ? keyOfPvps(rows[0]) : null);
           if (!rows[0]) closePvpsPopup();
@@ -381,7 +377,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ]);
         setAlocRows(rows);
         setAlocCompletedRows(completed);
-        setPvpsZoneOptions([]);
         if (!rows.some((row) => row.queue_id === activeAlocQueue)) {
           setActiveAlocQueue(rows[0]?.queue_id ?? null);
           if (!rows[0]) setShowAlocPopup(false);
@@ -706,15 +701,48 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [sortedAlocAllRows, alocActiveCoddvSet, selectedZones, zoneFilterSet, alocActiveCoddvList]);
 
   const zones = useMemo(() => {
-    if (tab === "pvps") {
-      const source = new Set<string>();
-      for (const zone of pvpsZoneOptions) source.add(zone);
-      for (const row of sortedPvpsAllRows) source.add(row.zona);
-      for (const item of pvpsFeedItemsAll) source.add(item.zone);
-      return Array.from(source).sort((a, b) => a.localeCompare(b));
+    if (feedView === "pendentes") {
+      if (tab === "pvps") {
+        return Array.from(
+          new Set(
+            pvpsFeedItemsAll
+              .filter((item) => pvpsActiveCoddvSet.has(item.row.coddv))
+              .map((item) => item.zone)
+          )
+        ).sort((a, b) => a.localeCompare(b));
+      }
+      return Array.from(
+        new Set(
+          sortedAlocAllRows
+            .filter((row) => alocActiveCoddvSet.has(row.coddv))
+            .map((row) => row.zona)
+        )
+      ).sort((a, b) => a.localeCompare(b));
     }
-    return Array.from(new Set(sortedAlocAllRows.map((row) => row.zona))).sort((a, b) => a.localeCompare(b));
-  }, [tab, pvpsZoneOptions, sortedPvpsAllRows, pvpsFeedItemsAll, sortedAlocAllRows]);
+    if (tab === "pvps") {
+      return Array.from(new Set(pvpsCompletedRows.map((row) => row.zona))).sort((a, b) => a.localeCompare(b));
+    }
+    return Array.from(new Set(alocCompletedRows.map((row) => row.zona))).sort((a, b) => a.localeCompare(b));
+  }, [
+    feedView,
+    tab,
+    pvpsFeedItemsAll,
+    pvpsActiveCoddvSet,
+    sortedAlocAllRows,
+    alocActiveCoddvSet,
+    pvpsCompletedRows,
+    alocCompletedRows
+  ]);
+
+  useEffect(() => {
+    if (!selectedZones.length) return;
+    const allowed = new Set(zones);
+    setSelectedZones((previous) => {
+      const next = previous.filter((zone) => allowed.has(zone));
+      if (next.length === previous.length) return previous;
+      return next;
+    });
+  }, [zones, selectedZones.length]);
 
   const filteredZones = useMemo(() => {
     const q = zoneSearch.trim().toLocaleLowerCase("pt-BR");
