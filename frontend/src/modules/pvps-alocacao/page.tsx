@@ -11,6 +11,7 @@ import {
   fetchAlocacaoManifest,
   fetchPvpsCompletedItemsDayAll,
   fetchPvpsManifest,
+  fetchPvpsZoneOptions,
   fetchPvpsPulItems,
   removeAdminBlacklist,
   removeAdminPriorityZone,
@@ -126,6 +127,17 @@ function formatAndar(value: string | null): string {
   if (!normalized) return "-";
   if (normalized.toLowerCase() === "t") return "T";
   return normalized;
+}
+
+function zoneFromEndereco(value: string | null | undefined): string {
+  const normalized = (value ?? "").trim().toUpperCase();
+  if (!normalized) return "SEM ZONA";
+  return normalized.slice(0, 4);
+}
+
+function dateSortValue(value: string | null | undefined): number {
+  const parsed = new Date(value ?? "").getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 function occurrenceIcon() {
@@ -246,6 +258,13 @@ function alocHistoryStatus(row: AlocacaoCompletedRow): { label: string; emoticon
   return { label: "Conforme", emoticon: ":)", tone: "ok" };
 }
 
+function pvpsStatusLabel(status: PvpsManifestRow["status"]): string {
+  if (status === "pendente_sep") return "Pendente Separação";
+  if (status === "pendente_pul") return "Pendente Pulmão";
+  if (status === "nao_conforme") return "Não conforme";
+  return "Concluído";
+}
+
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
@@ -261,6 +280,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const [pvpsRows, setPvpsRows] = useState<PvpsManifestRow[]>([]);
+  const [pvpsZoneOptions, setPvpsZoneOptions] = useState<string[]>([]);
   const [alocRows, setAlocRows] = useState<AlocacaoManifestRow[]>([]);
   const [pvpsCompletedRows, setPvpsCompletedRows] = useState<PvpsCompletedRow[]>([]);
   const [alocCompletedRows, setAlocCompletedRows] = useState<AlocacaoCompletedRow[]>([]);
@@ -342,12 +362,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
     try {
       if (tab === "pvps") {
-        const [rows, completed] = await Promise.all([
+        const [rows, completed, zoneOptions] = await Promise.all([
           fetchPvpsManifest({ p_cd: activeCd, zona: null }),
-          fetchPvpsCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt })
+          fetchPvpsCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt }),
+          fetchPvpsZoneOptions({ p_cd: activeCd })
         ]);
         setPvpsRows(rows);
         setPvpsCompletedRows(completed);
+        setPvpsZoneOptions(zoneOptions);
         if (!rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
           setActivePvpsKey(rows[0] ? keyOfPvps(rows[0]) : null);
           if (!rows[0]) closePvpsPopup();
@@ -359,6 +381,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ]);
         setAlocRows(rows);
         setAlocCompletedRows(completed);
+        setPvpsZoneOptions([]);
         if (!rows.some((row) => row.queue_id === activeAlocQueue)) {
           setActiveAlocQueue(rows[0]?.queue_id ?? null);
           if (!rows[0]) setShowAlocPopup(false);
@@ -504,7 +527,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setPulEndSits(mappedEndSit);
       })
       .catch((error) => {
-        setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar PUL.");
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar Pulmão.");
       })
       .finally(() => setPulBusy(false));
   }, [activePvps, activeCd]);
@@ -517,10 +540,185 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setActivePulEnd(next?.end_pul ?? null);
   }, [activePvpsMode, pulItems, activePulEnd]);
 
+  const zoneFilterSet = useMemo(() => new Set(selectedZones), [selectedZones]);
+
+  const sortedPvpsAllRows = useMemo(
+    () => [...pvpsRows].sort((a, b) => {
+      const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
+      if (byDate !== 0) return byDate;
+      const byCoddv = a.coddv - b.coddv;
+      if (byCoddv !== 0) return byCoddv;
+      const byZone = a.zona.localeCompare(b.zona);
+      if (byZone !== 0) return byZone;
+      return a.end_sep.localeCompare(b.end_sep);
+    }),
+    [pvpsRows]
+  );
+
+  const sortedAlocAllRows = useMemo(
+    () => [...alocRows].sort((a, b) => {
+      const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
+      if (byDate !== 0) return byDate;
+      const byCoddv = a.coddv - b.coddv;
+      if (byCoddv !== 0) return byCoddv;
+      const byZone = a.zona.localeCompare(b.zona);
+      if (byZone !== 0) return byZone;
+      return a.endereco.localeCompare(b.endereco);
+    }),
+    [alocRows]
+  );
+
+  const pvpsFeedItemsAll = useMemo<PvpsFeedItem[]>(() => {
+    const items: PvpsFeedItem[] = [];
+    for (const row of sortedPvpsAllRows) {
+      const baseKey = keyOfPvps(row);
+      if (row.status === "pendente_sep") {
+        items.push({
+          kind: "sep",
+          feedKey: `sep:${baseKey}`,
+          row,
+          zone: row.zona,
+          endereco: row.end_sep
+        });
+        continue;
+      }
+      const pulItemsByRow = feedPulBySepKey[baseKey];
+      if (!pulItemsByRow) continue;
+      const pendingPulItems = pulItemsByRow.filter((item) => !item.auditado);
+      for (const item of pendingPulItems) {
+        items.push({
+          kind: "pul",
+          feedKey: `pul:${baseKey}:${item.end_pul}`,
+          row,
+          zone: zoneFromEndereco(item.end_pul),
+          endereco: item.end_pul,
+          endPul: item.end_pul
+        });
+      }
+    }
+    return items;
+  }, [sortedPvpsAllRows, feedPulBySepKey]);
+
+  const pvpsQueueProducts = useMemo(() => {
+    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number }>();
+    for (const row of sortedPvpsAllRows) {
+      const ts = dateSortValue(row.dat_ult_compra);
+      const current = byCoddv.get(row.coddv);
+      if (!current || ts > current.maxTs) {
+        byCoddv.set(row.coddv, {
+          coddv: row.coddv,
+          descricao: row.descricao,
+          dat_ult_compra: row.dat_ult_compra,
+          maxTs: ts
+        });
+      }
+    }
+    return Array.from(byCoddv.values()).sort((a, b) => (b.maxTs - a.maxTs) || (a.coddv - b.coddv));
+  }, [sortedPvpsAllRows]);
+
+  const alocQueueProducts = useMemo(() => {
+    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number }>();
+    for (const row of sortedAlocAllRows) {
+      const ts = dateSortValue(row.dat_ult_compra);
+      const current = byCoddv.get(row.coddv);
+      if (!current || ts > current.maxTs) {
+        byCoddv.set(row.coddv, {
+          coddv: row.coddv,
+          descricao: row.descricao,
+          dat_ult_compra: row.dat_ult_compra,
+          maxTs: ts
+        });
+      }
+    }
+    return Array.from(byCoddv.values()).sort((a, b) => (b.maxTs - a.maxTs) || (a.coddv - b.coddv));
+  }, [sortedAlocAllRows]);
+
+  const pvpsEligibleCoddv = useMemo(() => {
+    if (!selectedZones.length) return new Set(pvpsQueueProducts.map((item) => item.coddv));
+    const eligible = new Set<number>();
+    for (const item of pvpsFeedItemsAll) {
+      if (zoneFilterSet.has(item.zone)) {
+        eligible.add(item.row.coddv);
+      }
+    }
+    return eligible;
+  }, [selectedZones, pvpsQueueProducts, pvpsFeedItemsAll, zoneFilterSet]);
+
+  const alocEligibleCoddv = useMemo(() => {
+    if (!selectedZones.length) return new Set(alocQueueProducts.map((item) => item.coddv));
+    const eligible = new Set<number>();
+    for (const row of sortedAlocAllRows) {
+      if (zoneFilterSet.has(row.zona)) {
+        eligible.add(row.coddv);
+      }
+    }
+    return eligible;
+  }, [selectedZones, alocQueueProducts, sortedAlocAllRows, zoneFilterSet]);
+
+  const pvpsActiveCoddvList = useMemo(() => {
+    const list: number[] = [];
+    for (const item of pvpsQueueProducts) {
+      if (!pvpsEligibleCoddv.has(item.coddv)) continue;
+      list.push(item.coddv);
+      if (list.length >= 5) break;
+    }
+    return list;
+  }, [pvpsQueueProducts, pvpsEligibleCoddv]);
+
+  const alocActiveCoddvList = useMemo(() => {
+    const list: number[] = [];
+    for (const item of alocQueueProducts) {
+      if (!alocEligibleCoddv.has(item.coddv)) continue;
+      list.push(item.coddv);
+      if (list.length >= 5) break;
+    }
+    return list;
+  }, [alocQueueProducts, alocEligibleCoddv]);
+
+  const pvpsActiveCoddvSet = useMemo(() => new Set(pvpsActiveCoddvList), [pvpsActiveCoddvList]);
+  const alocActiveCoddvSet = useMemo(() => new Set(alocActiveCoddvList), [alocActiveCoddvList]);
+
+  const pvpsFeedItems = useMemo<PvpsFeedItem[]>(() => {
+    const coddvOrder = new Map<number, number>();
+    pvpsActiveCoddvList.forEach((coddv, index) => coddvOrder.set(coddv, index));
+    return pvpsFeedItemsAll
+      .filter((item) => pvpsActiveCoddvSet.has(item.row.coddv))
+      .filter((item) => !selectedZones.length || zoneFilterSet.has(item.zone))
+      .sort((a, b) => {
+        const byCoddv = (coddvOrder.get(a.row.coddv) ?? 999) - (coddvOrder.get(b.row.coddv) ?? 999);
+        if (byCoddv !== 0) return byCoddv;
+        if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
+        const byZone = a.zone.localeCompare(b.zone);
+        if (byZone !== 0) return byZone;
+        return a.endereco.localeCompare(b.endereco);
+      });
+  }, [pvpsFeedItemsAll, pvpsActiveCoddvSet, selectedZones, zoneFilterSet, pvpsActiveCoddvList]);
+
+  const visibleAlocRows = useMemo(() => {
+    const coddvOrder = new Map<number, number>();
+    alocActiveCoddvList.forEach((coddv, index) => coddvOrder.set(coddv, index));
+    return sortedAlocAllRows
+      .filter((row) => alocActiveCoddvSet.has(row.coddv))
+      .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
+      .sort((a, b) => {
+        const byCoddv = (coddvOrder.get(a.coddv) ?? 999) - (coddvOrder.get(b.coddv) ?? 999);
+        if (byCoddv !== 0) return byCoddv;
+        const byZone = a.zona.localeCompare(b.zona);
+        if (byZone !== 0) return byZone;
+        return a.endereco.localeCompare(b.endereco);
+      });
+  }, [sortedAlocAllRows, alocActiveCoddvSet, selectedZones, zoneFilterSet, alocActiveCoddvList]);
+
   const zones = useMemo(() => {
-    const source = tab === "pvps" ? pvpsRows.map((row) => row.zona) : alocRows.map((row) => row.zona);
-    return Array.from(new Set(source)).sort((a, b) => a.localeCompare(b));
-  }, [tab, pvpsRows, alocRows]);
+    if (tab === "pvps") {
+      const source = new Set<string>();
+      for (const zone of pvpsZoneOptions) source.add(zone);
+      for (const row of sortedPvpsAllRows) source.add(row.zona);
+      for (const item of pvpsFeedItemsAll) source.add(item.zone);
+      return Array.from(source).sort((a, b) => a.localeCompare(b));
+    }
+    return Array.from(new Set(sortedAlocAllRows.map((row) => row.zona))).sort((a, b) => a.localeCompare(b));
+  }, [tab, pvpsZoneOptions, sortedPvpsAllRows, pvpsFeedItemsAll, sortedAlocAllRows]);
 
   const filteredZones = useMemo(() => {
     const q = zoneSearch.trim().toLocaleLowerCase("pt-BR");
@@ -528,51 +726,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return zones.filter((zone) => zone.toLocaleLowerCase("pt-BR").includes(q));
   }, [zones, zoneSearch]);
 
-  const filteredPvpsRows = useMemo(() => {
-    if (!selectedZones.length) return pvpsRows;
-    const selected = new Set(selectedZones);
-    return pvpsRows.filter((row) => selected.has(row.zona));
-  }, [pvpsRows, selectedZones]);
-
-  const filteredAlocRows = useMemo(() => {
-    if (!selectedZones.length) return alocRows;
-    const selected = new Set(selectedZones);
-    return alocRows.filter((row) => selected.has(row.zona));
-  }, [alocRows, selectedZones]);
-
   const filteredPvpsCompletedRows = useMemo(() => {
     if (!selectedZones.length) return pvpsCompletedRows;
-    const selected = new Set(selectedZones);
-    return pvpsCompletedRows.filter((row) => selected.has(row.zona));
-  }, [pvpsCompletedRows, selectedZones]);
+    return pvpsCompletedRows.filter((row) => zoneFilterSet.has(row.zona));
+  }, [pvpsCompletedRows, selectedZones, zoneFilterSet]);
 
   const filteredAlocCompletedRows = useMemo(() => {
     if (!selectedZones.length) return alocCompletedRows;
-    const selected = new Set(selectedZones);
-    return alocCompletedRows.filter((row) => selected.has(row.zona));
-  }, [alocCompletedRows, selectedZones]);
-
-  const sortedPvpsRows = useMemo(
-    () => [...filteredPvpsRows].sort((a, b) => {
-      const byZone = a.zona.localeCompare(b.zona);
-      if (byZone !== 0) return byZone;
-      const byEndereco = a.end_sep.localeCompare(b.end_sep);
-      if (byEndereco !== 0) return byEndereco;
-      return a.coddv - b.coddv;
-    }),
-    [filteredPvpsRows]
-  );
-
-  const sortedAlocRows = useMemo(
-    () => [...filteredAlocRows].sort((a, b) => {
-      const byZone = a.zona.localeCompare(b.zona);
-      if (byZone !== 0) return byZone;
-      const byEndereco = a.endereco.localeCompare(b.endereco);
-      if (byEndereco !== 0) return byEndereco;
-      return a.coddv - b.coddv;
-    }),
-    [filteredAlocRows]
-  );
+    return alocCompletedRows.filter((row) => zoneFilterSet.has(row.zona));
+  }, [alocCompletedRows, selectedZones, zoneFilterSet]);
 
   const sortedPvpsCompletedRows = useMemo(
     () => [...filteredPvpsCompletedRows].sort((a, b) => {
@@ -596,48 +758,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     [filteredAlocCompletedRows]
   );
 
-  const pvpsFeedItems = useMemo<PvpsFeedItem[]>(() => {
-    const items: PvpsFeedItem[] = [];
-    for (const row of sortedPvpsRows) {
-      const baseKey = keyOfPvps(row);
-      if (row.status === "pendente_sep") {
-        items.push({
-          kind: "sep",
-          feedKey: `sep:${baseKey}`,
-          row,
-          zone: row.zona,
-          endereco: row.end_sep
-        });
-        continue;
-      }
-      const pulItemsByRow = feedPulBySepKey[baseKey];
-      if (!pulItemsByRow) continue;
-      const pendingPulItems = pulItemsByRow.filter((item) => !item.auditado);
-      for (const item of pendingPulItems) {
-        items.push({
-          kind: "pul",
-          feedKey: `pul:${baseKey}:${item.end_pul}`,
-          row,
-          zone: row.zona,
-          endereco: item.end_pul,
-          endPul: item.end_pul
-        });
-      }
-    }
-    return items;
-  }, [sortedPvpsRows, feedPulBySepKey]);
-
-  const activePvpsFeedKey = useMemo(() => {
-    if (!activePvpsKey) return null;
-    if (activePvpsMode === "pul" && activePulEnd) {
-      return `pul:${activePvpsKey}:${activePulEnd}`;
-    }
-    return `sep:${activePvpsKey}`;
-  }, [activePvpsKey, activePvpsMode, activePulEnd]);
-
   useEffect(() => {
-    if (tab !== "pvps" || feedView !== "pendentes" || activeCd == null) return;
-    const pendingPulRows = sortedPvpsRows.filter((row) => row.status === "pendente_pul");
+    if (tab !== "pvps" || feedView !== "pendentes" || activeCd == null || !isOnline) return;
+    const pendingPulRows = sortedPvpsAllRows.filter((row) => row.status === "pendente_pul");
     const missingRows = pendingPulRows.filter((row) => feedPulBySepKey[keyOfPvps(row)] == null);
     if (!missingRows.length) return;
 
@@ -659,44 +782,51 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return () => {
       cancelled = true;
     };
-  }, [tab, feedView, sortedPvpsRows, activeCd, feedPulBySepKey]);
+  }, [tab, feedView, sortedPvpsAllRows, activeCd, feedPulBySepKey, isOnline]);
 
   useEffect(() => {
     if (tab === "pvps") {
-      if (!sortedPvpsRows.some((row) => keyOfPvps(row) === activePvpsKey)) {
-        setActivePvpsKey(sortedPvpsRows[0] ? keyOfPvps(sortedPvpsRows[0]) : null);
+      const visibleKeys = new Set(pvpsFeedItems.map((item) => keyOfPvps(item.row)));
+      if (!activePvpsKey || !visibleKeys.has(activePvpsKey)) {
+        const first = pvpsFeedItems[0];
+        setActivePvpsKey(first ? keyOfPvps(first.row) : null);
+        if (first?.kind === "pul") {
+          setActivePvpsMode("pul");
+          setActivePulEnd(first.endPul);
+        } else {
+          setActivePvpsMode("sep");
+          setActivePulEnd(null);
+        }
       }
       return;
     }
-    if (!sortedAlocRows.some((row) => row.queue_id === activeAlocQueue)) {
-      setActiveAlocQueue(sortedAlocRows[0]?.queue_id ?? null);
+    if (!visibleAlocRows.some((row) => row.queue_id === activeAlocQueue)) {
+      setActiveAlocQueue(visibleAlocRows[0]?.queue_id ?? null);
     }
-  }, [tab, sortedPvpsRows, sortedAlocRows, activePvpsKey, activeAlocQueue]);
+  }, [tab, pvpsFeedItems, visibleAlocRows, activePvpsKey, activeAlocQueue]);
 
   const nextQueueItems = useMemo(() => {
     if (tab === "pvps") {
-      const start = activePvpsFeedKey
-        ? Math.max(pvpsFeedItems.findIndex((item) => item.feedKey === activePvpsFeedKey), 0) + 1
-        : 0;
-      return pvpsFeedItems.slice(start, start + 5).map((item) => ({
-        key: item.feedKey,
-        coddv: item.row.coddv,
-        descricao: item.row.descricao,
-        endereco: item.endereco,
-        dat_ult_compra: item.row.dat_ult_compra
-      }));
+      return pvpsQueueProducts
+        .filter((item) => pvpsEligibleCoddv.has(item.coddv))
+        .slice(5, 10)
+        .map((item) => ({
+          key: `pvps-next:${item.coddv}`,
+          coddv: item.coddv,
+          descricao: item.descricao,
+          dat_ult_compra: item.dat_ult_compra
+        }));
     }
-    const start = activeAlocQueue
-      ? Math.max(sortedAlocRows.findIndex((row) => row.queue_id === activeAlocQueue), 0) + 1
-      : 0;
-    return sortedAlocRows.slice(start, start + 5).map((row) => ({
-      key: `aloc:${row.queue_id}`,
-      coddv: row.coddv,
-      descricao: row.descricao,
-      endereco: row.endereco,
-      dat_ult_compra: row.dat_ult_compra
-    }));
-  }, [tab, pvpsFeedItems, sortedAlocRows, activePvpsFeedKey, activeAlocQueue]);
+    return alocQueueProducts
+      .filter((item) => alocEligibleCoddv.has(item.coddv))
+      .slice(5, 10)
+      .map((item) => ({
+        key: `aloc-next:${item.coddv}`,
+        coddv: item.coddv,
+        descricao: item.descricao,
+        dat_ult_compra: item.dat_ult_compra
+      }));
+  }, [tab, pvpsQueueProducts, pvpsEligibleCoddv, alocQueueProducts, alocEligibleCoddv]);
 
   function openPvpsPopup(row: PvpsManifestRow): void {
     if (row.status === "pendente_pul") {
@@ -822,39 +952,34 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setShowAlocPopup(true);
   }
 
-  function openNextPvpsFrom(currentKey: string, currentZone?: string | null): void {
-    const index = sortedPvpsRows.findIndex((row) => keyOfPvps(row) === currentKey);
-    const fallbackZone = index >= 0 ? sortedPvpsRows[index]?.zona ?? null : null;
+  function openNextPvpsFrom(currentFeedKey: string, currentZone?: string | null): void {
+    const index = pvpsFeedItems.findIndex((item) => item.feedKey === currentFeedKey);
+    const fallbackZone = index >= 0 ? pvpsFeedItems[index]?.zone ?? null : null;
     const targetZone = currentZone ?? fallbackZone;
     const startAt = index >= 0 ? index + 1 : 0;
-    let next: PvpsManifestRow | undefined;
+    let next: PvpsFeedItem | undefined;
     if (targetZone) {
-      next = sortedPvpsRows.find((row, rowIndex) => rowIndex >= startAt && row.zona === targetZone);
+      next = pvpsFeedItems.find((item, itemIndex) => itemIndex >= startAt && item.zone === targetZone);
     }
-    if (next) {
-      const nextKey = keyOfPvps(next);
-      if (next.status === "pendente_pul") {
-        const pendingPulItems = (feedPulBySepKey[nextKey] ?? []).filter((item) => !item.auditado);
-        const firstPendingPul = pendingPulItems[0];
-        if (firstPendingPul) {
-          openPvpsPulPopup(next, firstPendingPul.end_pul);
-          return;
-        }
-      }
-      openPvpsPopup(next);
-    } else {
+    if (!next) {
       closePvpsPopup();
+      return;
     }
+    if (next.kind === "pul") {
+      openPvpsPulPopup(next.row, next.endPul);
+      return;
+    }
+    openPvpsPopup(next.row);
   }
 
   function openNextAlocacaoFrom(currentQueueId: string, currentZone?: string | null): void {
-    const index = sortedAlocRows.findIndex((row) => row.queue_id === currentQueueId);
-    const fallbackZone = index >= 0 ? sortedAlocRows[index]?.zona ?? null : null;
+    const index = visibleAlocRows.findIndex((row) => row.queue_id === currentQueueId);
+    const fallbackZone = index >= 0 ? visibleAlocRows[index]?.zona ?? null : null;
     const targetZone = currentZone ?? fallbackZone;
     const startAt = index >= 0 ? index + 1 : 0;
     let next: AlocacaoManifestRow | undefined;
     if (targetZone) {
-      next = sortedAlocRows.find((row, rowIndex) => rowIndex >= startAt && row.zona === targetZone);
+      next = visibleAlocRows.find((row, rowIndex) => rowIndex >= startAt && row.zona === targetZone);
     }
     if (next) {
       setActiveAlocQueue(next.queue_id);
@@ -875,10 +1000,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const hasOcorrencia = endSit === "vazio" || endSit === "obstruido";
     const normalizedValSep = valSep.trim();
     if (!hasOcorrencia && normalizedValSep.length !== 4) {
-      setErrorMessage("Validade SEP obrigatória (mmaa) quando não houver ocorrência.");
+      setErrorMessage("Validade de Separação obrigatória (mmaa) quando não houver ocorrência.");
       return;
     }
     const currentKey = keyOfPvps(activePvps);
+    const currentFeedKey = `sep:${currentKey}`;
     const currentZone = activePvps.zona;
     const isEditingCompleted = Boolean(editingPvpsCompleted);
     if (!isOnline) {
@@ -899,8 +1025,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         });
         if (hasOcorrencia) {
           setPvpsRows((current) => current.filter((row) => keyOfPvps(row) !== currentKey));
-          setStatusMessage("SEP com ocorrência salva offline. Item retirado localmente e será sincronizado ao reconectar.");
-          closePvpsPopup();
+          setStatusMessage("Separação com ocorrência salva offline. Item retirado localmente e será sincronizado ao reconectar.");
+          openNextPvpsFrom(currentFeedKey, currentZone);
         } else {
           const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
           setPvpsRows((current) => current.map((row) => (
@@ -908,10 +1034,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               ? { ...row, status: "pendente_pul", val_sep: localVal, end_sit: null }
               : row
           )));
-          setStatusMessage("SEP salva offline. PUL liberado localmente e será sincronizado ao reconectar.");
+          setStatusMessage("Separação salva offline. Pulmão liberado localmente e será sincronizado ao reconectar.");
         }
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar SEP offline.");
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Separação offline.");
       }
       return;
     }
@@ -928,9 +1054,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         val_sep: hasOcorrencia ? null : normalizedValSep
       });
       if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
-        setStatusMessage("SEP com ocorrência. Item removido do feed e não será enviado ao frontend.");
+        setStatusMessage("Separação com ocorrência. Item removido do feed e não será enviado ao frontend.");
       } else {
-        setStatusMessage(`SEP salva. PUL liberado: ${result.pul_auditados}/${result.pul_total} auditados.`);
+        setStatusMessage(`Separação salva. Pulmão liberado: ${result.pul_auditados}/${result.pul_total} auditados.`);
       }
       await upsertOfflineSepCache({
         cd: activeCd,
@@ -944,13 +1070,22 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setEditingPvpsCompleted(null);
         closePvpsPopup();
       } else {
-        const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
-        setFeedPulBySepKey((current) => ({ ...current, [currentKey]: items }));
-        setPulItems(items);
-        openNextPvpsFrom(currentKey, currentZone);
+        if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
+          openNextPvpsFrom(currentFeedKey, currentZone);
+        } else {
+          const items = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
+          setFeedPulBySepKey((current) => ({ ...current, [currentKey]: items }));
+          setPulItems(items);
+          const firstPendingPul = items.find((item) => !item.auditado);
+          if (firstPendingPul) {
+            openPvpsPulPopup(activePvps, firstPendingPul.end_pul);
+          } else {
+            openNextPvpsFrom(currentFeedKey, currentZone);
+          }
+        }
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa SEP.");
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Separação.");
     } finally {
       setBusy(false);
     }
@@ -966,9 +1101,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const hasPulOcorrencia = pulEndSit === "vazio" || pulEndSit === "obstruido";
     const value = pulInputs[endPul] ?? "";
     if (!hasPulOcorrencia && value.trim().length !== 4) {
-      setErrorMessage("Validade PUL obrigatória (mmaa).");
+      setErrorMessage("Validade de Pulmão obrigatória (mmaa).");
       return;
     }
+    const currentKey = keyOfPvps(activePvps);
+    const currentFeedKey = `pul:${currentKey}:${endPul}`;
+    const currentZone = zoneFromEndereco(endPul);
 
     if (!isOnline) {
       let hasSep = await hasOfflineSepCache(activeCd, activePvps.coddv, activePvps.end_sep);
@@ -983,7 +1121,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         hasSep = true;
       }
       if (!hasSep) {
-        setErrorMessage("Para informar PUL offline, salve primeiro a linha SEP no mesmo endereço.");
+        setErrorMessage("Para informar Pulmão offline, salve primeiro a linha de Separação no mesmo endereço.");
         return;
       }
       try {
@@ -999,10 +1137,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setPulInputs((prev) => ({ ...prev, [endPul]: "" }));
         setPulEndSits((prev) => ({ ...prev, [endPul]: "" }));
         setStatusMessage(hasPulOcorrencia
-          ? "PUL com ocorrência salvo localmente (offline). Será sincronizado automaticamente ao reconectar."
-          : "PUL salvo localmente (offline). Será sincronizado automaticamente ao reconectar.");
+          ? "Pulmão com ocorrência salvo localmente (offline). Será sincronizado automaticamente ao reconectar."
+          : "Pulmão salvo localmente (offline). Será sincronizado automaticamente ao reconectar.");
+        const nextPul = pulItems.find((item) => item.end_pul !== endPul && !item.auditado);
+        if (nextPul) {
+          setActivePvpsMode("pul");
+          setActivePulEnd(nextPul.end_pul);
+          setShowPvpsPopup(true);
+        } else {
+          openNextPvpsFrom(currentFeedKey, currentZone);
+        }
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar PUL offline.");
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Pulmão offline.");
       }
       return;
     }
@@ -1010,8 +1156,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
-    const currentKey = keyOfPvps(activePvps);
-    const currentZone = activePvps.zona;
     const isEditingCompleted = Boolean(editingPvpsCompleted);
     try {
       let auditId = activePvps.audit_id;
@@ -1020,7 +1164,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         auditId = rows.find((row) => row.coddv === activePvps.coddv && row.end_sep === activePvps.end_sep)?.audit_id ?? null;
       }
       if (!auditId) {
-        setErrorMessage("AUDIT_ID_PVPS_NAO_DISPONIVEL. Sincronize a SEP antes de salvar PUL online.");
+        setErrorMessage("AUDIT_ID_PVPS_NAO_DISPONIVEL. Sincronize a Separação antes de salvar Pulmão online.");
         return;
       }
       const result = await submitPvpsPul({
@@ -1031,13 +1175,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         val_pul: hasPulOcorrencia ? null : value
       });
       if (result.status === "concluido") {
-        setStatusMessage("PVPS concluído com conformidade (VAL_SEP <= VAL_PUL). Feed atualizado automaticamente.");
+        setStatusMessage("PVPS concluído com conformidade (validade da Separação <= validade do Pulmão). Feed atualizado automaticamente.");
       } else if (result.status === "nao_conforme") {
-        setStatusMessage("PVPS concluído sem conformidade: existe PUL com validade menor que SEP.");
+        setStatusMessage("PVPS concluído sem conformidade: existe Pulmão com validade menor que a Separação.");
       } else {
         setStatusMessage(hasPulOcorrencia
-          ? `PUL com ocorrência salvo. ${result.pul_auditados}/${result.pul_total} auditados.`
-          : `PUL salvo. ${result.pul_auditados}/${result.pul_total} auditados.`);
+          ? `Pulmão com ocorrência salvo. ${result.pul_auditados}/${result.pul_total} auditados.`
+          : `Pulmão salvo. ${result.pul_auditados}/${result.pul_total} auditados.`);
       }
       await loadCurrent();
       if (isEditingCompleted) {
@@ -1058,10 +1202,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           setShowPvpsPopup(true);
         }
       } else {
-        openNextPvpsFrom(currentKey, currentZone);
+        openNextPvpsFrom(currentFeedKey, currentZone);
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa PUL.");
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Pulmão.");
     } finally {
       setBusy(false);
     }
@@ -1290,7 +1434,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <div className="module-screen-title-row">
               <div className="module-screen-title">
                 <h2>Auditoria por zona</h2>
-                <p>PVPS: PUL só libera quando SEP for salva sem ocorrência.</p>
+                <p>PVPS: Pulmão só libera quando a Separação for salva sem ocorrência.</p>
               </div>
               <div className="pvps-toolbar">
                 <div className="pvps-toolbar-group">
@@ -1467,9 +1611,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             {feedView === "pendentes" && tab === "pvps" ? (
               <div className="pvps-list">
                 {pvpsFeedItems.length === 0
-                  ? (sortedPvpsRows.length === 0
+                  ? (sortedPvpsAllRows.length === 0
                     ? <p>Nenhum item PVPS pendente para os filtros atuais.</p>
-                    : <p>Carregando endereços PUL pendentes...</p>)
+                    : <p>Carregando endereços de Pulmão pendentes...</p>)
                   : null}
                 {pvpsFeedItems.map((item, index) => {
                   const itemKey = item.feedKey;
@@ -1488,7 +1632,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong>{item.endereco}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
-                            {item.kind === "pul" ? <small>PUL pendente</small> : null}
+                            {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
                           </div>
                           <div className="pvps-row-actions">
                             <button
@@ -1513,9 +1657,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         {open ? (
                           <div className="pvps-row-details">
                             {item.kind === "pul" ? (
-                              <small>Linha SEP {row.end_sep} | Validade linha {row.val_sep ?? "-"}</small>
+                              <small>Linha Separação {row.end_sep} | Validade linha {row.val_sep ?? "-"}</small>
                             ) : (
-                              <small>Status {row.status} | PUL {row.pul_auditados}/{row.pul_total}</small>
+                              <small>Status {pvpsStatusLabel(row.status)} | Pulmão {row.pul_auditados}/{row.pul_total}</small>
                             )}
                             {item.kind === "pul" ? (
                               <small>Ocorrência linha: {row.end_sit ?? "sem ocorrência"}</small>
@@ -1531,8 +1675,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   <h4>Próximos a entrar na lista (até 5)</h4>
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
-                      <span>{item.endereco}</span>
-                      <small>{item.coddv} - {item.descricao} | Última compra: {formatDate(item.dat_ult_compra)}</small>
+                      <span>{item.coddv} - {item.descricao}</span>
+                      <small>Última compra: {formatDate(item.dat_ult_compra)}</small>
                     </div>
                   ))}
                 </div>
@@ -1541,10 +1685,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
             {feedView === "pendentes" && tab === "alocacao" ? (
               <div className="pvps-list">
-                {sortedAlocRows.length === 0 ? <p>Nenhum item de Alocação pendente para os filtros atuais.</p> : null}
-                {sortedAlocRows.map((row, index) => {
+                {visibleAlocRows.length === 0 ? <p>Nenhum item de Alocação pendente para os filtros atuais.</p> : null}
+                {visibleAlocRows.map((row, index) => {
                   const open = Boolean(expandedAloc[row.queue_id]);
-                  const previous = index > 0 ? sortedAlocRows[index - 1] : null;
+                  const previous = index > 0 ? visibleAlocRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
@@ -1578,8 +1722,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   <h4>Próximos a entrar na lista (até 5)</h4>
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
-                      <span>{item.endereco}</span>
-                      <small>{item.coddv} - {item.descricao} | Última compra: {formatDate(item.dat_ult_compra)}</small>
+                      <span>{item.coddv} - {item.descricao}</span>
+                      <small>Última compra: {formatDate(item.dat_ult_compra)}</small>
                     </div>
                   ))}
                 </div>
@@ -1618,10 +1762,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
-                            <small>PUL auditados: {row.pul_auditados}/{row.pul_total}</small>
+                            <small>Pulmão auditados: {row.pul_auditados}/{row.pul_total}</small>
                             {row.pul_has_lower ? (
                               <small>
-                                PUL com validade menor: {row.pul_lower_end ?? "-"} ({row.pul_lower_val ?? "-"})
+                                Pulmão com validade menor: {row.pul_lower_end ?? "-"} ({row.pul_lower_val ?? "-"})
                               </small>
                             ) : null}
                             <small>Auditor: {row.auditor_nome}</small>
@@ -1699,12 +1843,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               {editingPvpsCompleted
                 ? "Editar PVPS concluído"
                 : activePvpsMode === "pul"
-                  ? "Informar PVPS - PUL"
-                  : "Informar PVPS - SEP"}
+                  ? "Informar PVPS - Pulmão"
+                  : "Informar PVPS - Separação"}
             </h3>
-            <p>SEP: <strong>{activePvps.end_sep}</strong> | CODDV: <strong>{activePvps.coddv}</strong></p>
+            <p>Separação: <strong>{activePvps.end_sep}</strong> | CODDV: <strong>{activePvps.coddv}</strong></p>
             <p>Produto: {activePvps.descricao}</p>
-            <p>Zona: <strong>{activePvps.zona}</strong> | Status: <strong>{activePvps.status}</strong></p>
+            <p>Zona: <strong>{activePvps.zona}</strong> | Status: <strong>{pvpsStatusLabel(activePvps.status)}</strong></p>
             <p>Data última compra: <strong>{formatDate(activePvps.dat_ult_compra)}</strong></p>
             {editingPvpsCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong></p> : null}
 
@@ -1712,7 +1856,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
                 {endSit !== "vazio" && endSit !== "obstruido" ? (
                   <label>
-                    Validade SEP (mmaa)
+                    Validade da Separação (mmaa)
                     <input
                       value={valSep}
                       onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
@@ -1743,17 +1887,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     </select>
                   </div>
                 </label>
-                <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa SEP</button>
+                <button className="btn btn-primary" type="submit" disabled={busy}>Salvar etapa Separação</button>
               </form>
             ) : null}
 
             {activePvpsMode === "pul" ? (
               <div className="pvps-pul-box">
-                <h4>Etapa PUL individual</h4>
-                <p>Linha SEP: <strong>{activePvps.end_sep}</strong> | Validade linha: <strong>{activePvps.val_sep ?? "-"}</strong></p>
+                <h4>Etapa Pulmão individual</h4>
+                <p>Linha Separação: <strong>{activePvps.end_sep}</strong> | Validade linha: <strong>{activePvps.val_sep ?? "-"}</strong></p>
                 <p>Ocorrência linha: <strong>{activePvps.end_sit ?? "sem ocorrência"}</strong></p>
-                {pulBusy ? <p>Carregando endereços PUL...</p> : null}
-                {!pulBusy && !activePulItem ? <p>Endereço PUL não encontrado no feed atual.</p> : null}
+                {pulBusy ? <p>Carregando endereços de Pulmão...</p> : null}
+                {!pulBusy && !activePulItem ? <p>Endereço de Pulmão não encontrado no feed atual.</p> : null}
                 {activePulItem ? (
                   <div className="pvps-pul-row">
                     <div>
@@ -1789,7 +1933,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       </select>
                     </div>
                     <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
-                      Salvar PUL
+                      Salvar Pulmão
                     </button>
                   </div>
                 ) : null}

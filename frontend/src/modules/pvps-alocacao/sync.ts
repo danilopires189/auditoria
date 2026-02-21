@@ -158,15 +158,36 @@ function mapAlocacaoCompleted(raw: Record<string, unknown>): AlocacaoCompletedRo
 
 export async function fetchPvpsManifest(params?: { p_cd?: number | null; zona?: string | null }): Promise<PvpsManifestRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_pvps_manifest_items_page", {
-    p_cd: params?.p_cd ?? null,
-    p_zona: params?.zona ?? null,
-    p_offset: 0,
-    p_limit: 500
+  const pageSize = 500;
+  const rows: PvpsManifestRow[] = [];
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await supabase.rpc("rpc_pvps_manifest_items_page", {
+      p_cd: params?.p_cd ?? null,
+      p_zona: params?.zona ?? null,
+      p_offset: offset,
+      p_limit: pageSize
+    });
+    if (error) throw new Error(toErrorMessage(error));
+    const page = Array.isArray(data) ? data.map((row) => mapPvpsManifest(row as Record<string, unknown>)) : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows;
+}
+
+export async function fetchPvpsZoneOptions(params?: { p_cd?: number | null }): Promise<string[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_pvps_zone_options", {
+    p_cd: params?.p_cd ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
-  return data.map((row) => mapPvpsManifest(row as Record<string, unknown>));
+  const zones = data
+    .map((row) => parseString((row as Record<string, unknown>).zona, "").toUpperCase())
+    .filter((zone) => zone.length > 0);
+  return Array.from(new Set(zones)).sort((a, b) => a.localeCompare(b));
 }
 
 export async function fetchPvpsPulItems(coddv: number, endSep: string, pCd?: number | null): Promise<PvpsPulItemRow[]> {
@@ -404,15 +425,23 @@ export async function submitPvpsPul(params: {
 
 export async function fetchAlocacaoManifest(params?: { p_cd?: number | null; zona?: string | null }): Promise<AlocacaoManifestRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_alocacao_manifest_items_page", {
-    p_cd: params?.p_cd ?? null,
-    p_zona: params?.zona ?? null,
-    p_offset: 0,
-    p_limit: 500
-  });
-  if (error) throw new Error(toErrorMessage(error));
-  if (!Array.isArray(data)) return [];
-  return data.map((row) => mapAlocacaoManifest(row as Record<string, unknown>));
+  const pageSize = 500;
+  const rows: AlocacaoManifestRow[] = [];
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await supabase.rpc("rpc_alocacao_manifest_items_page", {
+      p_cd: params?.p_cd ?? null,
+      p_zona: params?.zona ?? null,
+      p_offset: offset,
+      p_limit: pageSize
+    });
+    if (error) throw new Error(toErrorMessage(error));
+    const page = Array.isArray(data) ? data.map((row) => mapAlocacaoManifest(row as Record<string, unknown>)) : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows;
 }
 
 export async function submitAlocacao(params: {
