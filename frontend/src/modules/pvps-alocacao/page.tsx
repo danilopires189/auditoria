@@ -235,11 +235,9 @@ function nextIcon() {
 function clearSelectionIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 7h16" />
-      <path d="M9 7V5h6v2" />
-      <path d="M8 7l1 12h6l1-12" />
-      <path d="M10 10v7" />
-      <path d="M14 10v7" />
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+      <path d="M5 6l1 13a2 2 0 002 2h8a2 2 0 002-2l1-13" />
     </svg>
   );
 }
@@ -247,8 +245,26 @@ function clearSelectionIcon() {
 function selectFilteredIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="3" ry="3" />
       <path d="M9 12l2 2 4-4" />
-      <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
+    </svg>
+  );
+}
+
+function searchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.35-4.35" />
+    </svg>
+  );
+}
+
+function closeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M18 6L6 18" />
+      <path d="M6 6l12 12" />
     </svg>
   );
 }
@@ -2280,7 +2296,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       {showZoneFilterPopup && typeof document !== "undefined"
         ? createPortal(
           <div
-            className="confirm-overlay"
+            className="confirm-overlay pvps-popup-overlay"
             role="dialog"
             aria-modal="true"
             aria-labelledby="pvps-zone-filter-title"
@@ -2289,17 +2305,34 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               setShowZoneFilterPopup(false);
             }}
           >
-            <div className="confirm-dialog surface-enter pvps-zone-popup-card" onClick={(event) => event.stopPropagation()}>
-              <h3 id="pvps-zone-filter-title">Filtro de zonas ({tab.toUpperCase()})</h3>
-              <div className="form-grid">
-                <label>
-                  Pesquisar zona
-                  <input
-                    value={zoneSearch}
-                    onChange={(event) => setZoneSearch(event.target.value.toUpperCase())}
-                    placeholder="Ex.: A001"
-                  />
-                </label>
+            <div className="confirm-dialog pvps-zone-popup-card" onClick={(event) => event.stopPropagation()}>
+              <div className="pvps-zone-popup-header">
+                <div className="pvps-zone-popup-title-row">
+                  <div className="pvps-zone-popup-title">
+                    <span className="pvps-zone-popup-icon" aria-hidden="true">{filterIcon()}</span>
+                    <h3 id="pvps-zone-filter-title">Filtro de zonas</h3>
+                  </div>
+                  <span className="pvps-zone-popup-badge">{tab.toUpperCase()}</span>
+                </div>
+                <button
+                  className="btn btn-muted pvps-zone-close-btn"
+                  type="button"
+                  onClick={() => setShowZoneFilterPopup(false)}
+                  aria-label="Fechar filtro"
+                >
+                  <span aria-hidden="true">{closeIcon()}</span>
+                </button>
+              </div>
+
+              <div className="pvps-zone-search-wrap">
+                <span className="pvps-zone-search-icon" aria-hidden="true">{searchIcon()}</span>
+                <input
+                  className="pvps-zone-search-input"
+                  value={zoneSearch}
+                  onChange={(event) => setZoneSearch(event.target.value.toUpperCase())}
+                  placeholder="Buscar zona... ex.: A001"
+                  autoFocus
+                />
               </div>
 
               <div className="pvps-zone-picker-actions">
@@ -2310,44 +2343,54 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   title="Limpar seleção"
                   aria-label="Limpar seleção"
                 >
-                  <span className="pvps-btn-icon" aria-hidden="true">{clearSelectionIcon()}</span>
+                  <span className="pvps-zone-action-icon pvps-zone-action-clear" aria-hidden="true">{clearSelectionIcon()}</span>
                   <span className="pvps-zone-action-label">Limpar</span>
                 </button>
                 <button
                   className="btn btn-muted pvps-zone-action-btn"
                   type="button"
                   onClick={() => setSelectedZones(filteredZones)}
-                  title="Selecionar filtradas"
-                  aria-label="Selecionar filtradas"
+                  title="Selecionar todas"
+                  aria-label="Selecionar todas"
                 >
-                  <span className="pvps-btn-icon" aria-hidden="true">{selectFilteredIcon()}</span>
-                  <span className="pvps-zone-action-label">Selecionar</span>
+                  <span className="pvps-zone-action-icon pvps-zone-action-select" aria-hidden="true">{selectFilteredIcon()}</span>
+                  <span className="pvps-zone-action-label">Selecionar todas</span>
                 </button>
               </div>
 
+              {selectedZones.length > 0 ? (
+                <div className="pvps-zone-selected-count">
+                  <strong>{selectedZones.length}</strong> de <strong>{zones.length}</strong> zonas selecionadas
+                </div>
+              ) : null}
+
               <div className="pvps-zone-list">
                 {filteredZones.length === 0 ? <p>Sem zonas para este filtro.</p> : null}
-                {filteredZones.map((zone) => (
-                  <label key={zone} className="pvps-zone-item">
-                    <input type="checkbox" checked={selectedZones.includes(zone)} onChange={() => toggleZone(zone)} />
-                    <span>{zone}</span>
-                  </label>
-                ))}
+                {filteredZones.map((zone) => {
+                  const checked = selectedZones.includes(zone);
+                  return (
+                    <label key={zone} className={`pvps-zone-item${checked ? " is-checked" : ""}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleZone(zone)} />
+                      <span className="pvps-zone-item-label">{zone}</span>
+                      {checked ? <span className="pvps-zone-check-mark" aria-hidden="true">{doneIcon()}</span> : null}
+                    </label>
+                  );
+                })}
               </div>
 
-              <div className="confirm-actions">
+              <div className="pvps-zone-popup-footer">
                 {isAdmin ? (
                   <button
-                    className="btn btn-danger"
+                    className="btn btn-danger pvps-zone-footer-btn"
                     type="button"
                     disabled={adminBusy || selectedZones.length === 0}
                     onClick={() => setShowDiscardZonesConfirm(true)}
                   >
-                    Descartar zonas selecionadas (repos. auto)
+                    Descartar zonas selecionadas
                   </button>
                 ) : null}
-                <button className="btn btn-primary" type="button" onClick={() => setShowZoneFilterPopup(false)}>
-                  Aplicar filtro
+                <button className="btn btn-primary pvps-zone-footer-btn" type="button" onClick={() => setShowZoneFilterPopup(false)}>
+                  Aplicar filtro{selectedZones.length > 0 ? ` (${selectedZones.length})` : ""}
                 </button>
               </div>
             </div>
