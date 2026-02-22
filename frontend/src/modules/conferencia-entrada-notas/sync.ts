@@ -48,6 +48,11 @@ function parseIntegerOrNull(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseDecimal(value: unknown, fallback = 0): number {
+  const parsed = Number.parseFloat(String(value ?? "").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function normalizeConferenceStatus(value: unknown): EntradaNotasVolumeRow["status"] {
   const statusRaw = String(value ?? "em_conferencia");
   if (statusRaw === "finalizado_ok" || statusRaw === "finalizado_falta" || statusRaw === "finalizado_divergencia") {
@@ -135,6 +140,8 @@ function mapRouteOverview(raw: Record<string, unknown>): EntradaNotasRouteOvervi
   const totalItens = Math.max(parseInteger(raw.total_itens), 0);
   const itensConferidos = Math.max(parseInteger(raw.itens_conferidos), 0);
   const itensDivergentes = Math.max(parseInteger(raw.itens_divergentes), 0);
+  const valorTotal = Math.max(parseDecimal(raw.valor_total), 0);
+  const valorConferido = Math.max(Math.min(parseDecimal(raw.valor_conferido), valorTotal), 0);
   const status = normalizeRouteStatus(raw.status);
 
   return {
@@ -145,6 +152,8 @@ function mapRouteOverview(raw: Record<string, unknown>): EntradaNotasRouteOvervi
     total_itens: totalItens,
     itens_conferidos: itensConferidos,
     itens_divergentes: itensDivergentes,
+    valor_total: valorTotal,
+    valor_conferido: valorConferido,
     status,
     colaborador_nome: parseNullableString(raw.colaborador_nome),
     colaborador_mat: parseNullableString(raw.colaborador_mat),

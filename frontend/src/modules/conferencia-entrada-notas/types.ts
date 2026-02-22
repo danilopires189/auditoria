@@ -63,6 +63,8 @@ export interface EntradaNotasRouteOverviewRow {
   total_itens: number;
   itens_conferidos: number;
   itens_divergentes: number;
+  valor_total: number;
+  valor_conferido: number;
   status: "pendente" | "em_andamento" | "concluido";
   colaborador_nome: string | null;
   colaborador_mat: string | null;
