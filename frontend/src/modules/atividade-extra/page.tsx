@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -17,6 +18,16 @@ interface AtividadeExtraPageProps {
   isOnline: boolean;
   profile: AtividadeExtraModuleProfile;
 }
+
+type ConfirmDialogState =
+  | {
+      kind: "delete";
+      entry: AtividadeExtraEntryRow;
+    }
+  | {
+      kind: "visibility";
+      nextMode: AtividadeExtraVisibilityMode;
+    };
 
 const MODULE_DEF = getModuleByKeyOrThrow("atividade-extra");
 
@@ -212,6 +223,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const [horaInicio, setHoraInicio] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
   const [horaFim, setHoraFim] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
   const [descricao, setDescricao] = useState<string>("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const selectedCollaborator = useMemo(
     () => collaborators.find((row) => row.user_id === selectedUserId) ?? null,
@@ -321,43 +333,63 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     setErrorMessage(null);
   }, []);
 
-  const onDeleteEntry = useCallback(async (entry: AtividadeExtraEntryRow) => {
+  const onDeleteEntry = useCallback((entry: AtividadeExtraEntryRow) => {
     if (!entry.can_edit || busySubmit) return;
-    const confirmed = window.confirm(`Deseja excluir a atividade "${entry.descricao}"?`);
-    if (!confirmed) return;
+    setConfirmDialog({
+      kind: "delete",
+      entry
+    });
+  }, [busySubmit]);
 
-    setBusySubmit(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
-    try {
-      await deleteAtividadeExtra(entry.id);
-      if (editingEntryId === entry.id) {
-        resetForm();
-      }
-      setStatusMessage("Atividade excluída com sucesso.");
-      await loadModuleData(selectedUserId ?? profile.user_id);
-    } catch (error) {
-      setErrorMessage(asUnknownErrorMessage(error));
-    } finally {
-      setBusySubmit(false);
-    }
-  }, [busySubmit, editingEntryId, loadModuleData, profile.user_id, resetForm, selectedUserId]);
-
-  const onToggleVisibility = useCallback(async () => {
+  const onToggleVisibility = useCallback(() => {
     if (!isAdmin || activeCd == null || busyVisibility || !visibility) return;
     const nextMode: AtividadeExtraVisibilityMode = visibility.visibility_mode === "public_cd" ? "owner_only" : "public_cd";
-    const confirmed = window.confirm(
-      nextMode === "public_cd"
-        ? "Liberar visualização para todos do CD?"
-        : "Ocultar dados de outros colaboradores para usuários comuns?"
-    );
-    if (!confirmed) return;
+    setConfirmDialog({
+      kind: "visibility",
+      nextMode
+    });
+  }, [activeCd, busyVisibility, isAdmin, visibility]);
+
+  const onConfirmDialog = useCallback(async () => {
+    if (!confirmDialog) return;
+
+    if (confirmDialog.kind === "delete") {
+      const entry = confirmDialog.entry;
+      if (!entry.can_edit || busySubmit) {
+        setConfirmDialog(null);
+        return;
+      }
+
+      setBusySubmit(true);
+      setErrorMessage(null);
+      setStatusMessage(null);
+      setConfirmDialog(null);
+      try {
+        await deleteAtividadeExtra(entry.id);
+        if (editingEntryId === entry.id) {
+          resetForm();
+        }
+        setStatusMessage("Atividade excluída com sucesso.");
+        await loadModuleData(selectedUserId ?? profile.user_id);
+      } catch (error) {
+        setErrorMessage(asUnknownErrorMessage(error));
+      } finally {
+        setBusySubmit(false);
+      }
+      return;
+    }
+
+    if (!isAdmin || activeCd == null || busyVisibility || !visibility) {
+      setConfirmDialog(null);
+      return;
+    }
 
     setBusyVisibility(true);
     setErrorMessage(null);
     setStatusMessage(null);
+    setConfirmDialog(null);
     try {
-      const row = await setAtividadeExtraVisibility(activeCd, nextMode);
+      const row = await setAtividadeExtraVisibility(activeCd, confirmDialog.nextMode);
       setVisibility(row);
       setStatusMessage(`Visibilidade atualizada: ${visibilityModeLabel(row.visibility_mode)}.`);
       await loadModuleData(selectedUserId ?? profile.user_id);
@@ -366,7 +398,19 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     } finally {
       setBusyVisibility(false);
     }
-  }, [activeCd, busyVisibility, isAdmin, loadModuleData, profile.user_id, selectedUserId, visibility]);
+  }, [
+    activeCd,
+    busySubmit,
+    busyVisibility,
+    confirmDialog,
+    editingEntryId,
+    isAdmin,
+    loadModuleData,
+    profile.user_id,
+    resetForm,
+    selectedUserId,
+    visibility
+  ]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -645,6 +689,55 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
           </div>
         </article>
       </section>
+      {confirmDialog && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="atividade-extra-confirm-title"
+              onClick={() => setConfirmDialog(null)}
+            >
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="atividade-extra-confirm-title">
+                  {confirmDialog.kind === "delete" ? "Excluir atividade" : "Alterar visibilidade"}
+                </h3>
+                <p>
+                  {confirmDialog.kind === "delete"
+                    ? `Deseja excluir a atividade "${confirmDialog.entry.descricao}"? Essa ação não pode ser desfeita.`
+                    : confirmDialog.nextMode === "owner_only"
+                      ? "Somente o dono e administradores verão atividades de outros colaboradores. Deseja continuar?"
+                      : "Todos os usuários do CD poderão visualizar as atividades registradas. Deseja continuar?"}
+                </p>
+                <div className="confirm-actions">
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    onClick={() => setConfirmDialog(null)}
+                    disabled={busySubmit || busyVisibility}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className={confirmDialog.kind === "delete" ? "btn btn-danger" : "btn btn-primary"}
+                    type="button"
+                    onClick={() => void onConfirmDialog()}
+                    disabled={busySubmit || busyVisibility}
+                  >
+                    {confirmDialog.kind === "delete"
+                      ? busySubmit
+                        ? "Excluindo..."
+                        : "Excluir"
+                      : busyVisibility
+                        ? "Salvando..."
+                        : "Confirmar"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }
