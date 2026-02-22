@@ -705,6 +705,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
+  const pageScrollAnchorRef = useRef<HTMLElement | null>(null);
+  const didNormalizeInitialScrollRef = useRef(false);
   const scannerInputStateRef = useRef<Record<ScannerTarget, ScannerInputState>>({
     barras: createScannerInputState(),
     final_barras: createScannerInputState()
@@ -737,6 +739,19 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   } = useOnDemandSoftKeyboard("numeric");
 
   useEffect(() => { lockRef.current = lock; }, [lock]);
+  useEffect(() => {
+    if (didNormalizeInitialScrollRef.current) return;
+    didNormalizeInitialScrollRef.current = true;
+    const rafId = window.requestAnimationFrame(() => {
+      const anchor = pageScrollAnchorRef.current;
+      if (anchor && document.contains(anchor)) {
+        anchor.scrollIntoView({ block: "start", inline: "nearest", behavior: "auto" });
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, []);
 
   const closeEditorPopup = useCallback(() => {
     disableBarcodeSoftKeyboard();
@@ -1345,7 +1360,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
     if (!popupOpen && popupWasOpenRef.current) {
       const target = popupReturnFocusRef.current;
-      if (target && document.contains(target)) target.focus();
+      if (target && document.contains(target)) {
+        try {
+          target.focus({ preventScroll: true });
+        } catch {
+          target.focus();
+        }
+      }
       popupReturnFocusRef.current = null;
     }
     popupWasOpenRef.current = popupOpen;
@@ -1385,8 +1406,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const id = window.setTimeout(() => {
       const target = reportDtIniInputRef.current;
       if (!target) return;
-      target.focus();
-      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      try {
+        target.focus({ preventScroll: true });
+      } catch {
+        target.focus();
+      }
     }, 80);
     return () => window.clearTimeout(id);
   }, [reportOpen]);
@@ -2420,7 +2444,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         </div>
       </header>
 
-      <section className="modules-shell termo-shell inventario-shell">
+      <section ref={pageScrollAnchorRef} className="modules-shell termo-shell inventario-shell">
         {showTopContextBlocks ? (
           <>
             <div className="termo-head">
@@ -2823,7 +2847,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             Quantidade
                             <input
                               ref={qtdInputRef}
-                              autoFocus
                               value={qtd}
                               onChange={(e) => {
                                 setQtd(e.target.value);
