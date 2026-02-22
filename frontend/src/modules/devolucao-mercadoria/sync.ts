@@ -28,6 +28,19 @@ function toErrorMessage(error: unknown): string {
   return "Erro inesperado.";
 }
 
+function isMissingRouteOverviewRpcError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("rpc_conf_devolucao_route_overview")
+    && (
+      normalized.includes("schema cache")
+      || normalized.includes("could not find the function")
+      || normalized.includes("function public.rpc_conf_devolucao_route_overview")
+      || normalized.includes("pgrst202")
+    )
+  );
+}
+
 function parseNullableString(value: unknown): string | null {
   if (value == null) return null;
   const parsed = String(value).trim();
@@ -276,7 +289,13 @@ export async function fetchManifestBarrasPage(
 export async function fetchRouteOverview(cd: number): Promise<DevolucaoMercadoriaRouteOverviewRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_devolucao_route_overview", { p_cd: cd });
-  if (error) throw new Error(toErrorMessage(error));
+  if (error) {
+    const message = toErrorMessage(error);
+    if (isMissingRouteOverviewRpcError(message)) {
+      return [];
+    }
+    throw new Error(message);
+  }
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapRouteOverview(row as Record<string, unknown>));
 }
