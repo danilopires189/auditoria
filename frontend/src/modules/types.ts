@@ -18,6 +18,7 @@ export type ModuleTone = "blue" | "red" | "teal" | "amber";
 export type DashboardModuleKey =
   | "pvps-alocacao"
   | "atividade-extra"
+  | "busca-produto"
   | "coleta-mercadoria"
   | "check-list"
   | "conferencia-termo"

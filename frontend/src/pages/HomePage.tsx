@@ -98,7 +98,8 @@ export default function HomePage({
                 || moduleDef.key === "conferencia-pedido-direto"
                 || moduleDef.key === "conferencia-entrada-notas"
                 || moduleDef.key === "devolucao-mercadoria"
-                || moduleDef.key === "zerados" ? (
+                || moduleDef.key === "zerados"
+                || moduleDef.key === "busca-produto" ? (
                   <span className="module-available-pill">Disponível</span>
                 ) : null}
               </div>
