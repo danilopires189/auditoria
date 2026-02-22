@@ -659,6 +659,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [adminPreviewRows, setAdminPreviewRows] = useState<InventarioAdminPreviewZoneRow[]>([]);
   const [adminPreviewScope, setAdminPreviewScope] = useState<InventarioAdminSeedScope | null>(null);
   const [adminSummary, setAdminSummary] = useState<InventarioAdminSeedSummary | null>(null);
+  const [adminSuccessMsg, setAdminSuccessMsg] = useState<string | null>(null);
   const [adminClearHardReset, setAdminClearHardReset] = useState(false);
   const [adminConfirm, setAdminConfirm] = useState<InventarioAdminConfirmState | null>(null);
   const [isDesktop, setIsDesktop] = useState<boolean>(() => {
@@ -737,6 +738,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     scannerTorchModeRef.current = "none";
     setEditorOpen(false);
   }, [disableBarcodeSoftKeyboard]);
+
+  const closeAllAdminPopups = useCallback(() => {
+    setAdminConfirm(null);
+    setAdminZonePickerOpen(false);
+    setAdminOpen(false);
+    setAdminEntryOpen(false);
+    setAdminSuccessMsg(null);
+  }, []);
 
   useEffect(() => {
     if (editorOpen) {
@@ -1018,6 +1027,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setAdminPreviewRows([]);
     setAdminPreviewScope(null);
     setAdminSummary(null);
+    setAdminSuccessMsg(null);
     setErr(null);
     setMsg(null);
     setAdminOpen(true);
@@ -1057,6 +1067,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setAdminPreviewScope(scope);
       setAdminPreviewRows(rows);
       setAdminSummary(null);
+      setAdminSuccessMsg(null);
       setMsg(rows.length > 0 ? "Pré-visualização atualizada." : "Pré-visualização sem itens.");
     } catch (error) {
       setErr(parseErr(error));
@@ -1068,6 +1079,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const executeAdminApplyZona = useCallback(async (mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
     setAdminBusy(true);
+    setAdminSuccessMsg(null);
     setErr(null);
     try {
       const summary = await applyInventarioAdminSeed({
@@ -1076,6 +1088,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         mode
       });
       setAdminSummary(summary);
+      setAdminSuccessMsg("Dados inseridos com sucesso no fluxo por zona.");
       setMsg(`Base por zona aplicada. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
       await syncNow(true);
       await loadAdminZones();
@@ -1112,6 +1125,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const executeAdminApplyCoddv = useCallback(async () => {
     if (!canManageBase || cd == null) return;
     setAdminBusy(true);
+    setAdminSuccessMsg(null);
     setErr(null);
     try {
       const summary = await applyInventarioAdminManualCoddv({
@@ -1120,6 +1134,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         incluir_pul: adminIncluirPul
       });
       setAdminSummary(summary);
+      setAdminSuccessMsg("Dados inseridos com sucesso no fluxo por Código e Dígito.");
       setMsg(`Código e Dígito (CODDV) manual aplicado. Itens no escopo: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
       await syncNow(true);
       await loadAdminZones();
@@ -1155,6 +1170,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const executeAdminClearAll = useCallback(async () => {
     if (!canManageBase || cd == null) return;
     setAdminBusy(true);
+    setAdminSuccessMsg(null);
     setErr(null);
     try {
       const summary = await clearInventarioAdminBase({
@@ -1166,6 +1182,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setAdminSummary(summary);
       setAdminPreviewRows([]);
       setAdminPreviewScope(null);
+      setAdminSuccessMsg("Base limpa com sucesso.");
       if (summary.total_geral <= 0) {
         await clearManifestSnapshotByCd(profile.user_id, cd);
         const emptyState = defaultState();
@@ -1291,6 +1308,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   useEffect(() => {
     if (adminOpen) return;
     setAdminManageMode(null);
+    setAdminSuccessMsg(null);
     setAdminZoneSearch("");
     setAdminZonePickerOpen(false);
     setAdminConfirm(null);
@@ -1359,16 +1377,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (scannerOpen) closeCameraScanner();
-      else if (adminConfirm != null) setAdminConfirm(null);
-      else if (adminZonePickerOpen) setAdminZonePickerOpen(false);
-      else if (adminEntryOpen) setAdminEntryOpen(false);
-      else if (adminOpen) setAdminOpen(false);
+      else if (adminConfirm != null || adminZonePickerOpen || adminEntryOpen || adminOpen) closeAllAdminPopups();
       else if (reportOpen) setReportOpen(false);
       else closeEditorPopup();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [adminConfirm, adminEntryOpen, adminOpen, adminZonePickerOpen, closeCameraScanner, closeEditorPopup, editorOpen, reportOpen, scannerOpen]);
+  }, [adminConfirm, adminEntryOpen, adminOpen, adminZonePickerOpen, closeAllAdminPopups, closeCameraScanner, closeEditorPopup, editorOpen, reportOpen, scannerOpen]);
 
   useEffect(() => {
     const needsLock = (tab === "s1" || tab === "s2") && isOnline && cd != null && zone && canEdit;
@@ -2383,6 +2398,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         setAdminEntryOpen(true);
                         setAdminOpen(false);
                         setAdminManageMode(null);
+                        setAdminSuccessMsg(null);
                         setAdminZoneSearch("");
                         setAdminZoneDraft([]);
                         setAdminConfirm(null);
@@ -2927,14 +2943,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           : null}
 
         {canManageBase && adminEntryOpen && typeof document !== "undefined" ? createPortal(
-          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setAdminEntryOpen(false)}>
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
             <div className="inventario-popup-card inventario-admin-entry-popup" onClick={(event) => event.stopPropagation()}>
               <div className="inventario-popup-head">
                 <div>
                   <h3>Escolha o tipo de gestão</h3>
                   <p>Selecione como deseja montar a base para auditoria.</p>
                 </div>
-                <button type="button" className="inventario-popup-close" onClick={() => setAdminEntryOpen(false)} aria-label="Fechar popup">Fechar</button>
+                <button type="button" className="inventario-popup-close" onClick={closeAllAdminPopups} aria-label="Fechar popup">Fechar</button>
               </div>
               <div className="inventario-popup-body">
                 <div className="inventario-admin-entry-grid">
@@ -2953,7 +2969,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           document.body
         ) : null}
         {canManageBase && adminOpen && adminManageMode != null && typeof document !== "undefined" ? createPortal(
-          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setAdminOpen(false)}>
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
             <div className="inventario-popup-card inventario-admin-popup" onClick={(event) => event.stopPropagation()}>
               <div className="inventario-popup-head">
                 <div>
@@ -2963,11 +2979,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     : "Use Código e Dígito (CODDV) manual para montar a base por produto."}
                   </p>
                 </div>
-                <button type="button" className="inventario-popup-close" onClick={() => setAdminOpen(false)} aria-label="Fechar popup">Fechar</button>
+                <button type="button" className="inventario-popup-close" onClick={closeAllAdminPopups} aria-label="Fechar popup">Fechar</button>
               </div>
               <div className="inventario-popup-body">
                 {cd == null ? (
                   <p className="inventario-popup-note warn">Selecione um CD para gerenciar a base.</p>
+                ) : null}
+                {adminSuccessMsg ? (
+                  <p className="inventario-popup-note ok">{adminSuccessMsg}</p>
                 ) : null}
                 {isAdminZonaFlow ? (
                   <>
@@ -3167,14 +3186,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           document.body
         ) : null}
         {canManageBase && adminOpen && isAdminZonaFlow && adminZonePickerOpen && typeof document !== "undefined" ? createPortal(
-          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setAdminZonePickerOpen(false)}>
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
             <div className="inventario-popup-card inventario-admin-zone-popup" onClick={(event) => event.stopPropagation()}>
               <div className="inventario-popup-head">
                 <div>
                   <h3>Selecionar zonas de Separação (SEP)</h3>
                   <p>Marque as zonas para a inserção por zona e salve para voltar.</p>
                 </div>
-                <button type="button" className="inventario-popup-close" onClick={() => setAdminZonePickerOpen(false)} aria-label="Fechar popup">Fechar</button>
+                <button type="button" className="inventario-popup-close" onClick={closeAllAdminPopups} aria-label="Fechar popup">Fechar</button>
               </div>
               <div className="inventario-popup-body">
                 <div className="inventario-admin-zone-actions">
@@ -3265,14 +3284,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           document.body
         ) : null}
         {adminConfirm && typeof document !== "undefined" ? createPortal(
-          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setAdminConfirm(null)}>
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
             <div className="inventario-popup-card inventario-admin-confirm-popup" onClick={(event) => event.stopPropagation()}>
               <div className="inventario-popup-head">
                 <div>
                   <h3>{adminConfirm.title}</h3>
                   <p>Revise os dados antes de continuar.</p>
                 </div>
-                <button type="button" className="inventario-popup-close" onClick={() => setAdminConfirm(null)} aria-label="Fechar popup">Fechar</button>
+                <button type="button" className="inventario-popup-close" onClick={closeAllAdminPopups} aria-label="Fechar popup">Fechar</button>
               </div>
               <div className="inventario-popup-body">
                 <div className="inventario-admin-confirm-lines">
