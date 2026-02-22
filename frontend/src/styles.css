@@ -4453,11 +4453,6 @@ small {
 .iz-picker-search-icon svg {
   width: 16px;
   height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .iz-picker-search-input {
@@ -4473,40 +4468,6 @@ small {
 
 .iz-picker-search-input::placeholder {
   color: #a8b8d0;
-}
-
-.iz-picker-search-clear {
-  all: unset;
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #6c84a8;
-  background: #eaf0fb;
-  cursor: pointer;
-  transition: background 160ms ease, color 160ms ease, transform 120ms ease;
-}
-
-.iz-picker-search-clear:hover {
-  background: #dfe8f8;
-  color: #163b74;
-}
-
-.iz-picker-search-clear:active {
-  transform: scale(0.94);
-}
-
-.iz-picker-search-clear svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 /* Empty state */
@@ -4530,17 +4491,9 @@ small {
   box-sizing: border-box;
 }
 
-.iz-picker-grid > * {
-  min-width: 0;
-}
-
 /* Individual zone card */
 .iz-zone-card {
   all: unset;
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -5638,20 +5591,6 @@ small {
   .inventario-admin-zone-list {
     max-height: 36vh;
     min-height: 180px;
-  }
-
-  .iz-picker-sheet {
-    max-width: 100vw;
-  }
-
-  .iz-picker-search-wrap {
-    padding: 10px 12px;
-  }
-
-  .iz-picker-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    padding: 12px 12px calc(16px + env(safe-area-inset-bottom, 0px));
   }
 }
 
