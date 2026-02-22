@@ -557,12 +557,6 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
-            {visibility ? (
-              <div className="atividade-extra-visibility-line">
-                <strong>Visibilidade no CD:</strong> {visibilityModeLabel(visibility.visibility_mode)}
-              </div>
-            ) : null}
-
             <div className="atividade-extra-grid">
               <section className="atividade-extra-collaborators">
                 <h3>Resumo por colaborador</h3>
