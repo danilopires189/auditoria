@@ -909,7 +909,6 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [routeRows, setRouteRows] = useState<EntradaNotasRouteOverviewRow[]>([]);
-  const [baseCoddvTotal, setBaseCoddvTotal] = useState(0);
 
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
   const [cdAtivo, setCdAtivo] = useState<number | null>(null);
@@ -1274,20 +1273,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return mapped.filter((group): group is EntradaNotasRouteGroupView => group !== null);
   }, [routeGroups, routeSearchInput]);
 
-  const coddvCompletionStats = useMemo(() => {
-    if (baseCoddvTotal <= 0) {
-      return { completed: 0, total: 0, percent: 0 };
-    }
+  const valorRecebimentoStats = useMemo(() => {
+    let valorTotal = 0;
+    let valorConferido = 0;
 
-    let completed = 0;
     for (const row of routeRows) {
-      completed += Math.max(Number(row.itens_conferidos) || 0, 0);
+      const total = Math.max(Number(row.valor_total) || 0, 0);
+      const conferido = Math.max(Number(row.valor_conferido) || 0, 0);
+      valorTotal += total;
+      valorConferido += Math.min(conferido, total);
     }
 
-    completed = Math.max(0, Math.min(completed, baseCoddvTotal));
-    const percent = baseCoddvTotal > 0 ? (completed / baseCoddvTotal) * 100 : 0;
-    return { completed, total: baseCoddvTotal, percent };
-  }, [baseCoddvTotal, routeRows]);
+    const percent = valorTotal > 0 ? (valorConferido / valorTotal) * 100 : 0;
+    return { percent };
+  }, [routeRows]);
 
   const isRouteRowSelectableForBatch = useCallback((row: EntradaNotasRouteOverviewRow) => {
     if (!buildSeqNfLabelKey(row.seq_entrada, row.nf)) return false;
@@ -4202,36 +4201,6 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, [currentCd, persistPreferences]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    if (currentCd == null) {
-      setBaseCoddvTotal(0);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const loadProgressBase = async () => {
-      try {
-        const total = isOnline
-          ? Math.max((await fetchManifestMeta(currentCd)).row_count, 0)
-          : (await listManifestItemsByCd(profile.user_id, currentCd)).length;
-        if (cancelled) return;
-        setBaseCoddvTotal(total);
-      } catch {
-        if (cancelled) return;
-        setBaseCoddvTotal(0);
-      }
-    };
-
-    void loadProgressBase();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentCd, isOnline, profile.user_id]);
-
-  useEffect(() => {
     setRouteContributorsMap({});
     routeContributorsInFlightRef.current.clear();
     routeBatchDispatchingRef.current = false;
@@ -5121,17 +5090,16 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           <div className="pvps-progress-card" role="status" aria-live="polite">
             <div className="pvps-progress-head">
               <strong>Conclusão Entrada de Notas</strong>
-              <span>{formatPercent(coddvCompletionStats.percent)}</span>
+              <span>{formatPercent(valorRecebimentoStats.percent)}</span>
             </div>
             <div className="pvps-progress-track" aria-hidden="true">
               <span
                 className="pvps-progress-fill"
-                style={{ width: `${Math.max(0, Math.min(coddvCompletionStats.percent, 100))}%` }}
+                style={{ width: `${Math.max(0, Math.min(valorRecebimentoStats.percent, 100))}%` }}
               />
             </div>
             <small>
-              {coddvCompletionStats.completed} {coddvCompletionStats.completed === 1 ? "SKU conferido" : "SKUs conferidos"}
-              {" "}de {coddvCompletionStats.total} {coddvCompletionStats.total === 1 ? "SKU" : "SKUs"} na base {isOnline ? "online atual" : "local atual"}.
+              Percentual de valor conferido em relação ao recebimento da base {isOnline ? "online atual" : "local atual"}.
             </small>
           </div>
         ) : null}
