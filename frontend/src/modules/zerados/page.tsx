@@ -613,6 +613,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [adminEstoqueFim, setAdminEstoqueFim] = useState("0");
   const [adminIncluirPul, setAdminIncluirPul] = useState(false);
   const [adminManualCoddvCsv, setAdminManualCoddvCsv] = useState("");
+  const [adminZoneSearch, setAdminZoneSearch] = useState("");
   const [adminPreviewRows, setAdminPreviewRows] = useState<InventarioAdminPreviewZoneRow[]>([]);
   const [adminSummary, setAdminSummary] = useState<InventarioAdminSeedSummary | null>(null);
   const [adminClearHardReset, setAdminClearHardReset] = useState(false);
@@ -918,6 +919,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     () => adminPreviewRows.length > 0 ? adminPreviewRows[0].total_geral : 0,
     [adminPreviewRows]
   );
+  const filteredAdminZones = useMemo(() => {
+    const query = adminZoneSearch.trim().toUpperCase();
+    if (!query) return adminZones;
+    return adminZones.filter((row) => row.zona.includes(query));
+  }, [adminZoneSearch, adminZones]);
 
   const loadAdminZones = useCallback(async () => {
     if (!canManageBase || cd == null) return;
@@ -2739,51 +2745,59 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 {cd == null ? (
                   <p className="inventario-popup-note warn">Selecione um CD para gerenciar a base.</p>
                 ) : null}
-                <div className="inventario-admin-grid">
-                  <label>
-                    Estoque inicial
+                <div className="inventario-admin-section">
+                  <h4>Selecao por zona e faixa de estoque</h4>
+                  <div className="inventario-admin-grid">
+                    <label>
+                      Estoque inicial
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={adminEstoqueIni}
+                        onChange={(event) => setAdminEstoqueIni(event.target.value)}
+                        disabled={adminBusy || cd == null}
+                      />
+                    </label>
+                    <label>
+                      Estoque final
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={adminEstoqueFim}
+                        onChange={(event) => setAdminEstoqueFim(event.target.value)}
+                        disabled={adminBusy || cd == null}
+                      />
+                    </label>
+                  </div>
+                  <label className="inventario-admin-check">
                     <input
-                      type="number"
-                      min={0}
-                      inputMode="numeric"
-                      value={adminEstoqueIni}
-                      onChange={(event) => setAdminEstoqueIni(event.target.value)}
+                      type="checkbox"
+                      checked={adminIncluirPul}
+                      onChange={(event) => setAdminIncluirPul(event.target.checked)}
                       disabled={adminBusy || cd == null}
                     />
+                    Incluir enderecos PUL dos CODDV selecionados
                   </label>
+                </div>
+
+                <div className="inventario-admin-section inventario-admin-manual">
+                  <h4>Inclusao manual de CODDV</h4>
+                  <p className="inventario-editor-text">
+                    CODDV manual entra para auditoria mesmo fora da zona/faixa selecionada.
+                  </p>
                   <label>
-                    Estoque final
-                    <input
-                      type="number"
-                      min={0}
-                      inputMode="numeric"
-                      value={adminEstoqueFim}
-                      onChange={(event) => setAdminEstoqueFim(event.target.value)}
+                    CODDV manual (separado por virgula)
+                    <textarea
+                      value={adminManualCoddvCsv}
+                      onChange={(event) => setAdminManualCoddvCsv(event.target.value)}
+                      placeholder="Ex.: 12345, 67890, 10001"
+                      rows={3}
                       disabled={adminBusy || cd == null}
                     />
                   </label>
                 </div>
-
-                <label className="inventario-admin-check">
-                  <input
-                    type="checkbox"
-                    checked={adminIncluirPul}
-                    onChange={(event) => setAdminIncluirPul(event.target.checked)}
-                    disabled={adminBusy || cd == null}
-                  />
-                  Incluir endereços PUL dos CODDV selecionados
-                </label>
-
-                <label>
-                  CODDV manual (separado por vírgula)
-                  <input
-                    type="text"
-                    value={adminManualCoddvCsv}
-                    onChange={(event) => setAdminManualCoddvCsv(event.target.value)}
-                    placeholder="Ex.: 12345, 67890, 10001"
-                    disabled={adminBusy || cd == null}
-                  />
-                </label>
 
                 <div className="inventario-admin-zone-head">
                   <strong>{`Zonas SEP (${adminZones.length})`}</strong>
@@ -2807,10 +2821,21 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   </div>
                 </div>
 
+                <input
+                  type="text"
+                  className="inventario-admin-zone-search"
+                  value={adminZoneSearch}
+                  onChange={(event) => setAdminZoneSearch(event.target.value)}
+                  placeholder="Buscar zona (ex.: A101)"
+                  disabled={adminBusy || cd == null || adminZones.length === 0}
+                />
+
                 <div className="inventario-admin-zone-list">
                   {adminZones.length === 0 ? (
                     <p className="inventario-popup-note warn">Nenhuma zona SEP encontrada para este CD.</p>
-                  ) : adminZones.map((row) => {
+                  ) : filteredAdminZones.length === 0 ? (
+                    <p className="inventario-popup-note warn">Nenhuma zona encontrada para o filtro informado.</p>
+                  ) : filteredAdminZones.map((row) => {
                     const checked = adminSelectedZones.includes(row.zona);
                     return (
                       <label key={row.zona} className="inventario-admin-zone-item">
@@ -2829,14 +2854,16 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           }}
                           disabled={adminBusy || cd == null}
                         />
-                        <span>{row.zona}</span>
-                        <small>{`${row.itens} itens SEP`}</small>
+                        <span className="inventario-admin-zone-main">
+                          <span>{row.zona}</span>
+                          <small>{`${row.itens} itens SEP`}</small>
+                        </span>
                       </label>
                     );
                   })}
                 </div>
 
-                <div className="inventario-editor-actions">
+                <div className="inventario-admin-actions">
                   <button
                     className="btn btn-muted"
                     type="button"
@@ -2886,7 +2913,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     />
                     Hard reset (apaga também itens iniciados)
                   </label>
-                  <div className="inventario-editor-actions">
+                  <div className="inventario-admin-actions">
                     <button
                       className="btn btn-muted termo-danger-btn"
                       type="button"
