@@ -79,6 +79,18 @@ type MobileFlowStep = "stage" | "zone" | "address";
 type ScannerTarget = "barras" | "final_barras";
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 type InventarioAdminSeedScope = "zona" | "coddv";
+type InventarioAdminConfirmAction =
+  | { kind: "apply_zona"; mode: InventarioAdminApplyMode }
+  | { kind: "apply_coddv" }
+  | { kind: "clear_all" };
+
+interface InventarioAdminConfirmState {
+  title: string;
+  lines: string[];
+  confirm_label: string;
+  danger?: boolean;
+  action: InventarioAdminConfirmAction;
+}
 
 type Row = InventarioManifestItemRow & {
   key: string;
@@ -619,10 +631,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [adminManualCoddvCsv, setAdminManualCoddvCsv] = useState("");
   const [adminZoneSearch, setAdminZoneSearch] = useState("");
   const [adminZonesLoading, setAdminZonesLoading] = useState(false);
+  const [adminZonePickerOpen, setAdminZonePickerOpen] = useState(false);
+  const [adminZoneDraft, setAdminZoneDraft] = useState<string[]>([]);
   const [adminPreviewRows, setAdminPreviewRows] = useState<InventarioAdminPreviewZoneRow[]>([]);
   const [adminPreviewScope, setAdminPreviewScope] = useState<InventarioAdminSeedScope | null>(null);
   const [adminSummary, setAdminSummary] = useState<InventarioAdminSeedSummary | null>(null);
   const [adminClearHardReset, setAdminClearHardReset] = useState(false);
+  const [adminConfirm, setAdminConfirm] = useState<InventarioAdminConfirmState | null>(null);
   const [isDesktop, setIsDesktop] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.innerWidth >= 1024;
@@ -930,6 +945,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!query) return adminZones;
     return adminZones.filter((row) => row.zona.includes(query));
   }, [adminZoneSearch, adminZones]);
+  const openAdminZonePicker = useCallback(() => {
+    setAdminZoneDraft([...adminSelectedZones]);
+    setAdminZoneSearch("");
+    setAdminZonePickerOpen(true);
+  }, [adminSelectedZones]);
+  const saveAdminZonePicker = useCallback(() => {
+    setAdminSelectedZones([...adminZoneDraft].sort((a, b) => a.localeCompare(b)));
+    setAdminZonePickerOpen(false);
+  }, [adminZoneDraft]);
 
   const loadAdminZones = useCallback(async () => {
     if (!canManageBase || cd == null) return;
@@ -941,9 +965,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         if (current.length > 0) {
           const available = new Set(rows.map((row) => row.zona));
           const kept = current.filter((zona) => available.has(zona));
-          if (kept.length > 0) return kept;
+          return kept;
         }
-        return rows.map((row) => row.zona);
+        return [];
       });
     } catch (error) {
       setErr(parseErr(error));
@@ -967,6 +991,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const runAdminPreview = useCallback(async (scope: InventarioAdminSeedScope) => {
     if (!canManageBase || cd == null) return;
+    if (scope === "zona" && adminSelectedZones.length === 0) {
+      setErr("Selecione ao menos uma zona para gerar a prévia por zona.");
+      return;
+    }
+    if (scope === "coddv" && !adminManualCoddvCsv.trim()) {
+      setErr("Informe ao menos um CODDV para gerar a prévia de CODDV.");
+      return;
+    }
     setAdminBusy(true);
     setErr(null);
     try {
@@ -983,23 +1015,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     } finally {
       setAdminBusy(false);
     }
-  }, [buildAdminSeedPayload, canManageBase, cd]);
+  }, [adminManualCoddvCsv, adminSelectedZones.length, buildAdminSeedPayload, canManageBase, cd]);
 
-  const runAdminApplyZona = useCallback(async (mode: InventarioAdminApplyMode) => {
+  const executeAdminApplyZona = useCallback(async (mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
-    if (adminPreviewRows.length === 0 || adminPreviewScope !== "zona") {
-      setErr("Faça a pré-visualização da inserção por zona antes de confirmar.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Confirma aplicar a base por ZONA?` +
-      `\nModo: ${mode === "replace_cd" ? "Substituir base do CD" : "Recarregar zonas selecionadas"}` +
-      `\nZonas na prévia: ${adminPreviewRows.length}` +
-      `\nTotal geral: ${adminPreviewTotal}`
-    );
-    if (!confirmed) return;
-
     setAdminBusy(true);
     setErr(null);
     try {
@@ -1017,31 +1036,29 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     } finally {
       setAdminBusy(false);
     }
-  }, [
-    adminPreviewRows.length,
-    adminPreviewScope,
-    adminPreviewTotal,
-    buildAdminSeedPayload,
-    canManageBase,
-    cd,
-    loadAdminZones,
-    syncNow
-  ]);
+  }, [buildAdminSeedPayload, canManageBase, cd, loadAdminZones, syncNow]);
 
-  const runAdminApplyCoddv = useCallback(async () => {
+  const runAdminApplyZona = useCallback((mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
-    if (adminPreviewRows.length === 0 || adminPreviewScope !== "coddv") {
-      setErr("Faça a pré-visualização da inserção por CODDV antes de confirmar.");
+    if (adminPreviewRows.length === 0 || adminPreviewScope !== "zona") {
+      setErr("Faça a pré-visualização da inserção por zona antes de confirmar.");
       return;
     }
 
-    const confirmed = window.confirm(
-      `Confirma inserir CODDV manual?` +
-      `\nZonas na prévia: ${adminPreviewRows.length}` +
-      `\nTotal geral: ${adminPreviewTotal}`
-    );
-    if (!confirmed) return;
+    setAdminConfirm({
+      title: "Confirmar inserção por zona",
+      lines: [
+        `Modo: ${mode === "replace_cd" ? "Substituir base do CD" : "Recarregar zonas selecionadas"}`,
+        `Zonas na prévia: ${adminPreviewRows.length}`,
+        `Total geral: ${adminPreviewTotal}`
+      ],
+      confirm_label: "Confirmar inserção",
+      action: { kind: "apply_zona", mode }
+    });
+  }, [adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, canManageBase, cd]);
 
+  const executeAdminApplyCoddv = useCallback(async () => {
+    if (!canManageBase || cd == null) return;
     setAdminBusy(true);
     setErr(null);
     try {
@@ -1059,24 +1076,28 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     } finally {
       setAdminBusy(false);
     }
-  }, [
-    adminIncluirPul,
-    adminManualCoddvCsv,
-    adminPreviewRows.length,
-    adminPreviewScope,
-    adminPreviewTotal,
-    canManageBase,
-    cd,
-    loadAdminZones,
-    syncNow
-  ]);
+  }, [adminIncluirPul, adminManualCoddvCsv, canManageBase, cd, loadAdminZones, syncNow]);
 
-  const runAdminClearAll = useCallback(async () => {
+  const runAdminApplyCoddv = useCallback(() => {
     if (!canManageBase || cd == null) return;
-    const modeLabel = adminClearHardReset ? "RESET TOTAL (inclui iniciados)" : "limpeza segura (somente pendentes)";
-    const confirmed = window.confirm(`Confirma ${modeLabel} da base do CD?`);
-    if (!confirmed) return;
+    if (adminPreviewRows.length === 0 || adminPreviewScope !== "coddv") {
+      setErr("Faça a pré-visualização da inserção por CODDV antes de confirmar.");
+      return;
+    }
 
+    setAdminConfirm({
+      title: "Confirmar inserção por CODDV",
+      lines: [
+        `Zonas na prévia: ${adminPreviewRows.length}`,
+        `Total geral: ${adminPreviewTotal}`
+      ],
+      confirm_label: "Confirmar inserção",
+      action: { kind: "apply_coddv" }
+    });
+  }, [adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, canManageBase, cd]);
+
+  const executeAdminClearAll = useCallback(async () => {
+    if (!canManageBase || cd == null) return;
     setAdminBusy(true);
     setErr(null);
     try {
@@ -1098,6 +1119,36 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setAdminBusy(false);
     }
   }, [adminClearHardReset, canManageBase, cd, loadAdminZones, syncNow]);
+
+  const runAdminClearAll = useCallback(() => {
+    if (!canManageBase || cd == null) return;
+    const modeLabel = adminClearHardReset ? "Reset total (inclui iniciados)" : "Limpeza segura (somente pendentes)";
+    setAdminConfirm({
+      title: "Confirmar limpeza da base",
+      lines: [
+        `Tipo: ${modeLabel}`,
+        "Essa ação altera imediatamente a base de auditoria do CD."
+      ],
+      confirm_label: "Confirmar limpeza",
+      danger: true,
+      action: { kind: "clear_all" }
+    });
+  }, [adminClearHardReset, canManageBase, cd]);
+
+  const confirmAdminAction = useCallback(async () => {
+    if (!adminConfirm) return;
+    const action = adminConfirm.action;
+    setAdminConfirm(null);
+    if (action.kind === "apply_zona") {
+      await executeAdminApplyZona(action.mode);
+      return;
+    }
+    if (action.kind === "apply_coddv") {
+      await executeAdminApplyCoddv();
+      return;
+    }
+    await executeAdminClearAll();
+  }, [adminConfirm, executeAdminApplyCoddv, executeAdminApplyZona, executeAdminClearAll]);
 
   const send = useCallback(async (eventType: InventarioEventType, payload: Record<string, unknown>) => {
     if (cd == null) return;
@@ -1174,9 +1225,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   useEffect(() => {
     if (adminOpen) return;
     setAdminZoneSearch("");
+    setAdminZonePickerOpen(false);
+    setAdminConfirm(null);
+    setAdminZoneDraft([]);
   }, [adminOpen]);
   useEffect(() => {
-    const popupOpen = editorOpen || reportOpen || scannerOpen || adminOpen;
+    if (!adminZonePickerOpen) return;
+    const available = new Set(adminZones.map((row) => row.zona));
+    setAdminZoneDraft((current) => current.filter((zonaItem) => available.has(zonaItem)));
+  }, [adminZonePickerOpen, adminZones]);
+  useEffect(() => {
+    const popupOpen = editorOpen || reportOpen || scannerOpen || adminOpen || adminZonePickerOpen || adminConfirm != null;
     if (popupOpen && !popupWasOpenRef.current) {
       popupReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     }
@@ -1186,15 +1245,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       popupReturnFocusRef.current = null;
     }
     popupWasOpenRef.current = popupOpen;
-  }, [adminOpen, editorOpen, reportOpen, scannerOpen]);
+  }, [adminConfirm, adminOpen, adminZonePickerOpen, editorOpen, reportOpen, scannerOpen]);
   useEffect(() => {
-    if (!(editorOpen || reportOpen || scannerOpen || adminOpen)) return;
+    if (!(editorOpen || reportOpen || scannerOpen || adminOpen || adminZonePickerOpen || adminConfirm != null)) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [adminOpen, editorOpen, reportOpen, scannerOpen]);
+  }, [adminConfirm, adminOpen, adminZonePickerOpen, editorOpen, reportOpen, scannerOpen]);
   useEffect(() => {
     if (!editorOpen) return;
     const id = window.setTimeout(() => {
@@ -1228,17 +1287,19 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     return () => window.clearTimeout(id);
   }, [reportOpen]);
   useEffect(() => {
-    if (!(editorOpen || reportOpen || scannerOpen || adminOpen)) return;
+    if (!(editorOpen || reportOpen || scannerOpen || adminOpen || adminZonePickerOpen || adminConfirm != null)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (scannerOpen) closeCameraScanner();
+      else if (adminConfirm != null) setAdminConfirm(null);
+      else if (adminZonePickerOpen) setAdminZonePickerOpen(false);
       else if (adminOpen) setAdminOpen(false);
       else if (reportOpen) setReportOpen(false);
       else closeEditorPopup();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [adminOpen, closeCameraScanner, closeEditorPopup, editorOpen, reportOpen, scannerOpen]);
+  }, [adminConfirm, adminOpen, adminZonePickerOpen, closeCameraScanner, closeEditorPopup, editorOpen, reportOpen, scannerOpen]);
 
   useEffect(() => {
     const needsLock = (tab === "s1" || tab === "s2") && isOnline && cd != null && zone && canEdit;
@@ -2249,7 +2310,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       className="btn btn-muted termo-route-btn inventario-report-inline-btn"
                       onClick={() => {
                         setAdminOpen(true);
+                        setAdminSelectedZones([]);
                         setAdminZoneSearch("");
+                        setAdminZonePickerOpen(false);
+                        setAdminConfirm(null);
+                        setAdminPreviewRows([]);
+                        setAdminPreviewScope(null);
                         void loadAdminZones();
                       }}
                       title="Gerir Base"
@@ -2876,7 +2942,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 </div>
 
                 <div className="inventario-admin-zone-head">
-                  <strong>{`Zonas SEP (${adminZones.length})`}</strong>
+                  <strong>{`Inserção por zona (SEP disponíveis: ${adminZones.length})`}</strong>
                   <div className="inventario-admin-zone-actions">
                     <button
                       type="button"
@@ -2889,10 +2955,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     <button
                       type="button"
                       className="btn btn-muted"
-                      onClick={() => setAdminSelectedZones(adminZones.map((row) => row.zona))}
-                      disabled={adminBusy || cd == null || adminZones.length === 0}
+                      onClick={openAdminZonePicker}
+                      disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
                     >
-                      Selecionar todas
+                      Escolher zonas
                     </button>
                     <button
                       type="button"
@@ -2904,53 +2970,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     </button>
                   </div>
                 </div>
-
-                <input
-                  type="text"
-                  className="inventario-admin-zone-search"
-                  value={adminZoneSearch}
-                  onChange={(event) => setAdminZoneSearch(event.target.value)}
-                  placeholder="Buscar zona (ex.: A101)"
-                  disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
-                />
                 <p className="inventario-admin-zone-meta">
-                  {`${adminSelectedZones.length} zona(s) selecionada(s)`}
+                  {adminSelectedZones.length === 0
+                    ? "Nenhuma zona selecionada. Abra \"Escolher zonas\" para marcar."
+                    : `${adminSelectedZones.length} zona(s) selecionada(s)`}
                 </p>
-
-                <div className="inventario-admin-zone-list">
-                  {adminZonesLoading ? (
-                    <p className="inventario-popup-note">Carregando zonas...</p>
-                  ) : adminZones.length === 0 ? (
-                    <p className="inventario-popup-note warn">Nenhuma zona SEP encontrada para este CD.</p>
-                  ) : filteredAdminZones.length === 0 ? (
-                    <p className="inventario-popup-note warn">Nenhuma zona encontrada para o filtro informado.</p>
-                  ) : filteredAdminZones.map((row) => {
-                    const checked = adminSelectedZones.includes(row.zona);
-                    return (
-                      <label key={row.zona} className="inventario-admin-zone-item">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) => {
-                            const isChecked = event.target.checked;
-                            setAdminSelectedZones((current) => {
-                              if (isChecked) {
-                                if (current.includes(row.zona)) return current;
-                                return [...current, row.zona].sort((a, b) => a.localeCompare(b));
-                              }
-                              return current.filter((zonaItem) => zonaItem !== row.zona);
-                            });
-                          }}
-                          disabled={adminBusy || cd == null}
-                        />
-                        <span className="inventario-admin-zone-main">
-                          <span>{row.zona}</span>
-                          <small>{`${row.itens} itens SEP`}</small>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
 
                 <div className="inventario-admin-actions">
                   <button
@@ -3019,6 +3043,138 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     {`Itens afetados: ${adminSummary.itens_afetados} | Zonas atuais: ${adminSummary.zonas_afetadas} | Total atual: ${adminSummary.total_geral}`}
                   </p>
                 ) : null}
+              </div>
+            </div>
+          </div>,
+          document.body
+        ) : null}
+        {canManageBase && adminOpen && adminZonePickerOpen && typeof document !== "undefined" ? createPortal(
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setAdminZonePickerOpen(false)}>
+            <div className="inventario-popup-card inventario-admin-zone-popup" onClick={(event) => event.stopPropagation()}>
+              <div className="inventario-popup-head">
+                <div>
+                  <h3>Selecionar zonas SEP</h3>
+                  <p>Marque as zonas para a inserção por zona e salve para voltar.</p>
+                </div>
+                <button type="button" className="inventario-popup-close" onClick={() => setAdminZonePickerOpen(false)} aria-label="Fechar popup">Fechar</button>
+              </div>
+              <div className="inventario-popup-body">
+                <div className="inventario-admin-zone-actions">
+                  <button
+                    type="button"
+                    className="btn btn-muted"
+                    onClick={() => void loadAdminZones()}
+                    disabled={adminBusy || adminZonesLoading || cd == null}
+                  >
+                    {adminZonesLoading ? "Atualizando..." : "Atualizar zonas"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-muted"
+                    onClick={() => setAdminZoneDraft(adminZones.map((row) => row.zona))}
+                    disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
+                  >
+                    Selecionar todas
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-muted"
+                    onClick={() => setAdminZoneDraft([])}
+                    disabled={adminBusy || cd == null || adminZones.length === 0}
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  className="inventario-admin-zone-search"
+                  value={adminZoneSearch}
+                  onChange={(event) => setAdminZoneSearch(event.target.value)}
+                  placeholder="Buscar zona (ex.: A101)"
+                  disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
+                />
+                <p className="inventario-admin-zone-meta">
+                  {`${adminZoneDraft.length} zona(s) marcada(s)`}
+                </p>
+
+                <div className="inventario-admin-zone-list">
+                  {adminZonesLoading ? (
+                    <p className="inventario-popup-note">Carregando zonas...</p>
+                  ) : adminZones.length === 0 ? (
+                    <p className="inventario-popup-note warn">Nenhuma zona SEP encontrada para este CD.</p>
+                  ) : filteredAdminZones.length === 0 ? (
+                    <p className="inventario-popup-note warn">Nenhuma zona encontrada para o filtro informado.</p>
+                  ) : filteredAdminZones.map((row) => {
+                    const checked = adminZoneDraft.includes(row.zona);
+                    return (
+                      <label key={row.zona} className="inventario-admin-zone-item">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => {
+                            const isChecked = event.target.checked;
+                            setAdminZoneDraft((current) => {
+                              if (isChecked) {
+                                if (current.includes(row.zona)) return current;
+                                return [...current, row.zona].sort((a, b) => a.localeCompare(b));
+                              }
+                              return current.filter((zonaItem) => zonaItem !== row.zona);
+                            });
+                          }}
+                          disabled={adminBusy || cd == null}
+                        />
+                        <span className="inventario-admin-zone-main">
+                          <span>{row.zona}</span>
+                          <small>{`${row.itens} itens SEP`}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="inventario-admin-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setAdminZonePickerOpen(false)}>
+                    Cancelar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={saveAdminZonePicker}>
+                    Salvar seleção
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        ) : null}
+        {adminConfirm && typeof document !== "undefined" ? createPortal(
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setAdminConfirm(null)}>
+            <div className="inventario-popup-card inventario-admin-confirm-popup" onClick={(event) => event.stopPropagation()}>
+              <div className="inventario-popup-head">
+                <div>
+                  <h3>{adminConfirm.title}</h3>
+                  <p>Revise os dados antes de continuar.</p>
+                </div>
+                <button type="button" className="inventario-popup-close" onClick={() => setAdminConfirm(null)} aria-label="Fechar popup">Fechar</button>
+              </div>
+              <div className="inventario-popup-body">
+                <div className="inventario-admin-confirm-lines">
+                  {adminConfirm.lines.map((line, index) => (
+                    <p key={`${index}-${line}`}>{line}</p>
+                  ))}
+                </div>
+                <div className="inventario-admin-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setAdminConfirm(null)} disabled={adminBusy}>
+                    Cancelar
+                  </button>
+                  <button
+                    className={`btn ${adminConfirm.danger ? "btn-muted termo-danger-btn" : "btn-primary"}`}
+                    type="button"
+                    onClick={() => void confirmAdminAction()}
+                    disabled={adminBusy}
+                  >
+                    {adminBusy ? "Processando..." : adminConfirm.confirm_label}
+                  </button>
+                </div>
               </div>
             </div>
           </div>,

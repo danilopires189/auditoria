@@ -4558,6 +4558,14 @@ small {
   width: min(920px, 96vw);
 }
 
+.inventario-admin-zone-popup {
+  width: min(760px, 96vw);
+}
+
+.inventario-admin-confirm-popup {
+  width: min(560px, 94vw);
+}
+
 .inventario-admin-section {
   border: 1px solid #d7e1f4;
   border-radius: 12px;
@@ -4617,7 +4625,7 @@ small {
 }
 
 .inventario-admin-zone-list {
-  max-height: min(34vh, 280px);
+  max-height: min(42vh, 380px);
   min-height: 140px;
   overflow-y: auto;
   border: 1px solid #d6e2f4;
@@ -4687,6 +4695,16 @@ small {
 .inventario-admin-preview-list p {
   margin: 0;
   color: #425778;
+}
+
+.inventario-admin-confirm-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.inventario-admin-confirm-lines p {
+  margin: 0;
+  color: #3f557c;
 }
 
 .inventario-admin-clear {
@@ -4852,6 +4870,13 @@ small {
     max-height: calc(100dvh - env(safe-area-inset-top, 0px));
   }
 
+  .inventario-admin-zone-popup,
+  .inventario-admin-confirm-popup {
+    width: 100vw;
+    width: 100dvw;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+  }
+
   .inventario-admin-zone-actions,
   .inventario-admin-actions {
     grid-template-columns: 1fr;
@@ -4863,7 +4888,7 @@ small {
   }
 
   .inventario-admin-zone-list {
-    max-height: 30vh;
+    max-height: 36vh;
     min-height: 180px;
   }
 }
