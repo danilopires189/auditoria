@@ -1,5 +1,5 @@
 export type DevolucaoMercadoriaConfStatus = "em_conferencia" | "finalizado_ok" | "finalizado_falta";
-
+export type DevolucaoMercadoriaConferenceKind = "com_nfd" | "sem_nfd";
 export type DevolucaoMercadoriaDivergenciaTipo = "falta" | "sobra" | "correto";
 
 export interface DevolucaoMercadoriaModuleProfile {
@@ -27,20 +27,27 @@ export interface DevolucaoMercadoriaManifestMeta {
 
 export interface DevolucaoMercadoriaManifestItemRow {
   ref: string;
+  nfd: number | null;
+  chave: string | null;
+  motivo: string | null;
+  coddv: number;
+  descricao: string;
+  tipo: string;
+  qtd_esperada: number;
   caixa: string | null;
   pedido: number | null;
   filial: number | null;
   filial_nome: string | null;
   rota: string | null;
-  coddv: number;
-  descricao: string;
-  qtd_esperada: number;
   lotes: string | null;
   validades: string | null;
 }
 
-export interface DevolucaoMercadoriaManifestVolumeRow {
+export interface DevolucaoMercadoriaManifestNotaRow {
   ref: string;
+  nfd: number | null;
+  chave: string | null;
+  motivo: string | null;
   itens_total: number;
   qtd_esperada_total: number;
   status: "pendente" | "em_andamento" | "concluido" | null;
@@ -48,6 +55,8 @@ export interface DevolucaoMercadoriaManifestVolumeRow {
   colaborador_mat: string | null;
   status_at: string | null;
 }
+
+export type DevolucaoMercadoriaManifestVolumeRow = DevolucaoMercadoriaManifestNotaRow;
 
 export interface DevolucaoMercadoriaManifestBarrasRow {
   barras: string;
@@ -76,8 +85,10 @@ export interface DevolucaoMercadoriaItemRow {
   coddv: number;
   barras: string | null;
   descricao: string;
+  tipo: string;
   qtd_esperada: number;
   qtd_conferida: number;
+  qtd_manual_total: number;
   qtd_falta: number;
   qtd_sobra: number;
   divergencia_tipo: DevolucaoMercadoriaDivergenciaTipo;
@@ -90,12 +101,13 @@ export interface DevolucaoMercadoriaVolumeRow {
   conf_id: string;
   conf_date: string;
   cd: number;
+  conference_kind: DevolucaoMercadoriaConferenceKind;
+  nfd: number | null;
+  chave: string | null;
   ref: string;
-  caixa: string | null;
-  pedido: number | null;
-  filial: number | null;
-  filial_nome: string | null;
-  rota: string | null;
+  source_motivo: string | null;
+  nfo: string | null;
+  motivo_sem_nfd: string | null;
   status: DevolucaoMercadoriaConfStatus;
   falta_motivo: string | null;
   started_by: string;
@@ -105,14 +117,21 @@ export interface DevolucaoMercadoriaVolumeRow {
   finalized_at: string | null;
   updated_at: string;
   is_read_only: boolean;
+  caixa: string | null;
+  pedido: number | null;
+  filial: number | null;
+  filial_nome: string | null;
+  rota: string | null;
 }
 
 export interface DevolucaoMercadoriaLocalItem {
   coddv: number;
   barras: string | null;
   descricao: string;
+  tipo: string;
   qtd_esperada: number;
   qtd_conferida: number;
+  qtd_manual_total: number;
   lotes: string | null;
   validades: string | null;
   updated_at: string;
@@ -123,7 +142,13 @@ export interface DevolucaoMercadoriaLocalVolume {
   user_id: string;
   conf_date: string;
   cd: number;
+  conference_kind: DevolucaoMercadoriaConferenceKind;
+  nfd: number | null;
+  chave: string | null;
   ref: string;
+  source_motivo: string | null;
+  nfo: string | null;
+  motivo_sem_nfd: string | null;
   caixa: string | null;
   pedido: number | null;
   filial: number | null;
@@ -143,6 +168,9 @@ export interface DevolucaoMercadoriaLocalVolume {
   pending_snapshot: boolean;
   pending_finalize: boolean;
   pending_finalize_reason: string | null;
+  pending_finalize_without_scan: boolean;
+  pending_finalize_nfo: string | null;
+  pending_finalize_motivo_sem_nfd: string | null;
   pending_cancel: boolean;
   sync_error: string | null;
   last_synced_at: string | null;
@@ -170,4 +198,3 @@ export interface DevolucaoMercadoriaPartialReopenInfo {
   pending_items: number;
   can_reopen: boolean;
 }
-

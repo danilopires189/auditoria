@@ -52,6 +52,7 @@ import {
   finalizeVolume,
   normalizeBarcode,
   openVolume,
+  openWithoutNfd,
   reopenPartialConference,
   scanBarcode,
   setItemQtd,
@@ -251,8 +252,10 @@ function createLocalVolumeFromRemote(
     coddv: item.coddv,
     barras: item.barras ?? null,
     descricao: item.descricao,
+    tipo: item.tipo ?? "UN",
     qtd_esperada: item.qtd_esperada,
     qtd_conferida: item.qtd_conferida,
+    qtd_manual_total: item.qtd_manual_total ?? 0,
     lotes: item.lotes ?? null,
     validades: item.validades ?? null,
     updated_at: item.updated_at
@@ -263,7 +266,13 @@ function createLocalVolumeFromRemote(
     user_id: profile.user_id,
     conf_date: confDate,
     cd: volume.cd,
+    conference_kind: volume.conference_kind ?? "com_nfd",
+    nfd: volume.nfd ?? null,
+    chave: volume.chave ?? null,
     ref: volume.ref,
+    source_motivo: volume.source_motivo ?? null,
+    nfo: volume.nfo ?? null,
+    motivo_sem_nfd: volume.motivo_sem_nfd ?? null,
     caixa: volume.caixa,
     pedido: volume.pedido,
     filial: volume.filial,
@@ -283,6 +292,9 @@ function createLocalVolumeFromRemote(
     pending_snapshot: false,
     pending_finalize: false,
     pending_finalize_reason: null,
+    pending_finalize_without_scan: false,
+    pending_finalize_nfo: null,
+    pending_finalize_motivo_sem_nfd: null,
     pending_cancel: false,
     sync_error: null,
     last_synced_at: new Date().toISOString()
@@ -303,8 +315,10 @@ function createLocalVolumeFromManifest(
     coddv: row.coddv,
     barras: null,
     descricao: row.descricao,
+    tipo: row.tipo ?? "UN",
     qtd_esperada: row.qtd_esperada,
     qtd_conferida: 0,
+    qtd_manual_total: 0,
     lotes: row.lotes ?? null,
     validades: row.validades ?? null,
     updated_at: nowIso
@@ -315,7 +329,13 @@ function createLocalVolumeFromManifest(
     user_id: profile.user_id,
     conf_date: confDate,
     cd,
+    conference_kind: "com_nfd",
+    nfd: first?.nfd ?? null,
+    chave: first?.chave ?? null,
     ref: idEtiqueta,
+    source_motivo: first?.motivo ?? null,
+    nfo: null,
+    motivo_sem_nfd: null,
     caixa: first?.caixa ?? null,
     pedido: first?.pedido ?? null,
     filial: first?.filial ?? null,
@@ -335,6 +355,57 @@ function createLocalVolumeFromManifest(
     pending_snapshot: true,
     pending_finalize: false,
     pending_finalize_reason: null,
+    pending_finalize_without_scan: false,
+    pending_finalize_nfo: null,
+    pending_finalize_motivo_sem_nfd: null,
+    pending_cancel: false,
+    sync_error: null,
+    last_synced_at: null
+  };
+}
+
+function createLocalVolumeWithoutNfd(
+  profile: DevolucaoMercadoriaModuleProfile,
+  cd: number
+): DevolucaoMercadoriaLocalVolume {
+  const nowIso = new Date().toISOString();
+  const confDate = todayIsoBrasilia();
+  const localRef = `SEM-NFD-${nowIso.replace(/[^0-9]/g, "").slice(-8)}`;
+  const localKey = buildDevolucaoMercadoriaVolumeKey(profile.user_id, cd, confDate, localRef);
+  return {
+    local_key: localKey,
+    user_id: profile.user_id,
+    conf_date: confDate,
+    cd,
+    conference_kind: "sem_nfd",
+    nfd: null,
+    chave: null,
+    ref: localRef,
+    source_motivo: null,
+    nfo: null,
+    motivo_sem_nfd: null,
+    caixa: null,
+    pedido: null,
+    filial: null,
+    filial_nome: null,
+    rota: null,
+    remote_conf_id: null,
+    status: "em_conferencia",
+    falta_motivo: null,
+    started_by: profile.user_id,
+    started_mat: profile.mat || "",
+    started_nome: profile.nome || "Usuário",
+    started_at: nowIso,
+    finalized_at: null,
+    updated_at: nowIso,
+    is_read_only: false,
+    items: [],
+    pending_snapshot: true,
+    pending_finalize: false,
+    pending_finalize_reason: null,
+    pending_finalize_without_scan: false,
+    pending_finalize_nfo: null,
+    pending_finalize_motivo_sem_nfd: null,
     pending_cancel: false,
     sync_error: null,
     last_synced_at: null
@@ -667,6 +738,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const [modalVolumeHistory, setModalVolumeHistory] = useState<DevolucaoMercadoriaLocalVolume[]>([]);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeMotivo, setFinalizeMotivo] = useState("");
+  const [finalizeNfo, setFinalizeNfo] = useState("");
+  const [finalizeMotivoSemNfd, setFinalizeMotivoSemNfd] = useState("");
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
   const [busyManifest, setBusyManifest] = useState(false);
@@ -1415,19 +1488,84 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     showDialog
   ]);
 
-  const updateItemQtyLocal = useCallback(async (coddv: number, qtd: number, barras: string | null = null) => {
+  const handleStartWithoutNfd = useCallback(async () => {
+    if (currentCd == null) {
+      setErrorMessage("CD não definido para esta conferência.");
+      return;
+    }
+    if (hasOpenConference) {
+      setErrorMessage("Existe uma conferência em andamento. Finalize ou cancele antes de iniciar sem NFD.");
+      return;
+    }
+
+    setBusyOpenVolume(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    try {
+      if (isOnline && !preferOfflineMode) {
+        const remoteVolume = await openWithoutNfd(currentCd);
+        const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, []);
+        await saveLocalVolume(localVolume);
+        setActiveVolume(localVolume);
+        setEtiquetaInput(localVolume.ref);
+        setStatusMessage("Devolução sem NFD iniciada.");
+      } else {
+        const localVolume = createLocalVolumeWithoutNfd(profile, currentCd);
+        await saveLocalVolume(localVolume);
+        setActiveVolume(localVolume);
+        setEtiquetaInput(localVolume.ref);
+        setStatusMessage("Devolução sem NFD iniciada offline.");
+      }
+      focusBarras();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao iniciar devolução sem NFD.";
+      setErrorMessage(normalizeRpcErrorMessage(message));
+    } finally {
+      setBusyOpenVolume(false);
+    }
+  }, [currentCd, focusBarras, hasOpenConference, isOnline, preferOfflineMode, profile]);
+
+  const updateItemQtyLocal = useCallback(async (
+    coddv: number,
+    qtd: number,
+    barras: string | null = null,
+    options?: {
+      qtdManualDelta?: number;
+      createIfMissing?: boolean;
+      descricao?: string;
+      tipo?: string;
+    }
+  ) => {
     if (!activeVolume) return;
     const nowIso = new Date().toISOString();
-    const nextItems = activeVolume.items.map((item) => (
-      item.coddv === coddv
-        ? {
-            ...item,
-            barras: barras ?? item.barras ?? null,
-            qtd_conferida: Math.max(0, Math.trunc(qtd)),
-            updated_at: nowIso
-          }
-        : item
-    ));
+    const qtdManualDelta = Math.max(0, Math.trunc(options?.qtdManualDelta ?? 0));
+    let found = false;
+    const nextItems = activeVolume.items.map((item) => {
+      if (item.coddv !== coddv) return item;
+      found = true;
+      return {
+        ...item,
+        barras: barras ?? item.barras ?? null,
+        qtd_conferida: Math.max(0, Math.trunc(qtd)),
+        qtd_manual_total: Math.max(0, (item.qtd_manual_total ?? 0) + qtdManualDelta),
+        updated_at: nowIso
+      };
+    });
+
+    if (!found && options?.createIfMissing) {
+      nextItems.push({
+        coddv,
+        barras: barras ?? null,
+        descricao: options.descricao?.trim() || `SKU ${coddv}`,
+        tipo: (options.tipo ?? "UN").toUpperCase(),
+        qtd_esperada: 0,
+        qtd_conferida: Math.max(0, Math.trunc(qtd)),
+        qtd_manual_total: qtdManualDelta,
+        lotes: null,
+        validades: null,
+        updated_at: nowIso
+      });
+    }
 
     const nextVolume: DevolucaoMercadoriaLocalVolume = {
       ...activeVolume,
@@ -1462,6 +1600,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const clearConferenceScreen = useCallback(() => {
     setShowFinalizeModal(false);
     setFinalizeMotivo("");
+    setFinalizeNfo("");
+    setFinalizeMotivoSemNfd("");
     setFinalizeError(null);
     setExpandedCoddv(null);
     setEditingCoddv(null);
@@ -1542,6 +1682,16 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     let barrasRegistrada = barras;
     let registroRemoto = false;
     let highlightedCoddv: number | null = null;
+    const requestQtdManual = (tipo: string): number => {
+      const normalizedTipo = (tipo || "UN").toUpperCase();
+      if (normalizedTipo === "UN") return 0;
+      const raw = window.prompt(`Produto tipo ${normalizedTipo}. Informe a quantidade manual complementar:`, "1");
+      const qtdManual = parsePositiveInteger(raw ?? "", 0);
+      if (qtdManual <= 0) {
+        throw new Error("QTD_MANUAL_OBRIGATORIA");
+      }
+      return qtdManual;
+    };
     setStatusMessage(null);
     setErrorMessage(null);
     setBarcodeValidationState("validating");
@@ -1558,43 +1708,90 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           triggerScanErrorAlert("Código de barras inválido.");
           return;
         }
-        const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
-        if (!target) {
+        const target = activeVolume.items.find((item) => item.coddv === lookup.coddv) ?? null;
+        if (!target && activeVolume.conference_kind !== "sem_nfd") {
           const produtoNome = `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
           showDialog({
-            title: "Produto fora do volume",
-            message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
+            title: "Produto fora da NFD",
+            message: `Produto "${produtoNome}" não faz parte da devolução em conferência.`,
             confirmLabel: "OK"
           });
           setBarcodeValidationState("invalid");
-          triggerScanErrorAlert("Produto fora do volume.");
+          triggerScanErrorAlert("Produto fora da NFD.");
           return;
         }
-        produtoRegistrado = target.descricao;
+
+        const tipo = (target?.tipo ?? "UN").toUpperCase();
+        const qtdManual = requestQtdManual(tipo);
+        produtoRegistrado = target?.descricao || lookup.descricao?.trim() || `SKU ${lookup.coddv}`;
         barrasRegistrada = lookup.barras || barras;
-        highlightedCoddv = target.coddv;
-        await updateItemQtyLocal(target.coddv, target.qtd_conferida + qtd, barrasRegistrada);
+        highlightedCoddv = lookup.coddv;
+        await updateItemQtyLocal(
+          lookup.coddv,
+          (target?.qtd_conferida ?? 0) + qtd,
+          barrasRegistrada,
+          {
+            qtdManualDelta: qtdManual,
+            createIfMissing: activeVolume.conference_kind === "sem_nfd" && !target,
+            descricao: lookup.descricao || target?.descricao || `SKU ${lookup.coddv}`,
+            tipo
+          }
+        );
         if (isOnline) {
           void runPendingSync(true);
         }
       } else {
-        const updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd);
+        const localItem = activeVolume.items.find((item) => normalizeBarcode(item.barras ?? "") === barras);
+        let qtdManual = 0;
+        if (localItem && (localItem.tipo ?? "UN").toUpperCase() !== "UN") {
+          qtdManual = requestQtdManual(localItem.tipo);
+        }
+
+        let updated: DevolucaoMercadoriaItemRow;
+        try {
+          updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd, qtdManual);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          if (!message.includes("QTD_MANUAL_OBRIGATORIA")) throw error;
+          const forcedManual = requestQtdManual(localItem?.tipo ?? "CX");
+          updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd, forcedManual);
+        }
         produtoRegistrado = updated.descricao;
         barrasRegistrada = updated.barras ?? barras;
         registroRemoto = true;
         highlightedCoddv = updated.coddv;
         const nowIso = new Date().toISOString();
-        const nextItems = activeVolume.items.map((item) => (
-          item.coddv === updated.coddv
-            ? {
-                ...item,
+        const existing = activeVolume.items.find((item) => item.coddv === updated.coddv);
+        const nextItems = existing
+          ? activeVolume.items.map((item) => (
+            item.coddv === updated.coddv
+              ? {
+                  ...item,
+                  barras: updated.barras ?? barras,
+                  descricao: updated.descricao,
+                  tipo: updated.tipo,
+                  qtd_conferida: updated.qtd_conferida,
+                  qtd_esperada: updated.qtd_esperada,
+                  qtd_manual_total: updated.qtd_manual_total,
+                  updated_at: updated.updated_at
+                }
+              : item
+          ))
+          : [
+              ...activeVolume.items,
+              {
+                coddv: updated.coddv,
                 barras: updated.barras ?? barras,
-                qtd_conferida: updated.qtd_conferida,
+                descricao: updated.descricao,
+                tipo: updated.tipo,
                 qtd_esperada: updated.qtd_esperada,
+                qtd_conferida: updated.qtd_conferida,
+                qtd_manual_total: updated.qtd_manual_total,
+                lotes: null,
+                validades: null,
                 updated_at: updated.updated_at
               }
-            : item
-        ));
+          ];
         const nextVolume: DevolucaoMercadoriaLocalVolume = {
           ...activeVolume,
           items: nextItems.sort(itemSort),
@@ -1644,11 +1841,16 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           ? `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
           : `Código de barras ${barras}`;
         showDialog({
-          title: "Produto fora do volume",
-          message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
+          title: "Produto fora da NFD",
+          message: `Produto "${produtoNome}" não faz parte da devolução em conferência.`,
           confirmLabel: "OK"
         });
-        triggerScanErrorAlert("Produto fora do volume.");
+        triggerScanErrorAlert("Produto fora da NFD.");
+        return;
+      }
+      if (message.includes("QTD_MANUAL_OBRIGATORIA")) {
+        setErrorMessage("Este produto exige quantidade manual complementar (tipo diferente de UN).");
+        triggerScanErrorAlert("Informe quantidade manual.");
         return;
       }
       const normalizedError = normalizeRpcErrorMessage(message);
@@ -1690,8 +1892,11 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
             ? {
                 ...item,
                 barras: updated.barras ?? item.barras ?? null,
+                descricao: updated.descricao,
+                tipo: updated.tipo,
                 qtd_conferida: updated.qtd_conferida,
                 qtd_esperada: updated.qtd_esperada,
+                qtd_manual_total: updated.qtd_manual_total,
                 updated_at: updated.updated_at
               }
             : item
@@ -1743,15 +1948,18 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
               await updateItemQtyLocal(coddv, 0);
               if (isOnline) void runPendingSync(true);
             } else {
-              const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, 0);
+              const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, 0, 0);
               const nowIso = new Date().toISOString();
               const nextItems = activeVolume.items.map((row) => (
                 row.coddv === updated.coddv
                   ? {
                       ...row,
                       barras: updated.barras ?? row.barras ?? null,
+                      descricao: updated.descricao,
+                      tipo: updated.tipo,
                       qtd_conferida: updated.qtd_conferida,
                       qtd_esperada: updated.qtd_esperada,
+                      qtd_manual_total: updated.qtd_manual_total,
                       updated_at: updated.updated_at
                     }
                   : row
@@ -1796,44 +2004,66 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     if (!canEditActiveVolume) return;
 
     setFinalizeError(null);
+    const withoutScan = !hasAnyItemInformed && activeVolume.conference_kind === "com_nfd";
     const sobra = divergenciaTotals.sobra;
     const falta = divergenciaTotals.falta;
 
     if (sobra > 0) {
-      setFinalizeError("Existem sobras no volume. Corrija antes de finalizar.");
+      setFinalizeError("Existem sobras na devolução. Corrija antes de finalizar.");
       return;
     }
 
     const motivo = finalizeMotivo.trim();
-    if (falta > 0 && !motivo) {
+    if ((falta > 0 || withoutScan) && !motivo) {
       setFinalizeError("Informe o motivo de falta para concluir.");
       return;
+    }
+    const nfo = finalizeNfo.trim();
+    const motivoSemNfd = finalizeMotivoSemNfd.trim();
+    if (activeVolume.conference_kind === "sem_nfd") {
+      if (!nfo) {
+        setFinalizeError("Informe a NFO para concluir devolução sem NFD.");
+        return;
+      }
+      if (!motivoSemNfd) {
+        setFinalizeError("Informe o motivo da devolução sem NFD.");
+        return;
+      }
     }
 
     setBusyFinalize(true);
     try {
       if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
         const nowIso = new Date().toISOString();
-        const nextStatus = falta > 0 ? "finalizado_falta" : "finalizado_ok";
+        const nextStatus = (falta > 0 || withoutScan) ? "finalizado_falta" : "finalizado_ok";
         const nextVolume: DevolucaoMercadoriaLocalVolume = {
           ...activeVolume,
           status: nextStatus,
-          falta_motivo: falta > 0 ? motivo : null,
+          falta_motivo: (falta > 0 || withoutScan) ? motivo : null,
+          nfo: activeVolume.conference_kind === "sem_nfd" ? nfo : activeVolume.nfo,
+          motivo_sem_nfd: activeVolume.conference_kind === "sem_nfd" ? motivoSemNfd : activeVolume.motivo_sem_nfd,
           finalized_at: nowIso,
           is_read_only: true,
           pending_snapshot: true,
           pending_finalize: true,
-          pending_finalize_reason: falta > 0 ? motivo : null,
+          pending_finalize_reason: (falta > 0 || withoutScan) ? motivo : null,
+          pending_finalize_without_scan: withoutScan,
+          pending_finalize_nfo: activeVolume.conference_kind === "sem_nfd" ? nfo : null,
+          pending_finalize_motivo_sem_nfd: activeVolume.conference_kind === "sem_nfd" ? motivoSemNfd : null,
           updated_at: nowIso,
           sync_error: null
         };
         await applyVolumeUpdate(nextVolume, false);
-        setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outro NFD/Chave.");
+        setStatusMessage("Devolução finalizada localmente. Você já pode iniciar outra conferência.");
       } else {
-        await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
+        await finalizeVolume(activeVolume.remote_conf_id, (falta > 0 || withoutScan) ? motivo : null, {
+          faltaTotalSemBipagem: withoutScan,
+          nfo: activeVolume.conference_kind === "sem_nfd" ? nfo : null,
+          motivoSemNfd: activeVolume.conference_kind === "sem_nfd" ? motivoSemNfd : null
+        });
         await removeLocalVolume(activeVolume.local_key);
         await refreshPendingState();
-        setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outro NFD/Chave.");
+        setStatusMessage("Devolução finalizada com sucesso. Você já pode iniciar outra conferência.");
       }
       clearConferenceScreen();
     } catch (error) {
@@ -1851,6 +2081,9 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     divergenciaTotals.falta,
     divergenciaTotals.sobra,
     finalizeMotivo,
+    finalizeMotivoSemNfd,
+    finalizeNfo,
+    hasAnyItemInformed,
     isOnline,
     preferOfflineMode,
     refreshPendingState,
@@ -2554,9 +2787,11 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   };
 
   const requestFinalize = () => {
-    if (!activeVolume || !hasAnyItemInformed) return;
+    if (!activeVolume) return;
     setFinalizeError(null);
     setFinalizeMotivo(activeVolume.falta_motivo ?? "");
+    setFinalizeNfo(activeVolume.nfo ?? "");
+    setFinalizeMotivoSemNfd(activeVolume.motivo_sem_nfd ?? "");
     setShowFinalizeModal(true);
   };
 

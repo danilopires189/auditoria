@@ -32,6 +32,8 @@ import type { TermoModuleProfile } from "./modules/conferencia-termo/types";
 import { clearUserTermoSessionCache } from "./modules/conferencia-termo/storage";
 import type { VolumeAvulsoModuleProfile } from "./modules/conferencia-volume-avulso/types";
 import { clearUserVolumeAvulsoSessionCache } from "./modules/conferencia-volume-avulso/storage";
+import type { DevolucaoMercadoriaModuleProfile } from "./modules/devolucao-mercadoria/types";
+import { clearUserDevolucaoSessionCache } from "./modules/devolucao-mercadoria/storage";
 import type { InventarioModuleProfile } from "./modules/zerados/types";
 import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
 import type { PvpsAlocacaoModuleProfile } from "./modules/pvps-alocacao/types";
@@ -1129,6 +1131,11 @@ export default function App() {
           // Ignore local cleanup failures and proceed with logout.
         }
         try {
+          await clearUserDevolucaoSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
+        try {
           await clearUserInventarioSessionCache(currentUserId);
         } catch {
           // Ignore local cleanup failures and proceed with logout.
@@ -1294,6 +1301,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const devolucaoProfile = useMemo<DevolucaoMercadoriaModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const inventarioProfile = useMemo<InventarioModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -1432,7 +1451,16 @@ export default function App() {
               )
             }
           />
-          <Route path="/modulos/devolucao-mercadoria" element={<DevolucaoMercadoriaPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/devolucao-mercadoria"
+            element={
+              devolucaoProfile ? (
+                <DevolucaoMercadoriaPage isOnline={isOnline} profile={devolucaoProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/meta-mes" element={<MetaMesPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/produtividade" element={<ProdutividadePage isOnline={isOnline} userName={displayContext.nome} />} />

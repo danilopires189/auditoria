@@ -303,6 +303,9 @@ export async function saveManifestSnapshot(params: {
         user_id: params.user_id,
         cd: params.cd,
         ref: idEtiqueta,
+        nfd: row.nfd ?? null,
+        chave: row.chave ?? null,
+        motivo: row.motivo ?? null,
         caixa: row.caixa ?? null,
         pedido: row.pedido ?? null,
         filial: row.filial ?? null,
@@ -310,6 +313,7 @@ export async function saveManifestSnapshot(params: {
         rota: row.rota ?? null,
         coddv,
         descricao: row.descricao,
+        tipo: (row.tipo ?? "UN").toUpperCase(),
         qtd_esperada: parsePositiveInt(row.qtd_esperada, 1),
         lotes: row.lotes ?? null,
         validades: row.validades ?? null
@@ -396,6 +400,9 @@ export async function getManifestItemsByEtiqueta(
   return rows
     .map((row) => ({
       ref: row.ref,
+      nfd: row.nfd ?? null,
+      chave: row.chave ?? null,
+      motivo: row.motivo ?? null,
       caixa: row.caixa,
       pedido: row.pedido,
       filial: row.filial,
@@ -403,6 +410,7 @@ export async function getManifestItemsByEtiqueta(
       rota: row.rota,
       coddv: row.coddv,
       descricao: row.descricao,
+      tipo: (row.tipo ?? "UN").toUpperCase(),
       qtd_esperada: row.qtd_esperada,
       lotes: row.lotes ?? null,
       validades: row.validades ?? null
@@ -425,6 +433,9 @@ export async function listManifestItemsByCd(
   return rows
     .map((row) => ({
       ref: row.ref,
+      nfd: row.nfd ?? null,
+      chave: row.chave ?? null,
+      motivo: row.motivo ?? null,
       caixa: row.caixa,
       pedido: row.pedido,
       filial: row.filial,
@@ -432,6 +443,7 @@ export async function listManifestItemsByCd(
       rota: row.rota,
       coddv: row.coddv,
       descricao: row.descricao,
+      tipo: (row.tipo ?? "UN").toUpperCase(),
       qtd_esperada: row.qtd_esperada,
       lotes: row.lotes ?? null,
       validades: row.validades ?? null
@@ -465,6 +477,9 @@ export async function listManifestVolumes(
     if (!current) {
       grouped.set(nrVolume, {
         ref: nrVolume,
+        nfd: row.nfd ?? null,
+        chave: row.chave ?? null,
+        motivo: row.motivo ?? null,
         itens_total: 1,
         qtd_esperada_total: Math.max(Number(row.qtd_esperada ?? 0), 0),
         status: null,
@@ -649,5 +664,9 @@ export async function clearUserDevolucaoMercadoriaSessionCache(userId: string): 
   const transaction = db.transaction(STORE_PREFS, "readwrite");
   transaction.objectStore(STORE_PREFS).delete(prefsKey(userId));
   await transactionDone(transaction);
+}
+
+export async function clearUserDevolucaoSessionCache(userId: string): Promise<void> {
+  await clearUserDevolucaoMercadoriaSessionCache(userId);
 }
 
