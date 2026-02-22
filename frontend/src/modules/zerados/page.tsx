@@ -614,6 +614,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [adminIncluirPul, setAdminIncluirPul] = useState(false);
   const [adminManualCoddvCsv, setAdminManualCoddvCsv] = useState("");
   const [adminZoneSearch, setAdminZoneSearch] = useState("");
+  const [adminZonesLoading, setAdminZonesLoading] = useState(false);
   const [adminPreviewRows, setAdminPreviewRows] = useState<InventarioAdminPreviewZoneRow[]>([]);
   const [adminSummary, setAdminSummary] = useState<InventarioAdminSeedSummary | null>(null);
   const [adminClearHardReset, setAdminClearHardReset] = useState(false);
@@ -927,16 +928,25 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const loadAdminZones = useCallback(async () => {
     if (!canManageBase || cd == null) return;
-    const rows = await fetchInventarioAdminZones(cd);
-    setAdminZones(rows);
-    setAdminSelectedZones((current) => {
-      if (current.length > 0) {
-        const available = new Set(rows.map((row) => row.zona));
-        const kept = current.filter((zona) => available.has(zona));
-        if (kept.length > 0) return kept;
-      }
-      return rows.map((row) => row.zona);
-    });
+    setAdminZonesLoading(true);
+    try {
+      const rows = await fetchInventarioAdminZones(cd);
+      setAdminZones(rows);
+      setAdminSelectedZones((current) => {
+        if (current.length > 0) {
+          const available = new Set(rows.map((row) => row.zona));
+          const kept = current.filter((zona) => available.has(zona));
+          if (kept.length > 0) return kept;
+        }
+        return rows.map((row) => row.zona);
+      });
+    } catch (error) {
+      setErr(parseErr(error));
+      setAdminZones([]);
+      setAdminSelectedZones([]);
+    } finally {
+      setAdminZonesLoading(false);
+    }
   }, [canManageBase, cd]);
 
   const runAdminPreview = useCallback(async () => {
@@ -1121,6 +1131,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!adminOpen || !canManageBase || cd == null) return;
     void loadAdminZones();
   }, [adminOpen, canManageBase, cd, loadAdminZones]);
+  useEffect(() => {
+    if (adminOpen) return;
+    setAdminZoneSearch("");
+  }, [adminOpen]);
   useEffect(() => {
     const popupOpen = editorOpen || reportOpen || scannerOpen || adminOpen;
     if (popupOpen && !popupWasOpenRef.current) {
@@ -2193,7 +2207,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     <button
                       type="button"
                       className="btn btn-muted termo-route-btn inventario-report-inline-btn"
-                      onClick={() => setAdminOpen(true)}
+                      onClick={() => {
+                        setAdminOpen(true);
+                        setAdminZoneSearch("");
+                        void loadAdminZones();
+                      }}
                       title="Gerir Base"
                       aria-label="Gerir Base"
                     >
@@ -2805,6 +2823,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     <button
                       type="button"
                       className="btn btn-muted"
+                      onClick={() => void loadAdminZones()}
+                      disabled={adminBusy || adminZonesLoading || cd == null}
+                    >
+                      {adminZonesLoading ? "Atualizando..." : "Atualizar zonas"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-muted"
                       onClick={() => setAdminSelectedZones(adminZones.map((row) => row.zona))}
                       disabled={adminBusy || cd == null || adminZones.length === 0}
                     >
@@ -2827,11 +2853,16 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   value={adminZoneSearch}
                   onChange={(event) => setAdminZoneSearch(event.target.value)}
                   placeholder="Buscar zona (ex.: A101)"
-                  disabled={adminBusy || cd == null || adminZones.length === 0}
+                  disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
                 />
+                <p className="inventario-admin-zone-meta">
+                  {`${adminSelectedZones.length} zona(s) selecionada(s)`}
+                </p>
 
                 <div className="inventario-admin-zone-list">
-                  {adminZones.length === 0 ? (
+                  {adminZonesLoading ? (
+                    <p className="inventario-popup-note">Carregando zonas...</p>
+                  ) : adminZones.length === 0 ? (
                     <p className="inventario-popup-note warn">Nenhuma zona SEP encontrada para este CD.</p>
                   ) : filteredAdminZones.length === 0 ? (
                     <p className="inventario-popup-note warn">Nenhuma zona encontrada para o filtro informado.</p>
