@@ -771,7 +771,19 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
               <h3>Resumo do Produto</h3>
               <p><strong>Descrição:</strong> {result.descricao || "-"}</p>
               <p><strong>SKU/CODDV:</strong> {result.coddv}</p>
-              <p><strong>Barras:</strong> {result.barras || "-"}</p>
+              <p><strong>Barras principais:</strong> {result.barras || "-"}</p>
+              <p><strong>Total de códigos de barras:</strong> {result.barras_lista.length}</p>
+              {result.barras_lista.length > 0 ? (
+                <ul className="busca-produto-address-list">
+                  {result.barras_lista.map((barcode, index) => (
+                    <li key={`${barcode}-${index}`}>
+                      <span className="busca-produto-address-main">{barcode}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="coleta-empty">Nenhum código de barras encontrado.</div>
+              )}
               <p><strong>CD:</strong> {String(result.cd).padStart(2, "0")}</p>
               <p><strong>Estoque disponível:</strong> {result.qtd_est_disp}</p>
               <p><strong>Estoque atual:</strong> {result.qtd_est_atual}</p>
@@ -780,12 +792,12 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
             </article>
 
             <article className="busca-produto-card">
-              <h3>Endereços SEP ({result.enderecos_sep.length})</h3>
+              <h3>Endereços de Separação ({result.enderecos_sep.length})</h3>
               {renderAddressList(result.enderecos_sep, "Nenhum endereço SEP.", false)}
             </article>
 
             <article className="busca-produto-card">
-              <h3>Endereços PUL ({result.enderecos_pul.length})</h3>
+              <h3>Endereços de Pulmão ({result.enderecos_pul.length})</h3>
               {renderAddressList(result.enderecos_pul, "Nenhum endereço PUL.", true)}
             </article>
 

@@ -79,12 +79,27 @@ function parseExcludedRows(value: unknown): BuscaProdutoExcludedAddressRow[] {
   return rows;
 }
 
+function parseBarcodeList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const list: string[] = [];
+  for (const item of value) {
+    const parsed = String(item ?? "").trim();
+    if (!parsed) continue;
+    list.push(parsed);
+  }
+  return Array.from(new Set(list));
+}
+
 function mapLookupRow(raw: Record<string, unknown>): BuscaProdutoLookupResult {
+  const barrasLista = parseBarcodeList(raw.barras_lista);
+  const barrasPrincipal = String(raw.barras ?? "").trim();
+  const barras = barrasPrincipal || barrasLista[0] || "";
   return {
     cd: parseInteger(raw.cd),
     coddv: parseInteger(raw.coddv),
     descricao: String(raw.descricao ?? "").trim(),
-    barras: String(raw.barras ?? "").trim(),
+    barras,
+    barras_lista: barrasLista.length > 0 ? barrasLista : (barras ? [barras] : []),
     qtd_est_disp: Math.max(parseInteger(raw.qtd_est_disp), 0),
     qtd_est_atual: Math.max(parseInteger(raw.qtd_est_atual), 0),
     estoque_updated_at: parseNullableString(raw.estoque_updated_at),
