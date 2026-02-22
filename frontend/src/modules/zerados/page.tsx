@@ -2705,69 +2705,64 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
         {showZonePicker && typeof document !== "undefined"
           ? createPortal(
-            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-zonas-title" onClick={() => setShowZonePicker(false)}>
-              <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                <h3 id="inventario-zonas-title">{`Zonas - ${stageLabel(tab)}`}</h3>
-                <div className="input-icon-wrap termo-routes-search">
-                  <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
+            <div className="iz-picker-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-zonas-title" onClick={() => setShowZonePicker(false)}>
+              <div className="iz-picker-sheet" onClick={(event) => event.stopPropagation()}>
+                <div className="iz-picker-header">
+                  <div>
+                    <h3 id="inventario-zonas-title" className="iz-picker-title">{stageLabel(tab)}</h3>
+                    <p className="iz-picker-sub">Selecione uma zona para trabalhar</p>
+                  </div>
+                  <button type="button" className="iz-picker-close-btn" onClick={() => setShowZonePicker(false)} aria-label="Fechar">
+                    {closeIcon()}
+                  </button>
+                </div>
+                <div className="iz-picker-search-wrap">
+                  <span className="iz-picker-search-icon" aria-hidden="true">{searchIcon()}</span>
                   <input
                     type="text"
+                    className="iz-picker-search-input"
                     value={zoneSearchInput}
                     onChange={(event) => setZoneSearchInput(event.target.value)}
                     placeholder="Buscar zona..."
+                    autoFocus
                   />
                 </div>
                 {filteredZoneBuckets.length === 0 ? (
-                  <p>Sem zonas disponíveis para este filtro.</p>
+                  <p className="iz-picker-empty">Nenhuma zona encontrada.</p>
                 ) : (
-                  <div className="termo-routes-list">
+                  <div className="iz-picker-grid">
                     {filteredZoneBuckets.map((zoneBucket) => {
-                      const pendingWord = zoneBucket.pending_addresses === 1 ? "pendente" : "pendentes";
-                      const doneWord = zoneBucket.done_addresses === 1 ? "concluído" : "concluídos";
-
+                      const isActive = zone === zoneBucket.zona;
+                      const donePercent = zoneBucket.total_addresses > 0
+                        ? Math.round((zoneBucket.done_addresses / zoneBucket.total_addresses) * 100)
+                        : 0;
                       return (
-                        <div key={zoneBucket.zona} className={`termo-route-group${zone === zoneBucket.zona ? " is-open" : ""}`}>
-                          <button
-                            type="button"
-                            className="termo-route-row-button termo-route-row-button-volume"
-                            onClick={() => handleZoneSelect(zoneBucket.zona)}
-                          >
-                            <span className="termo-route-main">
-                              <span className="termo-route-info">
-                                <span className="termo-route-title inventario-zone-title-row">
-                                  <span className="inventario-zone-name-chip">{zoneBucket.zona}</span>
-                                  <span className="inventario-zone-total-chip" title={`Total: ${labelByCount(zoneBucket.total_addresses, "endereço", "endereços")}`}>
-                                    {zoneBucket.total_addresses}
-                                  </span>
-                                </span>
-                                <span className="inventario-zone-stats">
-                                  <span className="inventario-zone-stat pending">
-                                    <span className="inventario-zone-stat-count">{zoneBucket.pending_addresses}</span>
-                                    <span className="inventario-zone-stat-icon pending">X</span>
-                                    <span className="inventario-zone-stat-label">{pendingWord}</span>
-                                  </span>
-                                  <span className="inventario-zone-stat done">
-                                    <span className="inventario-zone-stat-count">{zoneBucket.done_addresses}</span>
-                                    <span className="inventario-zone-stat-icon done">✓</span>
-                                    <span className="inventario-zone-stat-label">{doneWord}</span>
-                                  </span>
-                                </span>
-                              </span>
-                              <span className="termo-route-actions-row">
-                                <span className={`termo-divergencia ${zone === zoneBucket.zona ? "correto" : "andamento"}`}>
-                                  {zone === zoneBucket.zona ? "Selecionada" : "Disponível"}
-                                </span>
-                              </span>
-                            </span>
-                          </button>
-                        </div>
+                        <button
+                          key={zoneBucket.zona}
+                          type="button"
+                          className={`iz-zone-card${isActive ? " is-active" : ""}`}
+                          onClick={() => handleZoneSelect(zoneBucket.zona)}
+                        >
+                          <div className="iz-zone-card-top">
+                            <span className="iz-zone-name">{zoneBucket.zona}</span>
+                            {isActive ? (
+                              <span className="iz-zone-check" aria-hidden="true">✓</span>
+                            ) : (
+                              <span className="iz-zone-total">{zoneBucket.total_addresses}</span>
+                            )}
+                          </div>
+                          <div className="iz-zone-bar-track" aria-hidden="true">
+                            <span className="iz-zone-bar-fill" style={{ width: `${donePercent}%` }} />
+                          </div>
+                          <div className="iz-zone-counts">
+                            <span className="iz-zone-count pending">{zoneBucket.pending_addresses} pend.</span>
+                            <span className="iz-zone-count done">{zoneBucket.done_addresses} ok</span>
+                          </div>
+                        </button>
                       );
                     })}
                   </div>
                 )}
-                <div className="confirm-actions">
-                  <button className="btn btn-muted" type="button" onClick={() => setShowZonePicker(false)}>Fechar</button>
-                </div>
               </div>
             </div>,
             document.body
