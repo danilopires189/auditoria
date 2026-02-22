@@ -162,6 +162,7 @@ function resultOf(estoque: number, qtd: number, discarded: boolean): InventarioR
 
 function parseErr(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "Erro inesperado");
+  if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia no servidor. Use 'Gerir Base' para montar e sincronize novamente.";
   if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este CODDV.";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
   if (raw.includes("ETAPA2_APENAS_QUANDO_SOBRA")) return "2ª verificação só é permitida quando houver sobra na 1ª verificação.";
@@ -2233,7 +2234,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   ) : null}
                 </div>
               </div>
-              <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE} | db_inventario: ${manifestItems.length}/${manifestMeta?.row_count ?? 0} | db_barras: ${dbBarrasCount}`}</p>
+              <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE}`}</p>
               <div className="inventario-base-chips">
                 <span className={`inventario-base-chip ${manifestMeta && manifestItems.length >= manifestMeta.row_count ? "ok" : "warn"}`}>{`db_inventario ${manifestItems.length}/${manifestMeta?.row_count ?? 0}`}</span>
                 <span className={`inventario-base-chip ${dbBarrasCount > 0 ? "ok" : "warn"}`}>{`db_barras ${dbBarrasCount}`}</span>
