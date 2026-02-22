@@ -363,6 +363,11 @@ export async function listManifestZonesByCd(userId: string, cd: number): Promise
   return Array.from(unique).sort((a, b) => a.localeCompare(b));
 }
 
+export async function clearManifestSnapshotByCd(userId: string, cd: number): Promise<void> {
+  await clearByUserCd(STORE_MANIFEST_ITEMS, INDEX_ITEMS_BY_USER_CD, userId, cd);
+  await clearByUserCd(STORE_MANIFEST_META, INDEX_META_BY_USER_CD, userId, cd);
+}
+
 export async function getRemoteStateCache(
   userId: string,
   cd: number,

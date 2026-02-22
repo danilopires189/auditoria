@@ -17,6 +17,7 @@ import {
 } from "../../shared/db-barras/storage";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
+  clearManifestSnapshotByCd,
   countPendingEventsByCycle,
   getInventarioPreferences,
   getManifestMetaLocal,
@@ -926,6 +927,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setDbBarrasCount(bm.row_count);
       setMsg("Sincronização concluída.");
     } catch (error) {
+      const raw = error instanceof Error ? error.message : String(error ?? "");
+      if (raw.includes("BASE_INVENTARIO_VAZIA")) {
+        try {
+          await clearManifestSnapshotByCd(profile.user_id, cd);
+        } catch {
+          // Ignore local cache cleanup failures and still report source error.
+        }
+        setManifestMeta(null);
+        setManifestItems([]);
+        setRemoteState(defaultState());
+      }
       setErr(parseErr(error));
     } finally {
       setBusy(false);
@@ -1121,15 +1133,25 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setAdminSummary(summary);
       setAdminPreviewRows([]);
       setAdminPreviewScope(null);
-      setMsg(`Limpeza concluída. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
-      await syncNow(true);
+      if (summary.total_geral <= 0) {
+        await clearManifestSnapshotByCd(profile.user_id, cd);
+        const emptyState = defaultState();
+        setManifestMeta(null);
+        setManifestItems([]);
+        setRemoteState(emptyState);
+        await saveRemoteStateCache({ user_id: profile.user_id, cd, cycle_date: CYCLE_DATE, state: emptyState });
+        setMsg(`Limpeza concluída. Itens afetados: ${summary.itens_afetados}. Base local atualizada (vazia).`);
+      } else {
+        setMsg(`Limpeza concluída. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
+        await syncNow(true);
+      }
       await loadAdminZones();
     } catch (error) {
       setErr(parseErr(error));
     } finally {
       setAdminBusy(false);
     }
-  }, [adminClearHardReset, canManageBase, cd, loadAdminZones, syncNow]);
+  }, [adminClearHardReset, canManageBase, cd, loadAdminZones, profile.user_id, syncNow]);
 
   const runAdminClearAll = useCallback(() => {
     if (!canManageBase || cd == null) return;
