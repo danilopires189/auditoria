@@ -3030,36 +3030,34 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           </div>,
           document.body
         ) : null}
-        {/* ═══ Admin Main — fluxo zona ou coddv ═══ */}
+
         {canManageBase && adminOpen && adminManageMode != null && typeof document !== "undefined" ? createPortal(
-          <div className="iz-picker-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
-            <div className="iz-picker-sheet iz-admin-sheet iz-admin-sheet-full" onClick={(event) => event.stopPropagation()}>
-              <div className="iz-picker-header">
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
+            <div className="inventario-popup-card inventario-admin-popup" onClick={(event) => event.stopPropagation()}>
+              <div className="inventario-popup-head">
                 <div>
-                  <h3 className="iz-picker-title">{isAdminZonaFlow ? "Fluxo por Zona" : "Fluxo por Código (CODDV)"}</h3>
-                  <p className="iz-picker-sub">{isAdminZonaFlow
-                    ? "Configure zonas e faixa de estoque"
-                    : "Informe códigos para inclusão direta"}</p>
+                  <h3>{isAdminZonaFlow ? "Gestão da Base - Fluxo por Zona" : "Gestão da Base - Fluxo por Código e Dígito"}</h3>
+                  <p>{isAdminZonaFlow
+                    ? "Configure zonas e faixa de estoque para montar a base por zona."
+                    : "Use Código e Dígito (CODDV) manual para montar a base por produto."}
+                  </p>
                 </div>
-                <button type="button" className="iz-picker-close-btn" onClick={closeAllAdminPopups} aria-label="Fechar">
-                  {closeIcon()}
-                </button>
+                <button type="button" className="inventario-popup-close" onClick={closeAllAdminPopups} aria-label="Fechar popup">Fechar</button>
               </div>
-              <div className="iz-admin-body iz-admin-scroll">
+              <div className="inventario-popup-body">
                 {cd == null ? (
-                  <p className="iz-admin-note warn">Selecione um CD para gerenciar a base.</p>
+                  <p className="inventario-popup-note warn">Selecione um CD para gerenciar a base.</p>
                 ) : null}
                 {adminSuccessMsg ? (
-                  <p className="iz-admin-note ok">{adminSuccessMsg}</p>
+                  <p className="inventario-popup-note ok">{adminSuccessMsg}</p>
                 ) : null}
-
                 {isAdminZonaFlow ? (
                   <>
-                    <div className="iz-admin-section">
-                      <h4 className="iz-admin-section-title">Faixa de estoque</h4>
-                      <div className="iz-admin-row-inputs">
-                        <label className="iz-admin-label">
-                          <span>Inicial</span>
+                    <div className="inventario-admin-section">
+                      <h4>Selecao por zona e faixa de estoque</h4>
+                      <div className="inventario-admin-grid">
+                        <label>
+                          Estoque inicial
                           <input
                             type="number"
                             min={0}
@@ -3069,8 +3067,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             disabled={adminBusy || cd == null}
                           />
                         </label>
-                        <label className="iz-admin-label">
-                          <span>Final</span>
+                        <label>
+                          Estoque final
                           <input
                             type="number"
                             min={0}
@@ -3081,200 +3079,281 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           />
                         </label>
                       </div>
-                      <label className="iz-admin-toggle">
+                      <label className="inventario-admin-check">
                         <input
                           type="checkbox"
                           checked={adminIncluirPul}
                           onChange={(event) => setAdminIncluirPul(event.target.checked)}
                           disabled={adminBusy || cd == null}
                         />
-                        <span>Incluir endereços de Pulmão</span>
+                        Incluir endereços de Pulmão dos produtos selecionados na zona
                       </label>
                     </div>
 
-                    <div className="iz-admin-section">
-                      <div className="iz-admin-section-head">
-                        <h4 className="iz-admin-section-title">{`Zonas (${adminSelectedZones.length} selecionadas)`}</h4>
-                        <div className="iz-admin-section-actions">
-                          <button type="button" className="iz-admin-chip-btn" onClick={openAdminZonePicker} disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}>Escolher</button>
-                          <button type="button" className="iz-admin-chip-btn muted" onClick={() => setAdminSelectedZones([])} disabled={adminBusy || cd == null || adminSelectedZones.length === 0}>Limpar</button>
-                        </div>
+                    <div className="inventario-admin-zone-head">
+                      <strong>{`Zonas disponível: ${adminZones.length}`}</strong>
+                      <div className="inventario-admin-zone-actions">
+                        <button
+                          type="button"
+                          className="btn btn-muted"
+                          onClick={openAdminZonePicker}
+                          disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
+                        >
+                          Escolher zonas
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-muted"
+                          onClick={() => setAdminSelectedZones([])}
+                          disabled={adminBusy || cd == null || adminZones.length === 0}
+                        >
+                          Limpar seleção
+                        </button>
                       </div>
-                      {adminSelectedZones.length === 0 ? (
-                        <p className="iz-admin-hint">Nenhuma zona selecionada.</p>
-                      ) : (
-                        <div className="iz-admin-chips-row">
-                          {adminSelectedZones.map((z) => (
-                            <span key={z} className="iz-admin-chip selected">{z}</span>
-                          ))}
-                        </div>
-                      )}
                     </div>
+                    <p className="inventario-admin-zone-meta">
+                      {adminSelectedZones.length === 0
+                        ? "Nenhuma zona selecionada. Abra \"Escolher zonas\" para marcar."
+                        : `${adminSelectedZones.length} zona(s) selecionada(s)`}
+                    </p>
 
-                    <div className="iz-admin-actions-grid">
-                      <button className="iz-admin-action-btn" type="button" disabled={adminBusy || cd == null} onClick={() => void runAdminPreview("zona")}>{adminBusy ? "Processando..." : "Gerar prévia"}</button>
-                      <button className="iz-admin-action-btn primary" type="button" disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"} onClick={() => void runAdminApplyZona("replace_cd")}>Substituir base do CD</button>
-                      <button className="iz-admin-action-btn" type="button" disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"} onClick={() => void runAdminApplyZona("replace_zones")}>Recarregar zonas selecionadas</button>
+                    <div className="inventario-admin-actions">
+                      <button
+                        className="btn btn-muted"
+                        type="button"
+                        disabled={adminBusy || cd == null}
+                        onClick={() => void runAdminPreview("zona")}
+                      >
+                        {adminBusy ? "Processando..." : "Prévia  de enderços a auditar"}
+                      </button>
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
+                        onClick={() => void runAdminApplyZona("replace_cd")}
+                      >
+                        Adicionar (substituir base do CD)
+                      </button>
+                      <button
+                        className="btn btn-muted"
+                        type="button"
+                        disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
+                        onClick={() => void runAdminApplyZona("replace_zones")}
+                      >
+                        Recarregar zonas selecionadas
+                      </button>
                     </div>
                   </>
                 ) : null}
 
                 {isAdminCoddvFlow ? (
-                  <div className="iz-admin-section">
-                    <h4 className="iz-admin-section-title">Inserção manual (CODDV)</h4>
-                    <p className="iz-admin-hint">Informe códigos separados por vírgula.</p>
-                    <label className="iz-admin-toggle">
-                      <input type="checkbox" checked={adminIncluirPul} onChange={(event) => setAdminIncluirPul(event.target.checked)} disabled={adminBusy || cd == null} />
-                      <span>Incluir endereços de Pulmão</span>
+                  <div className="inventario-admin-section inventario-admin-manual">
+                    <h4>Inserção manual por Código e Dígito (CODDV)</h4>
+                    <p className="inventario-editor-text">
+                      Informe um ou vários Códigos e Dígitos (CODDV) para serem incluídos na base de endereços a auditar.
+                    </p>
+                    <label className="inventario-admin-check">
+                      <input
+                        type="checkbox"
+                        checked={adminIncluirPul}
+                        onChange={(event) => setAdminIncluirPul(event.target.checked)}
+                        disabled={adminBusy || cd == null}
+                      />
+                      Incluir endereços de Pulmão dos produtos (CODDV) informados
                     </label>
-                    <textarea className="iz-admin-textarea" value={adminManualCoddvCsv} onChange={(event) => setAdminManualCoddvCsv(event.target.value)} placeholder="Ex.: 12345, 67890" rows={3} disabled={adminBusy || cd == null} />
-                    <div className="iz-admin-actions-grid">
-                      <button className="iz-admin-action-btn" type="button" disabled={adminBusy || cd == null} onClick={() => void runAdminPreview("coddv")}>{adminBusy ? "Processando..." : "Gerar prévia"}</button>
-                      <button className="iz-admin-action-btn primary" type="button" disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "coddv"} onClick={() => void runAdminApplyCoddv()}>Adicionar à base</button>
+                    <label>
+                      Código e Dígito (CODDV) manual (separado por vírgula)
+                      <textarea
+                        value={adminManualCoddvCsv}
+                        onChange={(event) => setAdminManualCoddvCsv(event.target.value)}
+                        placeholder="Ex.: 12345, 67890, 10001"
+                        rows={4}
+                        disabled={adminBusy || cd == null}
+                      />
+                    </label>
+                    <div className="inventario-admin-actions">
+                      <button
+                        className="btn btn-muted"
+                        type="button"
+                        disabled={adminBusy || cd == null}
+                        onClick={() => void runAdminPreview("coddv")}
+                      >
+                        {adminBusy ? "Processando..." : "Gerar prévia"}
+                      </button>
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "coddv"}
+                        onClick={() => void runAdminApplyCoddv()}
+                      >
+                        Adicionar a base
+                      </button>
                     </div>
                   </div>
                 ) : null}
 
-                {adminPreviewRows.length > 0 && ((isAdminZonaFlow && adminPreviewScope === "zona") || (isAdminCoddvFlow && adminPreviewScope === "coddv")) ? (
-                  <div className="iz-admin-section iz-admin-preview">
-                    <h4 className="iz-admin-section-title">{`Prévia — ${adminPreviewTotal} itens`}</h4>
-                    <div className="iz-admin-preview-list">
+                {adminPreviewRows.length > 0 && (
+                  (isAdminZonaFlow && adminPreviewScope === "zona")
+                  || (isAdminCoddvFlow && adminPreviewScope === "coddv")
+                ) ? (
+                  <div className="inventario-admin-preview">
+                    <h4>{adminPreviewScope === "coddv" ? "Prévia da inserção por Código e Dígito (CODDV)" : "Prévia da inserção por zona"}</h4>
+                    <p className="inventario-editor-text">{`Total geral: ${adminPreviewTotal} itens`}</p>
+                    <div className="inventario-admin-preview-list">
                       {adminPreviewRows.map((row) => (
-                        <div key={row.zona} className="iz-admin-preview-row">
-                          <span className="iz-admin-preview-zona">{row.zona}</span>
-                          <span className="iz-admin-preview-count">{row.itens}</span>
-                        </div>
+                        <p key={row.zona}>{`${row.zona}: ${row.itens} itens`}</p>
                       ))}
                     </div>
                   </div>
                 ) : null}
 
-                <div className="iz-admin-section iz-admin-danger-section">
-                  <h4 className="iz-admin-section-title danger">Limpar dados</h4>
-                  <label className="iz-admin-toggle">
-                    <input type="checkbox" checked={adminClearHardReset} onChange={(event) => setAdminClearHardReset(event.target.checked)} disabled={adminBusy || cd == null} />
-                    <span>Hard reset (apaga itens iniciados)</span>
+                <div className="inventario-admin-clear">
+                  <h4>Limpar dados antigos</h4>
+                  <label className="inventario-admin-check">
+                    <input
+                      type="checkbox"
+                      checked={adminClearHardReset}
+                      onChange={(event) => setAdminClearHardReset(event.target.checked)}
+                      disabled={adminBusy || cd == null}
+                    />
+                    Hard reset (apaga também itens iniciados)
                   </label>
-                  <button className="iz-admin-action-btn danger" type="button" disabled={adminBusy || cd == null} onClick={() => void runAdminClearAll()}>Limpar base do CD</button>
+                  <div className="inventario-admin-actions">
+                    <button
+                      className="btn btn-muted termo-danger-btn"
+                      type="button"
+                      disabled={adminBusy || cd == null}
+                      onClick={() => void runAdminClearAll()}
+                    >
+                      Limpar base do CD
+                    </button>
+                  </div>
                 </div>
+
+                {adminSummary ? (
+                  <p className="inventario-popup-note ok">
+                    {`Itens afetados: ${adminSummary.itens_afetados} | Zonas atuais: ${adminSummary.zonas_afetadas} | Total atual: ${adminSummary.total_geral}`}
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>,
           document.body
         ) : null}
 
-        {/* ═══ Admin Zone Picker ═══ */}
         {canManageBase && adminOpen && isAdminZonaFlow && adminZonePickerOpen && typeof document !== "undefined" ? createPortal(
-          <div className="iz-picker-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
-            <div className="iz-picker-sheet iz-admin-sheet" onClick={(event) => event.stopPropagation()}>
-              <div className="iz-picker-header">
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
+            <div className="inventario-popup-card inventario-admin-zone-popup" onClick={(event) => event.stopPropagation()}>
+              <div className="inventario-popup-head">
                 <div>
-                  <h3 className="iz-picker-title">Selecionar zonas</h3>
-                  <p className="iz-picker-sub">{`${adminZoneDraft.length} marcada(s)`}</p>
+                  <h3>Selecionar zonas de Separação (SEP)</h3>
+                  <p>Marque as zonas para a inserção por zona e salve para voltar.</p>
                 </div>
-                <button type="button" className="iz-picker-close-btn" onClick={() => setAdminZonePickerOpen(false)} aria-label="Fechar">
-                  {closeIcon()}
-                </button>
+                <button type="button" className="inventario-popup-close" onClick={closeAllAdminPopups} aria-label="Fechar popup">Fechar</button>
               </div>
-              <div className="iz-admin-zone-toolbar">
-                <div className="iz-admin-section-actions">
+              <div className="inventario-popup-body">
+                <div className="inventario-admin-zone-actions">
                   <button
                     type="button"
-                    className="iz-admin-chip-btn"
+                    className="btn btn-muted"
                     onClick={() => setAdminZoneDraft(adminZones.map((row) => row.zona))}
                     disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
                   >
-                    Todas
+                    Selecionar todas
                   </button>
                   <button
                     type="button"
-                    className="iz-admin-chip-btn muted"
+                    className="btn btn-muted"
                     onClick={() => setAdminZoneDraft([])}
                     disabled={adminBusy || cd == null || adminZones.length === 0}
                   >
-                    Limpar
+                    Limpar seleção
                   </button>
                 </div>
+
                 <input
                   type="text"
-                  className="iz-picker-search-input iz-admin-zone-search-input"
+                  className="inventario-admin-zone-search"
                   value={adminZoneSearch}
                   onChange={(event) => setAdminZoneSearch(event.target.value)}
-                  placeholder="Buscar zona..."
+                  placeholder="Buscar zona (ex.: A101)"
                   disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
                 />
-              </div>
-              <div className="iz-admin-body iz-admin-scroll">
-                {adminZonesLoading ? (
-                  <p className="iz-admin-hint">Carregando zonas...</p>
-                ) : adminZones.length === 0 ? (
-                  <p className="iz-admin-note warn">Nenhuma zona de Separação (SEP) encontrada.</p>
-                ) : filteredAdminZones.length === 0 ? (
-                  <p className="iz-admin-note warn">Nenhuma zona encontrada.</p>
-                ) : (
-                  <div className="iz-admin-zone-grid">
-                    {filteredAdminZones.map((row) => {
-                      const checked = adminZoneDraft.includes(row.zona);
-                      return (
-                        <button
-                          key={row.zona}
-                          type="button"
-                          className={`iz-admin-zone-chip${checked ? " is-selected" : ""}`}
-                          onClick={() => {
+                <p className="inventario-admin-zone-meta">
+                  {`${adminZoneDraft.length} zona(s) marcada(s)`}
+                </p>
+
+                <div className="inventario-admin-zone-list">
+                  {adminZonesLoading ? (
+                    <p className="inventario-popup-note">Carregando zonas...</p>
+                  ) : adminZones.length === 0 ? (
+                    <p className="inventario-popup-note warn">Nenhuma zona de Separação (SEP) encontrada para este CD.</p>
+                  ) : filteredAdminZones.length === 0 ? (
+                    <p className="inventario-popup-note warn">Nenhuma zona encontrada para o filtro informado.</p>
+                  ) : filteredAdminZones.map((row) => {
+                    const checked = adminZoneDraft.includes(row.zona);
+                    return (
+                      <label key={row.zona} className="inventario-admin-zone-item">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => {
+                            const isChecked = event.target.checked;
                             setAdminZoneDraft((current) => {
-                              if (checked) return current.filter((z) => z !== row.zona);
-                              return [...current, row.zona].sort((a, b) => a.localeCompare(b));
+                              if (isChecked) {
+                                if (current.includes(row.zona)) return current;
+                                return [...current, row.zona].sort((a, b) => a.localeCompare(b));
+                              }
+                              return current.filter((zonaItem) => zonaItem !== row.zona);
                             });
                           }}
                           disabled={adminBusy || cd == null}
-                        >
-                          <span className="iz-admin-zone-chip-name">{row.zona}</span>
-                          <span className="iz-admin-zone-chip-count">{row.itens}</span>
-                          {checked ? <span className="iz-admin-zone-chip-check">✓</span> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              <div className="iz-admin-footer">
-                <button className="iz-admin-action-btn" type="button" onClick={() => setAdminZonePickerOpen(false)}>
-                  Cancelar
-                </button>
-                <button className="iz-admin-action-btn primary" type="button" onClick={saveAdminZonePicker}>
-                  Salvar seleção
-                </button>
+                        />
+                        <span className="inventario-admin-zone-main">
+                          <span>{row.zona}</span>
+                          <small>{`${row.itens} Endereços de Separação`}</small>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="inventario-admin-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setAdminZonePickerOpen(false)}>
+                    Cancelar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={saveAdminZonePicker}>
+                    Salvar seleção
+                  </button>
+                </div>
               </div>
             </div>
           </div>,
           document.body
         ) : null}
 
-        {/* ═══ Admin Confirm ═══ */}
         {adminConfirm && typeof document !== "undefined" ? createPortal(
-          <div className="iz-picker-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
-            <div className="iz-picker-sheet iz-admin-sheet iz-admin-confirm-sheet" onClick={(event) => event.stopPropagation()}>
-              <div className="iz-picker-header">
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
+            <div className="inventario-popup-card inventario-admin-confirm-popup" onClick={(event) => event.stopPropagation()}>
+              <div className="inventario-popup-head">
                 <div>
-                  <h3 className="iz-picker-title">{adminConfirm.title}</h3>
-                  <p className="iz-picker-sub">Revise antes de confirmar</p>
+                  <h3>{adminConfirm.title}</h3>
+                  <p>Revise os dados antes de continuar.</p>
                 </div>
-                <button type="button" className="iz-picker-close-btn" onClick={closeAllAdminPopups} aria-label="Fechar">
-                  {closeIcon()}
-                </button>
+                <button type="button" className="inventario-popup-close" onClick={closeAllAdminPopups} aria-label="Fechar popup">Fechar</button>
               </div>
-              <div className="iz-admin-body">
-                <div className="iz-admin-confirm-lines">
+              <div className="inventario-popup-body">
+                <div className="inventario-admin-confirm-lines">
                   {adminConfirm.lines.map((line, index) => (
                     <p key={`${index}-${line}`}>{line}</p>
                   ))}
                 </div>
-                <div className="iz-admin-footer">
-                  <button className="iz-admin-action-btn" type="button" onClick={() => setAdminConfirm(null)} disabled={adminBusy}>
+                <div className="inventario-admin-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setAdminConfirm(null)} disabled={adminBusy}>
                     Cancelar
                   </button>
                   <button
-                    className={`iz-admin-action-btn${adminConfirm.danger ? " danger" : " primary"}`}
+                    className={`btn ${adminConfirm.danger ? "btn-muted termo-danger-btn" : "btn-primary"}`}
                     type="button"
                     onClick={() => void confirmAdminAction()}
                     disabled={adminBusy}
