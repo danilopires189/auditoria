@@ -447,7 +447,7 @@ function moduloLabel(value: PvpsModulo): string {
 }
 
 function ruleTargetLabel(targetType: PvpsRuleTargetType, targetValue: string): string {
-  return targetType === "zona" ? `Zona ${targetValue}` : `CODDV ${targetValue}`;
+  return targetType === "zona" ? `Zona ${targetValue}` : `SKU ${targetValue}`;
 }
 
 function historyActionLabel(value: "create" | "remove"): string {
@@ -1355,10 +1355,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setProgressBaselinePvps((prev) => {
       const nextTotal = Math.max(currentTotal, 0);
       if (prev.key !== scopeKey) return { key: scopeKey, total: nextTotal };
+      if (isOnline) return { key: scopeKey, total: nextTotal };
       if (prev.total <= 0 && nextTotal > 0) return { key: scopeKey, total: nextTotal };
       return prev;
     });
-  }, [activeCd, todayBrt, zoneScopeKey, filteredPvpsPendingRows.length, sortedPvpsCompletedRows.length]);
+  }, [activeCd, todayBrt, zoneScopeKey, filteredPvpsPendingRows.length, sortedPvpsCompletedRows.length, isOnline]);
 
   useEffect(() => {
     const scopeKey = `${activeCd ?? "no-cd"}|${todayBrt}|${zoneScopeKey}`;
@@ -1366,10 +1367,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setProgressBaselineAloc((prev) => {
       const nextTotal = Math.max(currentTotal, 0);
       if (prev.key !== scopeKey) return { key: scopeKey, total: nextTotal };
+      if (isOnline) return { key: scopeKey, total: nextTotal };
       if (prev.total <= 0 && nextTotal > 0) return { key: scopeKey, total: nextTotal };
       return prev;
     });
-  }, [activeCd, todayBrt, zoneScopeKey, filteredAlocPendingRows.length, sortedAlocCompletedRows.length]);
+  }, [activeCd, todayBrt, zoneScopeKey, filteredAlocPendingRows.length, sortedAlocCompletedRows.length, isOnline]);
 
   const pvpsStats = useMemo(() => {
     const total = progressBaselinePvps.total;
@@ -2059,7 +2061,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       ? draft.target_value.trim().toUpperCase()
       : draft.target_value.replace(/\D/g, "");
     if (!normalizedTarget) {
-      setErrorMessage(draft.target_type === "zona" ? "Zona obrigatória para criar regra." : "CODDV obrigatório para criar regra.");
+      setErrorMessage(draft.target_type === "zona" ? "Zona obrigatória para criar regra." : "SKU obrigatório para criar regra.");
       return;
     }
     const priorityValue = draft.rule_kind === "priority"
@@ -2087,7 +2089,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       await loadAdminData();
       await loadCurrent();
       const createdLabel = created.rule_kind === "blacklist" ? "Blacklist" : "Regra";
-      const targetLabel = `${draft.target_type === "zona" ? "Zona" : "CODDV"} ${normalizedTarget}`;
+      const targetLabel = `${draft.target_type === "zona" ? "Zona" : "SKU"} ${normalizedTarget}`;
       const effectLabel = applyMode === "next_inclusions"
         ? "Somente próximas inclusões serão afetadas; pendentes atuais foram preservados."
         : (created.rule_kind === "blacklist"
@@ -2110,7 +2112,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       ? adminDraft.target_value.trim().toUpperCase()
       : adminDraft.target_value.replace(/\D/g, "");
     if (!normalizedTarget) {
-      setErrorMessage(adminDraft.target_type === "zona" ? "Zona obrigatória para criar regra." : "CODDV obrigatório para criar regra.");
+      setErrorMessage(adminDraft.target_type === "zona" ? "Zona obrigatória para criar regra." : "SKU obrigatório para criar regra.");
       return;
     }
     const priorityValue = adminDraft.rule_kind === "priority"
@@ -2371,11 +2373,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       onChange={(event) => setAdminDraft((current) => ({ ...current, target_type: event.target.value as PvpsRuleTargetType }))}
                     >
                       <option value="zona">Zona</option>
-                      <option value="coddv">CODDV</option>
+                      <option value="coddv">SKU</option>
                     </select>
                   </label>
                   <label>
-                    {adminDraft.target_type === "zona" ? "Zona" : "CODDV"}
+                    {adminDraft.target_type === "zona" ? "Zona" : "SKU"}
                     <input
                       value={adminDraft.target_value}
                       onChange={(event) => setAdminDraft((current) => ({
@@ -2384,7 +2386,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           ? event.target.value.toUpperCase()
                           : event.target.value.replace(/\D/g, "")
                       }))}
-                      placeholder={adminDraft.target_type === "zona" ? "Ex.: PG01" : "Código"}
+                      placeholder={adminDraft.target_type === "zona" ? "Ex.: PG01" : "SKU"}
                     />
                   </label>
                   {adminDraft.rule_kind === "priority" ? (
@@ -2610,7 +2612,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     />
                   </div>
                   <small>
-                    {pvpsStats.completed} concluído(s) de {pvpsStats.total} na base de referência.
+                    {pvpsStats.completed} {pvpsStats.completed === 1 ? "SKU conferido" : "SKUs conferidos"} de {pvpsStats.total} {pvpsStats.total === 1 ? "SKU" : "SKUs"} na base {isOnline ? "online atual" : "local atual"}.
                   </small>
                 </div>
                 {sortedPvpsCompletedRows.length === 0 ? <p>Sem itens concluídos hoje para o CD ativo.</p> : null}
@@ -2687,7 +2689,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     />
                   </div>
                   <small>
-                    {alocStats.completed} concluído(s) de {alocStats.total} na base de referência.
+                    {alocStats.completed} {alocStats.completed === 1 ? "SKU conferido" : "SKUs conferidos"} de {alocStats.total} {alocStats.total === 1 ? "SKU" : "SKUs"} na base {isOnline ? "online atual" : "local atual"}.
                   </small>
                 </div>
                 {sortedAlocCompletedRows.length === 0 ? <p>Sem itens concluídos hoje para o CD ativo.</p> : null}
@@ -3067,7 +3069,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <strong>
                   {pendingRulePreview.draft.target_type === "zona"
                     ? `ZONA ${pendingRulePreview.draft.target_value}`
-                    : `CODDV ${pendingRulePreview.draft.target_value}`}
+                    : `SKU ${pendingRulePreview.draft.target_value}`}
                 </strong>.
               </p>
               <p>

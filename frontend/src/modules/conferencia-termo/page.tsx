@@ -1568,7 +1568,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         }
         const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
         if (!target) {
-          const produtoNome = `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
+          const produtoNome = `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
           showDialog({
             title: "Produto fora do volume",
             message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
@@ -1649,7 +1649,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       if (message.includes("PRODUTO_FORA_DO_VOLUME")) {
         const lookup = await resolveBarcodeProduct(barras);
         const produtoNome = lookup
-          ? `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
+          ? `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
           : `Código de barras ${barras}`;
         showDialog({
           title: "Produto fora do volume",
@@ -2028,7 +2028,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     const loadProgressBase = async () => {
       try {
-        const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+        const manifestItems = isOnline
+          ? (await fetchManifestBundle(currentCd, undefined, { includeBarras: false })).items
+          : await listManifestItemsByCd(profile.user_id, currentCd);
         if (cancelled) return;
 
         const byStore: Record<string, number> = {};
@@ -2051,7 +2053,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     return () => {
       cancelled = true;
     };
-  }, [currentCd, manifestInfo, profile.user_id]);
+  }, [currentCd, isOnline, profile.user_id]);
 
   useEffect(() => {
     if (currentCd == null) {
@@ -2786,7 +2788,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
               />
             </div>
             <small>
-              {coddvCompletionStats.completed} CODDV conferido(s) de {coddvCompletionStats.total} na base de referência.
+              {coddvCompletionStats.completed} {coddvCompletionStats.completed === 1 ? "SKU conferido" : "SKUs conferidos"}
+              {" "}de {coddvCompletionStats.total} {coddvCompletionStats.total === 1 ? "SKU" : "SKUs"} na base {isOnline ? "online atual" : "local atual"}.
             </small>
           </div>
         ) : null}
@@ -2974,7 +2977,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
-                        <p>CODDV: {item.coddv}</p>
+                        <p>SKU: {item.coddv}</p>
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
@@ -3047,7 +3050,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
-                        <p>CODDV: {item.coddv}</p>
+                        <p>SKU: {item.coddv}</p>
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
@@ -3119,7 +3122,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
                       <div className="termo-item-main">
                         <strong>{item.descricao}</strong>
-                        <p>CODDV: {item.coddv}</p>
+                        <p>SKU: {item.coddv}</p>
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
