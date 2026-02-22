@@ -1936,6 +1936,24 @@ small {
   justify-content: flex-end;
 }
 
+.atividade-extra-add-btn {
+  min-height: 40px;
+  padding: 8px 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.atividade-extra-add-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .atividade-extra-refresh-btn,
 .atividade-extra-visibility-btn {
   min-height: 40px;
@@ -1962,6 +1980,18 @@ small {
 
 .atividade-extra-body {
   display: grid;
+  gap: 10px;
+}
+
+.atividade-extra-editor-dialog {
+  width: min(100%, 460px);
+  max-width: min(calc(100vw - 24px), 460px);
+}
+
+.atividade-extra-editor-dialog .atividade-extra-form {
+  border: 0;
+  background: transparent;
+  padding: 0;
   gap: 10px;
 }
 
@@ -2013,6 +2043,10 @@ small {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.atividade-extra-editor-actions {
+  margin-top: 0;
 }
 
 .atividade-extra-grid {
@@ -2216,6 +2250,17 @@ small {
     justify-content: flex-start;
   }
 
+  .atividade-extra-add-label {
+    display: none;
+  }
+
+  .atividade-extra-add-btn {
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
   .atividade-extra-form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2232,7 +2277,7 @@ small {
     display: grid;
   }
 
-  .atividade-extra-form-actions .btn {
+  .atividade-extra-editor-actions .btn {
     width: 100%;
   }
 }
