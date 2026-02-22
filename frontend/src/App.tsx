@@ -8,6 +8,7 @@ import pmImage from "../assets/pm.png";
 import { supabase, supabaseInitError } from "./lib/supabase";
 import { findModuleByPath } from "./modules/registry";
 import AtividadeExtraPage from "./modules/atividade-extra/page";
+import BuscaProdutoPage from "./modules/busca-produto/page";
 import CheckListPage from "./modules/check-list/page";
 import ColetaMercadoriaPage from "./modules/coleta-mercadoria/page";
 import ConferenciaEntradaNotasPage from "./modules/conferencia-entrada-notas/page";
@@ -25,6 +26,7 @@ import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
+import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
 import type { PedidoDiretoModuleProfile } from "./modules/conferencia-pedido-direto/types";
 import { clearUserPedidoDiretoSessionCache } from "./modules/conferencia-pedido-direto/storage";
 import type { EntradaNotasModuleProfile } from "./modules/conferencia-entrada-notas/types";
@@ -1266,6 +1268,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const buscaProdutoProfile = useMemo<BuscaProdutoModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const termoProfile = useMemo<TermoModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -1417,6 +1431,16 @@ export default function App() {
             element={
               atividadeExtraProfile ? (
                 <AtividadeExtraPage isOnline={isOnline} profile={atividadeExtraProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/busca-produto"
+            element={
+              buscaProdutoProfile ? (
+                <BuscaProdutoPage isOnline={isOnline} profile={buscaProdutoProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )

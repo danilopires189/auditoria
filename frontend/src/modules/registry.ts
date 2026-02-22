@@ -3,6 +3,7 @@ import type { DashboardModule, DashboardModuleKey } from "./types";
 export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "pvps-alocacao", path: "/modulos/pvps-alocacao", title: "Auditoria de PVPS e Alocação", icon: "audit", tone: "blue" },
   { key: "atividade-extra", path: "/modulos/atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
+  { key: "busca-produto", path: "/modulos/busca-produto", title: "Busca por Produto", icon: "notes", tone: "blue" },
   { key: "coleta-mercadoria", path: "/modulos/coleta-mercadoria", title: "Coleta de Mercadoria", icon: "collect", tone: "teal" },
   { key: "check-list", path: "/modulos/check-list", title: "Check List", icon: "checklist", tone: "blue" },
   { key: "conferencia-termo", path: "/modulos/conferencia-termo", title: "Conferência de Termo", icon: "term", tone: "blue" },
