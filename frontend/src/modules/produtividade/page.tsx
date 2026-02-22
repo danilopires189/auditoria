@@ -115,6 +115,55 @@ function formatMetric(value: number, unit: string): string {
   }).format(safe);
 }
 
+function isSingularValue(value: number): boolean {
+  return Math.abs(value - 1) < 0.0005;
+}
+
+function inflectUnitLabel(unitLabel: string, value: number): string {
+  const raw = unitLabel.trim();
+  if (!raw) return "";
+
+  const key = raw.toLocaleLowerCase("pt-BR");
+  const irregularMap: Record<string, { singular: string; plural: string }> = {
+    ponto: { singular: "ponto", plural: "pontos" },
+    pontos: { singular: "ponto", plural: "pontos" },
+    unidade: { singular: "unidade", plural: "unidades" },
+    unidades: { singular: "unidade", plural: "unidades" },
+    endereco: { singular: "endereço", plural: "endereços" },
+    enderecos: { singular: "endereço", plural: "endereços" },
+    "endereço": { singular: "endereço", plural: "endereços" },
+    "endereços": { singular: "endereço", plural: "endereços" },
+    loja: { singular: "loja", plural: "lojas" },
+    lojas: { singular: "loja", plural: "lojas" },
+    sku: { singular: "sku", plural: "skus" },
+    skus: { singular: "sku", plural: "skus" },
+    nfd: { singular: "nfd", plural: "nfds" },
+    nfds: { singular: "nfd", plural: "nfds" },
+    volume: { singular: "volume", plural: "volumes" },
+    volumes: { singular: "volume", plural: "volumes" }
+  };
+
+  const irregular = irregularMap[key];
+  if (irregular) {
+    return isSingularValue(value) ? irregular.singular : irregular.plural;
+  }
+
+  if (isSingularValue(value)) {
+    return key.endsWith("s") ? key.slice(0, -1) : key;
+  }
+  return key.endsWith("s") ? key : `${key}s`;
+}
+
+function formatMetricWithUnit(value: number, unitLabel: string): string {
+  const metric = formatMetric(value, unitLabel);
+  const inflected = inflectUnitLabel(unitLabel, value);
+  return inflected ? `${metric} ${inflected}` : metric;
+}
+
+function pluralizeCount(value: number, singular: string, plural: string): string {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
 function asUnknownErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -528,9 +577,9 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                           onClick={() => onToggleActivityFilter(row.activity_key)}
                         >
                           <strong>{row.activity_label}</strong>
-                          <span>{formatMetric(row.valor_total, row.unit_label)} {row.unit_label}</span>
+                          <span>{formatMetricWithUnit(row.valor_total, row.unit_label)}</span>
                           <small>
-                            {row.registros_count} registro(s)
+                            {pluralizeCount(row.registros_count, "registro", "registros")}
                             {row.last_event_date ? ` | Último: ${formatDate(row.last_event_date)}` : ""}
                           </small>
                         </button>
@@ -569,7 +618,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                           <small>
                             {bucket.items
                               .slice(0, 4)
-                              .map((row) => `${row.activity_label}: ${formatMetric(row.valor_total, row.unit_label)}`)
+                              .map((row) => `${row.activity_label}: ${formatMetricWithUnit(row.valor_total, row.unit_label)}`)
                               .join(" | ")}
                           </small>
                         </article>
@@ -590,7 +639,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                         <article key={entry.entry_id} className="produtividade-entry-card">
                           <div className="produtividade-entry-head">
                             <strong>{entry.activity_label}</strong>
-                            <span>{formatMetric(entry.metric_value, entry.unit_label)} {entry.unit_label}</span>
+                            <span>{formatMetricWithUnit(entry.metric_value, entry.unit_label)}</span>
                           </div>
                           <p>{entry.detail || "-"}</p>
                           <div className="produtividade-entry-meta">
