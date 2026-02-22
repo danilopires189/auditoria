@@ -44,7 +44,6 @@ Artefato gerado em `dist\sync_backend.exe`.
 
 Arquivos esperados no fluxo padrão (`data\`):
 - `DB_BARRAS.xlsx`
-- `DB_INVENTARIO.xlsx`
 - demais arquivos já configurados em `config.yml`
 
 ## 5. Observações de segurança
@@ -52,4 +51,4 @@ Arquivos esperados no fluxo padrão (`data\`):
 - Nunca salvar senha real em `config.yml`.
 - O frontend depende de RLS no banco para controle de acesso.
 - `db_barras` é dimensão global (sem `cd`) e leitura autenticada via profile.
-- `db_inventario` é base por CD usada no módulo `Inventário (zerados)` e sincroniza pelo mesmo pipeline Excel -> staging -> app.
+- `db_inventario` é base por CD usada no módulo `Inventário (zerados)`, gerida por RPCs Admin e montada a partir de `db_end` + `db_estq_entr`.
