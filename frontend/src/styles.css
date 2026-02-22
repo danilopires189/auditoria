@@ -3691,6 +3691,11 @@ small {
   background: linear-gradient(130deg, #2756a2, #214a8f);
 }
 
+.inventario-progress-grid {
+  display: grid;
+  gap: 10px;
+}
+
 .inventario-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -4755,6 +4760,10 @@ small {
 }
 
 @media (min-width: 981px) {
+  .inventario-progress-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .inventario-popup-overlay {
     align-items: center;
     padding: 20px 12px;

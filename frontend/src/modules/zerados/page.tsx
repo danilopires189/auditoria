@@ -399,6 +399,22 @@ function stageLabel(stage: InventarioStageView): string {
   return "Concluídos";
 }
 
+function isPendingForStage(row: Row, stage: InventarioStageView): boolean {
+  if (stage === "s1") return isS1Pending(row);
+  if (stage === "s2") return isS2Pending(row);
+  if (stage === "conciliation") return isConciliationPending(row);
+  return !row.final;
+}
+
+function completionPercent(completed: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, (completed / total) * 100));
+}
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(0)}%`;
+}
+
 function labelByCount(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -1783,6 +1799,38 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     [reviewFilter, rows, statusFilter]
   );
 
+  const stageItemStats = useMemo(() => {
+    if (tab === "done") {
+      const total = rows.length;
+      const completed = rows.filter((row) => row.final).length;
+      const percent = completionPercent(completed, total);
+      return { total, completed, percent };
+    }
+
+    const total = stageUniverse.length;
+    const completed = stageUniverse.filter((row) => !isPendingForStage(row, tab)).length;
+    const percent = completionPercent(completed, total);
+    return { total, completed, percent };
+  }, [rows, stageUniverse, tab]);
+  const stageAddressStats = useMemo(() => {
+    const addressState = new Map<string, { has_pending: boolean; has_done: boolean }>();
+    const sourceRows = tab === "done" ? rows : stageUniverse;
+
+    for (const row of sourceRows) {
+      const key = addressKeyOf(row.zona, row.endereco);
+      const pending = isPendingForStage(row, tab);
+      const current = addressState.get(key) ?? { has_pending: false, has_done: false };
+      if (pending) current.has_pending = true;
+      else current.has_done = true;
+      addressState.set(key, current);
+    }
+
+    const total = addressState.size;
+    const completed = Array.from(addressState.values()).filter((state) => !state.has_pending && state.has_done).length;
+    const percent = completionPercent(completed, total);
+    return { total, completed, percent };
+  }, [rows, stageUniverse, tab]);
+
   const validateBarras = useCallback(async (coddv: number, value: string): Promise<string> => {
     const n = normalizeBarcode(value);
     if (!n) throw new Error("Informe o código de barras.");
@@ -2534,6 +2582,41 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 </button>
               </div>
             )}
+          </div>
+        ) : null}
+
+        {!canShowStageSelector ? (
+          <div className="inventario-progress-grid" role="status" aria-live="polite">
+            <div className="pvps-progress-card">
+              <div className="pvps-progress-head">
+                <strong>{`${stageLabel(tab)} • Itens`}</strong>
+                <span>{formatPercent(stageItemStats.percent)}</span>
+              </div>
+              <div className="pvps-progress-track" aria-hidden="true">
+                <span
+                  className="pvps-progress-fill"
+                  style={{ width: `${Math.max(0, Math.min(stageItemStats.percent, 100))}%` }}
+                />
+              </div>
+              <small>
+                {`${stageItemStats.completed} de ${stageItemStats.total} ${stageItemStats.total === 1 ? "item concluído" : "itens concluídos"} nesta etapa.`}
+              </small>
+            </div>
+            <div className="pvps-progress-card">
+              <div className="pvps-progress-head">
+                <strong>{`${stageLabel(tab)} • Endereços`}</strong>
+                <span>{formatPercent(stageAddressStats.percent)}</span>
+              </div>
+              <div className="pvps-progress-track" aria-hidden="true">
+                <span
+                  className="pvps-progress-fill"
+                  style={{ width: `${Math.max(0, Math.min(stageAddressStats.percent, 100))}%` }}
+                />
+              </div>
+              <small>
+                {`${stageAddressStats.completed} de ${stageAddressStats.total} ${stageAddressStats.total === 1 ? "endereço concluído" : "endereços concluídos"} nesta etapa.`}
+              </small>
+            </div>
           </div>
         ) : null}
 
