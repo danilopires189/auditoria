@@ -780,7 +780,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
               <p><strong>Descrição:</strong> {result.descricao || "-"}</p>
               <p><strong>SKU/CODDV:</strong> {result.coddv}</p>
               <p><strong>Códigos de barras:</strong> {result.barras_lista.length > 0 ? result.barras_lista.join(" | ") : "-"}</p>
-              <p><strong>CD:</strong> {currentCdLabel}</p>
+              <p><strong>Depósito:</strong> {currentCdLabel}</p>
               <p><strong>Estoque disponível:</strong> {result.qtd_est_disp}</p>
               <p><strong>Estoque atual:</strong> {result.qtd_est_atual}</p>
               <p><strong>Última atualização do estoque:</strong> {formatShortDate(result.estoque_updated_at)}</p>
