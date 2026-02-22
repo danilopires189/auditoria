@@ -613,19 +613,55 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (activeCd == null) {
       throw new Error("CD ativo obrigatório para preparar base offline.");
     }
+    setStatusMessage("Preparando base offline...");
     const [pvpsManifest, alocManifest] = await Promise.all([
       fetchPvpsManifest({ p_cd: activeCd, zona: null }),
       fetchAlocacaoManifest({ p_cd: activeCd, zona: null })
     ]);
+
+    const previousSnapshot = await loadOfflineSnapshot(profile.user_id, activeCd).catch(() => null);
     const pulBySepKey: Record<string, PvpsPulItemRow[]> = {};
+    const rowsToFetch: PvpsManifestRow[] = [];
+
     for (const row of pvpsManifest) {
       const rowKey = keyOfPvps(row);
-      try {
-        pulBySepKey[rowKey] = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
-      } catch {
-        pulBySepKey[rowKey] = [];
+      const cached = previousSnapshot?.pul_by_sep_key[rowKey];
+      if (Array.isArray(cached) && cached.length > 0) {
+        pulBySepKey[rowKey] = cached;
+      } else {
+        rowsToFetch.push(row);
       }
     }
+
+    if (rowsToFetch.length > 0) {
+      const total = rowsToFetch.length;
+      let done = 0;
+      let cursor = 0;
+      const concurrency = Math.max(6, Math.min(20, Math.ceil(total / 20)));
+
+      const worker = async () => {
+        for (;;) {
+          const index = cursor;
+          cursor += 1;
+          if (index >= total) return;
+          const row = rowsToFetch[index];
+          const rowKey = keyOfPvps(row);
+          try {
+            pulBySepKey[rowKey] = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
+          } catch {
+            pulBySepKey[rowKey] = [];
+          } finally {
+            done += 1;
+            if (done === total || done % 25 === 0) {
+              setStatusMessage(`Baixando base offline... ${done}/${total} endereços de Pulmão.`);
+            }
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    }
+
     await saveOfflineSnapshot({
       user_id: profile.user_id,
       cd: activeCd,

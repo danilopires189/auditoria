@@ -189,7 +189,7 @@ function mapAlocacaoCompleted(raw: Record<string, unknown>): AlocacaoCompletedRo
 
 export async function fetchPvpsManifest(params?: { p_cd?: number | null; zona?: string | null }): Promise<PvpsManifestRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const pageSize = 500;
+  const pageSize = 1000;
   const rows: PvpsManifestRow[] = [];
   let offset = 0;
   for (;;) {
@@ -653,7 +653,7 @@ export async function submitPvpsPul(params: {
 
 export async function fetchAlocacaoManifest(params?: { p_cd?: number | null; zona?: string | null }): Promise<AlocacaoManifestRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const pageSize = 500;
+  const pageSize = 1000;
   const rows: AlocacaoManifestRow[] = [];
   let offset = 0;
   for (;;) {
