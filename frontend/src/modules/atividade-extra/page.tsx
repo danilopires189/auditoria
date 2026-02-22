@@ -100,14 +100,13 @@ function secondsToHms(totalSeconds: number): string {
 }
 
 function computeDurationSeconds(params: {
-  dataInicio: string;
+  dataAtividade: string;
   horaInicio: string;
-  dataFim: string;
   horaFim: string;
 }): number | null {
-  if (!params.dataInicio || !params.horaInicio || !params.dataFim || !params.horaFim) return null;
-  const start = Date.parse(`${params.dataInicio}T${params.horaInicio}:00`);
-  const end = Date.parse(`${params.dataFim}T${params.horaFim}:00`);
+  if (!params.dataAtividade || !params.horaInicio || !params.horaFim) return null;
+  const start = Date.parse(`${params.dataAtividade}T${params.horaInicio}:00`);
+  const end = Date.parse(`${params.dataAtividade}T${params.horaFim}:00`);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
   return Math.floor((end - start) / 1000);
 }
@@ -209,9 +208,8 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const [entries, setEntries] = useState<AtividadeExtraEntryRow[]>([]);
 
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-  const [dataInicio, setDataInicio] = useState<string>(todayIsoBrasilia());
+  const [dataAtividade, setDataAtividade] = useState<string>(todayIsoBrasilia());
   const [horaInicio, setHoraInicio] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
-  const [dataFim, setDataFim] = useState<string>(todayIsoBrasilia());
   const [horaFim, setHoraFim] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
   const [descricao, setDescricao] = useState<string>("");
 
@@ -221,8 +219,8 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   );
 
   const previewDurationSeconds = useMemo(
-    () => computeDurationSeconds({ dataInicio, horaInicio, dataFim, horaFim }),
-    [dataInicio, horaInicio, dataFim, horaFim]
+    () => computeDurationSeconds({ dataAtividade, horaInicio, horaFim }),
+    [dataAtividade, horaInicio, horaFim]
   );
   const previewPoints = useMemo(() => computePoints(previewDurationSeconds), [previewDurationSeconds]);
 
@@ -230,9 +228,8 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     const nowDate = todayIsoBrasilia();
     const nowTime = clampTimeToWindow(nowHourMinuteBrasilia());
     setEditingEntryId(null);
-    setDataInicio(nowDate);
+    setDataAtividade(nowDate);
     setHoraInicio(nowTime);
-    setDataFim(nowDate);
     setHoraFim(nowTime);
     setDescricao("");
   }, []);
@@ -316,9 +313,8 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const onEditEntry = useCallback((entry: AtividadeExtraEntryRow) => {
     if (!entry.can_edit) return;
     setEditingEntryId(entry.id);
-    setDataInicio(entry.data_inicio);
+    setDataAtividade(entry.data_inicio);
     setHoraInicio(toTimeInputValue(entry.hora_inicio));
-    setDataFim(entry.data_fim);
     setHoraFim(toTimeInputValue(entry.hora_fim));
     setDescricao(entry.descricao);
     setStatusMessage(null);
@@ -392,9 +388,9 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       if (editingEntryId) {
         await updateAtividadeExtra({
           id: editingEntryId,
-          data_inicio: dataInicio,
+          data_inicio: dataAtividade,
           hora_inicio: horaInicio,
-          data_fim: dataFim,
+          data_fim: dataAtividade,
           hora_fim: horaFim,
           descricao: cleanDescription
         });
@@ -402,9 +398,9 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       } else {
         await insertAtividadeExtra({
           cd: activeCd,
-          data_inicio: dataInicio,
+          data_inicio: dataAtividade,
           hora_inicio: horaInicio,
-          data_fim: dataFim,
+          data_fim: dataAtividade,
           hora_fim: horaFim,
           descricao: cleanDescription
         });
@@ -451,7 +447,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             <div className="module-screen-title-row">
               <div className="module-screen-title">
                 <h2>Detalhamento de atividades</h2>
-                <p>{activeCd != null ? `CD ${String(activeCd).padStart(2, "0")}` : "CD não definido"}</p>
+                <p>Uso rápido para registro diário no celular.</p>
               </div>
               <div className="atividade-extra-actions-head">
                 <button
@@ -492,11 +488,11 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             <form className="atividade-extra-form" onSubmit={onSubmit}>
               <div className="atividade-extra-form-grid">
                 <label>
-                  Data inicial
+                  Data da atividade
                   <input
                     type="date"
-                    value={dataInicio}
-                    onChange={(event) => setDataInicio(event.target.value)}
+                    value={dataAtividade}
+                    onChange={(event) => setDataAtividade(event.target.value)}
                     required
                   />
                 </label>
@@ -508,15 +504,6 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                     onChange={(event) => setHoraInicio(clampTimeToWindow(event.target.value))}
                     min="06:00"
                     max="21:30"
-                    required
-                  />
-                </label>
-                <label>
-                  Data final
-                  <input
-                    type="date"
-                    value={dataFim}
-                    onChange={(event) => setDataFim(event.target.value)}
                     required
                   />
                 </label>
@@ -564,31 +551,48 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                 {collaborators.length === 0 ? (
                   <div className="coleta-empty">Nenhuma atividade registrada no período atual.</div>
                 ) : (
-                  <div className="atividade-extra-table-wrap">
-                    <table className="atividade-extra-table">
-                      <thead>
-                        <tr>
-                          <th>Mat</th>
-                          <th>Nome</th>
-                          <th>Pontuação</th>
-                          <th>Tempo total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {collaborators.map((row) => (
-                          <tr
-                            key={row.user_id}
-                            className={row.user_id === selectedUserId ? "is-selected" : ""}
-                            onClick={() => onSelectCollaborator(row.user_id)}
-                          >
-                            <td>{row.mat}</td>
-                            <td>{row.nome}</td>
-                            <td>{formatPoints(row.pontos_soma)}</td>
-                            <td>{row.tempo_total_hms}</td>
+                  <div className="atividade-extra-collaborators-content">
+                    <div className="atividade-extra-table-wrap">
+                      <table className="atividade-extra-table">
+                        <thead>
+                          <tr>
+                            <th>Mat</th>
+                            <th>Nome</th>
+                            <th>Pontuação</th>
+                            <th>Tempo total</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {collaborators.map((row) => (
+                            <tr
+                              key={row.user_id}
+                              className={row.user_id === selectedUserId ? "is-selected" : ""}
+                              onClick={() => onSelectCollaborator(row.user_id)}
+                            >
+                              <td>{row.mat}</td>
+                              <td>{row.nome}</td>
+                              <td>{formatPoints(row.pontos_soma)}</td>
+                              <td>{row.tempo_total_hms}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="atividade-extra-collaborator-cards">
+                      {collaborators.map((row) => (
+                        <button
+                          key={`card:${row.user_id}`}
+                          className={`atividade-extra-collaborator-card${row.user_id === selectedUserId ? " is-selected" : ""}`}
+                          type="button"
+                          onClick={() => onSelectCollaborator(row.user_id)}
+                        >
+                          <strong>{row.nome}</strong>
+                          <span>Mat: {row.mat}</span>
+                          <span>Pontuação: {formatPoints(row.pontos_soma)}</span>
+                          <span>Tempo total: {row.tempo_total_hms}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </section>
