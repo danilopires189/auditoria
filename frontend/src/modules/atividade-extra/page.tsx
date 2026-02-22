@@ -146,8 +146,8 @@ function formatDateTime(value: string): string {
 
 function formatPoints(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
-    minimumFractionDigits: 5,
-    maximumFractionDigits: 5
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3
   }).format(value);
 }
 
