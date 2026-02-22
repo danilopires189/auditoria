@@ -2724,7 +2724,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     value={zoneSearchInput}
                     onChange={(event) => setZoneSearchInput(event.target.value)}
                     placeholder="Buscar zona..."
-                    autoFocus
+                    onFocus={(e) => { e.target.removeAttribute("readOnly"); }}
+                    readOnly
                   />
                 </div>
                 {filteredZoneBuckets.length === 0 ? (
