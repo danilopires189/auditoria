@@ -2588,10 +2588,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <button
                   type="button"
                   className="btn btn-muted termo-route-btn inventario-change-zone-btn"
-                  onClick={() => {
-                    setZoneSearchInput("");
-                    setShowZonePicker(true);
-                  }}
+                  onClick={() => setShowZonePicker(true)}
                   disabled={zoneBuckets.length === 0}
                 >
                   <span aria-hidden="true">{listIcon()}</span>
@@ -2655,15 +2652,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           <div className="termo-form inventario-zone-list-mobile">
             <h3>{`Zonas - ${stageLabel(tab)}`}</h3>
             <p className="inventario-editor-text">Use o botão abaixo para escolher entre as zonas disponíveis.</p>
-            <button
-              type="button"
-              className="btn btn-muted termo-route-btn inventario-zone-picker-btn"
-              onClick={() => {
-                setZoneSearchInput("");
-                setShowZonePicker(true);
-              }}
-              disabled={zoneBuckets.length === 0}
-            >
+            <button type="button" className="btn btn-muted termo-route-btn inventario-zone-picker-btn" onClick={() => setShowZonePicker(true)} disabled={zoneBuckets.length === 0}>
               Escolher zona
             </button>
             {zone ? <p className="inventario-editor-text">{`Zona atual: ${zone}`}</p> : null}
@@ -2741,31 +2730,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
         {showZonePicker && typeof document !== "undefined"
           ? createPortal(
-            <div
-              className="iz-picker-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="inventario-zonas-title"
-              onClick={() => {
-                setShowZonePicker(false);
-                setZoneSearchInput("");
-              }}
-            >
+            <div className="iz-picker-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-zonas-title" onClick={() => setShowZonePicker(false)}>
               <div className="iz-picker-sheet" onClick={(event) => event.stopPropagation()}>
                 <div className="iz-picker-header">
                   <div>
                     <h3 id="inventario-zonas-title" className="iz-picker-title">{stageLabel(tab)}</h3>
                     <p className="iz-picker-sub">Selecione uma zona para trabalhar</p>
                   </div>
-                  <button
-                    type="button"
-                    className="iz-picker-close-btn"
-                    onClick={() => {
-                      setShowZonePicker(false);
-                      setZoneSearchInput("");
-                    }}
-                    aria-label="Fechar"
-                  >
+                  <button type="button" className="iz-picker-close-btn" onClick={() => setShowZonePicker(false)} aria-label="Fechar">
                     {closeIcon()}
                   </button>
                 </div>
@@ -2777,22 +2749,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     value={zoneSearchInput}
                     onChange={(event) => setZoneSearchInput(event.target.value)}
                     placeholder="Buscar zona..."
-                    inputMode="search"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    enterKeyHint="search"
+                    onFocus={(e) => { e.target.removeAttribute("readOnly"); }}
+                    readOnly
                   />
-                  {zoneSearchInput.trim() !== "" ? (
-                    <button
-                      type="button"
-                      className="iz-picker-search-clear"
-                      onClick={() => setZoneSearchInput("")}
-                      aria-label="Limpar busca de zonas"
-                    >
-                      {closeIcon()}
-                    </button>
-                  ) : null}
                 </div>
                 {filteredZoneBuckets.length === 0 ? (
                   <p className="iz-picker-empty">Nenhuma zona encontrada.</p>
