@@ -26,7 +26,6 @@ import {
   cleanupExpiredDevolucaoMercadoriaVolumes,
   getLocalVolume,
   getManifestItemsByEtiqueta,
-  listManifestItemsByCd,
   listManifestVolumes,
   getManifestMetaLocal,
   getPendingSummary,
@@ -597,12 +596,11 @@ function routeStatusClass(status: DevolucaoMercadoriaStoreStatus | string): "cor
   return "falta";
 }
 
-function buildStoreProgressKey(rota: string | null | undefined, filial: number | null | undefined): string {
-  const normalizedRota = (String(rota ?? "SEM ROTA").trim().toLocaleUpperCase("pt-BR") || "SEM ROTA");
-  const normalizedFilial = Number.isFinite(Number(filial))
-    ? String(Math.trunc(Number(filial)))
-    : "na";
-  return `${normalizedRota}::${normalizedFilial}`;
+function toStoreStatus(status: unknown): DevolucaoMercadoriaStoreStatus {
+  const value = String(status ?? "").toLowerCase();
+  if (value === "concluido" || value === "finalizado_ok" || value === "finalizado_falta") return "concluido";
+  if (value === "em_andamento" || value === "em_conferencia") return "em_andamento";
+  return "pendente";
 }
 
 function formatPercent(value: number): string {
@@ -709,8 +707,6 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [routeRows, setRouteRows] = useState<DevolucaoMercadoriaRouteOverviewRow[]>([]);
-  const [baseCoddvTotal, setBaseCoddvTotal] = useState(0);
-  const [baseCoddvByStore, setBaseCoddvByStore] = useState<Record<string, number>>({});
   const [manifestVolumeRows, setManifestVolumeRows] = useState<DevolucaoMercadoriaManifestVolumeRow[]>([]);
 
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
@@ -912,29 +908,63 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     ));
   }, [activeVolume, currentCd, manifestVolumeRows, modalVolumeHistory, routeSearchInput]);
 
-  const coddvCompletionStats = useMemo(() => {
-    if (baseCoddvTotal <= 0) {
+  const nfdCompletionStats = useMemo(() => {
+    if (currentCd == null) {
       return { completed: 0, total: 0, percent: 0 };
     }
 
-    let completed = 0;
-    for (const row of routeRows) {
-      const baseCount = baseCoddvByStore[buildStoreProgressKey(row.rota, row.filial)] ?? 0;
-      if (baseCount <= 0) continue;
-
-      const totalEtiquetas = Math.max(Number(row.total_etiquetas) || 0, 0);
-      const conferidas = Math.max(Number(row.conferidas) || 0, 0);
-      const ratio = totalEtiquetas > 0
-        ? Math.max(0, Math.min(conferidas / totalEtiquetas, 1))
-        : row.status === "concluido" ? 1 : 0;
-
-      completed += Math.round(baseCount * ratio);
+    const today = todayIsoBrasilia();
+    const latestByRef = new Map<string, DevolucaoMercadoriaLocalVolume>();
+    for (const row of modalVolumeHistory) {
+      if (row.cd !== currentCd) continue;
+      if (row.conf_date !== today) continue;
+      if (row.conference_kind !== "com_nfd") continue;
+      if (!latestByRef.has(row.ref)) {
+        latestByRef.set(row.ref, row);
+      }
     }
 
-    completed = Math.max(0, Math.min(completed, baseCoddvTotal));
-    const percent = baseCoddvTotal > 0 ? (completed / baseCoddvTotal) * 100 : 0;
-    return { completed, total: baseCoddvTotal, percent };
-  }, [baseCoddvByStore, baseCoddvTotal, routeRows]);
+    const baseRows = manifestVolumeRows.length > 0
+      ? manifestVolumeRows
+      : Array.from(latestByRef.values()).map((row) => ({
+          ref: row.ref,
+          nfd: row.nfd,
+          chave: row.chave,
+          motivo: row.source_motivo,
+          itens_total: row.items.length,
+          qtd_esperada_total: row.items.reduce((acc, item) => acc + Math.max(item.qtd_esperada, 0), 0),
+          status: (row.status === "em_conferencia" ? "em_andamento" : "concluido") as DevolucaoMercadoriaStoreStatus,
+          colaborador_nome: row.started_nome,
+          colaborador_mat: row.started_mat,
+          status_at: row.finalized_at ?? row.started_at
+        }));
+
+    const total = baseRows.length;
+    if (total <= 0) return { completed: 0, total: 0, percent: 0 };
+
+    let completed = 0;
+    for (const row of baseRows) {
+      let status: DevolucaoMercadoriaStoreStatus = toStoreStatus(row.status);
+      if (
+        activeVolume
+        && activeVolume.cd === currentCd
+        && activeVolume.ref === row.ref
+        && activeVolume.status === "em_conferencia"
+        && !activeVolume.is_read_only
+      ) {
+        status = "em_andamento";
+      } else if (row.status == null) {
+        const local = latestByRef.get(row.ref);
+        if (local) {
+          status = local.status === "em_conferencia" && !local.is_read_only ? "em_andamento" : "concluido";
+        }
+      }
+      if (status === "concluido") completed += 1;
+    }
+
+    const percent = total > 0 ? (completed / total) * 100 : 0;
+    return { completed, total, percent };
+  }, [activeVolume, currentCd, manifestVolumeRows, modalVolumeHistory]);
 
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
@@ -2132,9 +2162,34 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
     try {
       const remoteManifestVolumes = await fetchManifestVolumes(currentCd);
-      setManifestVolumeRows(remoteManifestVolumes);
-    } catch {
+      if (remoteManifestVolumes.length > 0) {
+        setManifestVolumeRows(remoteManifestVolumes);
+        return;
+      }
+      if (localManifestVolumes.length > 0) {
+        setManifestVolumeRows(localManifestVolumes);
+        return;
+      }
+      const bundle = await fetchManifestBundle(currentCd, undefined, { includeBarras: false });
+      await saveManifestSnapshot({
+        user_id: profile.user_id,
+        cd: currentCd,
+        meta: bundle.meta,
+        items: bundle.items,
+        barras: [],
+        routes: bundle.routes
+      });
+      const refreshedLocalNotes = await listManifestVolumes(profile.user_id, currentCd);
+      setManifestVolumeRows(refreshedLocalNotes);
+      if (refreshedLocalNotes.length === 0) {
+        setStatusMessage("Nenhuma nota encontrada para o CD selecionado.");
+      }
+    } catch (error) {
       setManifestVolumeRows(localManifestVolumes);
+      if (localManifestVolumes.length === 0) {
+        const message = error instanceof Error ? error.message : "Falha ao carregar notas.";
+        setErrorMessage(normalizeRpcErrorMessage(message));
+      }
     }
   }, [currentCd, isOnline, profile.user_id]);
 
@@ -2221,46 +2276,6 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     if (currentCd == null) return;
     void persistPreferences({ cd_ativo: currentCd });
   }, [currentCd, persistPreferences]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (currentCd == null) {
-      setBaseCoddvTotal(0);
-      setBaseCoddvByStore({});
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const loadProgressBase = async () => {
-      try {
-        const manifestItems = isOnline
-          ? (await fetchManifestBundle(currentCd, undefined, { includeBarras: false })).items
-          : await listManifestItemsByCd(profile.user_id, currentCd);
-        if (cancelled) return;
-
-        const byStore: Record<string, number> = {};
-        for (const item of manifestItems) {
-          const key = buildStoreProgressKey(item.rota, item.filial);
-          byStore[key] = (byStore[key] ?? 0) + 1;
-        }
-
-        setBaseCoddvTotal(manifestItems.length);
-        setBaseCoddvByStore(byStore);
-      } catch {
-        if (cancelled) return;
-        setBaseCoddvTotal(0);
-        setBaseCoddvByStore({});
-      }
-    };
-
-    void loadProgressBase();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentCd, isOnline, profile.user_id]);
 
   useEffect(() => {
     if (currentCd == null) {
@@ -3018,17 +3033,17 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           <div className="pvps-progress-card" role="status" aria-live="polite">
             <div className="pvps-progress-head">
               <strong>Conclusão Devolução</strong>
-              <span>{formatPercent(coddvCompletionStats.percent)}</span>
+              <span>{formatPercent(nfdCompletionStats.percent)}</span>
             </div>
             <div className="pvps-progress-track" aria-hidden="true">
               <span
                 className="pvps-progress-fill"
-                style={{ width: `${Math.max(0, Math.min(coddvCompletionStats.percent, 100))}%` }}
+                style={{ width: `${Math.max(0, Math.min(nfdCompletionStats.percent, 100))}%` }}
               />
             </div>
             <small>
-              {coddvCompletionStats.completed} {coddvCompletionStats.completed === 1 ? "SKU conferido" : "SKUs conferidos"}
-              {" "}de {coddvCompletionStats.total} {coddvCompletionStats.total === 1 ? "SKU" : "SKUs"} na base {isOnline ? "online atual" : "local atual"}.
+              {nfdCompletionStats.completed} {nfdCompletionStats.completed === 1 ? "NFD concluída" : "NFDs concluídas"}
+              {" "}de {nfdCompletionStats.total} {nfdCompletionStats.total === 1 ? "NFD" : "NFDs"} na base {isOnline ? "online atual" : "local atual"}.
             </small>
           </div>
         ) : null}
