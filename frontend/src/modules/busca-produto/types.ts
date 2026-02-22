@@ -23,6 +23,7 @@ export interface BuscaProdutoLookupResult {
   coddv: number;
   descricao: string;
   barras: string;
+  barras_lista: string[];
   qtd_est_disp: number;
   qtd_est_atual: number;
   estoque_updated_at: string | null;
