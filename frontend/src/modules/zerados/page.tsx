@@ -1748,6 +1748,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setSearch("");
     setMobileStep("address");
   }, []);
+  const clearZoneFilter = useCallback(() => {
+    setZone(null);
+    setSelectedAddress(null);
+    setSelectedItem(null);
+    setSearch("");
+    if (!isDesktop) {
+      setMobileStep("zone");
+    }
+  }, [isDesktop]);
 
   const openAddressEditor = useCallback((bucket: AddressBucketView) => {
     setSelectedAddress(bucket.key);
@@ -2837,17 +2846,29 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     spellCheck={false}
                     enterKeyHint="search"
                   />
-                  {zoneSearchInput.trim() !== "" ? (
+                  <button
+                    type="button"
+                    className="iz-picker-search-clear"
+                    onClick={() => setZoneSearchInput("")}
+                    aria-label="Limpar busca de zonas"
+                    disabled={zoneSearchInput.trim() === ""}
+                    title="Limpar busca"
+                  >
+                    {closeIcon()}
+                  </button>
+                </div>
+                {zone ? (
+                  <div className="iz-picker-filter-row">
+                    <span className="iz-picker-filter-chip">{`Zona atual: ${zone}`}</span>
                     <button
                       type="button"
-                      className="iz-picker-search-clear"
-                      onClick={() => setZoneSearchInput("")}
-                      aria-label="Limpar busca de zonas"
+                      className="iz-picker-filter-clear-btn"
+                      onClick={clearZoneFilter}
                     >
-                      {closeIcon()}
+                      Remover filtro
                     </button>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
                 {filteredZoneBuckets.length === 0 ? (
                   <p className="iz-picker-empty">Nenhuma zona encontrada.</p>
                 ) : (

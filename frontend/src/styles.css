@@ -4491,9 +4491,21 @@ small {
   transition: background 160ms ease, color 160ms ease, transform 120ms ease;
 }
 
+.iz-picker-search-clear:disabled {
+  cursor: default;
+  opacity: 0.45;
+  background: #edf2fb;
+  color: #9db0cc;
+}
+
 .iz-picker-search-clear:hover {
   background: #dfe8f8;
   color: #163b74;
+}
+
+.iz-picker-search-clear:disabled:hover {
+  background: #edf2fb;
+  color: #9db0cc;
 }
 
 .iz-picker-search-clear:active {
@@ -4508,6 +4520,49 @@ small {
   stroke-width: 2.1;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.iz-picker-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid #edf1f9;
+}
+
+.iz-picker-filter-chip {
+  min-width: 0;
+  border: 1px solid #c7d7f2;
+  background: #e8f0ff;
+  color: #1f467b;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.iz-picker-filter-clear-btn {
+  border: 1px solid #cedbf1;
+  background: #f4f8ff;
+  color: #23467b;
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 0.79rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.iz-picker-filter-clear-btn:hover {
+  background: #e8f0ff;
+  border-color: #b9ccec;
+  color: #163c73;
 }
 
 /* Empty state */
