@@ -3069,7 +3069,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
                         onClick={() => void runAdminApplyZona("replace_cd")}
                       >
-                        Aplicar (substituir base do CD)
+                        Adicionar à base do CD
                       </button>
                       <button
                         className="btn btn-muted"
