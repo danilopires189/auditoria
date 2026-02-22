@@ -1,6 +1,10 @@
 import { supabase } from "../../lib/supabase";
 import type {
   CdOption,
+  InventarioAdminApplyMode,
+  InventarioAdminSeedSummary,
+  InventarioAdminZoneRow,
+  InventarioAdminPreviewZoneRow,
   InventarioCountRow,
   InventarioEventApplyResponse,
   InventarioEventType,
@@ -459,4 +463,105 @@ export async function fetchReportRows(params: {
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapReportRow(row as Record<string, unknown>));
+}
+
+export async function fetchInventarioAdminZones(cd: number): Promise<InventarioAdminZoneRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_zones", {
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => {
+    const raw = row as Record<string, unknown>;
+    return {
+      zona: parseString(raw.zona, "SEM ZONA").trim().toUpperCase(),
+      itens: Math.max(parseInteger(raw.itens), 0)
+    } satisfies InventarioAdminZoneRow;
+  });
+}
+
+export async function previewInventarioAdminSeed(params: {
+  cd: number;
+  zonas: string[];
+  estoque_ini: number;
+  estoque_fim: number;
+  incluir_pul: boolean;
+  manual_coddv_csv: string;
+}): Promise<InventarioAdminPreviewZoneRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_preview_seed", {
+    p_cd: params.cd,
+    p_zonas: params.zonas,
+    p_estoque_ini: Math.max(Math.trunc(params.estoque_ini), 0),
+    p_estoque_fim: Math.max(Math.trunc(params.estoque_fim), 0),
+    p_incluir_pul: Boolean(params.incluir_pul),
+    p_manual_coddv_csv: params.manual_coddv_csv
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => {
+    const raw = row as Record<string, unknown>;
+    return {
+      zona: parseString(raw.zona, "SEM ZONA").trim().toUpperCase(),
+      itens: Math.max(parseInteger(raw.itens), 0),
+      total_geral: Math.max(parseInteger(raw.total_geral), 0)
+    } satisfies InventarioAdminPreviewZoneRow;
+  });
+}
+
+export async function applyInventarioAdminSeed(params: {
+  cd: number;
+  zonas: string[];
+  estoque_ini: number;
+  estoque_fim: number;
+  incluir_pul: boolean;
+  manual_coddv_csv: string;
+  mode: InventarioAdminApplyMode;
+}): Promise<InventarioAdminSeedSummary> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_apply_seed", {
+    p_cd: params.cd,
+    p_zonas: params.zonas,
+    p_estoque_ini: Math.max(Math.trunc(params.estoque_ini), 0),
+    p_estoque_fim: Math.max(Math.trunc(params.estoque_fim), 0),
+    p_incluir_pul: Boolean(params.incluir_pul),
+    p_manual_coddv_csv: params.manual_coddv_csv,
+    p_mode: params.mode
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Resposta inválida ao aplicar base.");
+
+  return {
+    itens_afetados: Math.max(parseInteger(first.itens_afetados), 0),
+    zonas_afetadas: Math.max(parseInteger(first.zonas_afetadas), 0),
+    total_geral: Math.max(parseInteger(first.total_geral), 0)
+  };
+}
+
+export async function clearInventarioAdminBase(params: {
+  cd: number;
+  scope: "all" | "zones";
+  zonas: string[];
+  hard_reset: boolean;
+}): Promise<InventarioAdminSeedSummary> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_clear_base", {
+    p_cd: params.cd,
+    p_scope: params.scope,
+    p_zonas: params.zonas,
+    p_hard_reset: Boolean(params.hard_reset)
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Resposta inválida ao limpar base.");
+
+  return {
+    itens_afetados: Math.max(parseInteger(first.itens_afetados), 0),
+    zonas_afetadas: Math.max(parseInteger(first.zonas_afetadas), 0),
+    total_geral: Math.max(parseInteger(first.total_geral), 0)
+  };
 }

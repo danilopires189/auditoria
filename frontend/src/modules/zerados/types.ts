@@ -200,3 +200,32 @@ export interface InventarioReportRow {
   origem_final: string;
   status_final: string;
 }
+
+export type InventarioAdminApplyMode = "replace_cd" | "replace_zones";
+export type InventarioAdminClearScope = "all" | "zones";
+
+export interface InventarioAdminZoneRow {
+  zona: string;
+  itens: number;
+}
+
+export interface InventarioAdminPreviewZoneRow {
+  zona: string;
+  itens: number;
+  total_geral: number;
+}
+
+export interface InventarioAdminSeedPayload {
+  zonas: string[];
+  estoque_ini: number;
+  estoque_fim: number;
+  incluir_pul: boolean;
+  manual_coddv_csv: string;
+  mode: InventarioAdminApplyMode;
+}
+
+export interface InventarioAdminSeedSummary {
+  itens_afetados: number;
+  zonas_afetadas: number;
+  total_geral: number;
+}

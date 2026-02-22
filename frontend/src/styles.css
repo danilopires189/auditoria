@@ -3648,6 +3648,13 @@ small {
   flex-wrap: wrap;
 }
 
+.inventario-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .inventario-report-inline-btn {
   white-space: nowrap;
 }
@@ -4529,6 +4536,101 @@ small {
   width: min(520px, 94vw);
 }
 
+.inventario-admin-popup {
+  width: min(920px, 96vw);
+}
+
+.inventario-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inventario-admin-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #203a63;
+  font-weight: 600;
+}
+
+.inventario-admin-zone-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inventario-admin-zone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inventario-admin-zone-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #d6e2f4;
+  border-radius: 12px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.inventario-admin-zone-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e4ebf7;
+  border-radius: 10px;
+  padding: 7px 9px;
+}
+
+.inventario-admin-zone-item span {
+  font-weight: 700;
+  color: #153660;
+}
+
+.inventario-admin-zone-item small {
+  color: #59709a;
+}
+
+.inventario-admin-preview {
+  border: 1px solid #d6e2f4;
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.inventario-admin-preview h4,
+.inventario-admin-clear h4 {
+  margin: 0;
+  color: #153660;
+  font-family: "Sora", sans-serif;
+  font-size: 0.94rem;
+}
+
+.inventario-admin-preview-list {
+  display: grid;
+  gap: 2px;
+}
+
+.inventario-admin-preview-list p {
+  margin: 0;
+  color: #425778;
+}
+
+.inventario-admin-clear {
+  border: 1px solid #f0d7d7;
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
 @media (min-width: 981px) {
   .inventario-popup-overlay {
     align-items: center;
@@ -4667,6 +4769,10 @@ small {
     grid-template-columns: 1fr;
     width: 100%;
     gap: 10px;
+  }
+
+  .inventario-admin-grid {
+    grid-template-columns: 1fr;
   }
 }
 

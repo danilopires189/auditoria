@@ -32,11 +32,15 @@ import {
 } from "./storage";
 import {
   acquireZoneLock,
+  applyInventarioAdminSeed,
   applyInventarioEvent,
+  clearInventarioAdminBase,
   countReportRows,
+  fetchInventarioAdminZones,
   fetchCdOptions,
   fetchManifestBundle,
   fetchManifestMeta,
+  previewInventarioAdminSeed,
   fetchReportRows,
   fetchSyncPull,
   heartbeatZoneLock,
@@ -44,6 +48,10 @@ import {
 } from "./sync";
 import type {
   CdOption,
+  InventarioAdminApplyMode,
+  InventarioAdminPreviewZoneRow,
+  InventarioAdminSeedSummary,
+  InventarioAdminZoneRow,
   InventarioAddressBucket,
   InventarioCountRow,
   InventarioEventType,
@@ -159,12 +167,17 @@ function parseErr(error: unknown): string {
   if (raw.includes("ETAPA2_APENAS_QUANDO_SOBRA")) return "2ª verificação só é permitida quando houver sobra na 1ª verificação.";
   if (raw.includes("ETAPA1_OBRIGATORIA")) return "A 1ª verificação precisa ser concluída antes da 2ª.";
   if (raw.includes("ZONA_TRAVADA_OUTRO_USUARIO")) return "Zona/etapa bloqueada por outro usuário.";
-  if (raw.includes("APENAS_ADMIN")) return "Apenas admin pode exportar relatório.";
+  if (raw.includes("APENAS_ADMIN")) return "Apenas admin pode executar esta ação.";
   if (raw.includes("MANIFESTO_INCOMPLETO")) return "Base local incompleta. Sincronize novamente para baixar todos os endereços.";
   if (raw.includes("ETAPA1_APENAS_AUTOR")) return "Apenas o autor pode editar a 1ª verificação.";
   if (raw.includes("ETAPA2_APENAS_AUTOR")) return "Apenas o autor pode editar a 2ª verificação.";
   if (raw.includes("ETAPA1_BLOQUEADA_SEGUNDA_EXISTE")) return "A 1ª verificação não pode ser alterada após existir 2ª verificação.";
   if (raw.includes("ITEM_JA_RESOLVIDO")) return "Endereço já resolvido na conciliação.";
+  if (raw.includes("ESTOQUE_FAIXA_INVALIDA")) return "Faixa de estoque inválida. O final deve ser maior ou igual ao inicial.";
+  if (raw.includes("ZONAS_OU_CODDV_OBRIGATORIO")) return "Selecione ao menos uma zona ou informe CODDV manual.";
+  if (raw.includes("ZONAS_OBRIGATORIAS")) return "Selecione pelo menos uma zona.";
+  if (raw.includes("MODE_INVALIDO")) return "Modo de aplicação inválido.";
+  if (raw.includes("SCOPE_INVALIDO")) return "Escopo de limpeza inválido.";
   return raw;
 }
 
@@ -551,6 +564,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const isGlobalAdmin = profile.role === "admin" && fixed == null;
   const canEdit = profile.role !== "viewer";
   const canExport = profile.role === "admin";
+  const canManageBase = profile.role === "admin";
 
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
   const [cd, setCd] = useState<number | null>(fixed);
@@ -591,6 +605,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [dtIni, setDtIni] = useState(CYCLE_DATE);
   const [dtFim, setDtFim] = useState(CYCLE_DATE);
   const [reportCount, setReportCount] = useState<number | null>(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminZones, setAdminZones] = useState<InventarioAdminZoneRow[]>([]);
+  const [adminSelectedZones, setAdminSelectedZones] = useState<string[]>([]);
+  const [adminEstoqueIni, setAdminEstoqueIni] = useState("0");
+  const [adminEstoqueFim, setAdminEstoqueFim] = useState("0");
+  const [adminIncluirPul, setAdminIncluirPul] = useState(false);
+  const [adminManualCoddvCsv, setAdminManualCoddvCsv] = useState("");
+  const [adminPreviewRows, setAdminPreviewRows] = useState<InventarioAdminPreviewZoneRow[]>([]);
+  const [adminSummary, setAdminSummary] = useState<InventarioAdminSeedSummary | null>(null);
+  const [adminClearHardReset, setAdminClearHardReset] = useState(false);
   const [isDesktop, setIsDesktop] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.innerWidth >= 1024;
@@ -883,6 +908,141 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
   }, [cd, isOnline, manifestItems.length, profile.user_id, pull, syncPending]);
 
+  const parseAdminStock = useCallback((value: string, fallback = 0): number => {
+    const parsed = Number.parseInt(String(value ?? "").replace(/\D/g, ""), 10);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(parsed, 0);
+  }, []);
+
+  const adminPreviewTotal = useMemo(
+    () => adminPreviewRows.length > 0 ? adminPreviewRows[0].total_geral : 0,
+    [adminPreviewRows]
+  );
+
+  const loadAdminZones = useCallback(async () => {
+    if (!canManageBase || cd == null) return;
+    const rows = await fetchInventarioAdminZones(cd);
+    setAdminZones(rows);
+    setAdminSelectedZones((current) => {
+      if (current.length > 0) {
+        const available = new Set(rows.map((row) => row.zona));
+        const kept = current.filter((zona) => available.has(zona));
+        if (kept.length > 0) return kept;
+      }
+      return rows.map((row) => row.zona);
+    });
+  }, [canManageBase, cd]);
+
+  const runAdminPreview = useCallback(async () => {
+    if (!canManageBase || cd == null) return;
+    setAdminBusy(true);
+    setErr(null);
+    try {
+      const rows = await previewInventarioAdminSeed({
+        cd,
+        zonas: adminSelectedZones,
+        estoque_ini: parseAdminStock(adminEstoqueIni, 0),
+        estoque_fim: parseAdminStock(adminEstoqueFim, 0),
+        incluir_pul: adminIncluirPul,
+        manual_coddv_csv: adminManualCoddvCsv
+      });
+      setAdminPreviewRows(rows);
+      setAdminSummary(null);
+      setMsg(rows.length > 0 ? "Pré-visualização atualizada." : "Pré-visualização sem itens.");
+    } catch (error) {
+      setErr(parseErr(error));
+    } finally {
+      setAdminBusy(false);
+    }
+  }, [
+    adminEstoqueFim,
+    adminEstoqueIni,
+    adminIncluirPul,
+    adminManualCoddvCsv,
+    adminSelectedZones,
+    canManageBase,
+    cd,
+    parseAdminStock
+  ]);
+
+  const runAdminApply = useCallback(async (mode: InventarioAdminApplyMode) => {
+    if (!canManageBase || cd == null) return;
+    if (adminPreviewRows.length === 0) {
+      setErr("Faça a pré-visualização antes de confirmar.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Confirma aplicar a base?` +
+      `\nModo: ${mode === "replace_cd" ? "Substituir base do CD" : "Recarregar zonas selecionadas"}` +
+      `\nZonas: ${adminPreviewRows.length}` +
+      `\nTotal geral: ${adminPreviewTotal}`
+    );
+    if (!confirmed) return;
+
+    setAdminBusy(true);
+    setErr(null);
+    try {
+      const summary = await applyInventarioAdminSeed({
+        cd,
+        zonas: adminSelectedZones,
+        estoque_ini: parseAdminStock(adminEstoqueIni, 0),
+        estoque_fim: parseAdminStock(adminEstoqueFim, 0),
+        incluir_pul: adminIncluirPul,
+        manual_coddv_csv: adminManualCoddvCsv,
+        mode
+      });
+      setAdminSummary(summary);
+      setMsg(`Base aplicada. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
+      await syncNow(true);
+      await loadAdminZones();
+    } catch (error) {
+      setErr(parseErr(error));
+    } finally {
+      setAdminBusy(false);
+    }
+  }, [
+    adminEstoqueFim,
+    adminEstoqueIni,
+    adminIncluirPul,
+    adminManualCoddvCsv,
+    adminPreviewRows.length,
+    adminPreviewTotal,
+    adminSelectedZones,
+    canManageBase,
+    cd,
+    loadAdminZones,
+    parseAdminStock,
+    syncNow
+  ]);
+
+  const runAdminClearAll = useCallback(async () => {
+    if (!canManageBase || cd == null) return;
+    const modeLabel = adminClearHardReset ? "RESET TOTAL (inclui iniciados)" : "limpeza segura (somente pendentes)";
+    const confirmed = window.confirm(`Confirma ${modeLabel} da base do CD?`);
+    if (!confirmed) return;
+
+    setAdminBusy(true);
+    setErr(null);
+    try {
+      const summary = await clearInventarioAdminBase({
+        cd,
+        scope: "all",
+        zonas: [],
+        hard_reset: adminClearHardReset
+      });
+      setAdminSummary(summary);
+      setAdminPreviewRows([]);
+      setMsg(`Limpeza concluída. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
+      await syncNow(true);
+      await loadAdminZones();
+    } catch (error) {
+      setErr(parseErr(error));
+    } finally {
+      setAdminBusy(false);
+    }
+  }, [adminClearHardReset, canManageBase, cd, loadAdminZones, syncNow]);
+
   const send = useCallback(async (eventType: InventarioEventType, payload: Record<string, unknown>) => {
     if (cd == null) return;
     if (!isOnline || preferOffline) {
@@ -952,7 +1112,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     if (!isDesktop) setReportOpen(false);
   }, [isDesktop]);
   useEffect(() => {
-    const popupOpen = editorOpen || reportOpen || scannerOpen;
+    if (!adminOpen || !canManageBase || cd == null) return;
+    void loadAdminZones();
+  }, [adminOpen, canManageBase, cd, loadAdminZones]);
+  useEffect(() => {
+    const popupOpen = editorOpen || reportOpen || scannerOpen || adminOpen;
     if (popupOpen && !popupWasOpenRef.current) {
       popupReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     }
@@ -962,15 +1126,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       popupReturnFocusRef.current = null;
     }
     popupWasOpenRef.current = popupOpen;
-  }, [editorOpen, reportOpen, scannerOpen]);
+  }, [adminOpen, editorOpen, reportOpen, scannerOpen]);
   useEffect(() => {
-    if (!(editorOpen || reportOpen || scannerOpen)) return;
+    if (!(editorOpen || reportOpen || scannerOpen || adminOpen)) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [editorOpen, reportOpen, scannerOpen]);
+  }, [adminOpen, editorOpen, reportOpen, scannerOpen]);
   useEffect(() => {
     if (!editorOpen) return;
     const id = window.setTimeout(() => {
@@ -1004,16 +1168,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     return () => window.clearTimeout(id);
   }, [reportOpen]);
   useEffect(() => {
-    if (!(editorOpen || reportOpen || scannerOpen)) return;
+    if (!(editorOpen || reportOpen || scannerOpen || adminOpen)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (scannerOpen) closeCameraScanner();
+      else if (adminOpen) setAdminOpen(false);
       else if (reportOpen) setReportOpen(false);
       else closeEditorPopup();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeCameraScanner, closeEditorPopup, editorOpen, reportOpen, scannerOpen]);
+  }, [adminOpen, closeCameraScanner, closeEditorPopup, editorOpen, reportOpen, scannerOpen]);
 
   useEffect(() => {
     const needsLock = (tab === "s1" || tab === "s2") && isOnline && cd != null && zone && canEdit;
@@ -2017,18 +2182,32 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             <div className="termo-head">
               <div className="inventario-head-row">
                 <h2>Olá, {userName}</h2>
-                {canExport && isDesktop ? (
-                  <button
-                    type="button"
-                    className="btn btn-muted termo-route-btn inventario-report-inline-btn"
-                    onClick={() => setReportOpen(true)}
-                    title="Gerar Relatório"
-                    aria-label="Gerar Relatório"
-                  >
-                    <span aria-hidden="true">{reportIcon()}</span>
-                    Gerar Relatório
-                  </button>
-                ) : null}
+                <div className="inventario-head-actions">
+                  {canManageBase ? (
+                    <button
+                      type="button"
+                      className="btn btn-muted termo-route-btn inventario-report-inline-btn"
+                      onClick={() => setAdminOpen(true)}
+                      title="Gerir Base"
+                      aria-label="Gerir Base"
+                    >
+                      <span aria-hidden="true">{listIcon()}</span>
+                      Gerir Base
+                    </button>
+                  ) : null}
+                  {canExport && isDesktop ? (
+                    <button
+                      type="button"
+                      className="btn btn-muted termo-route-btn inventario-report-inline-btn"
+                      onClick={() => setReportOpen(true)}
+                      title="Gerar Relatório"
+                      aria-label="Gerar Relatório"
+                    >
+                      <span aria-hidden="true">{reportIcon()}</span>
+                      Gerar Relatório
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE} | db_inventario: ${manifestItems.length}/${manifestMeta?.row_count ?? 0} | db_barras: ${dbBarrasCount}`}</p>
               <div className="inventario-base-chips">
@@ -2545,6 +2724,190 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               document.body
             )
           : null}
+
+        {canManageBase && adminOpen && typeof document !== "undefined" ? createPortal(
+          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setAdminOpen(false)}>
+            <div className="inventario-popup-card inventario-admin-popup" onClick={(event) => event.stopPropagation()}>
+              <div className="inventario-popup-head">
+                <div>
+                  <h3>Gestão da Base (Admin)</h3>
+                  <p>Monte a db_inventario por zona, faixa de estoque e inclusão opcional de PUL/CODDV.</p>
+                </div>
+                <button type="button" className="inventario-popup-close" onClick={() => setAdminOpen(false)} aria-label="Fechar popup">Fechar</button>
+              </div>
+              <div className="inventario-popup-body">
+                {cd == null ? (
+                  <p className="inventario-popup-note warn">Selecione um CD para gerenciar a base.</p>
+                ) : null}
+                <div className="inventario-admin-grid">
+                  <label>
+                    Estoque inicial
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={adminEstoqueIni}
+                      onChange={(event) => setAdminEstoqueIni(event.target.value)}
+                      disabled={adminBusy || cd == null}
+                    />
+                  </label>
+                  <label>
+                    Estoque final
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={adminEstoqueFim}
+                      onChange={(event) => setAdminEstoqueFim(event.target.value)}
+                      disabled={adminBusy || cd == null}
+                    />
+                  </label>
+                </div>
+
+                <label className="inventario-admin-check">
+                  <input
+                    type="checkbox"
+                    checked={adminIncluirPul}
+                    onChange={(event) => setAdminIncluirPul(event.target.checked)}
+                    disabled={adminBusy || cd == null}
+                  />
+                  Incluir endereços PUL dos CODDV selecionados
+                </label>
+
+                <label>
+                  CODDV manual (separado por vírgula)
+                  <input
+                    type="text"
+                    value={adminManualCoddvCsv}
+                    onChange={(event) => setAdminManualCoddvCsv(event.target.value)}
+                    placeholder="Ex.: 12345, 67890, 10001"
+                    disabled={adminBusy || cd == null}
+                  />
+                </label>
+
+                <div className="inventario-admin-zone-head">
+                  <strong>{`Zonas SEP (${adminZones.length})`}</strong>
+                  <div className="inventario-admin-zone-actions">
+                    <button
+                      type="button"
+                      className="btn btn-muted"
+                      onClick={() => setAdminSelectedZones(adminZones.map((row) => row.zona))}
+                      disabled={adminBusy || cd == null || adminZones.length === 0}
+                    >
+                      Selecionar todas
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-muted"
+                      onClick={() => setAdminSelectedZones([])}
+                      disabled={adminBusy || cd == null || adminZones.length === 0}
+                    >
+                      Limpar seleção
+                    </button>
+                  </div>
+                </div>
+
+                <div className="inventario-admin-zone-list">
+                  {adminZones.length === 0 ? (
+                    <p className="inventario-popup-note warn">Nenhuma zona SEP encontrada para este CD.</p>
+                  ) : adminZones.map((row) => {
+                    const checked = adminSelectedZones.includes(row.zona);
+                    return (
+                      <label key={row.zona} className="inventario-admin-zone-item">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => {
+                            const isChecked = event.target.checked;
+                            setAdminSelectedZones((current) => {
+                              if (isChecked) {
+                                if (current.includes(row.zona)) return current;
+                                return [...current, row.zona].sort((a, b) => a.localeCompare(b));
+                              }
+                              return current.filter((zonaItem) => zonaItem !== row.zona);
+                            });
+                          }}
+                          disabled={adminBusy || cd == null}
+                        />
+                        <span>{row.zona}</span>
+                        <small>{`${row.itens} itens SEP`}</small>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="inventario-editor-actions">
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    disabled={adminBusy || cd == null}
+                    onClick={() => void runAdminPreview()}
+                  >
+                    {adminBusy ? "Processando..." : "Pré-visualizar"}
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    disabled={adminBusy || cd == null || adminPreviewRows.length === 0}
+                    onClick={() => void runAdminApply("replace_cd")}
+                  >
+                    Aplicar (substituir base do CD)
+                  </button>
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    disabled={adminBusy || cd == null || adminPreviewRows.length === 0}
+                    onClick={() => void runAdminApply("replace_zones")}
+                  >
+                    Recarregar zonas selecionadas
+                  </button>
+                </div>
+
+                {adminPreviewRows.length > 0 ? (
+                  <div className="inventario-admin-preview">
+                    <h4>Prévia por zona</h4>
+                    <p className="inventario-editor-text">{`Total geral: ${adminPreviewTotal} itens`}</p>
+                    <div className="inventario-admin-preview-list">
+                      {adminPreviewRows.map((row) => (
+                        <p key={row.zona}>{`${row.zona}: ${row.itens} itens`}</p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="inventario-admin-clear">
+                  <h4>Limpeza da base do CD</h4>
+                  <label className="inventario-admin-check">
+                    <input
+                      type="checkbox"
+                      checked={adminClearHardReset}
+                      onChange={(event) => setAdminClearHardReset(event.target.checked)}
+                      disabled={adminBusy || cd == null}
+                    />
+                    Hard reset (apaga também itens iniciados)
+                  </label>
+                  <div className="inventario-editor-actions">
+                    <button
+                      className="btn btn-muted termo-danger-btn"
+                      type="button"
+                      disabled={adminBusy || cd == null}
+                      onClick={() => void runAdminClearAll()}
+                    >
+                      Limpar base do CD
+                    </button>
+                  </div>
+                </div>
+
+                {adminSummary ? (
+                  <p className="inventario-popup-note ok">
+                    {`Itens afetados: ${adminSummary.itens_afetados} | Zonas atuais: ${adminSummary.zonas_afetadas} | Total atual: ${adminSummary.total_geral}`}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>,
+          document.body
+        ) : null}
 
         {canExport && isDesktop && reportOpen ? (
           <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={() => setReportOpen(false)}>
