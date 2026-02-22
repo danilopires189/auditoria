@@ -92,6 +92,7 @@ export default function HomePage({
                 <span className="module-title">{moduleDef.title}</span>
                 {moduleDef.key === "coleta-mercadoria"
                 || moduleDef.key === "pvps-alocacao"
+                || moduleDef.key === "atividade-extra"
                 || moduleDef.key === "conferencia-termo"
                 || moduleDef.key === "conferencia-volume-avulso"
                 || moduleDef.key === "conferencia-pedido-direto"
