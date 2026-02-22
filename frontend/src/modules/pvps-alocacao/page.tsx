@@ -1388,6 +1388,26 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     };
   }, [tab, progressBaselinePvps.total, progressBaselineAloc.total, sortedPvpsCompletedRows.length, sortedAlocCompletedRows.length]);
 
+  const pvpsStats = useMemo(() => {
+    const total = progressBaselinePvps.total;
+    const completed = sortedPvpsCompletedRows.length;
+    return {
+      percent: completionPercent(completed, total),
+      total,
+      completed
+    };
+  }, [progressBaselinePvps.total, sortedPvpsCompletedRows.length]);
+
+  const alocStats = useMemo(() => {
+    const total = progressBaselineAloc.total;
+    const completed = sortedAlocCompletedRows.length;
+    return {
+      percent: completionPercent(completed, total),
+      total,
+      completed
+    };
+  }, [progressBaselineAloc.total, sortedAlocCompletedRows.length]);
+
   const activeCompletedCount = tab === "pvps" ? sortedPvpsCompletedRows.length : sortedAlocCompletedRows.length;
 
   useEffect(() => {
@@ -2338,21 +2358,23 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 Descartes por conflito nesta sessão: {offlineDiscardedInSession}.
               </div>
             ) : null}
-            <div className="pvps-progress-card" role="status" aria-live="polite">
-              <div className="pvps-progress-head">
-                <strong>Conclusão {tab === "pvps" ? "PVPS" : "Alocação"}</strong>
-                <span>{formatPercent(activeStats.percent)}</span>
+            {feedView !== "concluidos" ? (
+              <div className="pvps-progress-card" role="status" aria-live="polite">
+                <div className="pvps-progress-head">
+                  <strong>Conclusão {tab === "pvps" ? "PVPS" : "Alocação"}</strong>
+                  <span>{formatPercent(activeStats.percent)}</span>
+                </div>
+                <div className="pvps-progress-track" aria-hidden="true">
+                  <span
+                    className="pvps-progress-fill"
+                    style={{ width: `${Math.max(0, Math.min(activeStats.percent, 100))}%` }}
+                  />
+                </div>
+                <small>
+                  {activeCompletedCount} concluído(s) de {activeStats.total} na base de referência.
+                </small>
               </div>
-              <div className="pvps-progress-track" aria-hidden="true">
-                <span
-                  className="pvps-progress-fill"
-                  style={{ width: `${Math.max(0, Math.min(activeStats.percent, 100))}%` }}
-                />
-              </div>
-              <small>
-                {activeCompletedCount} concluído(s) de {activeStats.total} na base de referência.
-              </small>
-            </div>
+            ) : null}
             {isAdmin && showAdminPanel ? (
               <div className="pvps-admin-panel">
                 <h3>Gestão de Regras</h3>
@@ -2612,6 +2634,21 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
             {feedView === "concluidos" && tab === "pvps" ? (
               <div className="pvps-list">
+                <div className="pvps-progress-card" role="status" aria-live="polite">
+                  <div className="pvps-progress-head">
+                    <strong>Conclusão PVPS</strong>
+                    <span>{formatPercent(pvpsStats.percent)}</span>
+                  </div>
+                  <div className="pvps-progress-track" aria-hidden="true">
+                    <span
+                      className="pvps-progress-fill"
+                      style={{ width: `${Math.max(0, Math.min(pvpsStats.percent, 100))}%` }}
+                    />
+                  </div>
+                  <small>
+                    {pvpsStats.completed} concluído(s) de {pvpsStats.total} na base de referência.
+                  </small>
+                </div>
                 {sortedPvpsCompletedRows.length === 0 ? <p>Sem itens concluídos hoje para o CD ativo.</p> : null}
                 {sortedPvpsCompletedRows.map((row, index) => {
                   const open = Boolean(expandedPvpsCompleted[row.audit_id]);
@@ -2674,6 +2711,21 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
             {feedView === "concluidos" && tab === "alocacao" ? (
               <div className="pvps-list">
+                <div className="pvps-progress-card" role="status" aria-live="polite">
+                  <div className="pvps-progress-head">
+                    <strong>Conclusão Alocação</strong>
+                    <span>{formatPercent(alocStats.percent)}</span>
+                  </div>
+                  <div className="pvps-progress-track" aria-hidden="true">
+                    <span
+                      className="pvps-progress-fill"
+                      style={{ width: `${Math.max(0, Math.min(alocStats.percent, 100))}%` }}
+                    />
+                  </div>
+                  <small>
+                    {alocStats.completed} concluído(s) de {alocStats.total} na base de referência.
+                  </small>
+                </div>
                 {sortedAlocCompletedRows.length === 0 ? <p>Sem itens concluídos hoje para o CD ativo.</p> : null}
                 {sortedAlocCompletedRows.map((row, index) => {
                   const open = Boolean(expandedAlocCompleted[row.audit_id]);
