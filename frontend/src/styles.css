@@ -4899,10 +4899,6 @@ small {
     gap: 10px;
   }
 
-  .inventario-admin-grid {
-    grid-template-columns: 1fr;
-  }
-
   .inventario-admin-popup,
   .inventario-admin-entry-popup {
     width: 100vw;
