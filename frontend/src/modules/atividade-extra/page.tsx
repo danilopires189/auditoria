@@ -491,7 +491,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             <div className="module-screen-title-row">
               <div className="module-screen-title">
                 <h2>Detalhamento de atividades</h2>
-                <p>Uso rápido para registro diário no celular.</p>
+                <p>Registros de atividade diária.</p>
               </div>
               <div className="atividade-extra-actions-head">
                 <button
