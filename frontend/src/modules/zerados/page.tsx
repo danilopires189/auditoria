@@ -3304,7 +3304,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         />
                         <span className="inventario-admin-zone-main">
                           <span>{row.zona}</span>
-                          <small>{`${row.itens} itens de Separação (SEP)`}</small>
+                          <small>{`${row.itens} Endereços de Separação`}</small>
                         </span>
                       </label>
                     );
