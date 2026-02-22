@@ -525,6 +525,7 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";
   if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SOBRA_PENDENTE")) return "Existem sobras. Corrija antes de finalizar.";
+  if (value.includes("SOBRA_NAO_PERMITIDA")) return "Existem sobras na devolução. Corrija antes de finalizar.";
   if (value.includes("FALTA_MOTIVO_OBRIGATORIO")) return "Informe o motivo da falta para finalizar.";
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
