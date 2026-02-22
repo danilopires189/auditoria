@@ -1618,7 +1618,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
       return false;
     }
-    if (isOnline && activeVolume) {
+    if (isOnline && activeVolume && activeVolume.conference_kind === "com_nfd") {
       try {
         const remoteVolume = await openVolume(activeVolume.ref, activeVolume.cd);
         const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
@@ -1835,7 +1835,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         triggerScanErrorAlert("Código de barras inválido.");
         return;
       }
-      if (message.includes("PRODUTO_FORA_DO_VOLUME")) {
+      if (message.includes("PRODUTO_FORA_DO_VOLUME") || message.includes("PRODUTO_FORA_DA_NFD")) {
         const lookup = await resolveBarcodeProduct(barras);
         const produtoNome = lookup
           ? `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
@@ -2975,7 +2975,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
           <button type="button" className="btn btn-muted termo-route-btn" onClick={() => void openRoutesModal()}>
             <span aria-hidden="true">{listIcon()}</span>
-            Volumes
+            Notas
           </button>
         </div>
 
@@ -3035,7 +3035,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
         {!hasOpenConference ? (
           <form className="termo-form termo-open-form" onSubmit={onSubmitEtiqueta}>
-            <h3>Abertura de volume</h3>
+            <h3>Iniciar devolução</h3>
             <label>
               NFD/Chave
               <div className="input-icon-wrap with-action">
@@ -3066,7 +3066,10 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
               </div>
             </label>
             <button className="btn btn-primary" type="submit" disabled={busyOpenVolume || currentCd == null}>
-              {busyOpenVolume ? "Abrindo..." : "Abrir volume"}
+              {busyOpenVolume ? "Iniciando..." : "Iniciar devolução"}
+            </button>
+            <button className="btn btn-muted" type="button" onClick={() => void handleStartWithoutNfd()} disabled={busyOpenVolume || currentCd == null}>
+              Iniciar sem NFD
             </button>
           </form>
         ) : null}
@@ -3075,8 +3078,13 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           <article className="termo-volume-card">
             <div className="termo-volume-head">
               <div>
-                <h3>Volume {activeVolume.ref}</h3>
-                <p>Conferência em andamento para este NFD/Chave.</p>
+                <h3>{activeVolume.conference_kind === "sem_nfd" ? "Devolução sem NFD" : `Devolução ${activeVolume.ref}`}</h3>
+                <p>
+                  {activeVolume.conference_kind === "sem_nfd"
+                    ? "Conferência livre por bipagem de produtos."
+                    : "Conferência em andamento para este NFD/Chave."}
+                </p>
+                {activeVolume.source_motivo ? <p>Motivo: {activeVolume.source_motivo}</p> : null}
                 <p>
                   Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com falta"}
                 </p>
@@ -3107,7 +3115,17 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                         <span aria-hidden="true">{checkIcon()}</span>
                         Finalizar
                       </button>
-                    ) : null}
+                    ) : (
+                      <button
+                        className="btn btn-primary termo-finalize-btn"
+                        type="button"
+                        onClick={requestFinalize}
+                        disabled={busyCancel || busyFinalize}
+                      >
+                        <span aria-hidden="true">{checkIcon()}</span>
+                        Registrar envio sem bipagem
+                      </button>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -3420,7 +3438,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           </article>
         ) : (
           <div className="coleta-empty">
-            Nenhum volume ativo. Informe um NFD/Chave para iniciar a conferência.
+            Nenhuma devolução ativa. Informe um NFD/Chave para iniciar a conferência.
           </div>
         )}
       </section>
@@ -3429,7 +3447,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-volumes-title" onClick={() => setShowRoutesModal(false)}>
               <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                <h3 id="termo-volumes-title">Volumes do dia</h3>
+                <h3 id="termo-volumes-title">Notas do dia</h3>
                 <div className="input-icon-wrap termo-routes-search">
                   <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
                   <input
@@ -3440,7 +3458,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                   />
                 </div>
                 {filteredModalVolumes.length === 0 ? (
-                  <p>Sem volumes disponíveis para este CD.</p>
+                  <p>Sem notas disponíveis para este CD.</p>
                 ) : (
                   <div className="termo-routes-list">
                     {filteredModalVolumes.map((row) => {
@@ -3462,6 +3480,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                             <span className="termo-route-main">
                               <span className="termo-route-info">
                                 <span className="termo-route-title">NFD/Chave {row.ref}</span>
+                                {row.motivo ? <span className="termo-route-sub">Motivo: {row.motivo}</span> : null}
                                 <span className="termo-route-sub">
                                   Itens: {row.itens_total}
                                   {" | "}
@@ -3509,22 +3528,44 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           )
         : null}
 
-      {showFinalizeModal && activeVolume && hasAnyItemInformed && typeof document !== "undefined"
+      {showFinalizeModal && activeVolume && typeof document !== "undefined"
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-finalizar-title" onClick={() => setShowFinalizeModal(false)}>
               <div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="termo-finalizar-title">Finalizar conferência</h3>
                 <p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>
-                {divergenciaTotals.falta > 0 ? (
+                {(divergenciaTotals.falta > 0 || (!hasAnyItemInformed && activeVolume.conference_kind === "com_nfd")) ? (
                   <label>
                     Motivo da falta
                     <textarea
                       value={finalizeMotivo}
                       onChange={(event) => setFinalizeMotivo(event.target.value)}
-                      placeholder="Descreva o motivo da falta"
+                      placeholder={!hasAnyItemInformed ? "Descreva o motivo do envio sem bipagem" : "Descreva o motivo da falta"}
                       rows={3}
                     />
                   </label>
+                ) : null}
+                {activeVolume.conference_kind === "sem_nfd" ? (
+                  <>
+                    <label>
+                      NFO (nota fiscal de origem)
+                      <input
+                        type="text"
+                        value={finalizeNfo}
+                        onChange={(event) => setFinalizeNfo(event.target.value)}
+                        placeholder="Informe a NFO"
+                      />
+                    </label>
+                    <label>
+                      Motivo da devolução sem NFD
+                      <textarea
+                        value={finalizeMotivoSemNfd}
+                        onChange={(event) => setFinalizeMotivoSemNfd(event.target.value)}
+                        placeholder="Detalhe o motivo da devolução sem NFD"
+                        rows={3}
+                      />
+                    </label>
+                  </>
                 ) : null}
                 {finalizeError ? <div className="alert error">{finalizeError}</div> : null}
                 <div className="confirm-actions">
