@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { formatCountLabel } from "../../shared/inflection";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   deleteAtividadeExtra,
@@ -630,7 +631,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                       <article key={entry.id} className="atividade-extra-entry-card">
                         <div className="atividade-extra-entry-head">
                           <strong>{formatDate(entry.data_inicio)} | {entry.tempo_gasto_hms}</strong>
-                          <span>{formatPoints(entry.pontos)} ponto(s)</span>
+                          <span>{formatCountLabel(entry.pontos, "ponto", "pontos", { formatValue: formatPoints })}</span>
                         </div>
                         <p className="atividade-extra-entry-description">{entry.descricao}</p>
                         <div className="atividade-extra-entry-meta">

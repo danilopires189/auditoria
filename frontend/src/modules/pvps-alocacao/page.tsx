@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { formatCountLabel } from "../../shared/inflection";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
@@ -705,11 +706,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
       if (options?.manual || result.synced > 0 || result.failed > 0 || result.discarded > 0) {
         if (result.discarded > 0) {
-          setStatusMessage(`${result.discarded} endereço(s) já concluído(s) por outro usuário e descartado(s).`);
+          setStatusMessage(`${formatCountLabel(result.discarded, "endereço já concluído por outro usuário e descartado", "endereços já concluídos por outro usuário e descartados")}.`);
         } else if (result.failed > 0 && result.remaining > 0) {
-          setStatusMessage(`Sincronização parcial: ${result.failed} evento(s) com erro para nova tentativa.`);
+          setStatusMessage(`Sincronização parcial: ${formatCountLabel(result.failed, "evento", "eventos")} com erro para nova tentativa.`);
         } else if (result.synced > 0) {
-          setStatusMessage(`Sincronização concluída: ${result.synced} evento(s) enviado(s).`);
+          setStatusMessage(`Sincronização concluída: ${formatCountLabel(result.synced, "evento enviado", "eventos enviados")}.`);
         } else {
           setStatusMessage("Sem pendências para sincronizar.");
         }

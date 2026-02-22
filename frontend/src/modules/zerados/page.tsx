@@ -10,6 +10,7 @@ import {
 } from "../../shared/db-barras/sync";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
+import { formatCountLabel } from "../../shared/inflection";
 import {
   getDbBarrasByBarcode,
   getDbBarrasMeta,
@@ -416,7 +417,7 @@ function formatPercent(value: number): string {
 }
 
 function labelByCount(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
+  return formatCountLabel(count, singular, plural);
 }
 
 type CountedDisplayInfo = {
@@ -3137,7 +3138,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     <p className="inventario-admin-zone-meta">
                       {adminSelectedZones.length === 0
                         ? "Nenhuma zona selecionada. Abra \"Escolher zonas\" para marcar."
-                        : `${adminSelectedZones.length} zona(s) selecionada(s)`}
+                        : formatCountLabel(adminSelectedZones.length, "zona selecionada", "zonas selecionadas")}
                     </p>
 
                     <div className="inventario-admin-actions">
@@ -3303,7 +3304,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
                 />
                 <p className="inventario-admin-zone-meta">
-                  {`${adminZoneDraft.length} zona(s) marcada(s)`}
+                  {formatCountLabel(adminZoneDraft.length, "zona marcada", "zonas marcadas")}
                 </p>
 
                 <div className="inventario-admin-zone-list">

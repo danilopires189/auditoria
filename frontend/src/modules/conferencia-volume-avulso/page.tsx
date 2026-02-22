@@ -8,6 +8,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { chooseByJoinedValues, formatCountLabel } from "../../shared/inflection";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
   getDbBarrasByBarcode,
@@ -996,9 +997,9 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       }
       if (!silent) {
         if (result.failed > 0) {
-          setErrorMessage(`${result.failed} pendência(s) do Volume Avulso falharam na sincronização.`);
+          setErrorMessage(`${formatCountLabel(result.failed, "pendência", "pendências")} com falha na sincronização do Volume Avulso.`);
         } else if (result.processed > 0) {
-          setStatusMessage(`Sincronização concluída (${result.synced} pendência(s) processada(s)).`);
+          setStatusMessage(`Sincronização concluída (${formatCountLabel(result.synced, "pendência processada", "pendências processadas")}).`);
         } else {
           setStatusMessage("Sem pendências de conferência para sincronizar.");
         }
@@ -2992,8 +2993,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        <p>Lote(s): {item.lotes ?? "-"}</p>
-                        <p>Validade(s): {item.validades ?? "-"}</p>
+                        <p>{chooseByJoinedValues(item.lotes, "Lote", "Lotes")}: {item.lotes ?? "-"}</p>
+                        <p>{chooseByJoinedValues(item.validades, "Validade", "Validades")}: {item.validades ?? "-"}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
@@ -3067,8 +3068,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        <p>Lote(s): {item.lotes ?? "-"}</p>
-                        <p>Validade(s): {item.validades ?? "-"}</p>
+                        <p>{chooseByJoinedValues(item.lotes, "Lote", "Lotes")}: {item.lotes ?? "-"}</p>
+                        <p>{chooseByJoinedValues(item.validades, "Validade", "Validades")}: {item.validades ?? "-"}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
@@ -3141,8 +3142,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        <p>Lote(s): {item.lotes ?? "-"}</p>
-                        <p>Validade(s): {item.validades ?? "-"}</p>
+                        <p>{chooseByJoinedValues(item.lotes, "Lote", "Lotes")}: {item.lotes ?? "-"}</p>
+                        <p>{chooseByJoinedValues(item.validades, "Validade", "Validades")}: {item.validades ?? "-"}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
