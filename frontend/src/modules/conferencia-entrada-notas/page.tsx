@@ -3375,7 +3375,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           }
           const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
           if (!target) {
-            const produtoNome = `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
+            const produtoNome = `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
             showDialog({
               title: "Produto fora da entrada",
               message: `Produto "${produtoNome}" não faz parte da entrada selecionada.`,
@@ -3638,7 +3638,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       if (message.includes("PRODUTO_FORA_DA_ENTRADA")) {
         const lookup = await resolveBarcodeProduct(barras);
         const produtoNome = lookup
-          ? `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
+          ? `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
           : `Código de barras ${barras}`;
         showDialog({
           title: activeVolume?.conference_kind === "avulsa" ? "Produto inválido" : "Produto fora da entrada",
@@ -3653,7 +3653,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       if (message.includes("PRODUTO_FORA_BASE_AVULSA")) {
         const lookup = await resolveBarcodeProduct(barras);
         const produtoNome = lookup
-          ? `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
+          ? `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
           : `Código de barras ${barras}`;
         showDialog({
           title: "Produto inválido",
@@ -3666,7 +3666,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       if (message.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")) {
         const lookup = await resolveBarcodeProduct(barras);
         const produtoNome = lookup
-          ? `CODDV ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
+          ? `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
           : `Código de barras ${barras}`;
         showDialog({
           title: "Produto inválido",
@@ -4213,9 +4213,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
     const loadProgressBase = async () => {
       try {
-        const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+        const total = isOnline
+          ? Math.max((await fetchManifestMeta(currentCd)).row_count, 0)
+          : (await listManifestItemsByCd(profile.user_id, currentCd)).length;
         if (cancelled) return;
-        setBaseCoddvTotal(manifestItems.length);
+        setBaseCoddvTotal(total);
       } catch {
         if (cancelled) return;
         setBaseCoddvTotal(0);
@@ -4227,7 +4229,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return () => {
       cancelled = true;
     };
-  }, [currentCd, manifestInfo, profile.user_id]);
+  }, [currentCd, isOnline, profile.user_id]);
 
   useEffect(() => {
     setRouteContributorsMap({});
@@ -5128,7 +5130,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               />
             </div>
             <small>
-              {coddvCompletionStats.completed} CODDV conferido(s) de {coddvCompletionStats.total} na base de referência.
+              {coddvCompletionStats.completed} {coddvCompletionStats.completed === 1 ? "SKU conferido" : "SKUs conferidos"}
+              {" "}de {coddvCompletionStats.total} {coddvCompletionStats.total === 1 ? "SKU" : "SKUs"} na base {isOnline ? "online atual" : "local atual"}.
             </small>
           </div>
         ) : null}
