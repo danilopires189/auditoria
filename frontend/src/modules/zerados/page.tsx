@@ -176,6 +176,9 @@ function resultOf(estoque: number, qtd: number, discarded: boolean): InventarioR
 
 function parseErr(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "Erro inesperado");
+  if (raw.includes("rpc_conf_inventario_admin_apply_manual_coddv") || raw.includes("Could not find the function public.rpc_conf_inventario_admin_apply_manual_coddv")) {
+    return "Backend desatualizado para CODDV manual. Execute as migrações mais recentes e tente novamente.";
+  }
   if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia no servidor. Use 'Gerir Base' para montar e sincronize novamente.";
   if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este CODDV.";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
@@ -1040,6 +1043,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const runAdminApplyZona = useCallback((mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
+    if (adminSelectedZones.length === 0) {
+      setErr("Nenhuma zona selecionada. Abra 'Escolher zonas' e salve a seleção.");
+      return;
+    }
     if (adminPreviewRows.length === 0 || adminPreviewScope !== "zona") {
       setErr("Faça a pré-visualização da inserção por zona antes de confirmar.");
       return;
@@ -1055,7 +1062,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       confirm_label: "Confirmar inserção",
       action: { kind: "apply_zona", mode }
     });
-  }, [adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, canManageBase, cd]);
+  }, [adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, adminSelectedZones.length, canManageBase, cd]);
 
   const executeAdminApplyCoddv = useCallback(async () => {
     if (!canManageBase || cd == null) return;
@@ -1080,6 +1087,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const runAdminApplyCoddv = useCallback(() => {
     if (!canManageBase || cd == null) return;
+    if (!adminManualCoddvCsv.trim()) {
+      setErr("Informe ao menos um CODDV manual antes de confirmar.");
+      return;
+    }
     if (adminPreviewRows.length === 0 || adminPreviewScope !== "coddv") {
       setErr("Faça a pré-visualização da inserção por CODDV antes de confirmar.");
       return;
@@ -1094,7 +1105,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       confirm_label: "Confirmar inserção",
       action: { kind: "apply_coddv" }
     });
-  }, [adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, canManageBase, cd]);
+  }, [adminManualCoddvCsv, adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, canManageBase, cd]);
 
   const executeAdminClearAll = useCallback(async () => {
     if (!canManageBase || cd == null) return;
