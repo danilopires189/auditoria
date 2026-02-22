@@ -179,13 +179,13 @@ function resultOf(estoque: number, qtd: number, discarded: boolean): InventarioR
 function parseErr(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "Erro inesperado");
   if (raw.includes("rpc_conf_inventario_admin_apply_manual_coddv") || raw.includes("Could not find the function public.rpc_conf_inventario_admin_apply_manual_coddv")) {
-    return "Backend desatualizado para CODDV manual. Execute as migrações mais recentes e tente novamente.";
+    return "Backend desatualizado para Código e Dígito (CODDV) manual. Execute as migrações mais recentes e tente novamente.";
   }
   if (raw.toLowerCase().includes("read-only transaction")) {
     return "Backend com função de inventário em modo somente leitura. Execute as migrações mais recentes e sincronize novamente.";
   }
   if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia no servidor. Use 'Gerir Base' para montar e sincronize novamente.";
-  if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este CODDV.";
+  if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este Código e Dígito (CODDV).";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
   if (raw.includes("ETAPA2_APENAS_QUANDO_SOBRA")) return "2ª verificação só é permitida quando houver sobra na 1ª verificação.";
   if (raw.includes("ETAPA1_OBRIGATORIA")) return "A 1ª verificação precisa ser concluída antes da 2ª.";
@@ -197,9 +197,9 @@ function parseErr(error: unknown): string {
   if (raw.includes("ETAPA1_BLOQUEADA_SEGUNDA_EXISTE")) return "A 1ª verificação não pode ser alterada após existir 2ª verificação.";
   if (raw.includes("ITEM_JA_RESOLVIDO")) return "Endereço já resolvido na conciliação.";
   if (raw.includes("ESTOQUE_FAIXA_INVALIDA")) return "Faixa de estoque inválida. O final deve ser maior ou igual ao inicial.";
-  if (raw.includes("ZONAS_OU_CODDV_OBRIGATORIO")) return "Selecione ao menos uma zona ou informe CODDV manual.";
+  if (raw.includes("ZONAS_OU_CODDV_OBRIGATORIO")) return "Selecione ao menos uma zona ou informe Código e Dígito (CODDV) manual.";
   if (raw.includes("ZONAS_OBRIGATORIAS")) return "Selecione pelo menos uma zona.";
-  if (raw.includes("CODDV_MANUAL_OBRIGATORIO")) return "Informe ao menos um CODDV manual para essa ação.";
+  if (raw.includes("CODDV_MANUAL_OBRIGATORIO")) return "Informe ao menos um Código e Dígito (CODDV) manual para essa ação.";
   if (raw.includes("MODE_INVALIDO")) return "Modo de aplicação inválido.";
   if (raw.includes("SCOPE_INVALIDO")) return "Escopo de limpeza inválido.";
   return raw;
@@ -566,7 +566,7 @@ function optimistic(previous: InventarioSyncPullState, payload: Record<string, u
     zona,
     endereco,
     coddv,
-    descricao: String(payload.descricao ?? `CODDV ${coddv}`),
+    descricao: String(payload.descricao ?? `Código e Dígito ${coddv}`),
     estoque,
     etapa,
     qtd_contada: qtd,
@@ -1031,7 +1031,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       return;
     }
     if (scope === "coddv" && !adminManualCoddvCsv.trim()) {
-      setErr("Informe ao menos um CODDV para gerar a prévia de CODDV.");
+      setErr("Informe ao menos um Código e Dígito (CODDV) para gerar a prévia desse fluxo.");
       return;
     }
     setAdminBusy(true);
@@ -1107,7 +1107,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         incluir_pul: adminIncluirPul
       });
       setAdminSummary(summary);
-      setMsg(`CODDV manual aplicado. Itens no escopo: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
+      setMsg(`Código e Dígito (CODDV) manual aplicado. Itens no escopo: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
       await syncNow(true);
       await loadAdminZones();
     } catch (error) {
@@ -1120,16 +1120,16 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const runAdminApplyCoddv = useCallback(() => {
     if (!canManageBase || cd == null) return;
     if (!adminManualCoddvCsv.trim()) {
-      setErr("Informe ao menos um CODDV manual antes de confirmar.");
+      setErr("Informe ao menos um Código e Dígito (CODDV) manual antes de confirmar.");
       return;
     }
     if (adminPreviewRows.length === 0 || adminPreviewScope !== "coddv") {
-      setErr("Faça a pré-visualização da inserção por CODDV antes de confirmar.");
+      setErr("Faça a pré-visualização da inserção por Código e Dígito (CODDV) antes de confirmar.");
       return;
     }
 
     setAdminConfirm({
-      title: "Confirmar inserção por CODDV",
+      title: "Confirmar inserção por Código e Dígito (CODDV)",
       lines: [
         `Zonas na prévia: ${adminPreviewRows.length}`,
         `Total geral: ${adminPreviewTotal}`
@@ -1764,7 +1764,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       if (online) { await upsertDbBarrasCacheRow(online); found = online; }
     }
     if (!found) throw new Error("Código de barras não encontrado na base.");
-    if (found.coddv !== coddv) throw new Error("Código de barras inválido para este CODDV.");
+    if (found.coddv !== coddv) throw new Error("Código de barras inválido para este Código e Dígito (CODDV).");
     return found.barras;
   }, [isOnline]);
 
@@ -2053,8 +2053,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       if (qty > active.estoque) {
         const normalized = normalizeBarcode(finalBarras);
         if (!normalized) {
-          setPopupErr("Informe código de barras válido do mesmo CODDV.");
-          triggerScanErrorAlert("Informe código de barras válido do mesmo CODDV.");
+          setPopupErr("Informe código de barras válido do mesmo Código e Dígito (CODDV).");
+          triggerScanErrorAlert("Informe código de barras válido do mesmo Código e Dígito (CODDV).");
           return;
         }
         if (validatedFinalBarras !== normalized) {
@@ -2063,8 +2063,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         }
         b = normalizeBarcode(finalBarrasValueRef.current);
         if (!b) {
-          setPopupErr("Informe código de barras válido do mesmo CODDV.");
-          triggerScanErrorAlert("Informe código de barras válido do mesmo CODDV.");
+          setPopupErr("Informe código de barras válido do mesmo Código e Dígito (CODDV).");
+          triggerScanErrorAlert("Informe código de barras válido do mesmo Código e Dígito (CODDV).");
           return;
         }
       }
@@ -2309,7 +2309,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       CD: r.cd,
       Zona: r.zona,
       Endereco: r.endereco,
-      CODDV: r.coddv,
+      "Código e Dígito (CODDV)": r.coddv,
       Descricao: r.descricao,
       Estoque: r.estoque,
       QtdPrimeira: r.qtd_primeira,
@@ -2694,7 +2694,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   <div className="inventario-popup-head">
                     <div>
                       <h3>{active.endereco}</h3>
-                      <p>{`${stageLabel(tab)} | CODDV ${active.coddv}`}</p>
+                      <p>{`${stageLabel(tab)} | Código e Dígito (CODDV) ${active.coddv}`}</p>
                       <p className="inventario-popup-head-product">{active.descricao}</p>
                     </div>
                     <div className="inventario-popup-head-actions">
@@ -2749,7 +2749,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                               <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
                                 {barrasValidatedForCurrentInput
                                   ? "Código de barras validado. Toque em Salvar para concluir."
-                                  : "Sobra detectada. Informe barras válido do mesmo CODDV e valide antes de salvar, ou descarte."}
+                                  : "Sobra detectada. Informe barras válido do mesmo Código e Dígito (CODDV) e valide antes de salvar, ou descarte."}
                               </p>
                             ) : null}
                             {requiresBarras ? (
@@ -2799,7 +2799,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     ) : null}
                     {tab === "conciliation" ? (
                       <>
-                        <p className="inventario-editor-text">{`Endereço: ${active.endereco} | CODDV: ${active.coddv}`}</p>
+                        <p className="inventario-editor-text">{`Endereço: ${active.endereco} | Código e Dígito (CODDV): ${active.coddv}`}</p>
                         {(() => {
                           const c1Fallback = extractReviewSnapshotCount(active.review, 1);
                           const c2Fallback = extractReviewSnapshotCount(active.review, 2);
@@ -2860,7 +2860,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           />
                         </label>
                         {requiresFinalBarras ? (
-                          <p className="inventario-popup-note warn">Quantidade final acima do esperado. Informe barras válido do mesmo CODDV.</p>
+                          <p className="inventario-popup-note warn">Quantidade final acima do esperado. Informe barras válido do mesmo Código e Dígito (CODDV).</p>
                         ) : null}
                         {requiresFinalBarras ? (
                           <label>
@@ -2927,11 +2927,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <div className="inventario-admin-entry-grid">
                   <button type="button" className="inventario-admin-entry-card" onClick={() => openAdminMode("zona")}>
                     <strong>Fluxo por Zona</strong>
-                    <span>Escolha zonas SEP, faixa de estoque e aplique por zona.</span>
+                    <span>Escolha zonas de Separação (SEP), faixa de estoque e aplique por zona.</span>
                   </button>
                   <button type="button" className="inventario-admin-entry-card" onClick={() => openAdminMode("coddv")}>
-                    <strong>Fluxo por CODDV</strong>
-                    <span>Informe CODDV manual para inclusão direta na auditoria.</span>
+                    <strong>Fluxo por Código e Dígito</strong>
+                    <span>Informe Código e Dígito (CODDV) manual para inclusão direta na auditoria.</span>
                   </button>
                 </div>
               </div>
@@ -2944,10 +2944,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             <div className="inventario-popup-card inventario-admin-popup" onClick={(event) => event.stopPropagation()}>
               <div className="inventario-popup-head">
                 <div>
-                  <h3>{isAdminZonaFlow ? "Gestão da Base - Fluxo por Zona" : "Gestão da Base - Fluxo por CODDV"}</h3>
+                  <h3>{isAdminZonaFlow ? "Gestão da Base - Fluxo por Zona" : "Gestão da Base - Fluxo por Código e Dígito"}</h3>
                   <p>{isAdminZonaFlow
                     ? "Configure zonas e faixa de estoque para montar a base por zona."
-                    : "Use CODDV manual para montar a base por produto."}
+                    : "Use Código e Dígito (CODDV) manual para montar a base por produto."}
                   </p>
                 </div>
                 <button type="button" className="inventario-popup-close" onClick={() => setAdminOpen(false)} aria-label="Fechar popup">Fechar</button>
@@ -2991,12 +2991,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           onChange={(event) => setAdminIncluirPul(event.target.checked)}
                           disabled={adminBusy || cd == null}
                         />
-                        Incluir enderecos PUL dos CODDV selecionados na zona
+                        Incluir endereços de Pulmão (PUL) dos Códigos e Dígitos (CODDV) selecionados na zona
                       </label>
                     </div>
 
                     <div className="inventario-admin-zone-head">
-                      <strong>{`Inserção por zona (SEP disponíveis: ${adminZones.length})`}</strong>
+                      <strong>{`Inserção por zona de Separação (SEP disponíveis: ${adminZones.length})`}</strong>
                       <div className="inventario-admin-zone-actions">
                         <button
                           type="button"
@@ -3061,9 +3061,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
                 {isAdminCoddvFlow ? (
                   <div className="inventario-admin-section inventario-admin-manual">
-                    <h4>Insercao por CODDV manual</h4>
+                    <h4>Inserção manual por Código e Dígito (CODDV)</h4>
                     <p className="inventario-editor-text">
-                      Informe um ou varios CODDV para montar a base por produto.
+                      Informe um ou vários Códigos e Dígitos (CODDV) para montar a base por produto.
                     </p>
                     <label className="inventario-admin-check">
                       <input
@@ -3072,10 +3072,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         onChange={(event) => setAdminIncluirPul(event.target.checked)}
                         disabled={adminBusy || cd == null}
                       />
-                      Incluir enderecos PUL dos CODDV informados
+                      Incluir endereços de Pulmão (PUL) dos Códigos e Dígitos (CODDV) informados
                     </label>
                     <label>
-                      CODDV manual (separado por virgula)
+                      Código e Dígito (CODDV) manual (separado por vírgula)
                       <textarea
                         value={adminManualCoddvCsv}
                         onChange={(event) => setAdminManualCoddvCsv(event.target.value)}
@@ -3091,7 +3091,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         disabled={adminBusy || cd == null}
                         onClick={() => void runAdminPreview("coddv")}
                       >
-                        {adminBusy ? "Processando..." : "Prévia CODDV"}
+                        {adminBusy ? "Processando..." : "Prévia Código e Dígito"}
                       </button>
                       <button
                         className="btn btn-primary"
@@ -3099,7 +3099,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "coddv"}
                         onClick={() => void runAdminApplyCoddv()}
                       >
-                        Aplicar CODDV manual
+                        Aplicar Código e Dígito manual
                       </button>
                     </div>
                   </div>
@@ -3110,7 +3110,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   || (isAdminCoddvFlow && adminPreviewScope === "coddv")
                 ) ? (
                   <div className="inventario-admin-preview">
-                    <h4>{adminPreviewScope === "coddv" ? "Prévia da inserção por CODDV" : "Prévia da inserção por zona"}</h4>
+                    <h4>{adminPreviewScope === "coddv" ? "Prévia da inserção por Código e Dígito (CODDV)" : "Prévia da inserção por zona"}</h4>
                     <p className="inventario-editor-text">{`Total geral: ${adminPreviewTotal} itens`}</p>
                     <div className="inventario-admin-preview-list">
                       {adminPreviewRows.map((row) => (
@@ -3158,7 +3158,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             <div className="inventario-popup-card inventario-admin-zone-popup" onClick={(event) => event.stopPropagation()}>
               <div className="inventario-popup-head">
                 <div>
-                  <h3>Selecionar zonas SEP</h3>
+                  <h3>Selecionar zonas de Separação (SEP)</h3>
                   <p>Marque as zonas para a inserção por zona e salve para voltar.</p>
                 </div>
                 <button type="button" className="inventario-popup-close" onClick={() => setAdminZonePickerOpen(false)} aria-label="Fechar popup">Fechar</button>
@@ -3207,7 +3207,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   {adminZonesLoading ? (
                     <p className="inventario-popup-note">Carregando zonas...</p>
                   ) : adminZones.length === 0 ? (
-                    <p className="inventario-popup-note warn">Nenhuma zona SEP encontrada para este CD.</p>
+                    <p className="inventario-popup-note warn">Nenhuma zona de Separação (SEP) encontrada para este CD.</p>
                   ) : filteredAdminZones.length === 0 ? (
                     <p className="inventario-popup-note warn">Nenhuma zona encontrada para o filtro informado.</p>
                   ) : filteredAdminZones.map((row) => {
@@ -3231,7 +3231,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         />
                         <span className="inventario-admin-zone-main">
                           <span>{row.zona}</span>
-                          <small>{`${row.itens} itens SEP`}</small>
+                          <small>{`${row.itens} itens de Separação (SEP)`}</small>
                         </span>
                       </label>
                     );
