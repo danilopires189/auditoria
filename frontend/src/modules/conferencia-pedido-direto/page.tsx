@@ -26,6 +26,7 @@ import {
   cleanupExpiredPedidoDiretoVolumes,
   getLocalVolume,
   getManifestItemsByEtiqueta,
+  listManifestItemsByCd,
   getManifestMetaLocal,
   getPendingSummary,
   getRouteOverviewLocal,
@@ -545,6 +546,23 @@ function routeStatusClass(status: PedidoDiretoRouteStatus | PedidoDiretoStoreSta
   return "falta";
 }
 
+function buildStoreProgressKey(rota: string | null | undefined, filial: number | null | undefined): string {
+  const normalizedRota = (String(rota ?? "SEM ROTA").trim().toLocaleUpperCase("pt-BR") || "SEM ROTA");
+  const normalizedFilial = Number.isFinite(Number(filial))
+    ? String(Math.trunc(Number(filial)))
+    : "na";
+  return `${normalizedRota}::${normalizedFilial}`;
+}
+
+function formatPercent(value: number): string {
+  const normalized = Math.max(0, Math.min(value, 100));
+  const rounded = Math.round(normalized * 10) / 10;
+  return `${rounded.toLocaleString("pt-BR", {
+    minimumFractionDigits: Number.isInteger(rounded) ? 0 : 1,
+    maximumFractionDigits: 1
+  })}%`;
+}
+
 function isBrowserDesktop(): boolean {
   if (typeof window === "undefined") return true;
   return window.matchMedia("(min-width: 980px)").matches;
@@ -593,6 +611,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [routeRows, setRouteRows] = useState<PedidoDiretoRouteOverviewRow[]>([]);
+  const [baseCoddvTotal, setBaseCoddvTotal] = useState(0);
+  const [baseCoddvByStore, setBaseCoddvByStore] = useState<Record<string, number>>({});
 
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
   const [cdAtivo, setCdAtivo] = useState<number | null>(null);
@@ -778,6 +798,30 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
     return mapped.filter((group): group is PedidoDiretoRouteGroupView => group !== null);
   }, [routeGroups, routeSearchInput]);
+
+  const coddvCompletionStats = useMemo(() => {
+    if (baseCoddvTotal <= 0) {
+      return { completed: 0, total: 0, percent: 0 };
+    }
+
+    let completed = 0;
+    for (const row of routeRows) {
+      const baseCount = baseCoddvByStore[buildStoreProgressKey(row.rota, row.filial)] ?? 0;
+      if (baseCount <= 0) continue;
+
+      const totalEtiquetas = Math.max(Number(row.total_etiquetas) || 0, 0);
+      const conferidas = Math.max(Number(row.conferidas) || 0, 0);
+      const ratio = totalEtiquetas > 0
+        ? Math.max(0, Math.min(conferidas / totalEtiquetas, 1))
+        : row.status === "concluido" ? 1 : 0;
+
+      completed += Math.round(baseCount * ratio);
+    }
+
+    completed = Math.max(0, Math.min(completed, baseCoddvTotal));
+    const percent = baseCoddvTotal > 0 ? (completed / baseCoddvTotal) * 100 : 0;
+    return { completed, total: baseCoddvTotal, percent };
+  }, [baseCoddvByStore, baseCoddvTotal, routeRows]);
 
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
@@ -1797,6 +1841,44 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   }, [currentCd, persistPreferences]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (currentCd == null) {
+      setBaseCoddvTotal(0);
+      setBaseCoddvByStore({});
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const loadProgressBase = async () => {
+      try {
+        const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+        if (cancelled) return;
+
+        const byStore: Record<string, number> = {};
+        for (const item of manifestItems) {
+          const key = buildStoreProgressKey(item.rota, item.filial);
+          byStore[key] = (byStore[key] ?? 0) + 1;
+        }
+
+        setBaseCoddvTotal(manifestItems.length);
+        setBaseCoddvByStore(byStore);
+      } catch {
+        if (cancelled) return;
+        setBaseCoddvTotal(0);
+        setBaseCoddvByStore({});
+      }
+    };
+
+    void loadProgressBase();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCd, manifestInfo, profile.user_id]);
+
+  useEffect(() => {
     if (currentCd == null) {
       setManifestReady(false);
       setManifestInfo("");
@@ -2492,6 +2574,24 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                 ))}
               </select>
             </label>
+          </div>
+        ) : null}
+
+        {!activeVolume ? (
+          <div className="pvps-progress-card" role="status" aria-live="polite">
+            <div className="pvps-progress-head">
+              <strong>Conclusão Pedido Direto</strong>
+              <span>{formatPercent(coddvCompletionStats.percent)}</span>
+            </div>
+            <div className="pvps-progress-track" aria-hidden="true">
+              <span
+                className="pvps-progress-fill"
+                style={{ width: `${Math.max(0, Math.min(coddvCompletionStats.percent, 100))}%` }}
+              />
+            </div>
+            <small>
+              {coddvCompletionStats.completed} CODDV conferido(s) de {coddvCompletionStats.total} na base de referência.
+            </small>
           </div>
         ) : null}
 
