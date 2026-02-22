@@ -2092,6 +2092,11 @@ small {
   font-size: 0.82rem;
 }
 
+.termo-volume-ref {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .entrada-notas-contributors {
   color: #596987;
   font-size: 0.76rem;
