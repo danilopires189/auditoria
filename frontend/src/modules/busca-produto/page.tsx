@@ -374,7 +374,6 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
         return;
       }
 
-      setSearchInput(found.barras || barras);
       setResult(found);
       setStatusMessage("Produto localizado com sucesso.");
       setBarcodeValidationState("valid");
@@ -385,6 +384,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
       setBarcodeValidationState("invalid");
       focusSearch();
     } finally {
+      setSearchInput("");
       setBusySearch(false);
     }
   }, [currentCd, focusSearch]);
@@ -771,19 +771,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
               <h3>Resumo do Produto</h3>
               <p><strong>Descrição:</strong> {result.descricao || "-"}</p>
               <p><strong>SKU/CODDV:</strong> {result.coddv}</p>
-              <p><strong>Barras principais:</strong> {result.barras || "-"}</p>
-              <p><strong>Total de códigos de barras:</strong> {result.barras_lista.length}</p>
-              {result.barras_lista.length > 0 ? (
-                <ul className="busca-produto-address-list">
-                  {result.barras_lista.map((barcode, index) => (
-                    <li key={`${barcode}-${index}`}>
-                      <span className="busca-produto-address-main">{barcode}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="coleta-empty">Nenhum código de barras encontrado.</div>
-              )}
+              <p><strong>Códigos de barras:</strong> {result.barras_lista.length > 0 ? result.barras_lista.join(" | ") : "-"}</p>
               <p><strong>CD:</strong> {String(result.cd).padStart(2, "0")}</p>
               <p><strong>Estoque disponível:</strong> {result.qtd_est_disp}</p>
               <p><strong>Estoque atual:</strong> {result.qtd_est_atual}</p>
