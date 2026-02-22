@@ -986,9 +986,9 @@ small {
 }
 
 .global-cd-option.is-selected {
-  border-color: #1a5db8;
-  box-shadow: 0 0 0 2px rgba(26, 93, 184, 0.14);
-  background: linear-gradient(180deg, #eef5ff 0%, #e7f1ff 100%);
+  border-color: #0d3f89;
+  box-shadow: 0 0 0 2px rgba(13, 63, 137, 0.24);
+  background: linear-gradient(180deg, #2d63b6 0%, #1f4f98 100%);
 }
 
 .global-cd-option-label {
@@ -996,6 +996,10 @@ small {
   font-weight: 700;
   color: #233f67;
   line-height: 1.25;
+}
+
+.global-cd-option.is-selected .global-cd-option-label {
+  color: #f4f8ff;
 }
 
 .scanner-overlay {
