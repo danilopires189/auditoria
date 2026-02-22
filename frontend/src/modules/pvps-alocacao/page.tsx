@@ -459,15 +459,19 @@ function applyModeLabel(value: PvpsRuleApplyMode | null): string | null {
   return value === "apply_now" ? "Agir agora" : "Próximas inclusões";
 }
 
-function completionStats(pending: number, completed: number): { percent: number; total: number } {
-  const safePending = Math.max(0, pending);
+function completionPercent(completed: number, total: number): number {
   const safeCompleted = Math.max(0, completed);
-  const total = safePending + safeCompleted;
-  if (total <= 0) return { percent: 0, total: 0 };
-  return {
-    percent: Math.round((safeCompleted / total) * 100),
-    total
-  };
+  const safeTotal = Math.max(0, total);
+  if (safeTotal <= 0) return 0;
+  const raw = (safeCompleted / safeTotal) * 100;
+  return Number(Math.min(100, raw).toFixed(1));
+}
+
+function formatPercent(value: number): string {
+  return `${new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1
+  }).format(value)}%`;
 }
 
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
@@ -548,6 +552,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [manifestReady, setManifestReady] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [offlineDiscardedInSession, setOfflineDiscardedInSession] = useState(0);
+  const [progressBaselinePvps, setProgressBaselinePvps] = useState<{ key: string; total: number }>({ key: "", total: 0 });
+  const [progressBaselineAloc, setProgressBaselineAloc] = useState<{ key: string; total: number }>({ key: "", total: 0 });
   const [adminDraft, setAdminDraft] = useState<AdminRuleDraft>({
     modulo: "ambos",
     rule_kind: "blacklist",
@@ -1338,17 +1344,50 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     [filteredAlocCompletedRows]
   );
 
-  const pvpsStats = useMemo(
-    () => completionStats(filteredPvpsPendingRows.length, sortedPvpsCompletedRows.length),
-    [filteredPvpsPendingRows.length, sortedPvpsCompletedRows.length]
+  const zoneScopeKey = useMemo(
+    () => selectedZones.slice().sort((a, b) => a.localeCompare(b)).join(","),
+    [selectedZones]
   );
 
-  const alocStats = useMemo(
-    () => completionStats(filteredAlocPendingRows.length, sortedAlocCompletedRows.length),
-    [filteredAlocPendingRows.length, sortedAlocCompletedRows.length]
-  );
+  useEffect(() => {
+    const scopeKey = `${activeCd ?? "no-cd"}|${todayBrt}|${zoneScopeKey}`;
+    const currentTotal = filteredPvpsPendingRows.length + sortedPvpsCompletedRows.length;
+    setProgressBaselinePvps((prev) => {
+      const nextTotal = Math.max(currentTotal, 0);
+      if (prev.key !== scopeKey) return { key: scopeKey, total: nextTotal };
+      if (prev.total <= 0 && nextTotal > 0) return { key: scopeKey, total: nextTotal };
+      return prev;
+    });
+  }, [activeCd, todayBrt, zoneScopeKey, filteredPvpsPendingRows.length, sortedPvpsCompletedRows.length]);
 
-  const activeStats = tab === "pvps" ? pvpsStats : alocStats;
+  useEffect(() => {
+    const scopeKey = `${activeCd ?? "no-cd"}|${todayBrt}|${zoneScopeKey}`;
+    const currentTotal = filteredAlocPendingRows.length + sortedAlocCompletedRows.length;
+    setProgressBaselineAloc((prev) => {
+      const nextTotal = Math.max(currentTotal, 0);
+      if (prev.key !== scopeKey) return { key: scopeKey, total: nextTotal };
+      if (prev.total <= 0 && nextTotal > 0) return { key: scopeKey, total: nextTotal };
+      return prev;
+    });
+  }, [activeCd, todayBrt, zoneScopeKey, filteredAlocPendingRows.length, sortedAlocCompletedRows.length]);
+
+  const activeStats = useMemo(() => {
+    if (tab === "pvps") {
+      const total = progressBaselinePvps.total;
+      const completed = sortedPvpsCompletedRows.length;
+      return {
+        percent: completionPercent(completed, total),
+        total
+      };
+    }
+    const total = progressBaselineAloc.total;
+    const completed = sortedAlocCompletedRows.length;
+    return {
+      percent: completionPercent(completed, total),
+      total
+    };
+  }, [tab, progressBaselinePvps.total, progressBaselineAloc.total, sortedPvpsCompletedRows.length, sortedAlocCompletedRows.length]);
+
   const activeCompletedCount = tab === "pvps" ? sortedPvpsCompletedRows.length : sortedAlocCompletedRows.length;
 
   useEffect(() => {
@@ -2302,7 +2341,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             <div className="pvps-progress-card" role="status" aria-live="polite">
               <div className="pvps-progress-head">
                 <strong>Conclusão {tab === "pvps" ? "PVPS" : "Alocação"}</strong>
-                <span>{activeStats.percent}%</span>
+                <span>{formatPercent(activeStats.percent)}</span>
               </div>
               <div className="pvps-progress-track" aria-hidden="true">
                 <span
@@ -2311,7 +2350,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 />
               </div>
               <small>
-                {activeCompletedCount} concluído(s) de {activeStats.total} no total atual.
+                {activeCompletedCount} concluído(s) de {activeStats.total} na base de referência.
               </small>
             </div>
             {isAdmin && showAdminPanel ? (
