@@ -3489,6 +3489,341 @@ small {
   line-height: 1.1;
 }
 
+.produtividade-shell {
+  max-width: min(1260px, 100%);
+}
+
+.produtividade-screen {
+  width: min(1180px, 100%);
+}
+
+.produtividade-body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+  padding: 14px;
+}
+
+.produtividade-actions-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.produtividade-visibility-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.produtividade-visibility-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.produtividade-period-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.produtividade-period-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  color: #1b3a67;
+}
+
+.produtividade-period-row input {
+  width: 100%;
+  padding: 10px 11px;
+  border-radius: 10px;
+  border: 1px solid #c9d6ea;
+  background: #fff;
+  color: #17335b;
+  font: inherit;
+}
+
+.produtividade-grid {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.produtividade-collaborators,
+.produtividade-detail {
+  border-radius: 12px;
+  border: 1px solid #d5dfef;
+  background: #fff;
+  padding: 11px;
+  min-height: 0;
+}
+
+.produtividade-collaborators h3,
+.produtividade-detail h3 {
+  margin: 0 0 10px;
+  color: #17345f;
+  font-size: 0.98rem;
+}
+
+.produtividade-collaborator-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.produtividade-table-wrap {
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid #d7e2f2;
+}
+
+.produtividade-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+
+.produtividade-table th,
+.produtividade-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #ecf1f8;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.produtividade-table tbody tr {
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.produtividade-table tbody tr:hover {
+  background: #f6f9ff;
+}
+
+.produtividade-table tbody tr.is-selected {
+  background: #e8f0ff;
+}
+
+.produtividade-collaborator-cards {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.produtividade-collaborator-card {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #d6dfef;
+  background: #fff;
+  color: #17345f;
+  text-align: left;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.produtividade-collaborator-card.is-selected {
+  border-color: #87a6dc;
+  background: #ecf3ff;
+}
+
+.produtividade-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.produtividade-summary-strip span {
+  border-radius: 999px;
+  border: 1px solid #d5e1f3;
+  background: #f5f8ff;
+  color: #234670;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.produtividade-activity-block h4,
+.produtividade-daily-block h4,
+.produtividade-entries-block h4 {
+  margin: 0 0 8px;
+  color: #17345f;
+  font-size: 0.92rem;
+}
+
+.produtividade-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.produtividade-activity-card {
+  border-radius: 10px;
+  border: 1px solid #d7e2f2;
+  background: #fff;
+  color: #17345f;
+  text-align: left;
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.produtividade-activity-card strong {
+  font-size: 0.82rem;
+}
+
+.produtividade-activity-card span {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #0f2e58;
+}
+
+.produtividade-activity-card small {
+  font-size: 0.72rem;
+  color: #3f5d87;
+}
+
+.produtividade-activity-card.is-active {
+  border-color: #87a6dc;
+  background: #ecf3ff;
+}
+
+.produtividade-filter-line {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.produtividade-filter-line span {
+  color: #2b4b76;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.produtividade-daily-block {
+  margin-top: 12px;
+}
+
+.produtividade-daily-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.produtividade-day-card {
+  border-radius: 10px;
+  border: 1px solid #d8e2f2;
+  background: #fbfdff;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.produtividade-day-card strong {
+  color: #14335d;
+}
+
+.produtividade-day-card span {
+  color: #214a7f;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.produtividade-day-card small {
+  color: #47638c;
+  font-size: 0.75rem;
+}
+
+.produtividade-entries-block {
+  margin-top: 12px;
+}
+
+.produtividade-entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.produtividade-entry-card {
+  border-radius: 10px;
+  border: 1px solid #d9e2f1;
+  background: #fff;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.produtividade-entry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.produtividade-entry-head strong {
+  color: #14335d;
+  font-size: 0.84rem;
+}
+
+.produtividade-entry-head span {
+  color: #10345d;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.produtividade-entry-card p {
+  margin: 0;
+  color: #2f4d76;
+  font-size: 0.81rem;
+  font-weight: 500;
+}
+
+.produtividade-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.produtividade-entry-meta span {
+  border-radius: 999px;
+  background: #f4f8ff;
+  color: #395981;
+  border: 1px solid #d9e4f5;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+@media (max-width: 980px) {
+  .produtividade-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @keyframes termo-scan-feedback-in {
   from {
     opacity: 0;
@@ -3541,6 +3876,31 @@ small {
   .module-screen-body-large {
     min-height: clamp(160px, 30vh, 220px);
     padding: 14px;
+  }
+
+  .produtividade-period-row {
+    grid-template-columns: 1fr;
+  }
+
+  .produtividade-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .produtividade-table-wrap {
+    display: none;
+  }
+
+  .produtividade-collaborator-cards {
+    display: flex;
+  }
+
+  .produtividade-filter-line {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .produtividade-filter-line .btn {
+    width: 100%;
   }
 
   .coleta-actions-row .btn {

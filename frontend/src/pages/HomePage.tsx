@@ -4,6 +4,19 @@ import { DASHBOARD_MODULES } from "../modules/registry";
 import type { DisplayContext } from "../types/ui";
 import { LogoutIcon, ModuleIcon } from "../ui/icons";
 
+const AVAILABLE_MODULE_KEYS = new Set([
+  "coleta-mercadoria",
+  "pvps-alocacao",
+  "atividade-extra",
+  "conferencia-termo",
+  "conferencia-volume-avulso",
+  "conferencia-pedido-direto",
+  "conferencia-entrada-notas",
+  "devolucao-mercadoria",
+  "zerados",
+  "busca-produto"
+]);
+
 interface HomePageProps {
   displayContext: DisplayContext;
   isOnline: boolean;
@@ -90,17 +103,10 @@ export default function HomePage({
               </span>
               <div className="module-header-main">
                 <span className="module-title">{moduleDef.title}</span>
-                {moduleDef.key === "coleta-mercadoria"
-                || moduleDef.key === "pvps-alocacao"
-                || moduleDef.key === "atividade-extra"
-                || moduleDef.key === "conferencia-termo"
-                || moduleDef.key === "conferencia-volume-avulso"
-                || moduleDef.key === "conferencia-pedido-direto"
-                || moduleDef.key === "conferencia-entrada-notas"
-                || moduleDef.key === "devolucao-mercadoria"
-                || moduleDef.key === "zerados"
-                || moduleDef.key === "busca-produto" ? (
+                {AVAILABLE_MODULE_KEYS.has(moduleDef.key) ? (
                   <span className="module-available-pill">Disponível</span>
+                ) : moduleDef.key === "produtividade" ? (
+                  <span className="module-test-pill">Em teste</span>
                 ) : null}
               </div>
             </Link>
