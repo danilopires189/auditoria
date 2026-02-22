@@ -552,6 +552,10 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
+function motivoPermiteSemBipagem(motivo: string | null | undefined): boolean {
+  return normalizeSearchText(motivo ?? "").includes("falta");
+}
+
 function conferenceActionLabel(status: DevolucaoMercadoriaStoreStatus): string {
   return status === "pendente" ? "Iniciar conferência" : "Retornar conferência";
 }
@@ -832,6 +836,15 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const hasAnyItemInformed = useMemo(() => (
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
   ), [activeVolume]);
+
+  const canRegisterWithoutScan = useMemo(() => (
+    Boolean(
+      activeVolume
+      && activeVolume.conference_kind === "com_nfd"
+      && !hasAnyItemInformed
+      && motivoPermiteSemBipagem(activeVolume.source_motivo)
+    )
+  ), [activeVolume, hasAnyItemInformed]);
 
   const activeConferenceNfd = useMemo(() => {
     if (!activeVolume || activeVolume.conference_kind !== "com_nfd") return null;
@@ -2065,12 +2078,17 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     if (!canEditActiveVolume) return;
 
     setFinalizeError(null);
-    const withoutScan = !hasAnyItemInformed && activeVolume.conference_kind === "com_nfd";
+    const withoutScan = canRegisterWithoutScan;
     const sobra = divergenciaTotals.sobra;
     const falta = divergenciaTotals.falta;
 
-    if (sobra > 0) {
+    if (activeVolume.conference_kind !== "sem_nfd" && sobra > 0) {
       setFinalizeError("Existem sobras na devolução. Corrija antes de finalizar.");
+      return;
+    }
+
+    if (!hasAnyItemInformed && activeVolume.conference_kind === "com_nfd" && !canRegisterWithoutScan) {
+      setFinalizeError("Sem bipagem só é permitido quando o motivo da devolução contém 'falta'.");
       return;
     }
 
@@ -2145,6 +2163,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     finalizeMotivoSemNfd,
     finalizeNfo,
     hasAnyItemInformed,
+    canRegisterWithoutScan,
     isOnline,
     preferOfflineMode,
     refreshPendingState,
@@ -2834,6 +2853,10 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
   const requestFinalize = () => {
     if (!activeVolume) return;
+    if (!hasAnyItemInformed && activeVolume.conference_kind === "com_nfd" && !canRegisterWithoutScan) {
+      setErrorMessage("Sem bipagem só é permitido quando o motivo da devolução contém 'falta'.");
+      return;
+    }
     setFinalizeError(null);
     setFinalizeMotivo(activeVolume.falta_motivo ?? "");
     setFinalizeNfo(activeVolume.nfo ?? "");
@@ -3154,7 +3177,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                       <span aria-hidden="true">{closeIcon()}</span>
                       {busyCancel ? "Cancelando..." : "Cancelar"}
                     </button>
-                    {hasAnyItemInformed ? (
+                    {hasAnyItemInformed || activeVolume.conference_kind === "sem_nfd" || !canRegisterWithoutScan ? (
                       <button
                         className="btn btn-primary termo-finalize-btn"
                         type="button"
@@ -3594,13 +3617,13 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
               <div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="termo-finalizar-title">Finalizar conferência</h3>
                 <p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>
-                {(divergenciaTotals.falta > 0 || (!hasAnyItemInformed && activeVolume.conference_kind === "com_nfd")) ? (
+                {(divergenciaTotals.falta > 0 || canRegisterWithoutScan) ? (
                   <label>
                     Motivo da falta
                     <textarea
                       value={finalizeMotivo}
                       onChange={(event) => setFinalizeMotivo(event.target.value)}
-                      placeholder={!hasAnyItemInformed ? "Descreva o motivo do envio sem bipagem" : "Descreva o motivo da falta"}
+                      placeholder={canRegisterWithoutScan ? "Descreva o motivo do envio sem bipagem" : "Descreva o motivo da falta"}
                       rows={3}
                     />
                   </label>
