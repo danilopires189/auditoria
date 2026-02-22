@@ -3087,7 +3087,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   <div className="inventario-admin-section inventario-admin-manual">
                     <h4>Inserção manual por Código e Dígito (CODDV)</h4>
                     <p className="inventario-editor-text">
-                      Informe um ou vários Códigos e Dígitos (CODDV) para montar a base por produto.
+                      Informe um ou vários Códigos e Dígitos (CODDV) para serem incluídos na base de endereços a auditar.
                     </p>
                     <label className="inventario-admin-check">
                       <input
