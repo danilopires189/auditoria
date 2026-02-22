@@ -120,6 +120,19 @@ const CYCLE_DATE = new Intl.DateTimeFormat("en-CA", {
   month: "2-digit",
   day: "2-digit"
 }).format(new Date());
+const CYCLE_DATE_DISPLAY = (() => {
+  const formatted = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  }).format(new Date());
+  const parts = formatted.split(" de ");
+  if (parts.length !== 3) return formatted;
+  const month = parts[1];
+  const monthCapitalized = month.charAt(0).toLocaleUpperCase("pt-BR") + month.slice(1);
+  return `${parts[0]} de ${monthCapitalized} de ${parts[2]}`;
+})();
 const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
@@ -2397,7 +2410,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   ) : null}
                 </div>
               </div>
-              <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE}`}</p>
+              <p className="termo-meta-line">{`Ciclo ${CYCLE_DATE_DISPLAY}`}</p>
               <div className="inventario-base-chips">
                 <span className={`inventario-base-chip ${manifestMeta && manifestItems.length >= manifestMeta.row_count ? "ok" : "warn"}`}>{`db_inventario ${manifestItems.length}/${manifestMeta?.row_count ?? 0}`}</span>
                 <span className={`inventario-base-chip ${dbBarrasCount > 0 ? "ok" : "warn"}`}>{`db_barras ${dbBarrasCount}`}</span>
