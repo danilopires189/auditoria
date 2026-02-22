@@ -1934,7 +1934,7 @@ small {
 .atividade-extra-form-grid {
   display: grid;
   gap: 9px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .atividade-extra-form-grid label {
@@ -1987,6 +1987,11 @@ small {
   font-size: 0.96rem;
 }
 
+.atividade-extra-collaborators-content {
+  display: grid;
+  gap: 8px;
+}
+
 .atividade-extra-table-wrap {
   border: 1px solid #dce5f4;
   border-radius: 12px;
@@ -2030,6 +2035,42 @@ small {
 }
 
 .atividade-extra-table tbody tr.is-selected {
+  background: #edf3ff;
+}
+
+.atividade-extra-collaborator-cards {
+  display: none;
+  gap: 8px;
+}
+
+.atividade-extra-collaborator-card {
+  width: 100%;
+  border: 1px solid #dce5f4;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  color: #1f3560;
+}
+
+.atividade-extra-collaborator-card strong {
+  font-size: 0.88rem;
+  color: #15305d;
+}
+
+.atividade-extra-collaborator-card span {
+  font-size: 0.78rem;
+  color: #4a5f86;
+}
+
+.atividade-extra-collaborator-card.is-selected {
+  border-color: #8aa8d4;
+  box-shadow: 0 0 0 1px rgba(88, 125, 182, 0.25);
   background: #edf3ff;
 }
 
@@ -2131,8 +2172,16 @@ small {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .atividade-extra-table {
-    min-width: 520px;
+  .atividade-extra-table-wrap {
+    display: none;
+  }
+
+  .atividade-extra-collaborator-cards {
+    display: grid;
+  }
+
+  .atividade-extra-form-actions .btn {
+    width: 100%;
   }
 }
 
