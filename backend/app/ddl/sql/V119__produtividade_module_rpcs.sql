@@ -182,7 +182,7 @@ as $$
             c.zona,
             upper(c.endereco) as endereco,
             c.etapa::integer as etapa,
-            min(c.count_id)::text as source_ref,
+            min(c.count_id::text) as source_ref,
             max(c.updated_at) as event_at
         from app.conf_inventario_counts c
         where c.cd = p_cd
