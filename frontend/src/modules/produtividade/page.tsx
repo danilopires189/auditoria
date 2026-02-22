@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatCountLabel, formatMetricWithUnit as formatMetricWithInflection } from "../../shared/inflection";
@@ -25,6 +26,11 @@ interface ProdutividadePageProps {
   isOnline: boolean;
   profile: ProdutividadeModuleProfile;
 }
+
+type ConfirmDialogState = {
+  kind: "visibility";
+  nextMode: ProdutividadeVisibilityMode;
+};
 
 const MODULE_DEF = getModuleByKeyOrThrow("produtividade");
 
@@ -171,6 +177,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   const [dailyRows, setDailyRows] = useState<ProdutividadeDailyRow[]>([]);
   const [entries, setEntries] = useState<ProdutividadeEntryRow[]>([]);
   const [activityFilter, setActivityFilter] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const selectedCollaborator = useMemo(
     () => collaborators.find((row) => row.user_id === selectedUserId) ?? null,
@@ -350,15 +357,28 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     });
   }, [loadEntriesOnly, selectedUserId]);
 
-  const onToggleVisibility = useCallback(async () => {
+  const onToggleVisibility = useCallback(() => {
     if (!isAdmin || !visibility || activeCd == null || busyVisibility) return;
     const nextMode: ProdutividadeVisibilityMode = visibility.visibility_mode === "public_cd" ? "owner_only" : "public_cd";
+    setConfirmDialog({
+      kind: "visibility",
+      nextMode
+    });
+  }, [activeCd, busyVisibility, isAdmin, visibility]);
+
+  const onConfirmDialog = useCallback(async () => {
+    if (!confirmDialog) return;
+    if (!isAdmin || !visibility || activeCd == null || busyVisibility) {
+      setConfirmDialog(null);
+      return;
+    }
 
     setBusyVisibility(true);
     setErrorMessage(null);
     setStatusMessage(null);
+    setConfirmDialog(null);
     try {
-      const row = await setProdutividadeVisibility(activeCd, nextMode);
+      const row = await setProdutividadeVisibility(activeCd, confirmDialog.nextMode);
       setVisibility(row);
       setStatusMessage(`Visibilidade atualizada: ${visibilityModeLabel(row.visibility_mode)}.`);
       await loadModuleData(selectedUserId ?? profile.user_id);
@@ -367,7 +387,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     } finally {
       setBusyVisibility(false);
     }
-  }, [activeCd, busyVisibility, isAdmin, loadModuleData, profile.user_id, selectedUserId, visibility]);
+  }, [activeCd, busyVisibility, confirmDialog, isAdmin, loadModuleData, profile.user_id, selectedUserId, visibility]);
 
   return (
     <>
@@ -613,6 +633,45 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           </div>
         </article>
       </section>
+      {confirmDialog && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="produtividade-confirm-title"
+              onClick={() => setConfirmDialog(null)}
+            >
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="produtividade-confirm-title">Alterar visibilidade</h3>
+                <p>
+                  {confirmDialog.nextMode === "owner_only"
+                    ? "Somente o dono e administradores verão atividades de outros colaboradores. Deseja continuar?"
+                    : "Todos os usuários do CD poderão visualizar as atividades registradas. Deseja continuar?"}
+                </p>
+                <div className="confirm-actions">
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    onClick={() => setConfirmDialog(null)}
+                    disabled={busyVisibility}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => void onConfirmDialog()}
+                    disabled={busyVisibility}
+                  >
+                    {busyVisibility ? "Salvando..." : "Confirmar"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }
