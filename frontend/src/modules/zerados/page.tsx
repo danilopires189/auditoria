@@ -180,6 +180,9 @@ function parseErr(error: unknown): string {
   if (raw.includes("rpc_conf_inventario_admin_apply_manual_coddv") || raw.includes("Could not find the function public.rpc_conf_inventario_admin_apply_manual_coddv")) {
     return "Backend desatualizado para CODDV manual. Execute as migrações mais recentes e tente novamente.";
   }
+  if (raw.toLowerCase().includes("read-only transaction")) {
+    return "Backend com função de inventário em modo somente leitura. Execute as migrações mais recentes e sincronize novamente.";
+  }
   if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia no servidor. Use 'Gerir Base' para montar e sincronize novamente.";
   if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este CODDV.";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
