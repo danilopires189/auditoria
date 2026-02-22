@@ -31,6 +31,7 @@ import {
   updatePendingEventStatus
 } from "./storage";
 import {
+  applyInventarioAdminManualCoddv,
   acquireZoneLock,
   applyInventarioAdminSeed,
   applyInventarioEvent,
@@ -77,6 +78,7 @@ type ReviewStatusFilter = "pendente" | "resolvido";
 type MobileFlowStep = "stage" | "zone" | "address";
 type ScannerTarget = "barras" | "final_barras";
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
+type InventarioAdminSeedScope = "zona" | "coddv";
 
 type Row = InventarioManifestItemRow & {
   key: string;
@@ -177,6 +179,7 @@ function parseErr(error: unknown): string {
   if (raw.includes("ESTOQUE_FAIXA_INVALIDA")) return "Faixa de estoque inválida. O final deve ser maior ou igual ao inicial.";
   if (raw.includes("ZONAS_OU_CODDV_OBRIGATORIO")) return "Selecione ao menos uma zona ou informe CODDV manual.";
   if (raw.includes("ZONAS_OBRIGATORIAS")) return "Selecione pelo menos uma zona.";
+  if (raw.includes("CODDV_MANUAL_OBRIGATORIO")) return "Informe ao menos um CODDV manual para essa ação.";
   if (raw.includes("MODE_INVALIDO")) return "Modo de aplicação inválido.";
   if (raw.includes("SCOPE_INVALIDO")) return "Escopo de limpeza inválido.";
   return raw;
@@ -617,6 +620,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [adminZoneSearch, setAdminZoneSearch] = useState("");
   const [adminZonesLoading, setAdminZonesLoading] = useState(false);
   const [adminPreviewRows, setAdminPreviewRows] = useState<InventarioAdminPreviewZoneRow[]>([]);
+  const [adminPreviewScope, setAdminPreviewScope] = useState<InventarioAdminSeedScope | null>(null);
   const [adminSummary, setAdminSummary] = useState<InventarioAdminSeedSummary | null>(null);
   const [adminClearHardReset, setAdminClearHardReset] = useState(false);
   const [isDesktop, setIsDesktop] = useState<boolean>(() => {
@@ -950,19 +954,27 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
   }, [canManageBase, cd]);
 
-  const runAdminPreview = useCallback(async () => {
+  const buildAdminSeedPayload = useCallback((scope: InventarioAdminSeedScope) => {
+    const isZona = scope === "zona";
+    return {
+      zonas: isZona ? adminSelectedZones : [],
+      estoque_ini: parseAdminStock(adminEstoqueIni, 0),
+      estoque_fim: parseAdminStock(adminEstoqueFim, 0),
+      incluir_pul: adminIncluirPul,
+      manual_coddv_csv: isZona ? "" : adminManualCoddvCsv
+    };
+  }, [adminEstoqueFim, adminEstoqueIni, adminIncluirPul, adminManualCoddvCsv, adminSelectedZones, parseAdminStock]);
+
+  const runAdminPreview = useCallback(async (scope: InventarioAdminSeedScope) => {
     if (!canManageBase || cd == null) return;
     setAdminBusy(true);
     setErr(null);
     try {
       const rows = await previewInventarioAdminSeed({
         cd,
-        zonas: adminSelectedZones,
-        estoque_ini: parseAdminStock(adminEstoqueIni, 0),
-        estoque_fim: parseAdminStock(adminEstoqueFim, 0),
-        incluir_pul: adminIncluirPul,
-        manual_coddv_csv: adminManualCoddvCsv
+        ...buildAdminSeedPayload(scope)
       });
+      setAdminPreviewScope(scope);
       setAdminPreviewRows(rows);
       setAdminSummary(null);
       setMsg(rows.length > 0 ? "Pré-visualização atualizada." : "Pré-visualização sem itens.");
@@ -971,28 +983,19 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     } finally {
       setAdminBusy(false);
     }
-  }, [
-    adminEstoqueFim,
-    adminEstoqueIni,
-    adminIncluirPul,
-    adminManualCoddvCsv,
-    adminSelectedZones,
-    canManageBase,
-    cd,
-    parseAdminStock
-  ]);
+  }, [buildAdminSeedPayload, canManageBase, cd]);
 
-  const runAdminApply = useCallback(async (mode: InventarioAdminApplyMode) => {
+  const runAdminApplyZona = useCallback(async (mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
-    if (adminPreviewRows.length === 0) {
-      setErr("Faça a pré-visualização antes de confirmar.");
+    if (adminPreviewRows.length === 0 || adminPreviewScope !== "zona") {
+      setErr("Faça a pré-visualização da inserção por zona antes de confirmar.");
       return;
     }
 
     const confirmed = window.confirm(
-      `Confirma aplicar a base?` +
+      `Confirma aplicar a base por ZONA?` +
       `\nModo: ${mode === "replace_cd" ? "Substituir base do CD" : "Recarregar zonas selecionadas"}` +
-      `\nZonas: ${adminPreviewRows.length}` +
+      `\nZonas na prévia: ${adminPreviewRows.length}` +
       `\nTotal geral: ${adminPreviewTotal}`
     );
     if (!confirmed) return;
@@ -1002,15 +1005,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     try {
       const summary = await applyInventarioAdminSeed({
         cd,
-        zonas: adminSelectedZones,
-        estoque_ini: parseAdminStock(adminEstoqueIni, 0),
-        estoque_fim: parseAdminStock(adminEstoqueFim, 0),
-        incluir_pul: adminIncluirPul,
-        manual_coddv_csv: adminManualCoddvCsv,
+        ...buildAdminSeedPayload("zona"),
         mode
       });
       setAdminSummary(summary);
-      setMsg(`Base aplicada. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
+      setMsg(`Base por zona aplicada. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
       await syncNow(true);
       await loadAdminZones();
     } catch (error) {
@@ -1019,17 +1018,56 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setAdminBusy(false);
     }
   }, [
-    adminEstoqueFim,
-    adminEstoqueIni,
-    adminIncluirPul,
-    adminManualCoddvCsv,
     adminPreviewRows.length,
+    adminPreviewScope,
     adminPreviewTotal,
-    adminSelectedZones,
+    buildAdminSeedPayload,
     canManageBase,
     cd,
     loadAdminZones,
-    parseAdminStock,
+    syncNow
+  ]);
+
+  const runAdminApplyCoddv = useCallback(async () => {
+    if (!canManageBase || cd == null) return;
+    if (adminPreviewRows.length === 0 || adminPreviewScope !== "coddv") {
+      setErr("Faça a pré-visualização da inserção por CODDV antes de confirmar.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Confirma inserir CODDV manual?` +
+      `\nZonas na prévia: ${adminPreviewRows.length}` +
+      `\nTotal geral: ${adminPreviewTotal}`
+    );
+    if (!confirmed) return;
+
+    setAdminBusy(true);
+    setErr(null);
+    try {
+      const summary = await applyInventarioAdminManualCoddv({
+        cd,
+        manual_coddv_csv: adminManualCoddvCsv,
+        incluir_pul: adminIncluirPul
+      });
+      setAdminSummary(summary);
+      setMsg(`CODDV manual aplicado. Itens no escopo: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
+      await syncNow(true);
+      await loadAdminZones();
+    } catch (error) {
+      setErr(parseErr(error));
+    } finally {
+      setAdminBusy(false);
+    }
+  }, [
+    adminIncluirPul,
+    adminManualCoddvCsv,
+    adminPreviewRows.length,
+    adminPreviewScope,
+    adminPreviewTotal,
+    canManageBase,
+    cd,
+    loadAdminZones,
     syncNow
   ]);
 
@@ -1050,6 +1088,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       });
       setAdminSummary(summary);
       setAdminPreviewRows([]);
+      setAdminPreviewScope(null);
       setMsg(`Limpeza concluída. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
       await syncNow(true);
       await loadAdminZones();
@@ -2816,6 +2855,24 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       disabled={adminBusy || cd == null}
                     />
                   </label>
+                  <div className="inventario-admin-actions">
+                    <button
+                      className="btn btn-muted"
+                      type="button"
+                      disabled={adminBusy || cd == null}
+                      onClick={() => void runAdminPreview("coddv")}
+                    >
+                      {adminBusy ? "Processando..." : "Prévia CODDV"}
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "coddv"}
+                      onClick={() => void runAdminApplyCoddv()}
+                    >
+                      Aplicar CODDV manual
+                    </button>
+                  </div>
                 </div>
 
                 <div className="inventario-admin-zone-head">
@@ -2900,23 +2957,23 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     className="btn btn-muted"
                     type="button"
                     disabled={adminBusy || cd == null}
-                    onClick={() => void runAdminPreview()}
+                    onClick={() => void runAdminPreview("zona")}
                   >
-                    {adminBusy ? "Processando..." : "Pré-visualizar"}
+                    {adminBusy ? "Processando..." : "Prévia por zona"}
                   </button>
                   <button
                     className="btn btn-primary"
                     type="button"
-                    disabled={adminBusy || cd == null || adminPreviewRows.length === 0}
-                    onClick={() => void runAdminApply("replace_cd")}
+                    disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
+                    onClick={() => void runAdminApplyZona("replace_cd")}
                   >
                     Aplicar (substituir base do CD)
                   </button>
                   <button
                     className="btn btn-muted"
                     type="button"
-                    disabled={adminBusy || cd == null || adminPreviewRows.length === 0}
-                    onClick={() => void runAdminApply("replace_zones")}
+                    disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
+                    onClick={() => void runAdminApplyZona("replace_zones")}
                   >
                     Recarregar zonas selecionadas
                   </button>
@@ -2924,7 +2981,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
                 {adminPreviewRows.length > 0 ? (
                   <div className="inventario-admin-preview">
-                    <h4>Prévia por zona</h4>
+                    <h4>{adminPreviewScope === "coddv" ? "Prévia da inserção por CODDV" : "Prévia da inserção por zona"}</h4>
                     <p className="inventario-editor-text">{`Total geral: ${adminPreviewTotal} itens`}</p>
                     <div className="inventario-admin-preview-list">
                       {adminPreviewRows.map((row) => (

@@ -565,3 +565,25 @@ export async function clearInventarioAdminBase(params: {
     total_geral: Math.max(parseInteger(first.total_geral), 0)
   };
 }
+
+export async function applyInventarioAdminManualCoddv(params: {
+  cd: number;
+  manual_coddv_csv: string;
+  incluir_pul: boolean;
+}): Promise<InventarioAdminSeedSummary> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_apply_manual_coddv", {
+    p_cd: params.cd,
+    p_manual_coddv_csv: params.manual_coddv_csv,
+    p_incluir_pul: Boolean(params.incluir_pul)
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Resposta inválida ao aplicar CODDV manual.");
+
+  return {
+    itens_afetados: Math.max(parseInteger(first.itens_afetados), 0),
+    zonas_afetadas: Math.max(parseInteger(first.zonas_afetadas), 0),
+    total_geral: Math.max(parseInteger(first.total_geral), 0)
+  };
+}
