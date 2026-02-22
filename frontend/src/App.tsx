@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -44,6 +44,11 @@ import type { PvpsAlocacaoModuleProfile } from "./modules/pvps-alocacao/types";
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
 const DEFAULT_GLOBAL_CD = 2;
+const SESSION_DEVICE_STORAGE_KEY = "auditoria.session_device_id.v1";
+const SESSION_ACTIVITY_STORAGE_PREFIX = "auditoria.last_activity.v1:";
+const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+const SESSION_GUARD_CHECK_INTERVAL_MS = 60 * 1000;
+const SESSION_ACTIVITY_PING_THROTTLE_MS = 15 * 1000;
 const ADMIN_EMAIL_CANDIDATES = [
   "1@pmenos.com.br",
   "0001@pmenos.com.br",
@@ -58,6 +63,63 @@ interface CdOption {
 
 function globalCdSelectionKey(userId: string): string {
   return `${GLOBAL_CD_STORAGE_PREFIX}${userId}`;
+}
+
+function sessionActivityStorageKey(userId: string): string {
+  return `${SESSION_ACTIVITY_STORAGE_PREFIX}${userId}`;
+}
+
+function resolveClientDeviceId(): string {
+  if (typeof window === "undefined") return "server";
+
+  try {
+    const cached = window.localStorage.getItem(SESSION_DEVICE_STORAGE_KEY);
+    if (cached && cached.trim() !== "") return cached;
+  } catch {
+    // Ignore storage failures and fallback to runtime id generation.
+  }
+
+  const generated =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `device-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  try {
+    window.localStorage.setItem(SESSION_DEVICE_STORAGE_KEY, generated);
+  } catch {
+    // Ignore storage failures.
+  }
+  return generated;
+}
+
+function readLastActivityAt(userId: string): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(sessionActivityStorageKey(userId));
+    if (!raw) return null;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastActivityAt(userId: string, value: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(sessionActivityStorageKey(userId), String(Math.max(0, Math.trunc(value))));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearLastActivityAt(userId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(sessionActivityStorageKey(userId));
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function normalizeMat(value: string): string {
@@ -583,6 +645,35 @@ async function rpcListAvailableCds(): Promise<CdOption[]> {
     .sort((a, b) => a.cd - b.cd);
 }
 
+type SessionGuardStatus = "OK" | "REPLACED" | "IDLE_TIMEOUT";
+
+async function rpcSessionGuardPing(params: {
+  deviceId: string;
+  touchActivity?: boolean;
+  allowTakeover?: boolean;
+  idleMinutes?: number;
+}): Promise<SessionGuardStatus> {
+  const { data, error } = await supabase!.rpc("rpc_session_guard_ping", {
+    p_device_id: params.deviceId,
+    p_touch_activity: params.touchActivity === true,
+    p_allow_takeover: params.allowTakeover === true,
+    p_idle_minutes: params.idleMinutes ?? 60
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  const rawStatus = typeof row?.status === "string" ? row.status.toUpperCase() : "OK";
+  if (rawStatus === "REPLACED" || rawStatus === "IDLE_TIMEOUT") return rawStatus;
+  return "OK";
+}
+
+async function rpcSessionGuardRelease(deviceId: string): Promise<boolean> {
+  const { data, error } = await supabase!.rpc("rpc_session_guard_release", {
+    p_device_id: deviceId
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 async function rpcStartIdentityChallenge(
   mat: string,
   dtNasc: string,
@@ -686,8 +777,12 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [forcedLogoutNotice, setForcedLogoutNotice] = useState<{ title: string; message: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const inactivityLastActivityAtRef = useRef<number>(Date.now());
+  const lastActivityPingAtRef = useRef(0);
+  const forceLogoutInFlightRef = useRef(false);
 
   const [loginMat, setLoginMat] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -884,6 +979,17 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showLogoutConfirm, logoutBusy]);
+
+  useEffect(() => {
+    if (!forcedLogoutNotice) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setForcedLogoutNotice(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [forcedLogoutNotice]);
 
   const onLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1099,15 +1205,26 @@ export default function App() {
     setShowLogoutConfirm(false);
   };
 
-  const onLogout = async () => {
+  const executeSignOut = useCallback(async (options?: { successMessage?: string; releaseSessionGuard?: boolean }) => {
+    const shouldReleaseSessionGuard = options?.releaseSessionGuard !== false;
+    const nextSuccessMessage = options?.successMessage ?? "";
     setLogoutBusy(true);
     clearAlerts();
     try {
       const currentUserId = session?.user.id;
+      const deviceId = resolveClientDeviceId();
+      if (currentUserId && shouldReleaseSessionGuard) {
+        try {
+          await rpcSessionGuardRelease(deviceId);
+        } catch {
+          // Ignore release failures and continue with local cleanup/signout.
+        }
+      }
       if (currentUserId) {
         if (typeof window !== "undefined") {
           window.localStorage.removeItem(globalCdSelectionKey(currentUserId));
         }
+        clearLastActivityAt(currentUserId);
         try {
           await clearUserColetaSessionCache(currentUserId);
         } catch {
@@ -1148,13 +1265,137 @@ export default function App() {
       setAuthMode("login");
       clearRegisterValidation();
       clearResetValidation();
-      setSuccessMessage("Sessão encerrada.");
+      if (nextSuccessMessage) {
+        setSuccessMessage(nextSuccessMessage);
+      }
       navigate("/", { replace: true });
     } finally {
       setLogoutBusy(false);
       setShowLogoutConfirm(false);
     }
+  }, [navigate, session?.user.id]);
+
+  const onLogout = async () => {
+    setForcedLogoutNotice(null);
+    await executeSignOut({ successMessage: "Sessão encerrada.", releaseSessionGuard: true });
   };
+
+  const handleForcedLogout = useCallback(async (reason: "replaced" | "idle_timeout") => {
+    if (forceLogoutInFlightRef.current) return;
+    forceLogoutInFlightRef.current = true;
+
+    const notice =
+      reason === "replaced"
+        ? {
+            title: "Sessão encerrada por segurança",
+            message: "Seu acesso foi iniciado em outro dispositivo. Esta sessão foi encerrada automaticamente."
+          }
+        : {
+            title: "Sessão encerrada por inatividade",
+            message: "Você ficou 1 hora sem atividade. Faça login novamente para continuar."
+          };
+
+    setForcedLogoutNotice(notice);
+    try {
+      await executeSignOut({ successMessage: "", releaseSessionGuard: false });
+    } finally {
+      forceLogoutInFlightRef.current = false;
+    }
+  }, [executeSignOut]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    const userId = session.user.id;
+    const deviceId = resolveClientDeviceId();
+    const now = Date.now();
+    const storedLastActivity = readLastActivityAt(userId);
+    const effectiveLastActivity = storedLastActivity ?? now;
+
+    inactivityLastActivityAtRef.current = effectiveLastActivity;
+    lastActivityPingAtRef.current = 0;
+
+    if (now - effectiveLastActivity >= SESSION_IDLE_TIMEOUT_MS) {
+      void handleForcedLogout("idle_timeout");
+      return;
+    }
+
+    writeLastActivityAt(userId, effectiveLastActivity);
+
+    let cancelled = false;
+    let guardInFlight = false;
+
+    const processGuardStatus = (status: SessionGuardStatus) => {
+      if (cancelled) return;
+      if (status === "REPLACED") {
+        void handleForcedLogout("replaced");
+        return;
+      }
+      if (status === "IDLE_TIMEOUT") {
+        void handleForcedLogout("idle_timeout");
+      }
+    };
+
+    const pingGuard = async (touchActivity: boolean, allowTakeover: boolean) => {
+      if (guardInFlight || cancelled) return;
+      guardInFlight = true;
+      try {
+        const status = await rpcSessionGuardPing({
+          deviceId,
+          touchActivity,
+          allowTakeover,
+          idleMinutes: 60
+        });
+        processGuardStatus(status);
+      } catch {
+        // Keep the app usable if session guard RPC is temporarily unavailable.
+      } finally {
+        guardInFlight = false;
+      }
+    };
+
+    void pingGuard(true, true);
+
+    const touchActivity = () => {
+      const activityAt = Date.now();
+      inactivityLastActivityAtRef.current = activityAt;
+      writeLastActivityAt(userId, activityAt);
+      if (activityAt - lastActivityPingAtRef.current < SESSION_ACTIVITY_PING_THROTTLE_MS) return;
+      lastActivityPingAtRef.current = activityAt;
+      void pingGuard(true, false);
+    };
+
+    const checkIdleAndGuard = () => {
+      const idleMs = Date.now() - inactivityLastActivityAtRef.current;
+      if (idleMs >= SESSION_IDLE_TIMEOUT_MS) {
+        void handleForcedLogout("idle_timeout");
+        return;
+      }
+      void pingGuard(false, false);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      checkIdleAndGuard();
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart", "wheel"];
+    for (const eventName of activityEvents) {
+      window.addEventListener(eventName, touchActivity, { passive: true });
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    const guardIntervalId = window.setInterval(checkIdleAndGuard, SESSION_GUARD_CHECK_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(guardIntervalId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      for (const eventName of activityEvents) {
+        window.removeEventListener(eventName, touchActivity);
+      }
+    };
+  }, [handleForcedLogout, session]);
 
   const effectiveProfile = useMemo<ProfileContext | null>(() => {
     if (!session) return null;
@@ -1618,6 +1859,29 @@ export default function App() {
               document.body
             )
           : null}
+
+        {forcedLogoutNotice && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="confirm-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="forced-logout-title"
+                onClick={() => setForcedLogoutNotice(null)}
+              >
+                <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <h3 id="forced-logout-title">{forcedLogoutNotice.title}</h3>
+                  <p>{forcedLogoutNotice.message}</p>
+                  <div className="confirm-actions">
+                    <button className="btn btn-primary" type="button" onClick={() => setForcedLogoutNotice(null)}>
+                      Entendi
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
       </div>
     );
   }
@@ -1931,6 +2195,28 @@ export default function App() {
           )}
         </section>
       </div>
+      {forcedLogoutNotice && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="forced-logout-title"
+              onClick={() => setForcedLogoutNotice(null)}
+            >
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="forced-logout-title">{forcedLogoutNotice.title}</h3>
+                <p>{forcedLogoutNotice.message}</p>
+                <div className="confirm-actions">
+                  <button className="btn btn-primary" type="button" onClick={() => setForcedLogoutNotice(null)}>
+                    Entendi
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
