@@ -3023,21 +3023,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           onChange={(event) => setAdminIncluirPul(event.target.checked)}
                           disabled={adminBusy || cd == null}
                         />
-                        Incluir endereços de Pulmão (PUL) dos Códigos e Dígitos (CODDV) selecionados na zona
+                        Incluir endereços de Pulmão dos produtos selecionados na zona
                       </label>
                     </div>
 
                     <div className="inventario-admin-zone-head">
-                      <strong>{`Inserção por zona de Separação (SEP disponíveis: ${adminZones.length})`}</strong>
-                      <div className="inventario-admin-zone-actions">
-                        <button
-                          type="button"
-                          className="btn btn-muted"
-                          onClick={() => void loadAdminZones()}
-                          disabled={adminBusy || adminZonesLoading || cd == null}
-                        >
-                          {adminZonesLoading ? "Atualizando..." : "Atualizar zonas"}
-                        </button>
+                      <strong>{`Zonas disponível: ${adminZones.length}`}</strong>
+                    <div className="inventario-admin-zone-actions">
                         <button
                           type="button"
                           className="btn btn-muted"
@@ -3069,7 +3061,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         disabled={adminBusy || cd == null}
                         onClick={() => void runAdminPreview("zona")}
                       >
-                        {adminBusy ? "Processando..." : "Prévia por zona"}
+                        {adminBusy ? "Processando..." : "Prévia  de enderços a auditar"}
                       </button>
                       <button
                         className="btn btn-primary"
@@ -3153,7 +3145,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 ) : null}
 
                 <div className="inventario-admin-clear">
-                  <h4>Limpeza da base do CD</h4>
+                  <h4>Limpar dados antigos</h4>
                   <label className="inventario-admin-check">
                     <input
                       type="checkbox"
@@ -3197,14 +3189,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               </div>
               <div className="inventario-popup-body">
                 <div className="inventario-admin-zone-actions">
-                  <button
-                    type="button"
-                    className="btn btn-muted"
-                    onClick={() => void loadAdminZones()}
-                    disabled={adminBusy || adminZonesLoading || cd == null}
-                  >
-                    {adminZonesLoading ? "Atualizando..." : "Atualizar zonas"}
-                  </button>
                   <button
                     type="button"
                     className="btn btn-muted"
