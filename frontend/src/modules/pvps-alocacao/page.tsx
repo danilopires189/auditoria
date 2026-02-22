@@ -1371,23 +1371,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     });
   }, [activeCd, todayBrt, zoneScopeKey, filteredAlocPendingRows.length, sortedAlocCompletedRows.length]);
 
-  const activeStats = useMemo(() => {
-    if (tab === "pvps") {
-      const total = progressBaselinePvps.total;
-      const completed = sortedPvpsCompletedRows.length;
-      return {
-        percent: completionPercent(completed, total),
-        total
-      };
-    }
-    const total = progressBaselineAloc.total;
-    const completed = sortedAlocCompletedRows.length;
-    return {
-      percent: completionPercent(completed, total),
-      total
-    };
-  }, [tab, progressBaselinePvps.total, progressBaselineAloc.total, sortedPvpsCompletedRows.length, sortedAlocCompletedRows.length]);
-
   const pvpsStats = useMemo(() => {
     const total = progressBaselinePvps.total;
     const completed = sortedPvpsCompletedRows.length;
@@ -1407,8 +1390,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       completed
     };
   }, [progressBaselineAloc.total, sortedAlocCompletedRows.length]);
-
-  const activeCompletedCount = tab === "pvps" ? sortedPvpsCompletedRows.length : sortedAlocCompletedRows.length;
 
   useEffect(() => {
     if (tab !== "pvps" || feedView !== "pendentes" || activeCd == null || !isOnline) return;
@@ -2356,23 +2337,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             {offlineDiscardedInSession > 0 ? (
               <div className="alert success">
                 Descartes por conflito nesta sessão: {offlineDiscardedInSession}.
-              </div>
-            ) : null}
-            {feedView !== "concluidos" ? (
-              <div className="pvps-progress-card" role="status" aria-live="polite">
-                <div className="pvps-progress-head">
-                  <strong>Conclusão {tab === "pvps" ? "PVPS" : "Alocação"}</strong>
-                  <span>{formatPercent(activeStats.percent)}</span>
-                </div>
-                <div className="pvps-progress-track" aria-hidden="true">
-                  <span
-                    className="pvps-progress-fill"
-                    style={{ width: `${Math.max(0, Math.min(activeStats.percent, 100))}%` }}
-                  />
-                </div>
-                <small>
-                  {activeCompletedCount} concluído(s) de {activeStats.total} na base de referência.
-                </small>
               </div>
             ) : null}
             {isAdmin && showAdminPanel ? (
