@@ -159,13 +159,13 @@ function formatCdLabel(rawCd: string, cdDefault: number | null, isGlobalAdmin: b
 
 function formatCdOptionLabel(cd: number, cdNome: string): string {
   const base = `CD ${String(cd).padStart(2, "0")}`;
-  const compactNome = cdNome.trim();
+  const compactNome = cdNome.trim().replace(/\s+/g, " ");
   if (!compactNome) return base;
-  const normalized = compactNome.toLowerCase();
-  if (normalized.startsWith(`cd ${String(cd)}`) || normalized.startsWith(`cd0${String(cd)}`) || normalized.startsWith(`cd${String(cd)}`)) {
-    return compactNome;
-  }
-  return `${base} - ${compactNome}`;
+  const cdDescription = compactNome
+    .replace(/^cd\s*0*\d+\s*[-–]?\s*/i, "")
+    .trim();
+  if (!cdDescription) return base;
+  return `${base} - ${cdDescription}`;
 }
 
 function roleLabel(role: "admin" | "auditor" | "viewer" | null): string {
@@ -1555,8 +1555,7 @@ export default function App() {
                             className={`global-cd-option${pendingGlobalCdSelection === option.cd ? " is-selected" : ""}`}
                             onClick={() => setPendingGlobalCdSelection(option.cd)}
                           >
-                            <span className="global-cd-option-code">{`CD ${String(option.cd).padStart(2, "0")}`}</span>
-                            <span className="global-cd-option-name">{option.cd_nome || "Centro de distribuição"}</span>
+                            <span className="global-cd-option-label">{formatCdOptionLabel(option.cd, option.cd_nome)}</span>
                           </button>
                         ))
                       : null}
