@@ -96,6 +96,7 @@ export default function HomePage({
                 || moduleDef.key === "conferencia-volume-avulso"
                 || moduleDef.key === "conferencia-pedido-direto"
                 || moduleDef.key === "conferencia-entrada-notas"
+                || moduleDef.key === "devolucao-mercadoria"
                 || moduleDef.key === "zerados" ? (
                   <span className="module-available-pill">Disponível</span>
                 ) : null}
