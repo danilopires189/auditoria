@@ -572,8 +572,28 @@ function formatModalContributor(value: {
   return "";
 }
 
+function resolveModalNfdValue(row: { nfd: number | null; ref: string }): string | null {
+  if (typeof row.nfd === "number" && Number.isFinite(row.nfd)) {
+    return `${row.nfd}`;
+  }
+  const ref = row.ref.trim();
+  return /^\d+$/.test(ref) ? ref : null;
+}
+
+function resolveModalOpenRef(row: { nfd: number | null; chave: string | null; ref: string }): string {
+  const nfdRef = resolveModalNfdValue(row);
+  if (nfdRef) return nfdRef;
+  const chave = row.chave?.trim();
+  if (chave) return chave;
+  return row.ref;
+}
+
 function buildVolumeSearchBlob(row: DevolucaoMercadoriaModalVolumeRow): string {
+  const nfd = resolveModalNfdValue(row) ?? "";
   return normalizeSearchText([
+    nfd,
+    row.nfd ?? "",
+    row.chave ?? "",
     row.ref,
     `${row.itens_total}`,
     `${row.qtd_esperada_total}`,
@@ -3488,13 +3508,14 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                             className="termo-route-row-button termo-route-row-button-volume"
                             onClick={() => {
                               setShowRoutesModal(false);
-                              void openVolumeFromEtiqueta(row.ref);
+                              void openVolumeFromEtiqueta(resolveModalOpenRef(row));
                             }}
                             disabled={busyOpenVolume}
                           >
                             <span className="termo-route-main">
                               <span className="termo-route-info">
-                                <span className="termo-route-title">NFD/Chave {row.ref}</span>
+                                <span className="termo-route-title">NFD {resolveModalNfdValue(row) ?? "-"}</span>
+                                {row.chave ? <span className="termo-route-sub">Chave: {row.chave}</span> : null}
                                 {row.motivo ? <span className="termo-route-sub">Motivo: {row.motivo}</span> : null}
                                 <span className="termo-route-sub">
                                   Itens: {row.itens_total}
