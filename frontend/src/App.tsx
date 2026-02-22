@@ -24,6 +24,7 @@ import HomePage from "./pages/HomePage";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
+import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import type { PedidoDiretoModuleProfile } from "./modules/conferencia-pedido-direto/types";
 import { clearUserPedidoDiretoSessionCache } from "./modules/conferencia-pedido-direto/storage";
 import type { EntradaNotasModuleProfile } from "./modules/conferencia-entrada-notas/types";
@@ -1253,6 +1254,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const atividadeExtraProfile = useMemo<AtividadeExtraModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const termoProfile = useMemo<TermoModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -1399,7 +1412,16 @@ export default function App() {
               )
             }
           />
-          <Route path="/modulos/atividade-extra" element={<AtividadeExtraPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/atividade-extra"
+            element={
+              atividadeExtraProfile ? (
+                <AtividadeExtraPage isOnline={isOnline} profile={atividadeExtraProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="/modulos/check-list" element={<CheckListPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/coleta-mercadoria"
