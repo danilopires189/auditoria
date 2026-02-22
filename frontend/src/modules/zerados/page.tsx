@@ -3096,7 +3096,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         onChange={(event) => setAdminIncluirPul(event.target.checked)}
                         disabled={adminBusy || cd == null}
                       />
-                      Incluir endereços de Pulmão (PUL) dos Códigos e Dígitos (CODDV) informados
+                      Incluir endereços de Pulmão dos Códigos (CODDV) informados
                     </label>
                     <label>
                       Código e Dígito (CODDV) manual (separado por vírgula)
