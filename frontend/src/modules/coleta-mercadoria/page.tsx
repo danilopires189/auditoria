@@ -17,6 +17,7 @@ import {
   getDbBarrasMeta,
   upsertDbBarrasCacheRow
 } from "../../shared/db-barras/storage";
+import type { DbBarrasCacheRow } from "../../shared/db-barras/types";
 import {
   fetchDbBarrasByBarcodeOnline,
   normalizeBarcode,
@@ -27,7 +28,6 @@ import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   cleanupExpiredColetaRows,
-  countPendingRows,
   getColetaPreferences,
   getUserColetaRows,
   removeColetaRow,
@@ -64,6 +64,13 @@ const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+const LOOKUP_CACHE_MAX_ENTRIES = 800;
+const PENDING_SYNC_STATUSES = new Set<ColetaRow["sync_status"]>([
+  "pending_insert",
+  "pending_update",
+  "pending_delete",
+  "error"
+]);
 
 interface ScannerInputState {
   lastInputAt: number;
@@ -402,6 +409,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const refreshInFlightRef = useRef(false);
   const collectInFlightRef = useRef(false);
   const lastQuickSyncAtRef = useRef(0);
+  const productLookupCacheRef = useRef<Map<string, DbBarrasCacheRow>>(new Map());
 
   const [localRows, setLocalRows] = useState<ColetaRow[]>([]);
   const [sharedTodayRows, setSharedTodayRows] = useState<ColetaRow[]>([]);
@@ -521,11 +529,13 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   }, [editingRowId, visibleRows]);
 
   const refreshLocalState = useCallback(async () => {
-    const [nextRows, nextPending, nextMeta] = await Promise.all([
+    const [nextRows, nextMeta] = await Promise.all([
       getUserColetaRows(profile.user_id),
-      countPendingRows(profile.user_id),
       getDbBarrasMeta()
     ]);
+    const nextPending = nextRows.reduce((count, row) => (
+      PENDING_SYNC_STATUSES.has(row.sync_status) ? count + 1 : count
+    ), 0);
     setLocalRows(nextRows);
     setPendingCount(nextPending);
     setDbBarrasCount(nextMeta.row_count);
@@ -548,6 +558,28 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       barcodeRef.current?.focus();
     });
   }, [disableBarcodeSoftKeyboard]);
+
+  const readCachedProduct = useCallback((barras: string): DbBarrasCacheRow | null => {
+    const cache = productLookupCacheRef.current;
+    const hit = cache.get(barras);
+    if (!hit) return null;
+    cache.delete(barras);
+    cache.set(barras, hit);
+    return hit;
+  }, []);
+
+  const writeCachedProduct = useCallback((product: DbBarrasCacheRow) => {
+    const key = normalizeBarcode(product.barras);
+    if (!key) return;
+
+    const cache = productLookupCacheRef.current;
+    if (cache.has(key)) cache.delete(key);
+    cache.set(key, { ...product, barras: key });
+
+    if (cache.size <= LOOKUP_CACHE_MAX_ENTRIES) return;
+    const oldestKey = cache.keys().next().value;
+    if (typeof oldestKey === "string") cache.delete(oldestKey);
+  }, []);
 
   const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
     const videoEl = scannerVideoRef.current;
@@ -1270,12 +1302,13 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         return;
       }
 
-      let product = null;
+      let product = readCachedProduct(barras);
       const hasLocalBase = dbBarrasCount > 0;
 
       // Prioridade: base local (quando já existe no dispositivo).
-      if (hasLocalBase) {
+      if (!product && hasLocalBase) {
         product = await getDbBarrasByBarcode(barras);
+        if (product) writeCachedProduct(product);
       }
 
       // Fallback online quando necessário (inclusive durante carga offline em andamento).
@@ -1283,7 +1316,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         if (isOnline) {
           product = await fetchDbBarrasByBarcodeOnline(barras);
           if (product) {
-            await upsertDbBarrasCacheRow(product);
+            writeCachedProduct(product);
+            void upsertDbBarrasCacheRow(product);
             setDbBarrasCount((value) => Math.max(value, 1));
             setDbBarrasLastSyncAt(new Date().toISOString());
           }
@@ -1388,6 +1422,8 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     refreshLocalState,
     runSync,
     showScanFeedback,
+    readCachedProduct,
+    writeCachedProduct,
     openBlockingAlert,
     triggerScanErrorAlert,
     validadeInput
