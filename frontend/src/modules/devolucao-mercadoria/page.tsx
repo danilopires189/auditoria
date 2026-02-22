@@ -789,8 +789,14 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       correto: [] as Array<ReturnType<typeof withDivergencia>>
     };
     if (!activeVolume) return empty;
-
-    const mapped = activeVolume.items.map((item) => withDivergencia(item));
+    const mapped = activeVolume.conference_kind === "sem_nfd"
+      ? activeVolume.items.map((item) => ({
+          item,
+          divergencia: "correto" as const,
+          qtd_falta: 0,
+          qtd_sobra: 0
+        }))
+      : activeVolume.items.map((item) => withDivergencia(item));
     for (const row of mapped) {
       if (row.divergencia === "falta") empty.falta.push(row);
       else if (row.divergencia === "sobra") empty.sobra.push(row);
@@ -826,6 +832,11 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const hasAnyItemInformed = useMemo(() => (
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
   ), [activeVolume]);
+
+  const activeConferenceNfd = useMemo(() => {
+    if (!activeVolume || activeVolume.conference_kind !== "com_nfd") return null;
+    return resolveModalNfdValue(activeVolume);
+  }, [activeVolume]);
 
   const hasInformedItemsFromPreviousSession = useMemo(() => {
     if (!activeVolume) return false;
@@ -3113,12 +3124,15 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           <article className="termo-volume-card">
             <div className="termo-volume-head">
               <div>
-                <h3>{activeVolume.conference_kind === "sem_nfd" ? "Devolução sem NFD" : `Devolução ${activeVolume.ref}`}</h3>
+                <h3>{activeVolume.conference_kind === "sem_nfd" ? "Devolução sem NFD" : `Devolução NFD ${activeConferenceNfd ?? "-"}`}</h3>
                 <p>
                   {activeVolume.conference_kind === "sem_nfd"
                     ? "Conferência livre por bipagem de produtos."
-                    : "Conferência em andamento para este NFD/Chave."}
+                    : "Conferência em andamento para esta NFD."}
                 </p>
+                {activeVolume.conference_kind === "com_nfd" && activeVolume.chave ? (
+                  <p className="termo-volume-ref">Chave: {activeVolume.chave}</p>
+                ) : null}
                 {activeVolume.source_motivo ? <p>Motivo: {activeVolume.source_motivo}</p> : null}
                 <p>
                   Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com falta"}
@@ -3248,6 +3262,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
               </button>
             </form>
 
+            {activeVolume.conference_kind === "com_nfd" ? (
+              <>
             <div className="termo-list-block">
               <h4>Falta ({groupedItems.falta.length})</h4>
               {groupedItems.falta.length === 0 ? (
@@ -3396,11 +3412,15 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                 })
               )}
             </div>
+              </>
+            ) : null}
 
             <div className="termo-list-block">
-              <h4>Correto ({groupedItems.correto.length})</h4>
+              <h4>{activeVolume.conference_kind === "sem_nfd" ? `Produtos bipados (${groupedItems.correto.length})` : `Correto (${groupedItems.correto.length})`}</h4>
               {groupedItems.correto.length === 0 ? (
-                <div className="coleta-empty">Sem itens corretos ainda.</div>
+                <div className="coleta-empty">
+                  {activeVolume.conference_kind === "sem_nfd" ? "Nenhum produto bipado ainda." : "Sem itens corretos ainda."}
+                </div>
               ) : (
                 groupedItems.correto.map(({ item }) => {
                   const isLastAddedItem = activeLastAddedCoddv === item.coddv;
@@ -3413,7 +3433,11 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                         {item.qtd_conferida > 0 ? (
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
-                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
+                        <p>
+                          {activeVolume.conference_kind === "sem_nfd"
+                            ? `Quantidade bipada: ${item.qtd_conferida}`
+                            : `Esperada: ${item.qtd_esperada} | Conferida: ${item.qtd_conferida}`}
+                        </p>
                       </div>
                       <div className="termo-item-side">
                         {isLastAddedItem ? (
@@ -3422,7 +3446,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                             Último adicionado
                           </span>
                         ) : null}
-                        <span className="termo-divergencia correto">Correto</span>
+                        <span className="termo-divergencia correto">{activeVolume.conference_kind === "sem_nfd" ? "Bipado" : "Correto"}</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
                       </div>
                     </button>
