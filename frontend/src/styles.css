@@ -204,6 +204,9 @@ h1 {
   padding: 10px 12px;
   margin-bottom: 12px;
   font-size: 0.9rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .alert.error {
@@ -891,13 +894,19 @@ small {
   z-index: 1200;
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 18px)
+    calc(env(safe-area-inset-right, 0px) + 18px)
+    calc(env(safe-area-inset-bottom, 0px) + 18px)
+    calc(env(safe-area-inset-left, 0px) + 18px);
   background: rgba(9, 19, 34, 0.52);
   backdrop-filter: blur(1.5px);
+  overflow-x: hidden;
 }
 
 .confirm-dialog {
   width: min(100%, 360px);
+  max-width: min(calc(100vw - 24px), 360px);
   border-radius: 16px;
   background: linear-gradient(150deg, #ffffff, #f3f7ff 70%);
   border: 1px solid #d5e0f0;
@@ -905,6 +914,7 @@ small {
   padding: 16px;
   display: grid;
   gap: 10px;
+  overflow-x: hidden;
 }
 
 .confirm-dialog h3 {
@@ -921,6 +931,12 @@ small {
   max-height: min(44vh, 320px);
   overflow: auto;
   padding-right: 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.confirm-dialog .alert {
+  margin-bottom: 0;
 }
 
 .confirm-actions {
@@ -2755,10 +2771,17 @@ small {
 
 .termo-finalize-dialog label {
   font-size: 0.84rem;
+  min-width: 0;
+}
+
+.termo-finalize-dialog input,
+.termo-finalize-dialog textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .termo-finalize-dialog textarea {
-  width: 100%;
   min-height: 90px;
   border: 1px solid var(--line);
   border-radius: 12px;
