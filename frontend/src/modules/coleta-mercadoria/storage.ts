@@ -259,13 +259,37 @@ export async function getUserColetaRows(userId: string): Promise<ColetaRow[]> {
 }
 
 export async function getPendingRows(userId: string): Promise<ColetaRow[]> {
-  const allRows = await getUserColetaRows(userId);
-  return allRows.filter((row) => PENDING_STATUSES.includes(row.sync_status));
+  const db = await getDb();
+  const transaction = db.transaction(STORE_COLETA_ROWS, "readonly");
+  const index = transaction.objectStore(STORE_COLETA_ROWS).index(INDEX_ROWS_BY_USER_STATUS);
+
+  const batches = await Promise.all(
+    PENDING_STATUSES.map((status) =>
+      requestToPromise(index.getAll(IDBKeyRange.only([userId, status])))
+    )
+  );
+  await transactionDone(transaction);
+
+  const rows = batches.flatMap((batch) => (Array.isArray(batch) ? (batch as ColetaRow[]) : []));
+  return sortRows(rows);
 }
 
 export async function countPendingRows(userId: string): Promise<number> {
-  const pending = await getPendingRows(userId);
-  return pending.length;
+  const db = await getDb();
+  const transaction = db.transaction(STORE_COLETA_ROWS, "readonly");
+  const index = transaction.objectStore(STORE_COLETA_ROWS).index(INDEX_ROWS_BY_USER_STATUS);
+
+  const counts = await Promise.all(
+    PENDING_STATUSES.map((status) =>
+      requestToPromise(index.count(IDBKeyRange.only([userId, status])))
+    )
+  );
+  await transactionDone(transaction);
+
+  return counts.reduce((sum, current) => {
+    const value = typeof current === "number" && Number.isFinite(current) ? current : 0;
+    return sum + value;
+  }, 0);
 }
 
 export async function getColetaPreferences(userId: string): Promise<ColetaPreferences> {
