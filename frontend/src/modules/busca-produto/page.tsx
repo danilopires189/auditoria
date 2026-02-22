@@ -58,6 +58,21 @@ function toDisplayName(value: string): string {
     .join(" ");
 }
 
+function parseCdFromLabel(label: string | null): number | null {
+  if (!label) return null;
+  const matched = /cd\s*0*(\d+)/i.exec(label);
+  if (!matched) return null;
+  const parsed = Number.parseInt(matched[1], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function fixedCdFromProfile(profile: BuscaProdutoModuleProfile): number | null {
+  if (typeof profile.cd_default === "number" && Number.isFinite(profile.cd_default)) {
+    return Math.trunc(profile.cd_default);
+  }
+  return parseCdFromLabel(profile.cd_nome);
+}
+
 function asErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -133,16 +148,18 @@ function searchIcon() {
   );
 }
 
-function renderAddressList(rows: BuscaProdutoAddressRow[], emptyLabel: string) {
+function renderAddressList(rows: BuscaProdutoAddressRow[], emptyLabel: string, showMeta: boolean) {
   if (rows.length === 0) return <div className="coleta-empty">{emptyLabel}</div>;
   return (
     <ul className="busca-produto-address-list">
       {rows.map((row, index) => (
         <li key={`${row.endereco}-${index}`}>
           <span className="busca-produto-address-main">{row.endereco}</span>
-          <span className="busca-produto-address-meta">
-            Andar: {row.andar ?? "-"} | Validade: {row.validade ?? "-"}
-          </span>
+          {showMeta ? (
+            <span className="busca-produto-address-meta">
+              Andar: {row.andar ?? "-"} | Validade: {row.validade ?? "-"}
+            </span>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -189,6 +206,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
   const [torchEnabled, setTorchEnabled] = useState(false);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
+  const currentCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -316,6 +334,14 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
       focusSearch();
       return;
     }
+    if (currentCd == null) {
+      setErrorMessage("CD não definido para este usuário.");
+      setStatusMessage(null);
+      setBarcodeValidationState("invalid");
+      setResult(null);
+      focusSearch();
+      return;
+    }
 
     setBusySearch(true);
     setErrorMessage(null);
@@ -325,7 +351,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
     try {
       let found: BuscaProdutoLookupResult | null = null;
       try {
-        found = await lookupProduto({ barras });
+        found = await lookupProduto({ cd: currentCd, barras });
       } catch (error) {
         const errMsg = asErrorMessage(error);
         if (!errMsg.toUpperCase().includes("PRODUTO NÃO ENCONTRADO") && !errMsg.toUpperCase().includes("PRODUTO_NAO_ENCONTRADO")) {
@@ -336,7 +362,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
       if (!found && /^\d+$/.test(original)) {
         const parsedCoddv = Number.parseInt(original, 10);
         if (Number.isFinite(parsedCoddv) && parsedCoddv > 0) {
-          found = await lookupProduto({ coddv: parsedCoddv });
+          found = await lookupProduto({ cd: currentCd, coddv: parsedCoddv });
         }
       }
 
@@ -361,7 +387,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
     } finally {
       setBusySearch(false);
     }
-  }, [focusSearch]);
+  }, [currentCd, focusSearch]);
 
   const clearScannerInputTimer = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -755,12 +781,12 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
 
             <article className="busca-produto-card">
               <h3>Endereços SEP ({result.enderecos_sep.length})</h3>
-              {renderAddressList(result.enderecos_sep, "Nenhum endereço SEP.")}
+              {renderAddressList(result.enderecos_sep, "Nenhum endereço SEP.", false)}
             </article>
 
             <article className="busca-produto-card">
               <h3>Endereços PUL ({result.enderecos_pul.length})</h3>
-              {renderAddressList(result.enderecos_pul, "Nenhum endereço PUL.")}
+              {renderAddressList(result.enderecos_pul, "Nenhum endereço PUL.", true)}
             </article>
 
             <article className="busca-produto-card">
