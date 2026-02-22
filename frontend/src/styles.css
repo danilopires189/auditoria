@@ -4004,8 +4004,10 @@ small {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow-x: hidden;
   animation: iz-sheet-up 240ms cubic-bezier(0.22, 0.84, 0.44, 1) both;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
 }
 
 /* Sheet header row */
@@ -4071,6 +4073,9 @@ small {
   padding: 10px 16px;
   border-bottom: 1px solid #edf1f9;
   flex-shrink: 0;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .iz-picker-search-icon {
@@ -4088,9 +4093,12 @@ small {
 .iz-picker-search-input {
   all: unset;
   flex: 1 1 auto;
+  min-width: 0;
+  width: 0;
   font-size: 0.93rem;
   color: #1a304f;
   background: transparent;
+  box-sizing: border-box;
 }
 
 .iz-picker-search-input::placeholder {
@@ -4109,11 +4117,13 @@ small {
 .iz-picker-grid {
   flex: 1 1 auto;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 10px;
   padding: 14px 16px 16px;
+  box-sizing: border-box;
 }
 
 /* Individual zone card */
