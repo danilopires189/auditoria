@@ -952,7 +952,7 @@ small {
 
 .global-cd-picker {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   max-height: min(46vh, 320px);
   overflow: auto;
   padding-right: 2px;
@@ -973,9 +973,9 @@ small {
   border-radius: 12px;
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   text-align: left;
-  padding: 10px 12px;
-  display: grid;
-  gap: 4px;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -991,17 +991,11 @@ small {
   background: linear-gradient(180deg, #eef5ff 0%, #e7f1ff 100%);
 }
 
-.global-cd-option-code {
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  color: #12356d;
-}
-
-.global-cd-option-name {
+.global-cd-option-label {
   font-size: 0.9rem;
-  font-weight: 600;
-  color: #2f4362;
+  font-weight: 700;
+  color: #233f67;
+  line-height: 1.25;
 }
 
 .scanner-overlay {
