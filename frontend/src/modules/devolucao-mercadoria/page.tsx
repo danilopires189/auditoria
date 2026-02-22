@@ -95,6 +95,12 @@ type DialogState = {
   onConfirm?: () => void;
 };
 
+type ManualQtdPromptState = {
+  tipo: string;
+  value: string;
+  error: string | null;
+};
+
 const MODULE_DEF = getModuleByKeyOrThrow("devolucao-mercadoria");
 const PREFERRED_SYNC_DELAY_MS = 800;
 const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
@@ -709,6 +715,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     etiqueta: createScannerInputState(),
     barras: createScannerInputState()
   });
+  const manualQtdResolveRef = useRef<((value: number) => void) | null>(null);
+  const manualQtdRejectRef = useRef<((reason?: unknown) => void) | null>(null);
   const resolveScanFeedbackAnchor = useCallback(() => barrasRef.current, []);
   const {
     scanFeedback,
@@ -769,6 +777,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const [busyFinalize, setBusyFinalize] = useState(false);
   const [busyCancel, setBusyCancel] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
+  const [manualQtdPrompt, setManualQtdPrompt] = useState<ManualQtdPromptState | null>(null);
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
@@ -1024,6 +1033,77 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
   const closeDialog = useCallback(() => {
     setDialogState(null);
+  }, []);
+
+  const openManualQtdPrompt = useCallback((tipo: string): Promise<number> => (
+    new Promise<number>((resolve, reject) => {
+      if (manualQtdRejectRef.current) {
+        manualQtdRejectRef.current(new Error("QTD_MANUAL_OBRIGATORIA"));
+      }
+      manualQtdResolveRef.current = resolve;
+      manualQtdRejectRef.current = reject;
+      setManualQtdPrompt({
+        tipo,
+        value: "1",
+        error: null
+      });
+    })
+  ), []);
+
+  const cancelManualQtdPrompt = useCallback(() => {
+    const reject = manualQtdRejectRef.current;
+    manualQtdResolveRef.current = null;
+    manualQtdRejectRef.current = null;
+    setManualQtdPrompt(null);
+    reject?.(new Error("QTD_MANUAL_OBRIGATORIA"));
+    focusBarras();
+  }, [focusBarras]);
+
+  const confirmManualQtdPrompt = useCallback(() => {
+    if (!manualQtdPrompt) return;
+    const qtdManual = parsePositiveInteger(manualQtdPrompt.value, 0);
+    if (qtdManual <= 0) {
+      setManualQtdPrompt((current) => (
+        current
+          ? { ...current, error: "Informe uma quantidade válida maior que zero." }
+          : current
+      ));
+      return;
+    }
+
+    const resolve = manualQtdResolveRef.current;
+    manualQtdResolveRef.current = null;
+    manualQtdRejectRef.current = null;
+    setManualQtdPrompt(null);
+    resolve?.(qtdManual);
+    focusBarras();
+  }, [focusBarras, manualQtdPrompt]);
+
+  const onManualQtdPromptChange = useCallback((event: ReactChangeEvent<HTMLInputElement>) => {
+    const next = event.target.value.replace(/\D/g, "");
+    setManualQtdPrompt((current) => (
+      current
+        ? {
+            ...current,
+            value: next,
+            error: null
+          }
+        : current
+    ));
+  }, []);
+
+  const requestQtdManual = useCallback(async (tipo: string): Promise<number> => {
+    const normalizedTipo = (tipo || "UN").toUpperCase();
+    if (normalizedTipo === "UN") return 0;
+    return openManualQtdPrompt(normalizedTipo);
+  }, [openManualQtdPrompt]);
+
+  useEffect(() => () => {
+    if (manualQtdRejectRef.current) {
+      manualQtdRejectRef.current(new Error("QTD_MANUAL_OBRIGATORIA"));
+      manualQtdResolveRef.current = null;
+      manualQtdRejectRef.current = null;
+    }
   }, []);
 
   const refreshPendingState = useCallback(async () => {
@@ -1757,16 +1837,6 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     let barrasRegistrada = barras;
     let registroRemoto = false;
     let highlightedCoddv: number | null = null;
-    const requestQtdManual = (tipo: string): number => {
-      const normalizedTipo = (tipo || "UN").toUpperCase();
-      if (normalizedTipo === "UN") return 0;
-      const raw = window.prompt(`Produto tipo ${normalizedTipo}. Informe a quantidade manual complementar:`, "1");
-      const qtdManual = parsePositiveInteger(raw ?? "", 0);
-      if (qtdManual <= 0) {
-        throw new Error("QTD_MANUAL_OBRIGATORIA");
-      }
-      return qtdManual;
-    };
     setStatusMessage(null);
     setErrorMessage(null);
     setBarcodeValidationState("validating");
@@ -1797,7 +1867,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         }
 
         const tipo = (target?.tipo ?? "UN").toUpperCase();
-        const qtdManual = requestQtdManual(tipo);
+        const qtdManual = await requestQtdManual(tipo);
         produtoRegistrado = target?.descricao || lookup.descricao?.trim() || `SKU ${lookup.coddv}`;
         barrasRegistrada = lookup.barras || barras;
         highlightedCoddv = lookup.coddv;
@@ -1819,7 +1889,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         const localItem = activeVolume.items.find((item) => normalizeBarcode(item.barras ?? "") === barras);
         let qtdManual = 0;
         if (localItem && (localItem.tipo ?? "UN").toUpperCase() !== "UN") {
-          qtdManual = requestQtdManual(localItem.tipo);
+          qtdManual = await requestQtdManual(localItem.tipo);
         }
 
         let updated: DevolucaoMercadoriaItemRow;
@@ -1828,7 +1898,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         } catch (error) {
           const message = error instanceof Error ? error.message : "";
           if (!message.includes("QTD_MANUAL_OBRIGATORIA")) throw error;
-          const forcedManual = requestQtdManual(localItem?.tipo ?? "CX");
+          const forcedManual = await requestQtdManual(localItem?.tipo ?? "CX");
           updated = await scanBarcode(activeVolume.remote_conf_id, barras, qtd, forcedManual);
         }
         produtoRegistrado = updated.descricao;
@@ -1947,7 +2017,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     showScanFeedback,
     triggerScanErrorAlert,
     updateItemQtyLocal,
-    handleClosedConferenceError
+    handleClosedConferenceError,
+    requestQtdManual
   ]);
 
   const handleSaveItemEdit = useCallback(async (coddv: number) => {
@@ -3658,6 +3729,40 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                   </button>
                   <button className="btn btn-primary" type="button" onClick={() => void handleFinalizeVolume()} disabled={busyFinalize}>
                     {busyFinalize ? "Finalizando..." : "Confirmar finalização"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {manualQtdPrompt && typeof document !== "undefined"
+        ? createPortal(
+            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="devolucao-qtd-manual-title" onClick={cancelManualQtdPrompt}>
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="devolucao-qtd-manual-title">Quantidade manual complementar</h3>
+                <p>Produto tipo {manualQtdPrompt.tipo}. Informe a quantidade manual complementar.</p>
+                <div className="form-grid">
+                  <label>
+                    Quantidade
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={manualQtdPrompt.value}
+                      onChange={onManualQtdPromptChange}
+                      autoFocus
+                    />
+                  </label>
+                </div>
+                {manualQtdPrompt.error ? <div className="alert error">{manualQtdPrompt.error}</div> : null}
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={cancelManualQtdPrompt}>
+                    Cancelar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={confirmManualQtdPrompt}>
+                    Confirmar
                   </button>
                 </div>
               </div>

@@ -183,6 +183,15 @@ function visibilityIcon(isOwnerOnly: boolean) {
   );
 }
 
+function addIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
 function sanitizeDescription(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -223,6 +232,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const [horaInicio, setHoraInicio] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
   const [horaFim, setHoraFim] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
   const [descricao, setDescricao] = useState<string>("");
+  const [editorOpen, setEditorOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const selectedCollaborator = useMemo(
@@ -329,9 +339,22 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     setHoraInicio(toTimeInputValue(entry.hora_inicio));
     setHoraFim(toTimeInputValue(entry.hora_fim));
     setDescricao(entry.descricao);
+    setEditorOpen(true);
     setStatusMessage(null);
     setErrorMessage(null);
   }, []);
+
+  const openCreateModal = useCallback(() => {
+    resetForm();
+    setEditorOpen(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+  }, [resetForm]);
+
+  const closeEditorModal = useCallback(() => {
+    setEditorOpen(false);
+    resetForm();
+  }, [resetForm]);
 
   const onDeleteEntry = useCallback((entry: AtividadeExtraEntryRow) => {
     if (!entry.can_edit || busySubmit) return;
@@ -368,6 +391,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
         await deleteAtividadeExtra(entry.id);
         if (editingEntryId === entry.id) {
           resetForm();
+          setEditorOpen(false);
         }
         setStatusMessage("Atividade excluída com sucesso.");
         await loadModuleData(selectedUserId ?? profile.user_id);
@@ -452,6 +476,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       }
 
       resetForm();
+      setEditorOpen(false);
       await loadModuleData(profile.user_id);
     } catch (error) {
       setErrorMessage(asUnknownErrorMessage(error));
@@ -496,6 +521,16 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
               <div className="atividade-extra-actions-head">
                 <button
                   type="button"
+                  className="btn btn-primary atividade-extra-add-btn"
+                  onClick={openCreateModal}
+                  disabled={busySubmit || activeCd == null}
+                  title="Adicionar atividade"
+                >
+                  <span aria-hidden="true">{addIcon()}</span>
+                  <span className="atividade-extra-add-label">Adicionar</span>
+                </button>
+                <button
+                  type="button"
                   className="btn btn-muted atividade-extra-refresh-btn"
                   onClick={() => void loadModuleData()}
                   disabled={busyRefresh || loading}
@@ -528,66 +563,6 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                 <strong>Visibilidade no CD:</strong> {visibilityModeLabel(visibility.visibility_mode)}
               </div>
             ) : null}
-
-            <form className="atividade-extra-form" onSubmit={onSubmit}>
-              <div className="atividade-extra-form-grid">
-                <label>
-                  Data da atividade
-                  <input
-                    type="date"
-                    value={dataAtividade}
-                    onChange={(event) => setDataAtividade(event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  Hora inicial
-                  <input
-                    type="time"
-                    value={horaInicio}
-                    onChange={(event) => setHoraInicio(clampTimeToWindow(event.target.value))}
-                    min="06:00"
-                    max="21:30"
-                    required
-                  />
-                </label>
-                <label>
-                  Hora final
-                  <input
-                    type="time"
-                    value={horaFim}
-                    onChange={(event) => setHoraFim(clampTimeToWindow(event.target.value))}
-                    min="06:00"
-                    max="21:30"
-                    required
-                  />
-                </label>
-                <label className="atividade-extra-form-description">
-                  Descrição da atividade
-                  <input
-                    type="text"
-                    value={descricao}
-                    onChange={(event) => setDescricao(event.target.value)}
-                    maxLength={240}
-                    required
-                  />
-                </label>
-              </div>
-              <div className="atividade-extra-preview-line">
-                <span>Tempo: {previewDurationSeconds != null && previewDurationSeconds > 0 ? secondsToHms(previewDurationSeconds) : "--:--:--"}</span>
-                <span>Pontuação: {formatPoints(previewPoints)}</span>
-              </div>
-              <div className="atividade-extra-form-actions">
-                <button className="btn btn-primary" type="submit" disabled={busySubmit || activeCd == null}>
-                  {busySubmit ? "Salvando..." : editingEntryId ? "Salvar alteração" : "Registrar atividade"}
-                </button>
-                {editingEntryId ? (
-                  <button className="btn btn-muted" type="button" onClick={resetForm} disabled={busySubmit}>
-                    Cancelar edição
-                  </button>
-                ) : null}
-              </div>
-            </form>
 
             <div className="atividade-extra-grid">
               <section className="atividade-extra-collaborators">
@@ -689,6 +664,80 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
           </div>
         </article>
       </section>
+      {editorOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="atividade-extra-editor-title"
+              onClick={closeEditorModal}
+            >
+              <div className="confirm-dialog atividade-extra-editor-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="atividade-extra-editor-title">{editingEntryId ? "Editar atividade" : "Nova atividade"}</h3>
+                <p>Informe os horários e a descrição da atividade.</p>
+                <form className="atividade-extra-form" onSubmit={onSubmit}>
+                  <div className="atividade-extra-form-grid">
+                    <label>
+                      Data da atividade
+                      <input
+                        type="date"
+                        value={dataAtividade}
+                        onChange={(event) => setDataAtividade(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Hora inicial
+                      <input
+                        type="time"
+                        value={horaInicio}
+                        onChange={(event) => setHoraInicio(clampTimeToWindow(event.target.value))}
+                        min="06:00"
+                        max="21:30"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Hora final
+                      <input
+                        type="time"
+                        value={horaFim}
+                        onChange={(event) => setHoraFim(clampTimeToWindow(event.target.value))}
+                        min="06:00"
+                        max="21:30"
+                        required
+                      />
+                    </label>
+                    <label className="atividade-extra-form-description">
+                      Descrição da atividade
+                      <input
+                        type="text"
+                        value={descricao}
+                        onChange={(event) => setDescricao(event.target.value)}
+                        maxLength={240}
+                        required
+                      />
+                    </label>
+                  </div>
+                  <div className="atividade-extra-preview-line">
+                    <span>Tempo: {previewDurationSeconds != null && previewDurationSeconds > 0 ? secondsToHms(previewDurationSeconds) : "--:--:--"}</span>
+                    <span>Pontuação: {formatPoints(previewPoints)}</span>
+                  </div>
+                  <div className="confirm-actions atividade-extra-editor-actions">
+                    <button className="btn btn-muted" type="button" onClick={closeEditorModal} disabled={busySubmit}>
+                      Cancelar
+                    </button>
+                    <button className="btn btn-primary" type="submit" disabled={busySubmit || activeCd == null}>
+                      {busySubmit ? "Salvando..." : editingEntryId ? "Salvar alteração" : "Registrar atividade"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       {confirmDialog && typeof document !== "undefined"
         ? createPortal(
             <div
