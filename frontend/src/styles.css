@@ -895,10 +895,7 @@ small {
   display: grid;
   place-items: center;
   padding:
-    calc(env(safe-area-inset-top, 0px) + 18px)
-    calc(env(safe-area-inset-right, 0px) + 18px)
-    calc(env(safe-area-inset-bottom, 0px) + 18px)
-    calc(env(safe-area-inset-left, 0px) + 18px);
+    calc(env(safe-area-inset-top, 0px) + 18px) calc(env(safe-area-inset-right, 0px) + 18px) calc(env(safe-area-inset-bottom, 0px) + 18px) calc(env(safe-area-inset-left, 0px) + 18px);
   background: rgba(9, 19, 34, 0.52);
   backdrop-filter: blur(1.5px);
   overflow-x: hidden;
@@ -5173,7 +5170,11 @@ small {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #2d5fae, #4f8df0);
-  transition: width 220ms ease;
+  transition: width 220ms ease, background 220ms ease;
+}
+
+.pvps-progress-fill.is-pending {
+  background: linear-gradient(90deg, #c07a00, #f0a830);
 }
 
 .pvps-progress-card small {

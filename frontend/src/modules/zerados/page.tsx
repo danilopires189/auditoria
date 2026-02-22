@@ -1430,7 +1430,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   useEffect(() => {
     if (!lock || !isOnline) return;
-    const id = window.setInterval(() => { void heartbeatZoneLock(lock.lock_id, 900).then((l) => { setLock(l); lockRef.current = l; }).catch(() => {}); }, 60000);
+    const id = window.setInterval(() => { void heartbeatZoneLock(lock.lock_id, 900).then((l) => { setLock(l); lockRef.current = l; }).catch(() => { }); }, 60000);
     return () => window.clearInterval(id);
   }, [isOnline, lock]);
 
@@ -2574,25 +2574,34 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           </div>
         ) : null}
 
-        {!canShowStageSelector ? (
-          <div className="inventario-progress-grid" role="status" aria-live="polite">
-            <div className="pvps-progress-card">
-              <div className="pvps-progress-head">
-                <strong>{`${stageLabel(tab)} • Andamento por Endereços`}</strong>
-                <span>{formatPercent(stageAddressStats.percent)}</span>
+        {!canShowStageSelector ? (() => {
+          const isPendingView = (tab === "s1" || tab === "s2") && statusFilter === "pendente";
+          const pendingCount = stageAddressStats.total - stageAddressStats.completed;
+          const pendingPercent = completionPercent(pendingCount, stageAddressStats.total);
+          const displayPercent = isPendingView ? pendingPercent : stageAddressStats.percent;
+          const displayCount = isPendingView ? pendingCount : stageAddressStats.completed;
+          const singularLabel = isPendingView ? "endereço pendente" : "endereço concluído";
+          const pluralLabel = isPendingView ? "endereços pendentes" : "endereços concluídos";
+          return (
+            <div className="inventario-progress-grid" role="status" aria-live="polite">
+              <div className="pvps-progress-card">
+                <div className="pvps-progress-head">
+                  <strong>{`${stageLabel(tab)} • Andamento por Endereços`}</strong>
+                  <span>{formatPercent(displayPercent)}</span>
+                </div>
+                <div className="pvps-progress-track" aria-hidden="true">
+                  <span
+                    className={`pvps-progress-fill${isPendingView ? " is-pending" : ""}`}
+                    style={{ width: `${Math.max(0, Math.min(displayPercent, 100))}%` }}
+                  />
+                </div>
+                <small>
+                  {`${displayCount} de ${stageAddressStats.total} ${stageAddressStats.total === 1 ? singularLabel : pluralLabel} nesta etapa.`}
+                </small>
               </div>
-              <div className="pvps-progress-track" aria-hidden="true">
-                <span
-                  className="pvps-progress-fill"
-                  style={{ width: `${Math.max(0, Math.min(stageAddressStats.percent, 100))}%` }}
-                />
-              </div>
-              <small>
-                {`${stageAddressStats.completed} de ${stageAddressStats.total} ${stageAddressStats.total === 1 ? "endereço concluído" : "endereços concluídos"} nesta etapa.`}
-              </small>
             </div>
-          </div>
-        ) : null}
+          );
+        })() : null}
 
         {!canShowStageSelector ? (
           <div className="termo-actions-row inventario-subfilters">
@@ -2696,307 +2705,307 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
         {showZonePicker && typeof document !== "undefined"
           ? createPortal(
-              <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-zonas-title" onClick={() => setShowZonePicker(false)}>
-                <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                  <h3 id="inventario-zonas-title">{`Zonas - ${stageLabel(tab)}`}</h3>
-                  <div className="input-icon-wrap termo-routes-search">
-                    <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
-                    <input
-                      type="text"
-                      value={zoneSearchInput}
-                      onChange={(event) => setZoneSearchInput(event.target.value)}
-                      placeholder="Buscar zona..."
-                    />
-                  </div>
-                  {filteredZoneBuckets.length === 0 ? (
-                    <p>Sem zonas disponíveis para este filtro.</p>
-                  ) : (
-                    <div className="termo-routes-list">
-                      {filteredZoneBuckets.map((zoneBucket) => {
-                        const pendingWord = zoneBucket.pending_addresses === 1 ? "pendente" : "pendentes";
-                        const doneWord = zoneBucket.done_addresses === 1 ? "concluído" : "concluídos";
+            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-zonas-title" onClick={() => setShowZonePicker(false)}>
+              <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="inventario-zonas-title">{`Zonas - ${stageLabel(tab)}`}</h3>
+                <div className="input-icon-wrap termo-routes-search">
+                  <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
+                  <input
+                    type="text"
+                    value={zoneSearchInput}
+                    onChange={(event) => setZoneSearchInput(event.target.value)}
+                    placeholder="Buscar zona..."
+                  />
+                </div>
+                {filteredZoneBuckets.length === 0 ? (
+                  <p>Sem zonas disponíveis para este filtro.</p>
+                ) : (
+                  <div className="termo-routes-list">
+                    {filteredZoneBuckets.map((zoneBucket) => {
+                      const pendingWord = zoneBucket.pending_addresses === 1 ? "pendente" : "pendentes";
+                      const doneWord = zoneBucket.done_addresses === 1 ? "concluído" : "concluídos";
 
-                        return (
-                          <div key={zoneBucket.zona} className={`termo-route-group${zone === zoneBucket.zona ? " is-open" : ""}`}>
-                            <button
-                              type="button"
-                              className="termo-route-row-button termo-route-row-button-volume"
-                              onClick={() => handleZoneSelect(zoneBucket.zona)}
-                            >
-                              <span className="termo-route-main">
-                                <span className="termo-route-info">
-                                  <span className="termo-route-title inventario-zone-title-row">
-                                    <span className="inventario-zone-name-chip">{zoneBucket.zona}</span>
-                                    <span className="inventario-zone-total-chip" title={`Total: ${labelByCount(zoneBucket.total_addresses, "endereço", "endereços")}`}>
-                                      {zoneBucket.total_addresses}
-                                    </span>
-                                  </span>
-                                  <span className="inventario-zone-stats">
-                                    <span className="inventario-zone-stat pending">
-                                      <span className="inventario-zone-stat-count">{zoneBucket.pending_addresses}</span>
-                                      <span className="inventario-zone-stat-icon pending">X</span>
-                                      <span className="inventario-zone-stat-label">{pendingWord}</span>
-                                    </span>
-                                    <span className="inventario-zone-stat done">
-                                      <span className="inventario-zone-stat-count">{zoneBucket.done_addresses}</span>
-                                      <span className="inventario-zone-stat-icon done">✓</span>
-                                      <span className="inventario-zone-stat-label">{doneWord}</span>
-                                    </span>
+                      return (
+                        <div key={zoneBucket.zona} className={`termo-route-group${zone === zoneBucket.zona ? " is-open" : ""}`}>
+                          <button
+                            type="button"
+                            className="termo-route-row-button termo-route-row-button-volume"
+                            onClick={() => handleZoneSelect(zoneBucket.zona)}
+                          >
+                            <span className="termo-route-main">
+                              <span className="termo-route-info">
+                                <span className="termo-route-title inventario-zone-title-row">
+                                  <span className="inventario-zone-name-chip">{zoneBucket.zona}</span>
+                                  <span className="inventario-zone-total-chip" title={`Total: ${labelByCount(zoneBucket.total_addresses, "endereço", "endereços")}`}>
+                                    {zoneBucket.total_addresses}
                                   </span>
                                 </span>
-                                <span className="termo-route-actions-row">
-                                  <span className={`termo-divergencia ${zone === zoneBucket.zona ? "correto" : "andamento"}`}>
-                                    {zone === zoneBucket.zona ? "Selecionada" : "Disponível"}
+                                <span className="inventario-zone-stats">
+                                  <span className="inventario-zone-stat pending">
+                                    <span className="inventario-zone-stat-count">{zoneBucket.pending_addresses}</span>
+                                    <span className="inventario-zone-stat-icon pending">X</span>
+                                    <span className="inventario-zone-stat-label">{pendingWord}</span>
+                                  </span>
+                                  <span className="inventario-zone-stat done">
+                                    <span className="inventario-zone-stat-count">{zoneBucket.done_addresses}</span>
+                                    <span className="inventario-zone-stat-icon done">✓</span>
+                                    <span className="inventario-zone-stat-label">{doneWord}</span>
                                   </span>
                                 </span>
                               </span>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="confirm-actions">
-                    <button className="btn btn-muted" type="button" onClick={() => setShowZonePicker(false)}>Fechar</button>
+                              <span className="termo-route-actions-row">
+                                <span className={`termo-divergencia ${zone === zoneBucket.zona ? "correto" : "andamento"}`}>
+                                  {zone === zoneBucket.zona ? "Selecionada" : "Disponível"}
+                                </span>
+                              </span>
+                            </span>
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
+                )}
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setShowZonePicker(false)}>Fechar</button>
                 </div>
-              </div>,
-              document.body
-            )
+              </div>
+            </div>,
+            document.body
+          )
           : null}
 
         {editorOpen && active && typeof document !== "undefined"
           ? createPortal(
+            <div
+              className={`inventario-popup-overlay${tab === "conciliation" ? " inventario-popup-overlay-editor" : ""}`}
+              role="dialog"
+              aria-modal="true"
+              onClick={closeEditorPopup}
+            >
               <div
-                className={`inventario-popup-overlay${tab === "conciliation" ? " inventario-popup-overlay-editor" : ""}`}
-                role="dialog"
-                aria-modal="true"
-                onClick={closeEditorPopup}
+                className={`inventario-popup-card${tab === "conciliation" ? " inventario-editor-popup-card" : ""}`}
+                onClick={(event) => event.stopPropagation()}
               >
-                <div
-                  className={`inventario-popup-card${tab === "conciliation" ? " inventario-editor-popup-card" : ""}`}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="inventario-popup-head">
-                    <div>
-                      <h3>{active.endereco}</h3>
-                      <p>{`${stageLabel(tab)} | Código e Dígito (CODDV) ${active.coddv}`}</p>
-                      <p className="inventario-popup-head-product">{active.descricao}</p>
-                    </div>
-                    <div className="inventario-popup-head-actions">
-                      {canEditConcludedCount ? (
-                        <button
-                          type="button"
-                          className="inventario-popup-edit"
-                          onClick={() => {
-                            setPopupErr(null);
-                            setCountEditMode(true);
-                          }}
-                          aria-label="Editar contagem"
-                          title="Editar contagem"
-                        >
-                          {editIcon()}
-                          <span>Editar</span>
-                        </button>
-                      ) : null}
-                      <button type="button" className="inventario-popup-close" onClick={closeEditorPopup} aria-label="Fechar popup">Fechar</button>
-                    </div>
+                <div className="inventario-popup-head">
+                  <div>
+                    <h3>{active.endereco}</h3>
+                    <p>{`${stageLabel(tab)} | Código e Dígito (CODDV) ${active.coddv}`}</p>
+                    <p className="inventario-popup-head-product">{active.descricao}</p>
                   </div>
-                  <div ref={popupBodyRef} className="inventario-popup-body">
-                    {popupErr ? <p className="inventario-popup-note error">{popupErr}</p> : null}
-                    {(tab === "s1" || tab === "s2") ? (
-                      <>
-                        {showCountReadOnlyDetails ? (
-                          <div className="inventario-count-readonly">
-                            <p>{`Quantidade informada: ${activeStageCount?.qtd_contada ?? "-"}`}</p>
-                            <p>{`Barras: ${activeStageCount?.barras ?? "-"}`}</p>
-                            <p>{`Usuário: ${activeStageCount?.counted_nome ?? "-"} (${activeStageCount?.counted_mat ?? "-"})`}</p>
-                          </div>
-                        ) : (
-                          <>
-                            <label>
-                              Quantidade
-                              <input
-                                ref={qtdInputRef}
-                                autoFocus
-                                value={qtd}
-                                onChange={(e) => {
-                                  setQtd(e.target.value);
-                                  setValidatedBarras(null);
-                                }}
-                                onFocus={focusAndSelectNumericInput}
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                enterKeyHint="next"
-                                disabled={!canEditCount(active) || busy}
-                              />
-                            </label>
-                            {requiresBarras ? (
-                              <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
-                                {barrasValidatedForCurrentInput
-                                  ? "Código de barras validado. Toque em Salvar para concluir."
-                                  : "Sobra detectada. Informe barras válido do mesmo Código e Dígito (CODDV) e valide antes de salvar, ou descarte."}
-                              </p>
-                            ) : null}
-                            {requiresBarras ? (
-                              <label>
-                                Barras (obrigatório)
-                                <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
-                                  <span className={barrasIconClassName} aria-hidden="true">
-                                    {barcodeIcon()}
-                                  </span>
-                                  <input
-                                    ref={stageBarrasInputRef}
-                                    inputMode={barcodeInputMode}
-                                    value={barras}
-                                    onChange={(e) => handleScannerInputChange("barras", e.target.value)}
-                                    onKeyDown={onStageBarrasKeyDown}
-                                    onPointerDown={enableBarcodeSoftKeyboard}
-                                    onBlur={disableBarcodeSoftKeyboard}
-                                    onFocus={keepFocusedControlVisible}
-                                    pattern="[0-9]*"
-                                    autoCapitalize="off"
-                                    autoCorrect="off"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    enterKeyHint="done"
-                                    disabled={!canEditCount(active) || busy}
-                                  />
-                                  <button
-                                    type="button"
-                                    className="input-action-btn inventario-popup-scan-btn"
-                                    onClick={() => openCameraScanner("barras")}
-                                    title="Ler código pela câmera"
-                                    aria-label="Ler código pela câmera"
-                                    disabled={!canEditCount(active) || busy || !cameraSupported}
-                                  >
-                                    {cameraIcon()}
-                                  </button>
-                                </div>
-                              </label>
-                            ) : null}
-                            <div className="inventario-editor-actions">
-                              <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
-                              <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
-                            </div>
-                          </>
-                        )}
-                      </>
+                  <div className="inventario-popup-head-actions">
+                    {canEditConcludedCount ? (
+                      <button
+                        type="button"
+                        className="inventario-popup-edit"
+                        onClick={() => {
+                          setPopupErr(null);
+                          setCountEditMode(true);
+                        }}
+                        aria-label="Editar contagem"
+                        title="Editar contagem"
+                      >
+                        {editIcon()}
+                        <span>Editar</span>
+                      </button>
                     ) : null}
-                    {tab === "conciliation" ? (
-                      <>
-                        <p className="inventario-editor-text">{`Endereço: ${active.endereco} | Código e Dígito (CODDV): ${active.coddv}`}</p>
-                        {(() => {
-                          const c1Fallback = extractReviewSnapshotCount(active.review, 1);
-                          const c2Fallback = extractReviewSnapshotCount(active.review, 2);
-
-                          const c1Qtd = active.c1?.qtd_contada ?? c1Fallback?.qtd ?? "-";
-                          const c1Barras = active.c1?.barras ?? c1Fallback?.barras ?? "-";
-                          const c1Nome = pickText(
-                            active.c1?.counted_nome,
-                            c1Fallback?.nome,
-                            active.c1?.counted_mat ? `Mat ${active.c1.counted_mat}` : null,
-                            c1Fallback?.mat ? `Mat ${c1Fallback.mat}` : null
-                          ) ?? "-";
-
-                          const c2Qtd = active.c2?.qtd_contada ?? c2Fallback?.qtd ?? "-";
-                          const c2Barras = active.c2?.barras ?? c2Fallback?.barras ?? "-";
-                          const c2Nome = pickText(
-                            active.c2?.counted_nome,
-                            c2Fallback?.nome,
-                            active.c2?.counted_mat ? `Mat ${active.c2.counted_mat}` : null,
-                            c2Fallback?.mat ? `Mat ${c2Fallback.mat}` : null
-                          ) ?? "-";
-
-                          return (
-                            <>
-                              {active.review?.reason_code === "conflito_lock" && active.c2 == null ? (
-                                <p className="inventario-popup-note warn">
-                                  2ª verificação não registrada por conflito de lock. Resolve pela conciliação.
-                                </p>
-                              ) : null}
-                              <div className="inventario-conciliation-grid">
-                                <article className="inventario-conciliation-card">
-                                  <h4>1ª Verificação</h4>
-                                  <p>{`Qtd: ${c1Qtd}`}</p>
-                                  <p>{`Barras: ${c1Barras}`}</p>
-                                  <p>{`Usuário: ${c1Nome}`}</p>
-                                </article>
-                                <article className="inventario-conciliation-card">
-                                  <h4>2ª Verificação</h4>
-                                  <p>{`Qtd: ${c2Qtd}`}</p>
-                                  <p>{`Barras: ${c2Barras}`}</p>
-                                  <p>{`Usuário: ${c2Nome}`}</p>
-                                </article>
-                              </div>
-                            </>
-                          );
-                        })()}
-                        <label>
-                          Qtd final
-                          <input
-                            ref={finalQtdInputRef}
-                            value={finalQtd}
-                            onChange={(e) => setFinalQtd(e.target.value)}
-                            onFocus={focusAndSelectNumericInput}
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            enterKeyHint="next"
-                            disabled={!canResolveConciliation || busy}
-                          />
-                        </label>
-                        {requiresFinalBarras ? (
-                          <p className="inventario-popup-note warn">Quantidade final acima do esperado. Informe barras válido do mesmo Código e Dígito (CODDV).</p>
-                        ) : null}
-                        {requiresFinalBarras ? (
-                          <label>
-                            Barras final (obrigatório na sobra)
-                            <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
-                              <span className={finalBarrasIconClassName} aria-hidden="true">
-                                {barcodeIcon()}
-                              </span>
-                              <input
-                                ref={finalBarrasInputRef}
-                                inputMode={barcodeInputMode}
-                                value={finalBarras}
-                                onChange={(e) => handleScannerInputChange("final_barras", e.target.value)}
-                                onKeyDown={onFinalBarrasKeyDown}
-                                onPointerDown={enableBarcodeSoftKeyboard}
-                                onBlur={disableBarcodeSoftKeyboard}
-                                onFocus={keepFocusedControlVisible}
-                                pattern="[0-9]*"
-                                autoCapitalize="off"
-                                autoCorrect="off"
-                                autoComplete="off"
-                                spellCheck={false}
-                                enterKeyHint="done"
-                                disabled={!canResolveConciliation || busy}
-                              />
-                              <button
-                                type="button"
-                                className="input-action-btn inventario-popup-scan-btn"
-                                onClick={() => openCameraScanner("final_barras")}
-                                title="Ler código pela câmera"
-                                aria-label="Ler código pela câmera"
-                                disabled={!canResolveConciliation || busy || !cameraSupported}
-                              >
-                                {cameraIcon()}
-                              </button>
-                            </div>
-                          </label>
-                        ) : null}
-                        <div className="inventario-editor-actions">
-                          <button className="btn btn-muted" type="button" onClick={closeEditorPopup}>Fechar</button>
-                          <button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button>
-                        </div>
-                      </>
-                    ) : null}
-                    {tab === "done" ? <p className="inventario-editor-text">Endereço concluído e não pode ser alterado.</p> : null}
+                    <button type="button" className="inventario-popup-close" onClick={closeEditorPopup} aria-label="Fechar popup">Fechar</button>
                   </div>
                 </div>
-              </div>,
-              document.body
-            )
+                <div ref={popupBodyRef} className="inventario-popup-body">
+                  {popupErr ? <p className="inventario-popup-note error">{popupErr}</p> : null}
+                  {(tab === "s1" || tab === "s2") ? (
+                    <>
+                      {showCountReadOnlyDetails ? (
+                        <div className="inventario-count-readonly">
+                          <p>{`Quantidade informada: ${activeStageCount?.qtd_contada ?? "-"}`}</p>
+                          <p>{`Barras: ${activeStageCount?.barras ?? "-"}`}</p>
+                          <p>{`Usuário: ${activeStageCount?.counted_nome ?? "-"} (${activeStageCount?.counted_mat ?? "-"})`}</p>
+                        </div>
+                      ) : (
+                        <>
+                          <label>
+                            Quantidade
+                            <input
+                              ref={qtdInputRef}
+                              autoFocus
+                              value={qtd}
+                              onChange={(e) => {
+                                setQtd(e.target.value);
+                                setValidatedBarras(null);
+                              }}
+                              onFocus={focusAndSelectNumericInput}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              enterKeyHint="next"
+                              disabled={!canEditCount(active) || busy}
+                            />
+                          </label>
+                          {requiresBarras ? (
+                            <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
+                              {barrasValidatedForCurrentInput
+                                ? "Código de barras validado. Toque em Salvar para concluir."
+                                : "Sobra detectada. Informe barras válido do mesmo Código e Dígito (CODDV) e valide antes de salvar, ou descarte."}
+                            </p>
+                          ) : null}
+                          {requiresBarras ? (
+                            <label>
+                              Barras (obrigatório)
+                              <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
+                                <span className={barrasIconClassName} aria-hidden="true">
+                                  {barcodeIcon()}
+                                </span>
+                                <input
+                                  ref={stageBarrasInputRef}
+                                  inputMode={barcodeInputMode}
+                                  value={barras}
+                                  onChange={(e) => handleScannerInputChange("barras", e.target.value)}
+                                  onKeyDown={onStageBarrasKeyDown}
+                                  onPointerDown={enableBarcodeSoftKeyboard}
+                                  onBlur={disableBarcodeSoftKeyboard}
+                                  onFocus={keepFocusedControlVisible}
+                                  pattern="[0-9]*"
+                                  autoCapitalize="off"
+                                  autoCorrect="off"
+                                  autoComplete="off"
+                                  spellCheck={false}
+                                  enterKeyHint="done"
+                                  disabled={!canEditCount(active) || busy}
+                                />
+                                <button
+                                  type="button"
+                                  className="input-action-btn inventario-popup-scan-btn"
+                                  onClick={() => openCameraScanner("barras")}
+                                  title="Ler código pela câmera"
+                                  aria-label="Ler código pela câmera"
+                                  disabled={!canEditCount(active) || busy || !cameraSupported}
+                                >
+                                  {cameraIcon()}
+                                </button>
+                              </div>
+                            </label>
+                          ) : null}
+                          <div className="inventario-editor-actions">
+                            <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
+                            <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : null}
+                  {tab === "conciliation" ? (
+                    <>
+                      <p className="inventario-editor-text">{`Endereço: ${active.endereco} | Código e Dígito (CODDV): ${active.coddv}`}</p>
+                      {(() => {
+                        const c1Fallback = extractReviewSnapshotCount(active.review, 1);
+                        const c2Fallback = extractReviewSnapshotCount(active.review, 2);
+
+                        const c1Qtd = active.c1?.qtd_contada ?? c1Fallback?.qtd ?? "-";
+                        const c1Barras = active.c1?.barras ?? c1Fallback?.barras ?? "-";
+                        const c1Nome = pickText(
+                          active.c1?.counted_nome,
+                          c1Fallback?.nome,
+                          active.c1?.counted_mat ? `Mat ${active.c1.counted_mat}` : null,
+                          c1Fallback?.mat ? `Mat ${c1Fallback.mat}` : null
+                        ) ?? "-";
+
+                        const c2Qtd = active.c2?.qtd_contada ?? c2Fallback?.qtd ?? "-";
+                        const c2Barras = active.c2?.barras ?? c2Fallback?.barras ?? "-";
+                        const c2Nome = pickText(
+                          active.c2?.counted_nome,
+                          c2Fallback?.nome,
+                          active.c2?.counted_mat ? `Mat ${active.c2.counted_mat}` : null,
+                          c2Fallback?.mat ? `Mat ${c2Fallback.mat}` : null
+                        ) ?? "-";
+
+                        return (
+                          <>
+                            {active.review?.reason_code === "conflito_lock" && active.c2 == null ? (
+                              <p className="inventario-popup-note warn">
+                                2ª verificação não registrada por conflito de lock. Resolve pela conciliação.
+                              </p>
+                            ) : null}
+                            <div className="inventario-conciliation-grid">
+                              <article className="inventario-conciliation-card">
+                                <h4>1ª Verificação</h4>
+                                <p>{`Qtd: ${c1Qtd}`}</p>
+                                <p>{`Barras: ${c1Barras}`}</p>
+                                <p>{`Usuário: ${c1Nome}`}</p>
+                              </article>
+                              <article className="inventario-conciliation-card">
+                                <h4>2ª Verificação</h4>
+                                <p>{`Qtd: ${c2Qtd}`}</p>
+                                <p>{`Barras: ${c2Barras}`}</p>
+                                <p>{`Usuário: ${c2Nome}`}</p>
+                              </article>
+                            </div>
+                          </>
+                        );
+                      })()}
+                      <label>
+                        Qtd final
+                        <input
+                          ref={finalQtdInputRef}
+                          value={finalQtd}
+                          onChange={(e) => setFinalQtd(e.target.value)}
+                          onFocus={focusAndSelectNumericInput}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          enterKeyHint="next"
+                          disabled={!canResolveConciliation || busy}
+                        />
+                      </label>
+                      {requiresFinalBarras ? (
+                        <p className="inventario-popup-note warn">Quantidade final acima do esperado. Informe barras válido do mesmo Código e Dígito (CODDV).</p>
+                      ) : null}
+                      {requiresFinalBarras ? (
+                        <label>
+                          Barras final (obrigatório na sobra)
+                          <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
+                            <span className={finalBarrasIconClassName} aria-hidden="true">
+                              {barcodeIcon()}
+                            </span>
+                            <input
+                              ref={finalBarrasInputRef}
+                              inputMode={barcodeInputMode}
+                              value={finalBarras}
+                              onChange={(e) => handleScannerInputChange("final_barras", e.target.value)}
+                              onKeyDown={onFinalBarrasKeyDown}
+                              onPointerDown={enableBarcodeSoftKeyboard}
+                              onBlur={disableBarcodeSoftKeyboard}
+                              onFocus={keepFocusedControlVisible}
+                              pattern="[0-9]*"
+                              autoCapitalize="off"
+                              autoCorrect="off"
+                              autoComplete="off"
+                              spellCheck={false}
+                              enterKeyHint="done"
+                              disabled={!canResolveConciliation || busy}
+                            />
+                            <button
+                              type="button"
+                              className="input-action-btn inventario-popup-scan-btn"
+                              onClick={() => openCameraScanner("final_barras")}
+                              title="Ler código pela câmera"
+                              aria-label="Ler código pela câmera"
+                              disabled={!canResolveConciliation || busy || !cameraSupported}
+                            >
+                              {cameraIcon()}
+                            </button>
+                          </div>
+                        </label>
+                      ) : null}
+                      <div className="inventario-editor-actions">
+                        <button className="btn btn-muted" type="button" onClick={closeEditorPopup}>Fechar</button>
+                        <button className="btn btn-primary" type="button" disabled={!canResolveConciliation || busy} onClick={() => void resolveReview()}>Resolver conciliação</button>
+                      </div>
+                    </>
+                  ) : null}
+                  {tab === "done" ? <p className="inventario-editor-text">Endereço concluído e não pode ser alterado.</p> : null}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
           : null}
 
         {canManageBase && adminEntryOpen && typeof document !== "undefined" ? createPortal(
@@ -3086,7 +3095,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
                     <div className="inventario-admin-zone-head">
                       <strong>{`Zonas disponível: ${adminZones.length}`}</strong>
-                    <div className="inventario-admin-zone-actions">
+                      <div className="inventario-admin-zone-actions">
                         <button
                           type="button"
                           className="btn btn-muted"
@@ -3402,51 +3411,51 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         ) : null}
         {scannerOpen && typeof document !== "undefined"
           ? createPortal(
-              <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-scanner-title" onClick={closeCameraScanner}>
-                <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                  <div className="scanner-head">
-                    <h3 id="inventario-scanner-title">Scanner de barras</h3>
-                    <div className="scanner-head-actions">
-                      {!isDesktop ? (
-                        <button
-                          type="button"
-                          className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
-                          onClick={() => void toggleTorch()}
-                          aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
-                          title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
-                          disabled={!torchSupported}
-                        >
-                          {flashIcon({ on: torchEnabled })}
-                          <span>{torchEnabled ? "Flash on" : "Flash"}</span>
-                        </button>
-                      ) : null}
+            <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="inventario-scanner-title" onClick={closeCameraScanner}>
+              <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="scanner-head">
+                  <h3 id="inventario-scanner-title">Scanner de barras</h3>
+                  <div className="scanner-head-actions">
+                    {!isDesktop ? (
                       <button
                         type="button"
-                        className="scanner-close-btn"
-                        onClick={closeCameraScanner}
-                        aria-label="Fechar scanner"
-                        title="Fechar scanner"
+                        className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
+                        onClick={() => void toggleTorch()}
+                        aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
+                        title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
+                        disabled={!torchSupported}
                       >
-                        {closeIcon()}
+                        {flashIcon({ on: torchEnabled })}
+                        <span>{torchEnabled ? "Flash on" : "Flash"}</span>
                       </button>
-                    </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="scanner-close-btn"
+                      onClick={closeCameraScanner}
+                      aria-label="Fechar scanner"
+                      title="Fechar scanner"
+                    >
+                      {closeIcon()}
+                    </button>
                   </div>
-                  <div className="scanner-video-wrap">
-                    <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
-                    <div className="scanner-frame" aria-hidden="true">
-                      <div className="scanner-frame-corner top-left" />
-                      <div className="scanner-frame-corner top-right" />
-                      <div className="scanner-frame-corner bottom-left" />
-                      <div className="scanner-frame-corner bottom-right" />
-                      <div className="scanner-frame-line" />
-                    </div>
-                  </div>
-                  <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
-                  {scannerError ? <div className="alert error">{scannerError}</div> : null}
                 </div>
-              </div>,
-              document.body
-            )
+                <div className="scanner-video-wrap">
+                  <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+                  <div className="scanner-frame" aria-hidden="true">
+                    <div className="scanner-frame-corner top-left" />
+                    <div className="scanner-frame-corner top-right" />
+                    <div className="scanner-frame-corner bottom-left" />
+                    <div className="scanner-frame-corner bottom-right" />
+                    <div className="scanner-frame-line" />
+                  </div>
+                </div>
+                <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
+                {scannerError ? <div className="alert error">{scannerError}</div> : null}
+              </div>
+            </div>,
+            document.body
+          )
           : null}
       </section>
     </>
