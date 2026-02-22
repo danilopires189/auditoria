@@ -197,7 +197,7 @@ function parseErr(error: unknown): string {
   if (raw.toLowerCase().includes("read-only transaction")) {
     return "Backend com função de inventário em modo somente leitura. Execute as migrações mais recentes e sincronize novamente.";
   }
-  if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia no servidor. Use 'Gerir Base' para montar e sincronize novamente.";
+  if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia. Use 'Gerir Base' para montar e sincronize novamente.";
   if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este Código e Dígito (CODDV).";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
   if (raw.includes("ETAPA2_APENAS_QUANDO_SOBRA")) return "2ª verificação só é permitida quando houver sobra na 1ª verificação.";
