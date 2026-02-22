@@ -207,6 +207,14 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const currentCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
+  const currentCdLabel = useMemo(() => {
+    const profileLabel = typeof profile.cd_nome === "string"
+      ? profile.cd_nome.trim().replace(/\s+/g, " ")
+      : "";
+    if (profileLabel) return profileLabel;
+    if (currentCd != null) return `CD ${String(currentCd).padStart(2, "0")}`;
+    return "CD não definido";
+  }, [currentCd, profile.cd_nome]);
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -772,7 +780,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
               <p><strong>Descrição:</strong> {result.descricao || "-"}</p>
               <p><strong>SKU/CODDV:</strong> {result.coddv}</p>
               <p><strong>Códigos de barras:</strong> {result.barras_lista.length > 0 ? result.barras_lista.join(" | ") : "-"}</p>
-              <p><strong>CD:</strong> {String(result.cd).padStart(2, "0")}</p>
+              <p><strong>CD:</strong> {currentCdLabel}</p>
               <p><strong>Estoque disponível:</strong> {result.qtd_est_disp}</p>
               <p><strong>Estoque atual:</strong> {result.qtd_est_atual}</p>
               <p><strong>Última atualização do estoque:</strong> {formatShortDate(result.estoque_updated_at)}</p>
