@@ -2250,11 +2250,21 @@ small {
     justify-content: flex-start;
   }
 
+  .atividade-extra-refresh-btn {
+    order: 1;
+  }
+
+  .atividade-extra-visibility-btn {
+    order: 2;
+  }
+
   .atividade-extra-add-label {
     display: none;
   }
 
   .atividade-extra-add-btn {
+    order: 3;
+    margin-left: auto;
     width: 40px;
     min-width: 40px;
     padding: 0;
