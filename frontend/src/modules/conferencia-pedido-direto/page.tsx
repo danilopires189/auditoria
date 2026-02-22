@@ -43,6 +43,7 @@ import {
   fetchCdOptions,
   fetchActiveVolume,
   fetchManifestBundle,
+  fetchManifestItemsPage,
   fetchManifestMeta,
   fetchRouteOverview,
   fetchVolumeItems,
@@ -1033,21 +1034,30 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           }
         }, { includeBarras: false });
 
+        const routesForSave = bundle.routes.length > 0
+          ? bundle.routes
+          : await getRouteOverviewLocal(profile.user_id, currentCd);
+
         await saveManifestSnapshot({
           user_id: profile.user_id,
           cd: currentCd,
           meta: bundle.meta,
           items: bundle.items,
           barras: [],
-          routes: bundle.routes
+          routes: routesForSave
         });
 
-        setRouteRows(bundle.routes);
+        setRouteRows(routesForSave);
         termoRowCount = bundle.meta.row_count;
       } else {
-        const routes = await fetchRouteOverview(currentCd);
-        await saveRouteOverviewLocal(profile.user_id, currentCd, routes);
-        setRouteRows(routes);
+        try {
+          const routes = await fetchRouteOverview(currentCd);
+          await saveRouteOverviewLocal(profile.user_id, currentCd, routes);
+          setRouteRows(routes);
+        } catch {
+          const fallbackRoutes = await getRouteOverviewLocal(profile.user_id, currentCd);
+          setRouteRows(fallbackRoutes);
+        }
       }
 
       let barrasTotal = localBarrasMeta.row_count;
@@ -1853,9 +1863,20 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
     const loadProgressBase = async () => {
       try {
-        const manifestItems = isOnline
-          ? (await fetchManifestBundle(currentCd, undefined, { includeBarras: false })).items
-          : await listManifestItemsByCd(profile.user_id, currentCd);
+        let manifestItems: PedidoDiretoManifestItemRow[] = [];
+        if (isOnline) {
+          const pageSize = 1200;
+          let offset = 0;
+          while (true) {
+            const page = await fetchManifestItemsPage(currentCd, offset, pageSize);
+            if (!page.length) break;
+            manifestItems.push(...page);
+            if (page.length < pageSize) break;
+            offset += page.length;
+          }
+        } else {
+          manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+        }
         if (cancelled) return;
 
         const byStore: Record<string, number> = {};
