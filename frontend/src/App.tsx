@@ -1542,24 +1542,24 @@ export default function App() {
                 <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                   <h3 id="global-cd-switch-title">Trocar CD</h3>
                   <p>Selecione o CD para continuar sem sair da conta.</p>
-                  <div className="form-grid">
-                    <label>
-                      Centro de distribuição
-                      <select
-                        value={pendingGlobalCdSelection ?? ""}
-                        onChange={(event) => setPendingGlobalCdSelection(parseInteger(event.target.value))}
-                        disabled={globalCdLoading}
-                      >
-                        <option value="" disabled>
-                          {globalCdLoading ? "Carregando CDs..." : "Selecione um CD"}
-                        </option>
-                        {globalCdOptions.map((option) => (
-                          <option key={option.cd} value={option.cd}>
-                            {formatCdOptionLabel(option.cd, option.cd_nome)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                  <div className="global-cd-picker" role="listbox" aria-label="Centros de distribuição disponíveis">
+                    {globalCdLoading ? <div className="global-cd-picker-loading">Carregando CDs...</div> : null}
+                    {!globalCdLoading && globalCdOptions.length === 0 ? (
+                      <div className="global-cd-picker-empty">Nenhum CD disponível no momento.</div>
+                    ) : null}
+                    {!globalCdLoading
+                      ? globalCdOptions.map((option) => (
+                          <button
+                            key={option.cd}
+                            type="button"
+                            className={`global-cd-option${pendingGlobalCdSelection === option.cd ? " is-selected" : ""}`}
+                            onClick={() => setPendingGlobalCdSelection(option.cd)}
+                          >
+                            <span className="global-cd-option-code">{`CD ${String(option.cd).padStart(2, "0")}`}</span>
+                            <span className="global-cd-option-name">{option.cd_nome || "Centro de distribuição"}</span>
+                          </button>
+                        ))
+                      : null}
                   </div>
                   <div className="confirm-actions">
                     <button
