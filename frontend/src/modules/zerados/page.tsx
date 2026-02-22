@@ -1799,19 +1799,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     [reviewFilter, rows, statusFilter]
   );
 
-  const stageItemStats = useMemo(() => {
-    if (tab === "done") {
-      const total = rows.length;
-      const completed = rows.filter((row) => row.final).length;
-      const percent = completionPercent(completed, total);
-      return { total, completed, percent };
-    }
-
-    const total = stageUniverse.length;
-    const completed = stageUniverse.filter((row) => !isPendingForStage(row, tab)).length;
-    const percent = completionPercent(completed, total);
-    return { total, completed, percent };
-  }, [rows, stageUniverse, tab]);
   const stageAddressStats = useMemo(() => {
     const addressState = new Map<string, { has_pending: boolean; has_done: boolean }>();
     const sourceRows = tab === "done" ? rows : stageUniverse;
@@ -2589,22 +2576,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           <div className="inventario-progress-grid" role="status" aria-live="polite">
             <div className="pvps-progress-card">
               <div className="pvps-progress-head">
-                <strong>{`${stageLabel(tab)} • Itens`}</strong>
-                <span>{formatPercent(stageItemStats.percent)}</span>
-              </div>
-              <div className="pvps-progress-track" aria-hidden="true">
-                <span
-                  className="pvps-progress-fill"
-                  style={{ width: `${Math.max(0, Math.min(stageItemStats.percent, 100))}%` }}
-                />
-              </div>
-              <small>
-                {`${stageItemStats.completed} de ${stageItemStats.total} ${stageItemStats.total === 1 ? "item concluído" : "itens concluídos"} nesta etapa.`}
-              </small>
-            </div>
-            <div className="pvps-progress-card">
-              <div className="pvps-progress-head">
-                <strong>{`${stageLabel(tab)} • Endereços`}</strong>
+                <strong>{`${stageLabel(tab)} • Andamento por Endereços`}</strong>
                 <span>{formatPercent(stageAddressStats.percent)}</span>
               </div>
               <div className="pvps-progress-track" aria-hidden="true">
@@ -3179,7 +3151,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         onChange={(event) => setAdminIncluirPul(event.target.checked)}
                         disabled={adminBusy || cd == null}
                       />
-                      Incluir endereços de Pulmão dos Códigos (CODDV) informados
+                      Incluir endereços de Pulmão dos produtos (CODDV) informados
                     </label>
                     <label>
                       Código e Dígito (CODDV) manual (separado por vírgula)
@@ -3198,7 +3170,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         disabled={adminBusy || cd == null}
                         onClick={() => void runAdminPreview("coddv")}
                       >
-                        {adminBusy ? "Processando..." : "Prévia Código e Dígito"}
+                        {adminBusy ? "Processando..." : "Gerar prévia"}
                       </button>
                       <button
                         className="btn btn-primary"
@@ -3206,7 +3178,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "coddv"}
                         onClick={() => void runAdminApplyCoddv()}
                       >
-                        Aplicar Código e Dígito manual
+                        Adicionar a base
                       </button>
                     </div>
                   </div>
