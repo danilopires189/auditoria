@@ -459,6 +459,17 @@ function applyModeLabel(value: PvpsRuleApplyMode | null): string | null {
   return value === "apply_now" ? "Agir agora" : "Próximas inclusões";
 }
 
+function completionStats(pending: number, completed: number): { percent: number; total: number } {
+  const safePending = Math.max(0, pending);
+  const safeCompleted = Math.max(0, completed);
+  const total = safePending + safeCompleted;
+  if (total <= 0) return { percent: 0, total: 0 };
+  return {
+    percent: Math.round((safeCompleted / total) * 100),
+    total
+  };
+}
+
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
@@ -1259,6 +1270,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return alocCompletedRows.filter((row) => zoneFilterSet.has(row.zona));
   }, [alocCompletedRows, selectedZones, zoneFilterSet]);
 
+  const filteredPvpsPendingRows = useMemo(() => {
+    if (!selectedZones.length) return sortedPvpsAllRows;
+    return sortedPvpsAllRows.filter((row) => zoneFilterSet.has(row.zona));
+  }, [sortedPvpsAllRows, selectedZones, zoneFilterSet]);
+
+  const filteredAlocPendingRows = useMemo(() => {
+    if (!selectedZones.length) return sortedAlocAllRows;
+    return sortedAlocAllRows.filter((row) => zoneFilterSet.has(row.zona));
+  }, [sortedAlocAllRows, selectedZones, zoneFilterSet]);
+
   const sortedPvpsCompletedRows = useMemo(
     () => [...filteredPvpsCompletedRows].sort((a, b) => {
       const byZone = a.zona.localeCompare(b.zona);
@@ -1280,6 +1301,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }),
     [filteredAlocCompletedRows]
   );
+
+  const pvpsStats = useMemo(
+    () => completionStats(filteredPvpsPendingRows.length, sortedPvpsCompletedRows.length),
+    [filteredPvpsPendingRows.length, sortedPvpsCompletedRows.length]
+  );
+
+  const alocStats = useMemo(
+    () => completionStats(filteredAlocPendingRows.length, sortedAlocCompletedRows.length),
+    [filteredAlocPendingRows.length, sortedAlocCompletedRows.length]
+  );
+
+  const activeStats = tab === "pvps" ? pvpsStats : alocStats;
+  const activeCompletedCount = tab === "pvps" ? sortedPvpsCompletedRows.length : sortedAlocCompletedRows.length;
 
   useEffect(() => {
     if (tab !== "pvps" || feedView !== "pendentes" || activeCd == null || !isOnline) return;
@@ -2229,6 +2263,21 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 Descartes por conflito nesta sessão: {offlineDiscardedInSession}.
               </div>
             ) : null}
+            <div className="pvps-progress-card" role="status" aria-live="polite">
+              <div className="pvps-progress-head">
+                <strong>Conclusão {tab === "pvps" ? "PVPS" : "Alocação"}</strong>
+                <span>{activeStats.percent}%</span>
+              </div>
+              <div className="pvps-progress-track" aria-hidden="true">
+                <span
+                  className="pvps-progress-fill"
+                  style={{ width: `${Math.max(0, Math.min(activeStats.percent, 100))}%` }}
+                />
+              </div>
+              <small>
+                {activeCompletedCount} concluído(s) de {activeStats.total} no total atual.
+              </small>
+            </div>
             {isAdmin && showAdminPanel ? (
               <div className="pvps-admin-panel">
                 <h3>Gestão de Regras</h3>

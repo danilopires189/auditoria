@@ -4410,6 +4410,53 @@ small {
   stroke-width: 2.2;
 }
 
+.pvps-progress-card {
+  border: 1px solid #d9e6f7;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.pvps-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #1d3f72;
+}
+
+.pvps-progress-head strong {
+  font-size: 0.94rem;
+}
+
+.pvps-progress-head span {
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.pvps-progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #dce8f8;
+  overflow: hidden;
+}
+
+.pvps-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2d5fae, #4f8df0);
+  transition: width 220ms ease;
+}
+
+.pvps-progress-card small {
+  color: #4f6789;
+  font-size: 0.83rem;
+}
+
 /* Admin Panel */
 .pvps-admin-panel {
   border: 1px solid var(--line);
