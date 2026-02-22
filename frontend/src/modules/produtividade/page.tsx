@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { formatCountLabel, formatMetricWithUnit as formatMetricWithInflection } from "../../shared/inflection";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   fetchProdutividadeActivityTotals,
@@ -115,53 +116,8 @@ function formatMetric(value: number, unit: string): string {
   }).format(safe);
 }
 
-function isSingularValue(value: number): boolean {
-  return Math.abs(value - 1) < 0.0005;
-}
-
-function inflectUnitLabel(unitLabel: string, value: number): string {
-  const raw = unitLabel.trim();
-  if (!raw) return "";
-
-  const key = raw.toLocaleLowerCase("pt-BR");
-  const irregularMap: Record<string, { singular: string; plural: string }> = {
-    ponto: { singular: "ponto", plural: "pontos" },
-    pontos: { singular: "ponto", plural: "pontos" },
-    unidade: { singular: "unidade", plural: "unidades" },
-    unidades: { singular: "unidade", plural: "unidades" },
-    endereco: { singular: "endereço", plural: "endereços" },
-    enderecos: { singular: "endereço", plural: "endereços" },
-    "endereço": { singular: "endereço", plural: "endereços" },
-    "endereços": { singular: "endereço", plural: "endereços" },
-    loja: { singular: "loja", plural: "lojas" },
-    lojas: { singular: "loja", plural: "lojas" },
-    sku: { singular: "sku", plural: "skus" },
-    skus: { singular: "sku", plural: "skus" },
-    nfd: { singular: "nfd", plural: "nfds" },
-    nfds: { singular: "nfd", plural: "nfds" },
-    volume: { singular: "volume", plural: "volumes" },
-    volumes: { singular: "volume", plural: "volumes" }
-  };
-
-  const irregular = irregularMap[key];
-  if (irregular) {
-    return isSingularValue(value) ? irregular.singular : irregular.plural;
-  }
-
-  if (isSingularValue(value)) {
-    return key.endsWith("s") ? key.slice(0, -1) : key;
-  }
-  return key.endsWith("s") ? key : `${key}s`;
-}
-
 function formatMetricWithUnit(value: number, unitLabel: string): string {
-  const metric = formatMetric(value, unitLabel);
-  const inflected = inflectUnitLabel(unitLabel, value);
-  return inflected ? `${metric} ${inflected}` : metric;
-}
-
-function pluralizeCount(value: number, singular: string, plural: string): string {
-  return `${value} ${value === 1 ? singular : plural}`;
+  return formatMetricWithInflection(value, unitLabel, formatMetric);
 }
 
 function asUnknownErrorMessage(error: unknown): string {
@@ -579,7 +535,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                           <strong>{row.activity_label}</strong>
                           <span>{formatMetricWithUnit(row.valor_total, row.unit_label)}</span>
                           <small>
-                            {pluralizeCount(row.registros_count, "registro", "registros")}
+                            {formatCountLabel(row.registros_count, "registro", "registros")}
                             {row.last_event_date ? ` | Último: ${formatDate(row.last_event_date)}` : ""}
                           </small>
                         </button>

@@ -8,6 +8,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { formatCountLabel } from "../../shared/inflection";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
   getDbBarrasByBarcode,
@@ -985,9 +986,9 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       }
       if (!silent) {
         if (result.failed > 0) {
-          setErrorMessage(`${result.failed} pendência(s) do Termo falharam na sincronização.`);
+          setErrorMessage(`${formatCountLabel(result.failed, "pendência", "pendências")} com falha na sincronização do Termo.`);
         } else if (result.processed > 0) {
-          setStatusMessage(`Sincronização concluída (${result.synced} pendência(s) processada(s)).`);
+          setStatusMessage(`Sincronização concluída (${formatCountLabel(result.synced, "pendência processada", "pendências processadas")}).`);
         } else {
           setStatusMessage("Sem pendências de conferência para sincronizar.");
         }
@@ -1058,7 +1059,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             return;
           }
           if (progress.step === "routes") {
-            setProgressMessage(`Atualizando rotas/filiais... ${progress.percent}% (${progress.rows} rota(s))`);
+            setProgressMessage(`Atualizando rotas/filiais... ${progress.percent}% (${formatCountLabel(progress.rows, "rota", "rotas")})`);
           }
         }, { includeBarras: false });
 
