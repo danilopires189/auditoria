@@ -311,7 +311,12 @@ export async function fetchManifestBundle(
     }
   }
 
-  const routes = await fetchRouteOverview(cd);
+  let routes: PedidoDiretoRouteOverviewRow[] = [];
+  try {
+    routes = await fetchRouteOverview(cd);
+  } catch {
+    routes = [];
+  }
   onProgress?.({
     step: "routes",
     rows: routes.length,
