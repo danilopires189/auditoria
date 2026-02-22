@@ -688,6 +688,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   });
   const [showZonePicker, setShowZonePicker] = useState(false);
   const [zoneSearchInput, setZoneSearchInput] = useState("");
+  const [zonePickerKeyboardInset, setZonePickerKeyboardInset] = useState(0);
+  const [zonePickerViewportHeight, setZonePickerViewportHeight] = useState<number | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -708,6 +710,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
   const pageScrollAnchorRef = useRef<HTMLElement | null>(null);
   const didNormalizeInitialScrollRef = useRef(false);
+  const zoneSearchInputRef = useRef<HTMLInputElement | null>(null);
   const scannerInputStateRef = useRef<Record<ScannerTarget, ScannerInputState>>({
     barras: createScannerInputState(),
     final_barras: createScannerInputState()
@@ -1354,6 +1357,49 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const available = new Set(adminZones.map((row) => row.zona));
     setAdminZoneDraft((current) => current.filter((zonaItem) => available.has(zonaItem)));
   }, [adminZonePickerOpen, adminZones]);
+  useEffect(() => {
+    if (!showZonePicker || typeof window === "undefined") {
+      setZonePickerKeyboardInset(0);
+      setZonePickerViewportHeight(null);
+      return;
+    }
+
+    const vv = window.visualViewport;
+    const updateViewportMetrics = () => {
+      const layoutHeight = window.innerHeight;
+      if (!vv) {
+        setZonePickerKeyboardInset(0);
+        setZonePickerViewportHeight(layoutHeight);
+        return;
+      }
+
+      const inset = Math.max(0, Math.round(layoutHeight - (vv.height + vv.offsetTop)));
+      setZonePickerKeyboardInset(inset);
+      setZonePickerViewportHeight(Math.max(280, Math.round(vv.height)));
+    };
+
+    updateViewportMetrics();
+    vv?.addEventListener("resize", updateViewportMetrics);
+    vv?.addEventListener("scroll", updateViewportMetrics);
+    window.addEventListener("orientationchange", updateViewportMetrics);
+
+    const focusTimeout = window.setTimeout(() => {
+      const input = zoneSearchInputRef.current;
+      if (!input) return;
+      try {
+        input.focus({ preventScroll: true });
+      } catch {
+        input.focus();
+      }
+    }, 120);
+
+    return () => {
+      window.clearTimeout(focusTimeout);
+      vv?.removeEventListener("resize", updateViewportMetrics);
+      vv?.removeEventListener("scroll", updateViewportMetrics);
+      window.removeEventListener("orientationchange", updateViewportMetrics);
+    };
+  }, [showZonePicker]);
   useEffect(() => {
     const popupOpen = editorOpen || reportOpen || scannerOpen || adminEntryOpen || adminOpen || adminZonePickerOpen || adminConfirm != null;
     if (popupOpen && !popupWasOpenRef.current) {
@@ -2743,6 +2789,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           ? createPortal(
             <div
               className="iz-picker-overlay"
+              style={zonePickerKeyboardInset > 0 ? { paddingBottom: `${zonePickerKeyboardInset}px` } : undefined}
               role="dialog"
               aria-modal="true"
               aria-labelledby="inventario-zonas-title"
@@ -2751,7 +2798,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 setZoneSearchInput("");
               }}
             >
-              <div className="iz-picker-sheet" onClick={(event) => event.stopPropagation()}>
+              <div
+                className="iz-picker-sheet"
+                style={zonePickerViewportHeight != null
+                  ? { maxHeight: `${Math.max(280, Math.floor(zonePickerViewportHeight * 0.88))}px` }
+                  : undefined}
+                onClick={(event) => event.stopPropagation()}
+              >
                 <div className="iz-picker-header">
                   <div>
                     <h3 id="inventario-zonas-title" className="iz-picker-title">{stageLabel(tab)}</h3>
@@ -2772,6 +2825,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <div className="iz-picker-search-wrap">
                   <span className="iz-picker-search-icon" aria-hidden="true">{searchIcon()}</span>
                   <input
+                    ref={zoneSearchInputRef}
                     type="text"
                     className="iz-picker-search-input"
                     value={zoneSearchInput}
