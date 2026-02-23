@@ -1734,6 +1734,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     if (!activeVolume) return;
     const nowIso = new Date().toISOString();
     const qtdManualDelta = Math.max(0, Math.trunc(options?.qtdManualDelta ?? 0));
+    const hasLotesOption = Object.prototype.hasOwnProperty.call(options ?? {}, "lotes");
+    const hasValidadesOption = Object.prototype.hasOwnProperty.call(options ?? {}, "validades");
     let found = false;
     const nextItems = activeVolume.items.map((item) => {
       if (item.coddv !== coddv) return item;
@@ -1743,8 +1745,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         barras: barras ?? item.barras ?? null,
         qtd_conferida: Math.max(0, Math.trunc(qtd)),
         qtd_manual_total: Math.max(0, (item.qtd_manual_total ?? 0) + qtdManualDelta),
-        lotes: options?.lotes ?? item.lotes ?? null,
-        validades: options?.validades ?? item.validades ?? null,
+        lotes: hasLotesOption ? (options?.lotes ?? null) : (item.lotes ?? null),
+        validades: hasValidadesOption ? (options?.validades ?? null) : (item.validades ?? null),
         updated_at: nowIso
       };
     });
@@ -1758,8 +1760,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         qtd_esperada: 0,
         qtd_conferida: Math.max(0, Math.trunc(qtd)),
         qtd_manual_total: qtdManualDelta,
-        lotes: options?.lotes ?? null,
-        validades: options?.validades ?? null,
+        lotes: hasLotesOption ? (options?.lotes ?? null) : null,
+        validades: hasValidadesOption ? (options?.validades ?? null) : null,
         updated_at: nowIso
       });
     }
@@ -2077,7 +2079,10 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         });
         if (isOnline) void runPendingSync(true);
       } else {
-        const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, qtd);
+        const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, qtd, undefined, {
+          lotes: nextLotes ?? "",
+          validades: nextValidades ?? ""
+        });
         const nowIso = new Date().toISOString();
         const nextItems = activeVolume.items.map((item) => (
           item.coddv === updated.coddv
@@ -2141,10 +2146,16 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         void (async () => {
           try {
             if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
-              await updateItemQtyLocal(coddv, 0);
+              await updateItemQtyLocal(coddv, 0, null, {
+                lotes: null,
+                validades: null
+              });
               if (isOnline) void runPendingSync(true);
             } else {
-              const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, 0, 0);
+              const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, 0, 0, {
+                lotes: "",
+                validades: ""
+              });
               const nowIso = new Date().toISOString();
               const nextItems = activeVolume.items.map((row) => (
                 row.coddv === updated.coddv

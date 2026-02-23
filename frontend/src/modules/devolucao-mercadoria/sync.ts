@@ -206,8 +206,8 @@ function mapItem(raw: Record<string, unknown>): DevolucaoMercadoriaItemRow {
     qtd_falta: parseInteger(raw.qtd_falta),
     qtd_sobra: parseInteger(raw.qtd_sobra),
     divergencia_tipo,
-    lotes: null,
-    validades: null,
+    lotes: parseNullableString(raw.lotes),
+    validades: parseNullableString(raw.validades),
     updated_at: String(raw.updated_at ?? new Date().toISOString())
   };
 }
@@ -408,15 +408,26 @@ export async function setItemQtd(
   confId: string,
   coddv: number,
   qtdConferida: number,
-  qtdManualTotal?: number
+  qtdManualTotal?: number,
+  options?: {
+    lotes?: string | null;
+    validades?: string | null;
+  }
 ): Promise<DevolucaoMercadoriaItemRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_devolucao_set_item_qtd", {
+  const payload: Record<string, unknown> = {
     p_conf_id: confId,
     p_coddv: coddv,
     p_qtd_conferida: Math.max(0, Math.trunc(qtdConferida)),
     p_qtd_manual_total: typeof qtdManualTotal === "number" ? Math.max(0, Math.trunc(qtdManualTotal)) : null
-  });
+  };
+  if (options && Object.prototype.hasOwnProperty.call(options, "lotes")) {
+    payload.p_lotes = options.lotes;
+  }
+  if (options && Object.prototype.hasOwnProperty.call(options, "validades")) {
+    payload.p_validades = options.validades;
+  }
+  const { data, error } = await supabase.rpc("rpc_conf_devolucao_set_item_qtd", payload);
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) throw new Error("Falha ao salvar quantidade.");
@@ -437,14 +448,23 @@ export async function resetItem(confId: string, coddv: number): Promise<Devoluca
 
 export async function syncSnapshot(
   confId: string,
-  items: Array<{ coddv: number; qtd_conferida: number; qtd_manual_total?: number; barras?: string | null }>
+  items: Array<{
+    coddv: number;
+    qtd_conferida: number;
+    qtd_manual_total?: number;
+    barras?: string | null;
+    lotes?: string | null;
+    validades?: string | null;
+  }>
 ): Promise<void> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const payload = items.map((item) => ({
     coddv: item.coddv,
     qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
     qtd_manual_total: Math.max(0, Math.trunc(item.qtd_manual_total ?? 0)),
-    barras: item.barras ? normalizeBarcode(item.barras) : null
+    barras: item.barras ? normalizeBarcode(item.barras) : null,
+    lotes: Object.prototype.hasOwnProperty.call(item, "lotes") ? (item.lotes ?? null) : undefined,
+    validades: Object.prototype.hasOwnProperty.call(item, "validades") ? (item.validades ?? null) : undefined
   }));
 
   const { error } = await supabase.rpc("rpc_conf_devolucao_sync_snapshot", {
@@ -557,7 +577,9 @@ export async function syncPendingDevolucaoMercadoriaVolumes(userId: string): Pro
             coddv: item.coddv,
             qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
             qtd_manual_total: Math.max(0, Math.trunc(item.qtd_manual_total ?? 0)),
-            barras: item.barras ?? null
+            barras: item.barras ?? null,
+            lotes: item.lotes ?? null,
+            validades: item.validades ?? null
           }))
         );
         row.pending_snapshot = false;
