@@ -177,8 +177,8 @@ tables:
 
   db_log_end:
     file: "convertido/DB_LOG_END.csv"
-    mode: "upsert"
-    unique_keys: ["cd", "coddv", "endereco", "exclusao"]
+    mode: "insert_new"
+    unique_keys: []
     required_columns: ["cd", "coddv", "endereco"]
     refresh_before_load: false
     types:
