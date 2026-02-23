@@ -6288,12 +6288,6 @@ small {
   word-break: break-word;
 }
 
-.pvps-audit-inline-address {
-  font-size: 1.18rem;
-  font-weight: 800;
-  color: #0f2f62;
-}
-
 .pvps-popup-card>h3 {
   font-size: 1.1rem;
   margin-bottom: 2px;
