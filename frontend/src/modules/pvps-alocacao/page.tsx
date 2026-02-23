@@ -539,7 +539,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [alocEndSit, setAlocEndSit] = useState<PvpsEndSit | "">("");
   const [alocValConf, setAlocValConf] = useState("");
   const [alocResult, setAlocResult] = useState<AlocacaoSubmitResult | null>(null);
-  const [alocFeedback, setAlocFeedback] = useState<{ tone: PulFeedbackTone; text: string; queueId: string; zone: string | null } | null>(null);
   const [showSepOccurrence, setShowSepOccurrence] = useState(false);
   const [showPulOccurrence, setShowPulOccurrence] = useState(false);
   const [showAlocOccurrence, setShowAlocOccurrence] = useState(false);
@@ -1563,8 +1562,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openAlocPopup(row: AlocacaoManifestRow): void {
-    setAlocFeedback(null);
     setEditingAlocCompleted(null);
+    setShowAlocOccurrence(false);
     setActiveAlocQueue(row.queue_id);
     setAlocEndSit("");
     setAlocValConf("");
@@ -1666,7 +1665,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openAlocCompletedEdit(row: AlocacaoCompletedRow): void {
     if (!canEditAudit(row.auditor_id)) return;
-    setAlocFeedback(null);
+    setShowAlocOccurrence(false);
     setEditingAlocCompleted(row);
     setAlocEndSit(row.end_sit ?? "");
     setAlocValConf(row.val_conf?.replace("/", "") ?? "");
@@ -2046,13 +2045,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         await refreshPendingState();
         setAlocRows((current) => current.filter((row) => row.queue_id !== currentQueueId));
         const feedbackText = hasOcorrencia
-          ? "Alocação com ocorrência salva offline. Use o ícone à direita para ir ao próximo."
-          : "Alocação salva offline. Use o ícone à direita para ir ao próximo.";
+          ? "Alocação com ocorrência salva offline. Avançando para o próximo."
+          : "Alocação salva offline. Avançando para o próximo.";
         setStatusMessage(feedbackText);
-        setAlocFeedback({ tone: "warn", text: feedbackText, queueId: currentQueueId, zone: currentZone });
         setAlocResult(null);
+        setShowAlocOccurrence(false);
         setAlocEndSit("");
         setAlocValConf("");
+        openNextAlocacaoFrom(currentQueueId, currentZone);
+        void loadCurrent({ silent: true });
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar alocação offline.");
       }
@@ -2077,43 +2078,32 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           val_conf: hasOcorrencia ? null : normalizedValConf
         });
       setAlocResult(result);
-      let feedbackTone: PulFeedbackTone = "warn";
       let feedbackText = "";
       if (result.aud_sit === "conforme") {
-        feedbackTone = "ok";
-        feedbackText = "Alocação auditada conforme. Use o ícone à direita para ir ao próximo.";
+        feedbackText = "Alocação auditada conforme. Avançando para o próximo.";
       } else if (result.aud_sit === "nao_conforme") {
-        feedbackTone = "bad";
-        feedbackText = "Alocação auditada não conforme. Use o ícone à direita para ir ao próximo.";
+        feedbackText = "Alocação auditada não conforme. Avançando para o próximo.";
       } else {
-        feedbackTone = "warn";
-        feedbackText = "Alocação auditada com ocorrência. Use o ícone à direita para ir ao próximo.";
+        feedbackText = "Alocação auditada com ocorrência. Avançando para o próximo.";
       }
       setStatusMessage(feedbackText);
       setEditingAlocCompleted(null);
+      setShowAlocOccurrence(false);
       setAlocEndSit("");
       setAlocValConf("");
       if (isEditingCompleted) {
-        setAlocFeedback(null);
         await loadCurrent();
         setShowAlocPopup(false);
       } else {
-        setAlocFeedback({ tone: feedbackTone, text: feedbackText, queueId: currentQueueId, zone: currentZone });
+        setAlocResult(null);
+        openNextAlocacaoFrom(currentQueueId, currentZone);
+        void loadCurrent({ silent: true });
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar auditoria de alocação.");
     } finally {
       setBusy(false);
     }
-  }
-
-  function handleAlocGoNext(): void {
-    if (!alocFeedback) return;
-    const { queueId, zone } = alocFeedback;
-    setAlocFeedback(null);
-    setAlocResult(null);
-    openNextAlocacaoFrom(queueId, zone);
-    void loadCurrent({ silent: true });
   }
 
   async function executeCreateAdminRule(draft: AdminRuleDraft, applyMode: PvpsRuleApplyMode): Promise<void> {
@@ -3006,7 +2996,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               if (busy) return;
               setEditingAlocCompleted(null);
               setAlocResult(null);
-              setAlocFeedback(null);
+              setShowAlocOccurrence(false);
               setShowAlocPopup(false);
             }}
           >
@@ -3017,66 +3007,64 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <p>Zona: <strong>{activeAloc.zona}</strong> | Andar: <strong>{formatAndar(activeAloc.nivel)}</strong></p>
               {editingAlocCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong></p> : null}
 
-              {!alocFeedback ? (
-                <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
-                  <label>
-                    Validade do Produto
-                    <div className="pvps-validity-row">
-                      <button
-                        type="button"
-                        className={`pvps-occurrence-toggle${showAlocOccurrence || alocEndSit ? " is-open" : ""}`}
-                        onClick={() => {
-                          if (!showAlocOccurrence) {
-                            setShowAlocOccurrence(true);
-                            if (!alocEndSit) { setAlocEndSit("vazio"); setAlocValConf(""); }
-                          } else {
-                            setShowAlocOccurrence(false);
-                          }
-                        }}
-                        title="Registrar ocorrência"
-                        aria-label="Registrar ocorrência"
-                      >
-                        ⚠️
-                      </button>
-                      {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
-                        <input
-                          value={alocValConf}
-                          onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                          placeholder="MMAA"
-                          maxLength={4}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          required
-                          autoFocus
-                        />
-                      ) : !showAlocOccurrence ? (
-                        <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(alocEndSit as PvpsEndSit)}</span>
-                      ) : null}
-                    </div>
-                    {showAlocOccurrence ? (
-                      <select
-                        className="pvps-occurrence-select-minimal"
-                        value={alocEndSit}
-                        aria-label="Ocorrência do endereço"
-                        onChange={(event) => {
-                          const next = event.target.value;
-                          const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                          setAlocEndSit(parsed);
-                          if (parsed) setAlocValConf("");
-                          if (!parsed) setShowAlocOccurrence(false);
-                        }}
-                      >
-                        <option value="">— sem ocorrência</option>
-                        <option value="vazio">Vazio</option>
-                        <option value="obstruido">Obstruído</option>
-                      </select>
+              <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
+                <label>
+                  Validade do Produto
+                  <div className="pvps-validity-row">
+                    <button
+                      type="button"
+                      className={`pvps-occurrence-toggle${showAlocOccurrence || alocEndSit ? " is-open" : ""}`}
+                      onClick={() => {
+                        if (!showAlocOccurrence) {
+                          setShowAlocOccurrence(true);
+                          if (!alocEndSit) { setAlocEndSit("vazio"); setAlocValConf(""); }
+                        } else {
+                          setShowAlocOccurrence(false);
+                        }
+                      }}
+                      title="Registrar ocorrência"
+                      aria-label="Registrar ocorrência"
+                    >
+                      ⚠️
+                    </button>
+                    {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
+                      <input
+                        value={alocValConf}
+                        onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                        placeholder="MMAA"
+                        maxLength={4}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        required
+                        autoFocus
+                      />
+                    ) : !showAlocOccurrence ? (
+                      <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(alocEndSit as PvpsEndSit)}</span>
                     ) : null}
-                  </label>
-                  <button className="btn btn-primary" type="submit" disabled={busy}>
-                    Salvar
-                  </button>
-                </form>
-              ) : null}
+                  </div>
+                  {showAlocOccurrence ? (
+                    <select
+                      className="pvps-occurrence-select-minimal"
+                      value={alocEndSit}
+                      aria-label="Ocorrência do endereço"
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                        setAlocEndSit(parsed);
+                        if (parsed) setAlocValConf("");
+                        if (!parsed) setShowAlocOccurrence(false);
+                      }}
+                    >
+                      <option value="">— sem ocorrência</option>
+                      <option value="vazio">Vazio</option>
+                      <option value="obstruido">Obstruído</option>
+                    </select>
+                  ) : null}
+                </label>
+                <button className="btn btn-primary" type="submit" disabled={busy}>
+                  Salvar
+                </button>
+              </form>
 
               {alocResult ? (
                 <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "warn" : "bad"}`}>
@@ -3089,25 +3077,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   )}
                 </div>
               ) : null}
-              {alocFeedback ? (
-                <div className={`pvps-pul-feedback pvps-result-chip ${alocFeedback.tone === "ok" ? "ok" : alocFeedback.tone === "bad" ? "bad" : "warn"}`}>
-                  <span>{alocFeedback.text}</span>
-                  <button
-                    className="btn btn-primary pvps-icon-btn pvps-pul-next-btn"
-                    type="button"
-                    onClick={handleAlocGoNext}
-                    title="Ir para o próximo"
-                  >
-                    {nextIcon()}
-                  </button>
-                </div>
-              ) : null}
-
               <div className="confirm-actions">
                 <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
                   setEditingAlocCompleted(null);
                   setAlocResult(null);
-                  setAlocFeedback(null);
+                  setShowAlocOccurrence(false);
                   setShowAlocPopup(false);
                 }}>
                   Fechar
