@@ -2833,7 +2833,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     ? "PVPS - Pulmão"
                     : "PVPS - Separação"}
               </h3>
-              <p><strong>{activePvpsEnderecoAuditado}</strong></p>
+              <p className="pvps-audit-address"><strong>{activePvpsEnderecoAuditado}</strong></p>
               <p>{activePvps.coddv} - {activePvps.descricao}</p>
               <p>Zona: <strong>{activePvpsZonaAuditada}</strong></p>
               {editingPvpsCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong></p> : null}
@@ -2907,7 +2907,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {activePulItem ? (
                     <div className="pvps-pul-row">
                       <div>
-                        <strong>{activePulItem.end_pul}</strong>
+                        <strong className="pvps-audit-inline-address">{activePulItem.end_pul}</strong>
                         <small>{activePulItem.auditado ? "Auditado" : "Pendente"}</small>
                       </div>
                       <label>
@@ -3018,7 +3018,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           >
             <div className="confirm-dialog surface-enter pvps-popup-card" style={editorPopupCardStyle} onClick={(event) => event.stopPropagation()}>
               <h3 id="aloc-inform-title">{editingAlocCompleted ? "Alocação - Edição concluída" : "Alocação"}</h3>
-              <p><strong>{activeAloc.endereco}</strong></p>
+              <p className="pvps-audit-address"><strong>{activeAloc.endereco}</strong></p>
               <p>{activeAloc.coddv} - {activeAloc.descricao}</p>
               <p>Zona: <strong>{activeAloc.zona}</strong> | Andar: <strong>{formatAndar(activeAloc.nivel)}</strong></p>
               {editingAlocCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong></p> : null}

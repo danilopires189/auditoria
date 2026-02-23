@@ -6270,6 +6270,30 @@ small {
   font-size: 0.95rem;
 }
 
+.pvps-audit-address {
+  margin: 2px 0 6px;
+  border: 1px solid #bfd3f2;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #f4f8ff 0%, #ebf2ff 100%);
+}
+
+.pvps-audit-address strong {
+  display: block;
+  font-size: 1.68rem;
+  line-height: 1.15;
+  font-weight: 800;
+  color: #0f2f62;
+  letter-spacing: 0.01em;
+  word-break: break-word;
+}
+
+.pvps-audit-inline-address {
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: #0f2f62;
+}
+
 .pvps-popup-card>h3 {
   font-size: 1.1rem;
   margin-bottom: 2px;
@@ -6607,9 +6631,21 @@ small {
 }
 
 .pvps-row.is-active {
-  border-color: #a3c0e8;
-  box-shadow: 0 2px 12px rgba(47, 95, 170, 0.12), inset 0 0 0 1px rgba(47, 95, 170, 0.08);
-  background: linear-gradient(180deg, #f5f9ff 0%, #eef4fd 100%);
+  border-color: #4c7fc5;
+  box-shadow: 0 4px 18px rgba(47, 95, 170, 0.2), inset 0 0 0 2px rgba(47, 95, 170, 0.2);
+  background: linear-gradient(180deg, #eff5ff 0%, #e4eefc 100%);
+}
+
+.pvps-row.is-active .pvps-row-main strong {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0b2d62;
+  letter-spacing: 0.01em;
+}
+
+.pvps-row.is-active .pvps-row-main span {
+  color: #1f416f;
+  font-weight: 600;
 }
 
 .pvps-row-head {
@@ -6946,6 +6982,14 @@ small {
 
   .pvps-row {
     padding: 14px 14px;
+  }
+
+  .pvps-row.is-active .pvps-row-main strong {
+    font-size: 1.15rem;
+  }
+
+  .pvps-audit-address strong {
+    font-size: 1.46rem;
   }
 
   .pvps-row-head {
