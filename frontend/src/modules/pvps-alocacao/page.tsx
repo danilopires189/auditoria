@@ -94,6 +94,7 @@ type PvpsFeedItem =
     zone: string;
     endereco: string;
     endPul: string;
+    nivel: string | null;
   };
 
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
@@ -1191,7 +1192,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           row,
           zone: zoneFromEndereco(item.end_pul),
           endereco: item.end_pul,
-          endPul: item.end_pul
+          endPul: item.end_pul,
+          nivel: item.nivel
         });
       }
     }
@@ -2597,7 +2599,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong>{item.endereco}</strong>
                             <span>{row.coddv} - {row.descricao}</span>
-                            {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
+                            {item.kind === "pul" ? <small>Pulmão pendente | Andar {formatAndar(item.nivel)}</small> : null}
                           </div>
                           <div className="pvps-row-actions">
                             <button
@@ -2624,6 +2626,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             {item.kind === "pul" ? (
                               <>
                                 <small>Endereço separação: {row.end_sep}</small>
+                                <small>Andar Pulmão: {formatAndar(item.nivel)}</small>
                                 <small>Validade separação: {row.val_sep ?? "-"}</small>
                               </>
                             ) : (
@@ -2934,6 +2937,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   <p>Endereço separação: <strong>{activePvps.end_sep}</strong></p>
                   <p>Validade Separação: <strong>{activePvps.val_sep ?? "-"}</strong></p>
                   {activePvps.end_sit ? <p>Ocorrência linha: <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong></p> : null}
+                  {activePulItem ? <p>Andar Pulmão: <strong>{formatAndar(activePulItem.nivel)}</strong></p> : null}
                   {pulBusy ? <p>Carregando endereços de Pulmão...</p> : null}
                   {!pulBusy && !activePulItem ? <p>Endereço de Pulmão não encontrado no feed atual.</p> : null}
                   {activePulItem ? (

@@ -27,6 +27,7 @@ export interface PvpsManifestRow {
 
 export interface PvpsPulItemRow {
   end_pul: string;
+  nivel: string | null;
   val_pul: string | null;
   end_sit: PvpsEndSit | null;
   auditado: boolean;
