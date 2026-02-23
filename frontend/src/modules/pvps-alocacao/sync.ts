@@ -123,6 +123,7 @@ function mapPvpsManifest(raw: Record<string, unknown>): PvpsManifestRow {
 function mapPvpsPul(raw: Record<string, unknown>): PvpsPulItemRow {
   return {
     end_pul: parseString(raw.end_pul).toUpperCase(),
+    nivel: parseNullableString(raw.nivel),
     val_pul: parseNullableString(raw.val_pul),
     end_sit: parseEndSit(raw.end_sit),
     auditado: parseBoolean(raw.auditado)
