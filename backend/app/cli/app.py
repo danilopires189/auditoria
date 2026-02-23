@@ -14,8 +14,16 @@ cli = typer.Typer(add_completion=False, no_args_is_help=True)
 
 def _exit_with_error(exc: Exception) -> None:
     logger = get_logger()
+    message = str(exc)
+    # Lock contention is expected when another sync is already running;
+    # keep the output concise and return a dedicated exit code.
+    if "advisory lock in use" in message:
+        logger.warning("command failed: {}", message)
+        typer.echo(f"INFO: {message}")
+        raise typer.Exit(code=2)
+
     logger.exception("command failed")
-    typer.echo(f"ERROR: {exc}")
+    typer.echo(f"ERROR: {message}")
     raise typer.Exit(code=1)
 
 
