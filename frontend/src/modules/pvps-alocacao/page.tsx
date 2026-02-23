@@ -100,7 +100,7 @@ const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 const FEED_ACTIVE_CODDV_LIMIT = 50;
 const FEED_NEXT_PREVIEW_LIMIT = 5;
 const ADMIN_HISTORY_VIEW_LIMIT = 20;
-const NEXT_POPUP_SWAP_DELAY_MS = 120;
+const NEXT_POPUP_SWAP_DELAY_MS = 180;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
 function toDisplayName(value: string): string {
