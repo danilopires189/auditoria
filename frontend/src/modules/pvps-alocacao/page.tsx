@@ -568,6 +568,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [historyRuleRows, setHistoryRuleRows] = useState<PvpsAdminRuleHistoryRow[]>([]);
   const [showPvpsPopup, setShowPvpsPopup] = useState(false);
   const [showAlocPopup, setShowAlocPopup] = useState(false);
+  const [pvpsPopupMotion, setPvpsPopupMotion] = useState<"default" | "next">("default");
+  const [alocPopupMotion, setAlocPopupMotion] = useState<"default" | "next">("default");
   const [editorPopupKeyboardInset, setEditorPopupKeyboardInset] = useState(0);
   const [editorPopupViewportHeight, setEditorPopupViewportHeight] = useState<number | null>(null);
   const [expandedPvps, setExpandedPvps] = useState<Record<string, boolean>>({});
@@ -762,7 +764,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         }
         if (!localData.alocRows.some((row) => row.queue_id === activeAlocQueue)) {
           setActiveAlocQueue(localData.alocRows[0]?.queue_id ?? null);
-          if (!localData.alocRows[0]) setShowAlocPopup(false);
+          if (!localData.alocRows[0]) {
+            setAlocPopupMotion("default");
+            setShowAlocPopup(false);
+          }
         }
         return;
       }
@@ -787,7 +792,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setAlocCompletedRows(completed);
         if (!rows.some((row) => row.queue_id === activeAlocQueue)) {
           setActiveAlocQueue(rows[0]?.queue_id ?? null);
-          if (!rows[0]) setShowAlocPopup(false);
+          if (!rows[0]) {
+            setAlocPopupMotion("default");
+            setShowAlocPopup(false);
+          }
         }
       }
     } catch (error) {
@@ -1536,7 +1544,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }));
   }, [tab, pvpsQueueProducts, pvpsEligibleCoddv, alocQueueProducts, alocEligibleCoddv]);
 
-  async function openPvpsPopup(row: PvpsManifestRow): Promise<void> {
+  async function openPvpsPopup(row: PvpsManifestRow, options?: { motion?: "default" | "next" }): Promise<void> {
+    const motion = options?.motion ?? "default";
+    setPvpsPopupMotion(motion);
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
@@ -1555,7 +1565,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const pendingPulItems = (pulItemsByRow ?? []).filter((item) => !item.auditado);
       const firstPendingPul = pendingPulItems[0];
       if (firstPendingPul) {
-        openPvpsPulPopup(row, firstPendingPul.end_pul);
+        openPvpsPulPopup(row, firstPendingPul.end_pul, { motion });
         return;
       }
     }
@@ -1566,7 +1576,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setShowPvpsPopup(true);
   }
 
-  function openPvpsPulPopup(row: PvpsManifestRow, endPul: string): void {
+  function openPvpsPulPopup(row: PvpsManifestRow, endPul: string, options?: { motion?: "default" | "next" }): void {
+    setPvpsPopupMotion(options?.motion ?? "default");
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
@@ -1578,6 +1589,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openAlocPopup(row: AlocacaoManifestRow): void {
+    setAlocPopupMotion("default");
     setEditingAlocCompleted(null);
     setShowAlocOccurrence(false);
     setActiveAlocQueue(row.queue_id);
@@ -1588,6 +1600,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function closePvpsPopup(): void {
+    setPvpsPopupMotion("default");
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
@@ -1639,6 +1652,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openPvpsCompletedEdit(row: PvpsCompletedRow): void {
     if (!canEditAudit(row.auditor_id)) return;
+    setPvpsPopupMotion("default");
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
     setEditingPvpsCompleted(row);
@@ -1681,6 +1695,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openAlocCompletedEdit(row: AlocacaoCompletedRow): void {
     if (!canEditAudit(row.auditor_id)) return;
+    setAlocPopupMotion("default");
     setShowAlocOccurrence(false);
     setEditingAlocCompleted(row);
     setAlocEndSit(row.end_sit ?? "");
@@ -1716,10 +1731,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       return;
     }
     if (next.kind === "pul") {
-      openPvpsPulPopup(next.row, next.endPul);
+      openPvpsPulPopup(next.row, next.endPul, { motion: "next" });
       return;
     }
-    void openPvpsPopup(next.row);
+    void openPvpsPopup(next.row, { motion: "next" });
   }
 
   function openNextPvpsSepFrom(currentFeedKey: string): void {
@@ -1734,6 +1749,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       closePvpsPopup();
       return;
     }
+    setPvpsPopupMotion("next");
     setEditingPvpsCompleted(null);
     setShowSepOccurrence(false);
     setActivePvpsMode("sep");
@@ -1751,10 +1767,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (targetZone) {
       next = visibleAlocRows.find((row, rowIndex) => rowIndex >= startAt && row.zona === targetZone);
     }
+    if (!next) {
+      next = visibleAlocRows.find((_, rowIndex) => rowIndex >= startAt);
+    }
+    if (!next && index < 0) {
+      next = visibleAlocRows[0];
+    }
     if (next) {
+      setAlocPopupMotion("next");
       setActiveAlocQueue(next.queue_id);
       setShowAlocPopup(true);
     } else {
+      setAlocPopupMotion("default");
       setShowAlocPopup(false);
     }
   }
@@ -2109,6 +2133,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setAlocValConf("");
       if (isEditingCompleted) {
         await loadCurrent();
+        setAlocPopupMotion("default");
         setShowAlocPopup(false);
       } else {
         setAlocResult(null);
@@ -2825,7 +2850,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               closePvpsPopup();
             }}
           >
-            <div className="confirm-dialog surface-enter pvps-popup-card" style={editorPopupCardStyle} onClick={(event) => event.stopPropagation()}>
+            <div
+              key={`pvps:${activePvpsMode}:${activePvpsKey ?? "none"}:${activePulEnd ?? "none"}`}
+              className={`confirm-dialog surface-enter pvps-popup-card${pvpsPopupMotion === "next" ? " pvps-popup-card-next" : ""}`}
+              style={editorPopupCardStyle}
+              onClick={(event) => event.stopPropagation()}
+            >
               <h3 id="pvps-inform-title">
                 {editingPvpsCompleted
                   ? "PVPS - Edição concluída"
@@ -3012,10 +3042,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               setEditingAlocCompleted(null);
               setAlocResult(null);
               setShowAlocOccurrence(false);
+              setAlocPopupMotion("default");
               setShowAlocPopup(false);
             }}
           >
-            <div className="confirm-dialog surface-enter pvps-popup-card" style={editorPopupCardStyle} onClick={(event) => event.stopPropagation()}>
+            <div
+              key={`aloc:${activeAlocQueue ?? "none"}`}
+              className={`confirm-dialog surface-enter pvps-popup-card${alocPopupMotion === "next" ? " pvps-popup-card-next" : ""}`}
+              style={editorPopupCardStyle}
+              onClick={(event) => event.stopPropagation()}
+            >
               <h3 id="aloc-inform-title">{editingAlocCompleted ? "Alocação - Edição concluída" : "Alocação"}</h3>
               <p className="pvps-audit-address"><strong>{activeAloc.endereco}</strong></p>
               <p>{activeAloc.coddv} - {activeAloc.descricao}</p>
@@ -3097,6 +3133,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   setEditingAlocCompleted(null);
                   setAlocResult(null);
                   setShowAlocOccurrence(false);
+                  setAlocPopupMotion("default");
                   setShowAlocPopup(false);
                 }}>
                   Fechar
