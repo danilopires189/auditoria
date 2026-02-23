@@ -3950,7 +3950,8 @@ small {
 
   .surface-enter,
   .panel-enter,
-  .termo-scan-feedback {
+  .termo-scan-feedback,
+  .inventario-popup-card-next {
     animation: none;
   }
 }
@@ -5157,6 +5158,23 @@ small {
   stroke-linejoin: round;
 }
 
+@keyframes inventario-popup-next {
+  from {
+    opacity: 0.7;
+    transform: translate3d(62%, 0, 0) scale(0.986);
+  }
+
+  74% {
+    opacity: 1;
+    transform: translate3d(-2%, 0, 0) scale(1.002);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 .inventario-popup-overlay {
   position: fixed;
   inset: 0;
@@ -5189,6 +5207,13 @@ small {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.inventario-popup-card-next {
+  animation: inventario-popup-next 560ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .inventario-editor-popup-card {

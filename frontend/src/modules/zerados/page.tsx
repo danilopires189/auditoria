@@ -705,6 +705,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [zonePickerKeyboardInset, setZonePickerKeyboardInset] = useState(0);
   const [zonePickerViewportHeight, setZonePickerViewportHeight] = useState<number | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorPopupMotion, setEditorPopupMotion] = useState<"default" | "next">("default");
   const [reportOpen, setReportOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
@@ -778,6 +779,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const closeEditorPopup = useCallback(() => {
     disableBarcodeSoftKeyboard();
+    setEditorPopupMotion("default");
     setPopupErr(null);
     setCountEditMode(true);
     setValidatedBarras(null);
@@ -1910,6 +1912,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   }, [isDesktop]);
 
   const openAddressEditor = useCallback((bucket: AddressBucketView) => {
+    setEditorPopupMotion("default");
     setSelectedAddress(bucket.key);
     setSelectedItem(bucket.items[0]?.key ?? null);
     setEditorOpen(true);
@@ -1932,6 +1935,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const itemPosition = addressNavigation.itemPositionByKey.get(itemKey);
     const itemIndex = itemPosition?.addressIndex === addressIndex ? itemPosition.itemIndex : -1;
     if (itemIndex >= 0 && itemIndex + 1 < sameAddressItems.length) {
+      setEditorPopupMotion("next");
       setSelectedAddress(addressKey);
       setSelectedItem(sameAddressItems[itemIndex + 1].key);
       setEditorOpen(true);
@@ -1941,6 +1945,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     for (let index = addressIndex + 1; index < addressBuckets.length; index += 1) {
       const nextBucket = addressBuckets[index];
       if (!nextBucket.items.length) continue;
+      setEditorPopupMotion("next");
       setSelectedAddress(nextBucket.key);
       setSelectedItem(nextBucket.items[0].key);
       setEditorOpen(true);
@@ -3111,7 +3116,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               onClick={closeEditorPopup}
             >
               <div
-                className={`inventario-popup-card${tab === "conciliation" ? " inventario-editor-popup-card" : ""}`}
+                key={`iz-editor:${tab}:${active.key}`}
+                className={`inventario-popup-card${tab === "conciliation" ? " inventario-editor-popup-card" : ""}${editorPopupMotion === "next" ? " inventario-popup-card-next" : ""}`}
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="inventario-popup-head">
