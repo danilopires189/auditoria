@@ -1801,8 +1801,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (!next) {
       next = visibleAlocRows.find((_, rowIndex) => rowIndex >= startAt);
     }
-    if (!next && index < 0) {
-      next = visibleAlocRows[0];
+    // Se chegou ao fim da lista, volta para o primeiro pendente disponível.
+    if (!next) {
+      next = visibleAlocRows.find((row) => row.queue_id !== currentQueueId);
     }
     if (next) {
       if (alocNextSwapTimerRef.current != null) {
