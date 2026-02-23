@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.audit.writer import AuditWriter
@@ -290,6 +291,8 @@ class SyncService:
 
         status = "success"
         errors: list[str] = []
+        inventory_seed_source_tables = {"db_end", "db_estq_entr"}
+        inventory_seed_tables_synced: set[str] = set()
 
         from app.connectors.db import advisory_lock
 
@@ -339,6 +342,8 @@ class SyncService:
                                 counters.rows_in = rows_loaded
                                 counters.rows_out = rows_promoted
                                 counters.rows_rejected = rejected_rows
+                                if table_name in inventory_seed_source_tables:
+                                    inventory_seed_tables_synced.add(table_name)
 
                             with self.audit.step(run_id, "cleanup", table_name) as counters:
                                 clear_staging_for_run(self.engine, table_name, run_id)
@@ -360,6 +365,40 @@ class SyncService:
                             raise
                         status = "partial"
                         continue
+
+                if (
+                    not (dry_run or validate_only)
+                    and inventory_seed_tables_synced
+                ):
+                    with self.audit.step(run_id, "cleanup", "conf_inventario_refresh_pending_from_seed_all") as counters:
+                        with self.engine.begin() as conn:
+                            function_available = bool(
+                                conn.execute(
+                                    text(
+                                        """
+                                        select to_regprocedure(
+                                            'app.conf_inventario_refresh_pending_from_seed_all(date,integer)'
+                                        ) is not null
+                                        """
+                                    )
+                                ).scalar_one()
+                            )
+
+                            refreshed_cds = 0
+                            if function_available:
+                                refreshed_cds = int(
+                                    conn.execute(
+                                        text("select app.conf_inventario_refresh_pending_from_seed_all()")
+                                    ).scalar_one()
+                                    or 0
+                                )
+
+                        counters.rows_in = len(inventory_seed_tables_synced)
+                        counters.rows_out = refreshed_cds
+                        counters.details = {
+                            "function_available": function_available,
+                            "triggered_by_tables": sorted(inventory_seed_tables_synced),
+                        }
 
             if errors and status == "success":
                 status = "partial"
