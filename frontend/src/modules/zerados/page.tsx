@@ -1508,18 +1508,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     vv?.addEventListener("scroll", updateViewportMetrics);
     window.addEventListener("orientationchange", updateViewportMetrics);
 
-    const focusTimeout = window.setTimeout(() => {
-      const input = zoneSearchInputRef.current;
-      if (!input) return;
-      try {
-        input.focus({ preventScroll: true });
-      } catch {
-        input.focus();
-      }
-    }, 120);
-
     return () => {
-      window.clearTimeout(focusTimeout);
       vv?.removeEventListener("resize", updateViewportMetrics);
       vv?.removeEventListener("scroll", updateViewportMetrics);
       window.removeEventListener("orientationchange", updateViewportMetrics);
