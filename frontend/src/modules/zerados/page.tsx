@@ -6,7 +6,8 @@ import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
   fetchDbBarrasByBarcodeOnline,
-  normalizeBarcode
+  normalizeBarcode,
+  refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
 import type { DbBarrasCacheRow } from "../../shared/db-barras/types";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
@@ -654,6 +655,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const lockRef = useRef<InventarioLockAcquireResponse | null>(null);
 
   const [busy, setBusy] = useState(false);
+  const [busyOfflineBase, setBusyOfflineBase] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [popupErr, setPopupErr] = useState<string | null>(null);
@@ -721,6 +723,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const barcodeLookupInFlightRef = useRef<Map<string, Promise<DbBarrasCacheRow | null>>>(new Map());
   const backgroundPullTimerRef = useRef<number | null>(null);
   const backgroundPullRunningRef = useRef(false);
+  const offlineBaseAutoSyncKeyRef = useRef<string>("");
   const barrasValueRef = useRef("");
   const finalBarrasValueRef = useRef("");
   const popupWasOpenRef = useRef(false);
@@ -1276,6 +1279,61 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     await executeAdminClearAll();
   }, [adminConfirm, executeAdminApplyCoddv, executeAdminApplyZona, executeAdminClearAll]);
 
+  const prepareOfflineBase = useCallback(async (background = false) => {
+    if (cd == null) {
+      setErr("Selecione um CD antes de trabalhar offline.");
+      return;
+    }
+
+    setBusyOfflineBase(true);
+    if (!background) {
+      setErr(null);
+      setMsg(null);
+    }
+
+    try {
+      const [localMeta, localBarrasMeta] = await Promise.all([
+        getManifestMetaLocal(profile.user_id, cd),
+        getDbBarrasMeta()
+      ]);
+
+      if (!isOnline) {
+        if (!localMeta || localMeta.row_count <= 0) {
+          throw new Error("Sem base local do inventário. Conecte-se e sincronize antes de usar offline.");
+        }
+        if (localBarrasMeta.row_count <= 0) {
+          throw new Error("Sem base local de barras. Conecte-se e ative o modo offline para sincronizar.");
+        }
+        setDbBarrasCount(localBarrasMeta.row_count);
+        if (!background) {
+          setMsg("Offline ativo com bases locais já disponíveis.");
+        }
+        return;
+      }
+
+      setMsg("Atualizando base do inventário...");
+      await syncNow(true);
+
+      const barrasSync = await refreshDbBarrasCacheSmart((progress) => {
+        const percent = Math.max(0, Math.min(100, progress.percent));
+        if (progress.totalRows > 0) {
+          setMsg(`Atualizando base de barras... ${percent}% (${progress.rowsFetched}/${progress.totalRows})`);
+          return;
+        }
+        setMsg(`Atualizando base de barras... ${percent}%`);
+      });
+
+      const barrasMetaAfterSync = await getDbBarrasMeta();
+      const barrasTotal = barrasMetaAfterSync.row_count || barrasSync.total;
+      setDbBarrasCount(barrasTotal);
+      setMsg("Offline ativo. Bases do inventário e de barras atualizadas neste dispositivo.");
+    } catch (error) {
+      setErr(parseErr(error));
+    } finally {
+      setBusyOfflineBase(false);
+    }
+  }, [cd, isOnline, profile.user_id, syncNow]);
+
   const scheduleBackgroundPull = useCallback(() => {
     if (typeof window === "undefined") {
       void pull().catch(() => { });
@@ -1362,6 +1420,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     barcodeLookupInFlightRef.current.clear();
   }, [cd, dbBarrasCount]);
   useEffect(() => { if (cd != null) { void loadLocal(); void refreshPending(); void getDbBarrasMeta().then((m) => setDbBarrasCount(m.row_count)); if (isOnline) void syncNow(false); } }, [cd, isOnline, loadLocal, refreshPending, syncNow]);
+  useEffect(() => {
+    if (!preferOffline || !isOnline || cd == null) return;
+    const key = `${cd}|${preferOffline ? "1" : "0"}|${isOnline ? "1" : "0"}`;
+    if (offlineBaseAutoSyncKeyRef.current === key) return;
+    offlineBaseAutoSyncKeyRef.current = key;
+    void prepareOfflineBase(true);
+  }, [cd, isOnline, preferOffline, prepareOfflineBase]);
   useEffect(() => { if (!isOnline || cd == null) return; const id = window.setInterval(() => { void syncNow(false); }, 30000); return () => window.clearInterval(id); }, [cd, isOnline, syncNow]);
   useEffect(() => {
     const onResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -1776,6 +1841,22 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const showTopContextBlocks = canShowStageSelector;
   const isAdminZonaFlow = adminManageMode === "zona";
   const isAdminCoddvFlow = adminManageMode === "coddv";
+  const handleToggleOffline = useCallback(() => {
+    const nextMode = !preferOffline;
+    setPreferOffline(nextMode);
+    setErr(null);
+    if (nextMode) {
+      if (isOnline) {
+        setMsg("Offline ativado. Atualizando bases em segundo plano...");
+        void prepareOfflineBase(true);
+      } else {
+        void prepareOfflineBase(false);
+      }
+      return;
+    }
+    offlineBaseAutoSyncKeyRef.current = "";
+    setMsg("Modo online ativado.");
+  }, [isOnline, preferOffline, prepareOfflineBase]);
 
   const handleTabChange = useCallback((nextTab: InventarioStageView) => {
     setTab(nextTab);
@@ -1968,7 +2049,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
     const lookupPromise = (async () => {
       let found = await getDbBarrasByBarcode(normalized);
-      if (!found && isOnline) {
+      if (!found && isOnline && !preferOffline) {
         const online = await fetchDbBarrasByBarcodeOnline(normalized);
         if (online) {
           await upsertDbBarrasCacheRow(online);
@@ -1983,7 +2064,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
     barcodeLookupInFlightRef.current.set(normalized, lookupPromise);
     return lookupPromise;
-  }, [isOnline]);
+  }, [isOnline, preferOffline]);
 
   const validateBarras = useCallback(async (coddv: number, value: string): Promise<string> => {
     const normalized = normalizeBarcode(value);
@@ -2673,9 +2754,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               <button
                 className={`btn btn-muted termo-offline-toggle${preferOffline ? " is-active" : ""}`}
                 type="button"
-                onClick={() => setPreferOffline((v) => !v)}
+                onClick={handleToggleOffline}
+                disabled={busyOfflineBase}
               >
-                {preferOffline ? "📦 Offline ativo" : "📶 Trabalhar offline"}
+                {busyOfflineBase ? "Atualizando base..." : preferOffline ? "📦 Offline ativo" : "📶 Trabalhar offline"}
               </button>
             </div>
           </>

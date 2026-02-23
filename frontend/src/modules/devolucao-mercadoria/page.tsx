@@ -1324,7 +1324,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       setManifestVolumeRows(nextManifestVolumes);
 
       let barrasTotal = localBarrasMeta.row_count;
-      if (forceRefresh || localBarrasMeta.row_count <= 0) {
+      if (isOnline && (forceRefresh || background || localBarrasMeta.row_count <= 0)) {
         const barrasSync = await refreshDbBarrasCacheSmart((progress) => {
           if (progress.totalRows > 0) {
             setProgressMessage(
@@ -1370,7 +1370,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   }, [focusBarras, refreshPendingState]);
 
   const resumeRemoteActiveVolume = useCallback(async (silent = false): Promise<DevolucaoMercadoriaLocalVolume | null> => {
-    if (!isOnline) return null;
+    if (preferOfflineMode || !isOnline) return null;
 
     const remoteActive = await fetchActiveVolume();
     if (!remoteActive || remoteActive.status !== "em_conferencia") return null;
@@ -1751,7 +1751,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     } catch {
       return null;
     }
-  }, [isOnline]);
+  }, [isOnline, preferOfflineMode]);
 
   const clearConferenceScreen = useCallback(() => {
     setShowFinalizeModal(false);

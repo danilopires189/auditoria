@@ -921,12 +921,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
         return;
       }
 
-      if (dbBarrasCount > 0) {
-        setStatusMessage("Modo offline ativado com base local existente.");
-        return;
-      }
-
-      setStatusMessage("Modo offline ativado. Sem base local ainda, usando busca online até concluir o download.");
+      setStatusMessage("Modo offline ativado. Atualizando base de barras neste dispositivo...");
       void runDbBarrasRefresh(true);
       return;
     }
@@ -1313,7 +1308,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
       // Fallback online quando necessário (inclusive durante carga offline em andamento).
       if (!product) {
-        if (isOnline) {
+        if (isOnline && !preferOfflineMode) {
           product = await fetchDbBarrasByBarcodeOnline(barras);
           if (product) {
             writeCachedProduct(product);
