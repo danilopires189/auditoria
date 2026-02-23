@@ -30,11 +30,9 @@ def get_table_columns(engine: Engine, schema: str, table_name: str) -> list[str]
 
 
 def clear_staging_for_run(engine: Engine, table_name: str, run_id: str) -> None:
-    with engine.begin() as conn:
-        conn.execute(
-            text(f'delete from staging."{table_name}" where run_id = :run_id'),
-            {"run_id": run_id},
-        )
+    # Kept for compatibility with current sync flow; cleanup is table-wide now.
+    _ = run_id
+    clear_staging_for_table(engine, table_name)
 
 
 def clear_staging_for_table(engine: Engine, table_name: str) -> None:
@@ -48,6 +46,9 @@ def load_dataframe_to_staging(
     frame: pd.DataFrame,
     run_id: str,
 ) -> int:
+    # Staging is transient per load cycle; always start from a clean table.
+    clear_staging_for_table(engine, table_name)
+
     if frame.empty:
         return 0
 

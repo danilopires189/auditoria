@@ -937,7 +937,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     };
     const interval = window.setInterval(() => {
       refreshSilently();
-    }, 10000);
+    }, 30000);
     const onFocus = () => { refreshSilently(); };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
