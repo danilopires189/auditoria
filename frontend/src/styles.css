@@ -6254,6 +6254,7 @@ small {
   max-height: calc(100dvh - 16px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  scroll-padding-bottom: 120px;
   gap: 10px;
   padding: 18px 16px;
   border-radius: 20px;
@@ -6938,7 +6939,7 @@ small {
   .pvps-popup-overlay {
     align-content: end;
     padding-top: max(6vh, calc(env(safe-area-inset-top, 0px) + 8px));
-    padding-bottom: 0;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
     padding-left: 4px;
     padding-right: 4px;
   }
