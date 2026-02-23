@@ -2907,7 +2907,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {activePulItem ? (
                     <div className="pvps-pul-row">
                       <div>
-                        <strong className="pvps-audit-inline-address">{activePulItem.end_pul}</strong>
                         <small>{activePulItem.auditado ? "Auditado" : "Pendente"}</small>
                       </div>
                       <label>
