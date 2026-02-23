@@ -1055,8 +1055,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       return;
     }
 
+    const activeKey = keyOfPvps(activePvps);
+
     if (!isOnline && preferOfflineMode) {
-      const cachedItems = feedPulBySepKey[keyOfPvps(activePvps)] ?? [];
+      const cachedItems = feedPulBySepKey[activeKey] ?? [];
       setPulItems(cachedItems);
       const mapped: Record<string, string> = {};
       const mappedEndSit: Record<string, PvpsEndSit | ""> = {};
@@ -1069,10 +1071,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       return;
     }
 
+    if (activeCd == null) {
+      setPulBusy(false);
+      return;
+    }
+
+    let cancelled = false;
     setPulBusy(true);
     void fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd)
       .then((items) => {
-        setFeedPulBySepKey((current) => ({ ...current, [keyOfPvps(activePvps)]: items }));
+        if (cancelled) return;
+        setFeedPulBySepKey((current) => ({ ...current, [activeKey]: items }));
         setPulItems(items);
         const mapped: Record<string, string> = {};
         const mappedEndSit: Record<string, PvpsEndSit | ""> = {};
@@ -1084,10 +1093,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setPulEndSits(mappedEndSit);
       })
       .catch((error) => {
+        if (cancelled) return;
         setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar Pulmão.");
       })
-      .finally(() => setPulBusy(false));
-  }, [activePvps, activeCd, feedPulBySepKey, isOnline, preferOfflineMode, profile.user_id]);
+      .finally(() => {
+        if (!cancelled) setPulBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePvps, activeCd, isOnline, preferOfflineMode, profile.user_id]);
 
   useEffect(() => {
     if (activePvpsMode !== "pul") return;
