@@ -1561,7 +1561,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const id = window.setTimeout(() => {
       popupBodyRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
       if (tab === "conciliation") return;
-      if (isConcludedCountFilter && !countEditMode) return;
+      if ((tab === "s1" || tab === "s2") && statusFilter === "concluido" && !countEditMode) return;
 
       const target = qtdInputRef.current;
       if (!target || target.disabled) return;
@@ -1573,7 +1573,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       target.select();
     }, 32);
     return () => window.clearTimeout(id);
-  }, [countEditMode, editorOpen, isConcludedCountFilter, selectedItem, tab]);
+  }, [countEditMode, editorOpen, selectedItem, statusFilter, tab]);
   useEffect(() => {
     if (!editorOpen && scannerOpen) {
       closeCameraScanner();
