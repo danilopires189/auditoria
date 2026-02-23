@@ -734,6 +734,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   });
   const barcodeLookupCacheRef = useRef<Map<string, DbBarrasCacheRow | false>>(new Map());
   const barcodeLookupInFlightRef = useRef<Map<string, Promise<DbBarrasCacheRow | null>>>(new Map());
+  const autoSyncDebounceTimerRef = useRef<number | null>(null);
   const backgroundPullTimerRef = useRef<number | null>(null);
   const backgroundPullRunningRef = useRef(false);
   const offlineBaseAutoSyncKeyRef = useRef<string>("");
@@ -1045,6 +1046,18 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       syncRef.current = false;
     }
   }, [cd, isOnline, manifestItems.length, profile.user_id, pull, syncPending]);
+
+  const requestAutoSync = useCallback((delayMs = 700) => {
+    if (!isOnline || cd == null) return;
+    if (autoSyncDebounceTimerRef.current != null) {
+      window.clearTimeout(autoSyncDebounceTimerRef.current);
+      autoSyncDebounceTimerRef.current = null;
+    }
+    autoSyncDebounceTimerRef.current = window.setTimeout(() => {
+      autoSyncDebounceTimerRef.current = null;
+      void syncNow(false);
+    }, delayMs);
+  }, [cd, isOnline, syncNow]);
 
   const parseAdminStock = useCallback((value: string, fallback = 0): number => {
     const parsed = Number.parseInt(String(value ?? "").replace(/\D/g, ""), 10);
@@ -1462,8 +1475,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setDbBarrasCount(m.row_count);
       setDbBarrasLastSyncAt(m.last_sync_at);
     });
-    if (isOnline) void syncNow(false);
-  }, [cd, isOnline, loadLocal, refreshPending, syncNow]);
+    if (isOnline) requestAutoSync(250);
+  }, [cd, isOnline, loadLocal, refreshPending, requestAutoSync]);
   useEffect(() => {
     if (!preferOffline || !isOnline || cd == null) return;
     const key = `${cd}|${preferOffline ? "1" : "0"}|${isOnline ? "1" : "0"}`;
@@ -1476,10 +1489,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const id = window.setInterval(() => {
       const popupOpen = editorOpen || reportOpen || scannerOpen || adminEntryOpen || adminOpen || adminZonePickerOpen || adminConfirm != null || showZonePicker;
       if (popupOpen) return;
-      void syncNow(false);
+      requestAutoSync(450);
     }, 30000);
     return () => window.clearInterval(id);
-  }, [adminConfirm, adminEntryOpen, adminOpen, adminZonePickerOpen, cd, editorOpen, isOnline, reportOpen, scannerOpen, showZonePicker, syncNow]);
+  }, [adminConfirm, adminEntryOpen, adminOpen, adminZonePickerOpen, cd, editorOpen, isOnline, reportOpen, requestAutoSync, scannerOpen, showZonePicker]);
   useEffect(() => {
     const onResize = () => setIsDesktop(window.innerWidth >= 1024);
     onResize();
@@ -2340,6 +2353,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   useEffect(() => {
     return () => {
       if (typeof window === "undefined") return;
+      if (autoSyncDebounceTimerRef.current != null) {
+        window.clearTimeout(autoSyncDebounceTimerRef.current);
+        autoSyncDebounceTimerRef.current = null;
+      }
       if (backgroundPullTimerRef.current != null) {
         window.clearTimeout(backgroundPullTimerRef.current);
         backgroundPullTimerRef.current = null;
