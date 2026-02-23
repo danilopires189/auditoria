@@ -1724,10 +1724,21 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setShowAlocPopup(true);
   }
 
-  function openNextPvpsFrom(currentFeedKey: string): void {
+  function openNextPvpsFrom(currentFeedKey: string, currentZone?: string | null): void {
     const index = pvpsFeedItems.findIndex((item) => item.feedKey === currentFeedKey);
     const startAt = index >= 0 ? index + 1 : 0;
-    const next = pvpsFeedItems.find((_, itemIndex) => itemIndex >= startAt);
+    const fallbackZone = index >= 0 ? pvpsFeedItems[index]?.zone ?? null : null;
+    const targetZone = currentZone ?? fallbackZone;
+    let next: PvpsFeedItem | undefined;
+    if (targetZone) {
+      next = pvpsFeedItems.find((item, itemIndex) => itemIndex >= startAt && item.zone === targetZone);
+    }
+    if (!next) {
+      next = pvpsFeedItems.find((_, itemIndex) => itemIndex >= startAt);
+    }
+    if (!next) {
+      next = pvpsFeedItems.find((item) => item.feedKey !== currentFeedKey);
+    }
     if (!next) {
       closePvpsPopup();
       return;
@@ -1982,7 +1993,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           : "Pulmão salvo (offline). Avançando para o próximo.";
         setPulFeedback(null);
         setStatusMessage(feedbackText);
-        openNextPvpsFrom(currentFeedKey);
+        openNextPvpsFrom(currentFeedKey, zoneFromEndereco(endPul));
         void loadCurrent({ silent: true });
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Pulmão offline.");
@@ -2032,7 +2043,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setEditingPvpsCompleted(null);
         closePvpsPopup();
       } else {
-        openNextPvpsFrom(currentFeedKey);
+        openNextPvpsFrom(currentFeedKey, zoneFromEndereco(endPul));
         void loadCurrent({ silent: true });
       }
     } catch (error) {
@@ -2626,7 +2637,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             {item.kind === "pul" ? (
                               <>
                                 <small>Endereço separação: {row.end_sep}</small>
-                                <small>Andar Pulmão: {formatAndar(item.nivel)}</small>
                                 <small>Validade separação: {row.val_sep ?? "-"}</small>
                               </>
                             ) : (
