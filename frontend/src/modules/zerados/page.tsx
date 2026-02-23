@@ -704,6 +704,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [zoneSearchInput, setZoneSearchInput] = useState("");
   const [zonePickerKeyboardInset, setZonePickerKeyboardInset] = useState(0);
   const [zonePickerViewportHeight, setZonePickerViewportHeight] = useState<number | null>(null);
+  const [editorKeyboardInset, setEditorKeyboardInset] = useState(0);
+  const [editorViewportHeight, setEditorViewportHeight] = useState<number | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorPopupMotion, setEditorPopupMotion] = useState<"default" | "next">("default");
   const [reportOpen, setReportOpen] = useState(false);
@@ -998,7 +1000,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const syncNow = useCallback(async (forceManifest = false) => {
     if (!isOnline || cd == null || syncRef.current) return;
     syncRef.current = true;
-    setBusy(true);
+    if (forceManifest) setBusy(true);
     setErr(null);
     try {
       const remoteMeta = await fetchManifestMeta(cd);
@@ -1039,7 +1041,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       }
       setErr(parseErr(error));
     } finally {
-      setBusy(false);
+      if (forceManifest) setBusy(false);
       syncRef.current = false;
     }
   }, [cd, isOnline, manifestItems.length, profile.user_id, pull, syncPending]);
@@ -1469,7 +1471,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     offlineBaseAutoSyncKeyRef.current = key;
     void prepareOfflineBase(true);
   }, [cd, isOnline, preferOffline, prepareOfflineBase]);
-  useEffect(() => { if (!isOnline || cd == null) return; const id = window.setInterval(() => { void syncNow(false); }, 30000); return () => window.clearInterval(id); }, [cd, isOnline, syncNow]);
+  useEffect(() => {
+    if (!isOnline || cd == null) return;
+    const id = window.setInterval(() => {
+      const popupOpen = editorOpen || reportOpen || scannerOpen || adminEntryOpen || adminOpen || adminZonePickerOpen || adminConfirm != null || showZonePicker;
+      if (popupOpen) return;
+      void syncNow(false);
+    }, 30000);
+    return () => window.clearInterval(id);
+  }, [adminConfirm, adminEntryOpen, adminOpen, adminZonePickerOpen, cd, editorOpen, isOnline, reportOpen, scannerOpen, showZonePicker, syncNow]);
   useEffect(() => {
     const onResize = () => setIsDesktop(window.innerWidth >= 1024);
     onResize();
@@ -1530,6 +1540,38 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       window.removeEventListener("orientationchange", updateViewportMetrics);
     };
   }, [showZonePicker]);
+  useEffect(() => {
+    if (!editorOpen || typeof window === "undefined") {
+      setEditorKeyboardInset(0);
+      setEditorViewportHeight(null);
+      return;
+    }
+
+    const vv = window.visualViewport;
+    const updateViewportMetrics = () => {
+      const layoutHeight = window.innerHeight;
+      if (!vv) {
+        setEditorKeyboardInset(0);
+        setEditorViewportHeight(layoutHeight);
+        return;
+      }
+
+      const inset = Math.max(0, Math.round(layoutHeight - (vv.height + vv.offsetTop)));
+      setEditorKeyboardInset(inset);
+      setEditorViewportHeight(Math.max(280, Math.round(vv.height)));
+    };
+
+    updateViewportMetrics();
+    vv?.addEventListener("resize", updateViewportMetrics);
+    vv?.addEventListener("scroll", updateViewportMetrics);
+    window.addEventListener("orientationchange", updateViewportMetrics);
+
+    return () => {
+      vv?.removeEventListener("resize", updateViewportMetrics);
+      vv?.removeEventListener("scroll", updateViewportMetrics);
+      window.removeEventListener("orientationchange", updateViewportMetrics);
+    };
+  }, [editorOpen]);
   useEffect(() => {
     const popupOpen = editorOpen || reportOpen || scannerOpen || adminEntryOpen || adminOpen || adminZonePickerOpen || adminConfirm != null;
     if (popupOpen && !popupWasOpenRef.current) {
@@ -3126,6 +3168,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           ? createPortal(
             <div
               className={`inventario-popup-overlay${tab === "conciliation" ? " inventario-popup-overlay-editor" : ""}`}
+              style={editorKeyboardInset > 0 ? { paddingBottom: `${editorKeyboardInset}px` } : undefined}
               role="dialog"
               aria-modal="true"
               onClick={closeEditorPopup}
@@ -3133,6 +3176,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               <div
                 key={`iz-editor:${tab}:${active.key}`}
                 className={`inventario-popup-card${tab === "conciliation" ? " inventario-editor-popup-card" : ""}${editorPopupMotion === "next" ? " inventario-popup-card-next" : ""}`}
+                style={editorViewportHeight != null
+                  ? (tab === "conciliation"
+                    ? { height: `${Math.max(280, editorViewportHeight)}px`, maxHeight: `${Math.max(280, editorViewportHeight)}px` }
+                    : { maxHeight: `${Math.max(320, Math.floor(editorViewportHeight * 0.92))}px` })
+                  : undefined}
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="inventario-popup-head">
