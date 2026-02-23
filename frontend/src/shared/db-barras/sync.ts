@@ -2,6 +2,7 @@ import { supabase } from "../../lib/supabase";
 import {
   getDbBarrasMeta,
   mergeDbBarrasCache,
+  reconcileDbBarrasCache,
   replaceDbBarrasCache,
   touchDbBarrasMeta
 } from "./storage";
@@ -36,6 +37,13 @@ function toPercent(current: number, total: number): number {
   if (total <= 0) return current > 0 ? 100 : 0;
   const ratio = Math.max(0, Math.min(1, current / total));
   return Math.round(ratio * 100);
+}
+
+function isStatementTimeout(error: unknown): boolean {
+  const message = toErrorMessage(error).toLowerCase();
+  return message.includes("statement timeout")
+    || message.includes("canceling statement due to statement timeout")
+    || message.includes("canceling statement");
 }
 
 export function normalizeBarcode(value: string): string {
@@ -132,14 +140,81 @@ export async function refreshDbBarrasCache(
   return { rows: allRows.length, pages, totalRows };
 }
 
+async function refreshDbBarrasCacheReconcile(
+  onProgress?: (progress: DbBarrasProgress) => void,
+  remoteMetaInput?: { row_count: number; updated_max: string | null } | null
+): Promise<{ rows: number; pages: number; totalRows: number; removed: number }> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const remoteMeta = remoteMetaInput ?? await fetchDbBarrasMetaRemote();
+  const totalRows = Math.max(remoteMeta.row_count, 0);
+  let offset = 0;
+  let pages = 0;
+  const allRows: DbBarrasCacheRow[] = [];
+
+  while (true) {
+    const { data, error } = await supabase.rpc("rpc_db_barras_page", {
+      p_offset: offset,
+      p_limit: DB_BARRAS_PAGE_SIZE
+    });
+
+    if (error) {
+      throw new Error(`Falha ao reconciliar base de barras: ${toErrorMessage(error)}`);
+    }
+
+    const page = Array.isArray(data) ? data : [];
+    if (page.length === 0) break;
+
+    for (const item of page) {
+      const raw = item as Record<string, unknown>;
+      const barras = normalizeBarcode(String(raw.barras ?? ""));
+      const coddv = Number.parseInt(String(raw.coddv ?? ""), 10);
+      const descricao = String(raw.descricao ?? "").trim();
+      const updatedAt = raw.updated_at == null ? null : String(raw.updated_at);
+
+      if (!barras || !Number.isFinite(coddv)) continue;
+
+      allRows.push({
+        barras,
+        coddv,
+        descricao,
+        updated_at: updatedAt
+      });
+    }
+
+    pages += 1;
+    offset += page.length;
+    onProgress?.({
+      mode: "full",
+      pagesFetched: pages,
+      rowsFetched: allRows.length,
+      totalRows,
+      percent: toPercent(allRows.length, totalRows)
+    });
+
+    if (page.length < DB_BARRAS_PAGE_SIZE) break;
+  }
+
+  const reconciled = await reconcileDbBarrasCache(allRows, remoteMeta.updated_max ?? undefined);
+  onProgress?.({
+    mode: "full",
+    pagesFetched: pages,
+    rowsFetched: allRows.length,
+    totalRows,
+    percent: 100
+  });
+  return { rows: reconciled.row_count, pages, totalRows, removed: reconciled.removed };
+}
+
 export async function refreshDbBarrasCacheSmart(
   onProgress?: (progress: DbBarrasProgress) => void
 ): Promise<{ mode: "full" | "delta"; pages: number; applied: number; total: number }> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
+  const remoteMeta = await fetchDbBarrasMetaRemote();
   const meta = await getDbBarrasMeta();
   if (meta.row_count <= 0 || !meta.last_sync_at) {
-    const result = await refreshDbBarrasCache(onProgress);
+    const result = await refreshDbBarrasCacheReconcile(onProgress, remoteMeta);
     return {
       mode: "full",
       pages: result.pages,
@@ -148,8 +223,28 @@ export async function refreshDbBarrasCacheSmart(
     };
   }
 
-  const deltaTotal = await fetchDbBarrasDeltaCount(meta.last_sync_at);
-  if (deltaTotal <= 0) {
+  const needsReconcile = remoteMeta.row_count < meta.row_count;
+  if (needsReconcile) {
+    const reconciled = await refreshDbBarrasCacheReconcile(onProgress, remoteMeta);
+    return {
+      mode: "full",
+      pages: reconciled.pages,
+      applied: reconciled.rows,
+      total: reconciled.rows
+    };
+  }
+
+  let deltaTotal: number | null = null;
+  try {
+    deltaTotal = await fetchDbBarrasDeltaCount(meta.last_sync_at);
+  } catch (error) {
+    if (!isStatementTimeout(error)) {
+      throw error;
+    }
+    deltaTotal = null;
+  }
+
+  if (deltaTotal != null && deltaTotal <= 0) {
     await touchDbBarrasMeta(new Date().toISOString());
     onProgress?.({
       mode: "delta",
@@ -179,6 +274,15 @@ export async function refreshDbBarrasCacheSmart(
     });
 
     if (error) {
+      if (isStatementTimeout(error)) {
+        const reconciled = await refreshDbBarrasCacheReconcile(onProgress, remoteMeta);
+        return {
+          mode: "full",
+          pages: reconciled.pages,
+          applied: reconciled.rows,
+          total: reconciled.rows
+        };
+      }
       throw new Error(`Falha ao atualizar base de barras: ${toErrorMessage(error)}`);
     }
 
@@ -215,8 +319,8 @@ export async function refreshDbBarrasCacheSmart(
       mode: "delta",
       pagesFetched: pages,
       rowsFetched: changedRows.length,
-      totalRows: deltaTotal,
-      percent: toPercent(changedRows.length, deltaTotal)
+      totalRows: deltaTotal ?? 0,
+      percent: deltaTotal == null ? 0 : toPercent(changedRows.length, deltaTotal)
     });
 
     if (page.length < DB_BARRAS_PAGE_SIZE) break;
@@ -237,7 +341,7 @@ export async function refreshDbBarrasCacheSmart(
     mode: "delta",
     pagesFetched: pages,
     rowsFetched: 0,
-    totalRows: deltaTotal,
+    totalRows: deltaTotal ?? 0,
     percent: 100
   });
   return {

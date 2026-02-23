@@ -173,6 +173,65 @@ export async function mergeDbBarrasCache(
   };
 }
 
+export async function reconcileDbBarrasCache(
+  rows: DbBarrasCacheRow[],
+  syncAt?: string | null
+): Promise<{ row_count: number; removed: number; last_sync_at: string }> {
+  const db = await getDb();
+  const transaction = db.transaction([STORE_DB_BARRAS, STORE_META], "readwrite");
+  const barrasStore = transaction.objectStore(STORE_DB_BARRAS);
+  const metaStore = transaction.objectStore(STORE_META);
+  const remoteKeys = new Set<string>();
+
+  for (const row of rows) {
+    const barras = String(row.barras ?? "").trim();
+    if (!barras) continue;
+    remoteKeys.add(barras);
+    barrasStore.put({
+      barras,
+      coddv: row.coddv,
+      descricao: row.descricao,
+      updated_at: row.updated_at
+    });
+  }
+
+  const removed = await new Promise<number>((resolve, reject) => {
+    let removedCount = 0;
+    const request = barrasStore.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(removedCount);
+        return;
+      }
+      const key = String(cursor.primaryKey ?? "").trim();
+      if (key && !remoteKeys.has(key)) {
+        cursor.delete();
+        removedCount += 1;
+      }
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error ?? new Error("Falha ao reconciliar cache db_barras"));
+  });
+
+  const countRaw = await requestToPromise(barrasStore.count());
+  const rowCount = normalizeNonNegativeInteger((countRaw as number | undefined) ?? 0);
+  const effectiveSyncAt = syncAt ?? maxUpdatedAt(rows) ?? new Date().toISOString();
+
+  metaStore.put({
+    key: META_DB_BARRAS_SYNC,
+    last_sync_at: effectiveSyncAt,
+    row_count: rowCount
+  });
+
+  await transactionDone(transaction);
+  return {
+    row_count: rowCount,
+    removed,
+    last_sync_at: effectiveSyncAt
+  };
+}
+
 export async function touchDbBarrasMeta(syncAt?: string | null): Promise<void> {
   const db = await getDb();
   const transaction = db.transaction([STORE_DB_BARRAS, STORE_META], "readwrite");
