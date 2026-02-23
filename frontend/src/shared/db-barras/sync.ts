@@ -207,9 +207,13 @@ async function refreshDbBarrasCacheReconcile(
 }
 
 export async function refreshDbBarrasCacheSmart(
-  onProgress?: (progress: DbBarrasProgress) => void
+  onProgress?: (progress: DbBarrasProgress) => void,
+  options?: {
+    allowFullReconcile?: boolean;
+  }
 ): Promise<{ mode: "full" | "delta"; pages: number; applied: number; total: number }> {
   if (!supabase) throw new Error("Supabase não inicializado.");
+  const allowFullReconcile = options?.allowFullReconcile ?? false;
 
   const remoteMeta = await fetchDbBarrasMetaRemote();
   const meta = await getDbBarrasMeta();
@@ -224,7 +228,7 @@ export async function refreshDbBarrasCacheSmart(
   }
 
   const needsReconcile = remoteMeta.row_count < meta.row_count;
-  if (needsReconcile) {
+  if (needsReconcile && allowFullReconcile) {
     const reconciled = await refreshDbBarrasCacheReconcile(onProgress, remoteMeta);
     return {
       mode: "full",
@@ -234,17 +238,14 @@ export async function refreshDbBarrasCacheSmart(
     };
   }
 
-  let deltaTotal: number | null = null;
-  try {
-    deltaTotal = await fetchDbBarrasDeltaCount(meta.last_sync_at);
-  } catch (error) {
-    if (!isStatementTimeout(error)) {
-      throw error;
-    }
-    deltaTotal = null;
-  }
-
-  if (deltaTotal != null && deltaTotal <= 0) {
+  const remoteUpdatedTs = remoteMeta.updated_max ? Date.parse(remoteMeta.updated_max) : Number.NaN;
+  const localSyncTs = meta.last_sync_at ? Date.parse(meta.last_sync_at) : Number.NaN;
+  if (
+    Number.isFinite(remoteUpdatedTs)
+    && Number.isFinite(localSyncTs)
+    && remoteUpdatedTs <= localSyncTs
+    && remoteMeta.row_count === meta.row_count
+  ) {
     await touchDbBarrasMeta(new Date().toISOString());
     onProgress?.({
       mode: "delta",
@@ -261,6 +262,7 @@ export async function refreshDbBarrasCacheSmart(
     };
   }
 
+  let deltaTotal: number | null = null;
   let offset = 0;
   let pages = 0;
   const changedRows: DbBarrasCacheRow[] = [];
@@ -274,13 +276,28 @@ export async function refreshDbBarrasCacheSmart(
     });
 
     if (error) {
-      if (isStatementTimeout(error)) {
+      if (isStatementTimeout(error) && allowFullReconcile) {
         const reconciled = await refreshDbBarrasCacheReconcile(onProgress, remoteMeta);
         return {
           mode: "full",
           pages: reconciled.pages,
           applied: reconciled.rows,
           total: reconciled.rows
+        };
+      }
+      if (isStatementTimeout(error) && !allowFullReconcile) {
+        onProgress?.({
+          mode: "delta",
+          pagesFetched: pages,
+          rowsFetched: changedRows.length,
+          totalRows: 0,
+          percent: 100
+        });
+        return {
+          mode: "delta",
+          pages,
+          applied: changedRows.length,
+          total: meta.row_count
         };
       }
       throw new Error(`Falha ao atualizar base de barras: ${toErrorMessage(error)}`);
