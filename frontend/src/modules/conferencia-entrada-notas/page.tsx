@@ -2101,7 +2101,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       }
 
       let barrasTotal = localBarrasMeta.row_count;
-      if (forceRefresh || localBarrasMeta.row_count <= 0) {
+      if (isOnline && (forceRefresh || background || localBarrasMeta.row_count <= 0)) {
         const barrasSync = await refreshDbBarrasCacheSmart((progress) => {
           if (progress.totalRows > 0) {
             setProgressMessage(
@@ -2158,7 +2158,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     silent = false,
     options?: { includeAvulsa?: boolean }
   ): Promise<EntradaNotasLocalVolume | null> => {
-    if (!isOnline) return null;
+    if (preferOfflineMode || !isOnline) return null;
     const includeAvulsa = options?.includeAvulsa ?? true;
 
     const [remoteSeqNf, remoteAvulsa] = await Promise.all([
@@ -2861,7 +2861,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     } catch {
       return null;
     }
-  }, [isOnline]);
+  }, [isOnline, preferOfflineMode]);
 
   const lookupSeqNfOptionsByBarcodeOffline = useCallback(async (
     rawBarras: string

@@ -1081,7 +1081,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       }
 
       let barrasTotal = localBarrasMeta.row_count;
-      if (forceRefresh || localBarrasMeta.row_count <= 0) {
+      if (isOnline && (forceRefresh || background || localBarrasMeta.row_count <= 0)) {
         const barrasSync = await refreshDbBarrasCacheSmart((progress) => {
           if (progress.totalRows > 0) {
             setProgressMessage(
@@ -1127,7 +1127,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   }, [focusBarras, refreshPendingState]);
 
   const resumeRemoteActiveVolume = useCallback(async (silent = false): Promise<TermoLocalVolume | null> => {
-    if (!isOnline) return null;
+    if (preferOfflineMode || !isOnline) return null;
 
     const remoteActive = await fetchActiveVolume();
     if (!remoteActive || remoteActive.status !== "em_conferencia") return null;
@@ -1358,7 +1358,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     } catch {
       return null;
     }
-  }, [isOnline]);
+  }, [isOnline, preferOfflineMode]);
 
   const clearConferenceScreen = useCallback(() => {
     setShowFinalizeModal(false);
