@@ -527,6 +527,7 @@ function resumeConferenceIcon() {
 
 function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("VOLUME_NAO_ENCONTRADO")) return "NFD/Chave não encontrado na base do dia.";
+  if (value.includes("NFD_AMBIGUA_INFORME_CHAVE")) return "Esta NFD está associada a mais de uma chave. Informe a chave para abrir a devolução correta.";
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
   if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário hoje.";
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";
@@ -593,11 +594,13 @@ function resolveModalNfdValue(row: { nfd: number | null; ref: string }): string 
 }
 
 function resolveModalOpenRef(row: { nfd: number | null; chave: string | null; ref: string }): string {
-  const nfdRef = resolveModalNfdValue(row);
-  if (nfdRef) return nfdRef;
+  const ref = row.ref.trim();
+  if (ref) return ref;
   const chave = row.chave?.trim();
   if (chave) return chave;
-  return row.ref;
+  const nfdRef = resolveModalNfdValue(row);
+  if (nfdRef) return nfdRef;
+  return "";
 }
 
 function buildVolumeSearchBlob(row: DevolucaoMercadoriaModalVolumeRow): string {
