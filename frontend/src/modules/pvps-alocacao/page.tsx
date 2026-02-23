@@ -569,6 +569,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [historyRuleRows, setHistoryRuleRows] = useState<PvpsAdminRuleHistoryRow[]>([]);
   const [showPvpsPopup, setShowPvpsPopup] = useState(false);
   const [showAlocPopup, setShowAlocPopup] = useState(false);
+  const [editorPopupKeyboardInset, setEditorPopupKeyboardInset] = useState(0);
+  const [editorPopupViewportHeight, setEditorPopupViewportHeight] = useState<number | null>(null);
   const [expandedPvps, setExpandedPvps] = useState<Record<string, boolean>>({});
   const [expandedAloc, setExpandedAloc] = useState<Record<string, boolean>>({});
   const [expandedPvpsCompleted, setExpandedPvpsCompleted] = useState<Record<string, boolean>>({});
@@ -944,6 +946,62 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, tab, activeCd, todayBrt, feedView, showPvpsPopup, showAlocPopup, preferOfflineMode]);
+
+  useEffect(() => {
+    if (!(showPvpsPopup || showAlocPopup) || typeof window === "undefined") {
+      setEditorPopupKeyboardInset(0);
+      setEditorPopupViewportHeight(null);
+      return;
+    }
+
+    const isMobileViewport = window.matchMedia("(max-width: 980px)").matches;
+    if (!isMobileViewport) {
+      setEditorPopupKeyboardInset(0);
+      setEditorPopupViewportHeight(null);
+      return;
+    }
+
+    const vv = window.visualViewport;
+    const updateViewportMetrics = () => {
+      const layoutHeight = window.innerHeight;
+      if (!vv) {
+        setEditorPopupKeyboardInset(0);
+        setEditorPopupViewportHeight(layoutHeight);
+        return;
+      }
+
+      const visibleHeight = Math.max(280, Math.round(vv.height));
+      const inset = Math.max(0, Math.round(layoutHeight - (vv.height + vv.offsetTop)));
+      setEditorPopupKeyboardInset(inset);
+      setEditorPopupViewportHeight(visibleHeight);
+    };
+
+    const keepFocusVisible = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.closest(".pvps-popup-card")) return;
+      window.setTimeout(() => {
+        try {
+          target.scrollIntoView({ block: "center", inline: "nearest" });
+        } catch {
+          // ignore
+        }
+      }, 120);
+    };
+
+    updateViewportMetrics();
+    vv?.addEventListener("resize", updateViewportMetrics);
+    vv?.addEventListener("scroll", updateViewportMetrics);
+    window.addEventListener("orientationchange", updateViewportMetrics);
+    document.addEventListener("focusin", keepFocusVisible);
+
+    return () => {
+      vv?.removeEventListener("resize", updateViewportMetrics);
+      vv?.removeEventListener("scroll", updateViewportMetrics);
+      window.removeEventListener("orientationchange", updateViewportMetrics);
+      document.removeEventListener("focusin", keepFocusVisible);
+    };
+  }, [showAlocPopup, showPvpsPopup]);
 
   useEffect(() => {
     void refreshPendingState();
@@ -2193,6 +2251,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     ));
   }
 
+  const editorPopupOverlayStyle = editorPopupKeyboardInset > 0
+    ? { paddingBottom: `${editorPopupKeyboardInset + 10}px` }
+    : undefined;
+  const editorPopupCardStyle = editorPopupKeyboardInset > 0 && editorPopupViewportHeight != null
+    ? { maxHeight: `${Math.max(280, editorPopupViewportHeight - 12)}px` }
+    : undefined;
+
   return (
     <>
       <header className="module-topbar module-topbar-fixed">
@@ -2743,6 +2808,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ? createPortal(
           <div
             className="confirm-overlay pvps-popup-overlay"
+            style={editorPopupOverlayStyle}
             role="dialog"
             aria-modal="true"
             aria-labelledby="pvps-inform-title"
@@ -2752,7 +2818,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               closePvpsPopup();
             }}
           >
-            <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
+            <div className="confirm-dialog surface-enter pvps-popup-card" style={editorPopupCardStyle} onClick={(event) => event.stopPropagation()}>
               <h3 id="pvps-inform-title">
                 {editingPvpsCompleted
                   ? "PVPS - Edição concluída"
@@ -2931,6 +2997,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ? createPortal(
           <div
             className="confirm-overlay pvps-popup-overlay"
+            style={editorPopupOverlayStyle}
             role="dialog"
             aria-modal="true"
             aria-labelledby="aloc-inform-title"
@@ -2942,7 +3009,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               setShowAlocPopup(false);
             }}
           >
-            <div className="confirm-dialog surface-enter pvps-popup-card" onClick={(event) => event.stopPropagation()}>
+            <div className="confirm-dialog surface-enter pvps-popup-card" style={editorPopupCardStyle} onClick={(event) => event.stopPropagation()}>
               <h3 id="aloc-inform-title">{editingAlocCompleted ? "Alocação - Edição concluída" : "Alocação"}</h3>
               <p><strong>{activeAloc.endereco}</strong></p>
               <p>{activeAloc.coddv} - {activeAloc.descricao}</p>
