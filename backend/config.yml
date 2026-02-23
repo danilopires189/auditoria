@@ -53,7 +53,7 @@ tables:
   db_usuario:
     file: "DB_USUARIO.xlsx"
     sheet: "DB_USUARIO"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["cd", "mat"]
     required_columns: ["mat", "nome"]
     refresh_before_load: false
@@ -69,7 +69,7 @@ tables:
   db_barras:
     file: "DB_BARRAS.xlsx"
     sheet: "DB_BARRAS"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["coddv", "barras"]
     required_columns: ["coddv", "barras"]
     refresh_before_load: false
@@ -149,7 +149,7 @@ tables:
 
   db_end:
     file: "convertido/BD_END.csv"
-    mode: "full_replace"
+    mode: "upsert"
     unique_keys: ["cd", "coddv", "endereco", "tipo"]
     required_columns: ["cd", "coddv", "endereco"]
     refresh_before_load: false
@@ -177,8 +177,8 @@ tables:
 
   db_log_end:
     file: "convertido/DB_LOG_END.csv"
-    mode: "full_replace"
-    unique_keys: []
+    mode: "upsert"
+    unique_keys: ["cd", "coddv", "endereco", "exclusao"]
     required_columns: ["cd", "coddv", "endereco"]
     refresh_before_load: false
     types:
