@@ -1935,10 +1935,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         await refreshPendingState();
         applyLocalPulSave();
         const feedbackText = hasPulOcorrencia
-          ? "Pulmão com ocorrência salvo (offline). Use o ícone à direita para ir ao próximo."
-          : "Pulmão salvo (offline). Use o ícone à direita para ir ao próximo.";
-        setPulFeedback({ tone: "warn", text: feedbackText, feedKey: currentFeedKey });
+          ? "Pulmão com ocorrência salvo (offline). Avançando para o próximo."
+          : "Pulmão salvo (offline). Avançando para o próximo.";
+        setPulFeedback(null);
         setStatusMessage(feedbackText);
+        openNextPvpsFrom(currentFeedKey);
+        void loadCurrent({ silent: true });
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Pulmão offline.");
       }
@@ -1971,25 +1973,24 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         pul_total: result.pul_total,
         pul_auditados: result.pul_auditados
       });
-      let feedbackTone: PulFeedbackTone = "warn";
       let feedbackText = "";
       if (result.status === "concluido") {
-        feedbackTone = "ok";
-        feedbackText = "PVPS concluído com conformidade. Use o ícone à direita para ir ao próximo.";
+        feedbackText = "PVPS concluído com conformidade. Avançando para o próximo.";
       } else if (result.status === "nao_conforme") {
-        feedbackTone = "bad";
-        feedbackText = "PVPS concluído sem conformidade. Use o ícone à direita para ir ao próximo.";
+        feedbackText = "PVPS concluído sem conformidade. Avançando para o próximo.";
       } else {
-        feedbackTone = "warn";
         feedbackText = hasPulOcorrencia
-          ? `Pulmão com ocorrência salvo (${result.pul_auditados}/${result.pul_total}). Use o ícone à direita para ir ao próximo.`
-          : `Pulmão salvo (${result.pul_auditados}/${result.pul_total}). Use o ícone à direita para ir ao próximo.`;
+          ? `Pulmão com ocorrência salvo (${result.pul_auditados}/${result.pul_total}). Avançando para o próximo.`
+          : `Pulmão salvo (${result.pul_auditados}/${result.pul_total}). Avançando para o próximo.`;
       }
-      setPulFeedback({ tone: feedbackTone, text: feedbackText, feedKey: currentFeedKey });
+      setPulFeedback(null);
       setStatusMessage(feedbackText);
       if (isEditingCompleted) {
         setEditingPvpsCompleted(null);
         closePvpsPopup();
+      } else {
+        openNextPvpsFrom(currentFeedKey);
+        void loadCurrent({ silent: true });
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Pulmão.");
