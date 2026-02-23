@@ -8,6 +8,7 @@ import {
   fetchDbBarrasByBarcodeOnline,
   normalizeBarcode
 } from "../../shared/db-barras/sync";
+import type { DbBarrasCacheRow } from "../../shared/db-barras/types";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { formatCountLabel } from "../../shared/inflection";
@@ -137,7 +138,8 @@ const CYCLE_DATE_DISPLAY = (() => {
 const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
-const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 280;
+const BACKGROUND_PULL_DELAY_MS = 180;
 
 interface ScannerInputState {
   lastInputAt: number;
@@ -715,6 +717,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     barras: createScannerInputState(),
     final_barras: createScannerInputState()
   });
+  const barcodeLookupCacheRef = useRef<Map<string, DbBarrasCacheRow | false>>(new Map());
+  const barcodeLookupInFlightRef = useRef<Map<string, Promise<DbBarrasCacheRow | null>>>(new Map());
+  const backgroundPullTimerRef = useRef<number | null>(null);
+  const backgroundPullRunningRef = useRef(false);
   const barrasValueRef = useRef("");
   const finalBarrasValueRef = useRef("");
   const popupWasOpenRef = useRef(false);
@@ -791,8 +797,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const keepFocusedControlVisible = useCallback((event: FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
     const target = event.currentTarget;
     window.setTimeout(() => {
-      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-    }, 120);
+      target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    }, 40);
   }, []);
   const focusAndSelectNumericInput = useCallback((event: FocusEvent<HTMLInputElement>) => {
     event.currentTarget.select();
@@ -1270,6 +1276,25 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     await executeAdminClearAll();
   }, [adminConfirm, executeAdminApplyCoddv, executeAdminApplyZona, executeAdminClearAll]);
 
+  const scheduleBackgroundPull = useCallback(() => {
+    if (typeof window === "undefined") {
+      void pull().catch(() => { });
+      return;
+    }
+    if (backgroundPullTimerRef.current != null) return;
+
+    backgroundPullTimerRef.current = window.setTimeout(() => {
+      backgroundPullTimerRef.current = null;
+      if (backgroundPullRunningRef.current) return;
+      backgroundPullRunningRef.current = true;
+      void pull()
+        .catch(() => { })
+        .finally(() => {
+          backgroundPullRunningRef.current = false;
+        });
+    }, BACKGROUND_PULL_DELAY_MS);
+  }, [pull]);
+
   const send = useCallback(async (eventType: InventarioEventType, payload: Record<string, unknown>) => {
     if (cd == null) return;
     if (!isOnline || preferOffline) {
@@ -1304,10 +1329,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       payload,
       client_event_id: (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `inv-${Date.now()}`
     });
-    await pull();
-    await refreshPending();
+    setRemoteState((prev) => {
+      const next = optimistic(prev, payload, profile);
+      void saveRemoteStateCache({ user_id: profile.user_id, cd, cycle_date: CYCLE_DATE, state: next });
+      return next;
+    });
+    void refreshPending();
+    scheduleBackgroundPull();
     setMsg("Evento aplicado.");
-  }, [cd, isOnline, preferOffline, profile, pull, refreshPending]);
+  }, [cd, isOnline, preferOffline, profile, refreshPending, scheduleBackgroundPull]);
 
   useEffect(() => {
     let canceled = false;
@@ -1327,6 +1357,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   }, [fixed, isGlobalAdmin, isOnline, profile.user_id]);
 
   useEffect(() => { if (fixed == null) void saveInventarioPreferences(profile.user_id, { cd_ativo: cd, prefer_offline_mode: preferOffline } satisfies InventarioPreferences); }, [cd, fixed, preferOffline, profile.user_id]);
+  useEffect(() => {
+    barcodeLookupCacheRef.current.clear();
+    barcodeLookupInFlightRef.current.clear();
+  }, [cd, dbBarrasCount]);
   useEffect(() => { if (cd != null) { void loadLocal(); void refreshPending(); void getDbBarrasMeta().then((m) => setDbBarrasCount(m.row_count)); if (isOnline) void syncNow(false); } }, [cd, isOnline, loadLocal, refreshPending, syncNow]);
   useEffect(() => { if (!isOnline || cd == null) return; const id = window.setInterval(() => { void syncNow(false); }, 30000); return () => window.clearInterval(id); }, [cd, isOnline, syncNow]);
   useEffect(() => {
@@ -1440,7 +1474,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         target.focus();
       }
       target.select();
-    }, 80);
+    }, 32);
     return () => window.clearTimeout(id);
   }, [editorOpen, selectedItem, tab]);
   useEffect(() => {
@@ -1632,6 +1666,24 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     });
     return list;
   }, [tab, visible]);
+  const addressNavigation = useMemo(() => {
+    const addressIndexByKey = new Map<string, number>();
+    const itemPositionByKey = new Map<string, { addressIndex: number; itemIndex: number }>();
+
+    addressBuckets.forEach((bucket, addressIndex) => {
+      addressIndexByKey.set(bucket.key, addressIndex);
+      bucket.items.forEach((item, itemIndex) => {
+        itemPositionByKey.set(item.key, { addressIndex, itemIndex });
+      });
+    });
+
+    return { addressIndexByKey, itemPositionByKey };
+  }, [addressBuckets]);
+  const addressBucketByKey = useMemo(() => {
+    const map = new Map<string, AddressBucketView>();
+    for (const bucket of addressBuckets) map.set(bucket.key, bucket);
+    return map;
+  }, [addressBuckets]);
 
   useEffect(() => {
     if (mobileStep !== "address" || !zone) {
@@ -1644,8 +1696,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   }, [addressBuckets, mobileStep, selectedAddress, zone]);
 
   const activeAddress = useMemo(
-    () => addressBuckets.find((b) => b.key === selectedAddress) ?? null,
-    [addressBuckets, selectedAddress]
+    () => (selectedAddress ? addressBucketByKey.get(selectedAddress) ?? null : null),
+    [addressBucketByKey, selectedAddress]
   );
 
   useEffect(() => {
@@ -1770,7 +1822,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       return;
     }
 
-    const addressIndex = addressBuckets.findIndex((bucket) => bucket.key === addressKey);
+    const addressIndex = addressNavigation.addressIndexByKey.get(addressKey) ?? -1;
     if (addressIndex < 0) {
       closeEditorPopup();
       setMobileStep("zone");
@@ -1778,7 +1830,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
 
     const sameAddressItems = addressBuckets[addressIndex].items;
-    const itemIndex = sameAddressItems.findIndex((row) => row.key === itemKey);
+    const itemPosition = addressNavigation.itemPositionByKey.get(itemKey);
+    const itemIndex = itemPosition?.addressIndex === addressIndex ? itemPosition.itemIndex : -1;
     if (itemIndex >= 0 && itemIndex + 1 < sameAddressItems.length) {
       setSelectedAddress(addressKey);
       setSelectedItem(sameAddressItems[itemIndex + 1].key);
@@ -1804,7 +1857,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setSearch("");
     setMobileStep("zone");
     setMsg("Zona concluída. Selecione a próxima zona.");
-  }, [addressBuckets, closeEditorPopup]);
+  }, [addressBuckets, addressNavigation, closeEditorPopup]);
 
   const canEditCount = useCallback((row: Row | null): boolean => {
     if (!row || !canEdit) return false;
@@ -1900,18 +1953,46 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     return { total, completed, percent };
   }, [rows, stageUniverse, tab]);
 
-  const validateBarras = useCallback(async (coddv: number, value: string): Promise<string> => {
-    const n = normalizeBarcode(value);
-    if (!n) throw new Error("Informe o código de barras.");
-    let found = await getDbBarrasByBarcode(n);
-    if (!found && isOnline) {
-      const online = await fetchDbBarrasByBarcodeOnline(n);
-      if (online) { await upsertDbBarrasCacheRow(online); found = online; }
+  const resolveBarcodeLookup = useCallback(async (value: string): Promise<DbBarrasCacheRow | null> => {
+    const normalized = normalizeBarcode(value);
+    if (!normalized) return null;
+
+    if (barcodeLookupCacheRef.current.has(normalized)) {
+      const cached = barcodeLookupCacheRef.current.get(normalized);
+      if (!cached) return null;
+      return cached;
     }
+
+    const inFlight = barcodeLookupInFlightRef.current.get(normalized);
+    if (inFlight) return inFlight;
+
+    const lookupPromise = (async () => {
+      let found = await getDbBarrasByBarcode(normalized);
+      if (!found && isOnline) {
+        const online = await fetchDbBarrasByBarcodeOnline(normalized);
+        if (online) {
+          await upsertDbBarrasCacheRow(online);
+          found = online;
+        }
+      }
+      barcodeLookupCacheRef.current.set(normalized, found ?? false);
+      return found ?? null;
+    })().finally(() => {
+      barcodeLookupInFlightRef.current.delete(normalized);
+    });
+
+    barcodeLookupInFlightRef.current.set(normalized, lookupPromise);
+    return lookupPromise;
+  }, [isOnline]);
+
+  const validateBarras = useCallback(async (coddv: number, value: string): Promise<string> => {
+    const normalized = normalizeBarcode(value);
+    if (!normalized) throw new Error("Informe o código de barras.");
+    const found = await resolveBarcodeLookup(normalized);
     if (!found) throw new Error("Código de barras não encontrado na base.");
     if (found.coddv !== coddv) throw new Error("Código de barras inválido para este Código e Dígito (CODDV).");
     return found.barras;
-  }, [isOnline]);
+  }, [resolveBarcodeLookup]);
 
   const autoValidateStageBarras = useCallback(async (value: string): Promise<boolean> => {
     if (!active || !(tab === "s1" || tab === "s2")) return false;
@@ -2092,6 +2173,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           window.clearTimeout(state[target].timerId);
           state[target].timerId = null;
         }
+      }
+    };
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      if (backgroundPullTimerRef.current != null) {
+        window.clearTimeout(backgroundPullTimerRef.current);
+        backgroundPullTimerRef.current = null;
       }
     };
   }, []);
@@ -2741,7 +2831,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
               </h3>
 
               <div className="inventario-address-list">
-                {addressBuckets.map((bucket) => {
+                {!editorOpen ? addressBuckets.map((bucket) => {
                   const singleItem = bucket.total_items === 1 ? bucket.items[0] : null;
                   const showConcludedDetails = (
                     ((tab === "s1" || tab === "s2") && statusFilter === "concluido")
@@ -2785,8 +2875,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       </div>
                     </button>
                   );
-                })}
-                {addressBuckets.length === 0 ? (
+                }) : null}
+                {!editorOpen && addressBuckets.length === 0 ? (
                   <div className="inventario-empty-card"><p>Nenhum endereço para os filtros selecionados.</p></div>
                 ) : null}
               </div>

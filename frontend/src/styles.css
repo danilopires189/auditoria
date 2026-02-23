@@ -5334,6 +5334,7 @@ small {
   position: relative;
   width: 100%;
   min-width: 0;
+  min-height: 50px;
   border: 1px solid #d4deef;
   border-radius: 12px;
   background: #fff;
@@ -5347,7 +5348,7 @@ small {
   box-shadow: 0 0 0 3px rgba(47, 103, 191, 0.18);
 }
 
-.inventario-popup-input-action-wrap input {
+.inventario-popup-body .inventario-popup-input-action-wrap input:not([type="checkbox"]):not([type="radio"]) {
   display: block;
   width: 100%;
   min-width: 0;
@@ -5357,14 +5358,21 @@ small {
   height: 50px;
   padding-top: 0;
   padding-bottom: 0;
-  padding-left: 44px;
-  padding-right: 50px;
+  padding-left: 56px;
+  padding-right: 56px;
   line-height: 1.2;
   outline: none;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
 }
 
 .inventario-popup-input-action-wrap input:focus {
   outline: none;
+}
+
+.inventario-popup-body .inventario-popup-input-action-wrap .field-icon {
+  left: 12px;
 }
 
 .inventario-popup-scan-btn {
@@ -5747,12 +5755,12 @@ small {
     min-height: 96px;
   }
 
-  .inventario-popup-body .inventario-popup-input-action-wrap input {
+  .inventario-popup-body .inventario-popup-input-action-wrap input:not([type="checkbox"]):not([type="radio"]) {
     min-height: 50px;
     padding-top: 0;
     padding-bottom: 0;
-    padding-left: 44px;
-    padding-right: 50px;
+    padding-left: 56px;
+    padding-right: 56px;
   }
 
   .inventario-editor-actions,
