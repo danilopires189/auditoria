@@ -100,6 +100,7 @@ const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 const FEED_ACTIVE_CODDV_LIMIT = 50;
 const FEED_NEXT_PREVIEW_LIMIT = 5;
 const ADMIN_HISTORY_VIEW_LIMIT = 20;
+const NEXT_POPUP_SWAP_DELAY_MS = 120;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
 function toDisplayName(value: string): string {
@@ -581,6 +582,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [editingPvpsCompleted, setEditingPvpsCompleted] = useState<PvpsCompletedRow | null>(null);
   const [editingAlocCompleted, setEditingAlocCompleted] = useState<AlocacaoCompletedRow | null>(null);
   const silentRefreshInFlightRef = useRef(false);
+  const pvpsNextSwapTimerRef = useRef<number | null>(null);
+  const alocNextSwapTimerRef = useRef<number | null>(null);
   const activeCd = profile.cd_default ?? null;
 
   async function loadAdminData(): Promise<void> {
@@ -1028,6 +1031,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline, activeCd, pendingCount]);
+
+  useEffect(() => (
+    () => {
+      if (pvpsNextSwapTimerRef.current != null) {
+        window.clearTimeout(pvpsNextSwapTimerRef.current);
+        pvpsNextSwapTimerRef.current = null;
+      }
+      if (alocNextSwapTimerRef.current != null) {
+        window.clearTimeout(alocNextSwapTimerRef.current);
+        alocNextSwapTimerRef.current = null;
+      }
+    }
+  ), []);
 
   useEffect(() => {
     if (!activePvps) {
@@ -1730,11 +1746,23 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       closePvpsPopup();
       return;
     }
-    if (next.kind === "pul") {
-      openPvpsPulPopup(next.row, next.endPul, { motion: "next" });
-      return;
+    if (pvpsNextSwapTimerRef.current != null) {
+      window.clearTimeout(pvpsNextSwapTimerRef.current);
+      pvpsNextSwapTimerRef.current = null;
     }
-    void openPvpsPopup(next.row, { motion: "next" });
+    setPvpsPopupMotion("next");
+    setShowPvpsPopup(false);
+    const openNext = () => {
+      if (next.kind === "pul") {
+        openPvpsPulPopup(next.row, next.endPul, { motion: "next" });
+        return;
+      }
+      void openPvpsPopup(next.row, { motion: "next" });
+    };
+    pvpsNextSwapTimerRef.current = window.setTimeout(() => {
+      pvpsNextSwapTimerRef.current = null;
+      openNext();
+    }, NEXT_POPUP_SWAP_DELAY_MS);
   }
 
   function openNextPvpsSepFrom(currentFeedKey: string): void {
@@ -1749,13 +1777,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       closePvpsPopup();
       return;
     }
+    if (pvpsNextSwapTimerRef.current != null) {
+      window.clearTimeout(pvpsNextSwapTimerRef.current);
+      pvpsNextSwapTimerRef.current = null;
+    }
     setPvpsPopupMotion("next");
-    setEditingPvpsCompleted(null);
-    setShowSepOccurrence(false);
-    setActivePvpsMode("sep");
-    setActivePulEnd(null);
-    setActivePvpsKey(keyOfPvps(next.row));
-    setShowPvpsPopup(true);
+    setShowPvpsPopup(false);
+    pvpsNextSwapTimerRef.current = window.setTimeout(() => {
+      pvpsNextSwapTimerRef.current = null;
+      void openPvpsPopup(next.row, { motion: "next" });
+    }, NEXT_POPUP_SWAP_DELAY_MS);
   }
 
   function openNextAlocacaoFrom(currentQueueId: string, currentZone?: string | null): void {
@@ -1774,9 +1805,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       next = visibleAlocRows[0];
     }
     if (next) {
+      if (alocNextSwapTimerRef.current != null) {
+        window.clearTimeout(alocNextSwapTimerRef.current);
+        alocNextSwapTimerRef.current = null;
+      }
       setAlocPopupMotion("next");
-      setActiveAlocQueue(next.queue_id);
-      setShowAlocPopup(true);
+      setShowAlocPopup(false);
+      alocNextSwapTimerRef.current = window.setTimeout(() => {
+        alocNextSwapTimerRef.current = null;
+        setActiveAlocQueue(next.queue_id);
+        setShowAlocPopup(true);
+      }, NEXT_POPUP_SWAP_DELAY_MS);
     } else {
       setAlocPopupMotion("default");
       setShowAlocPopup(false);
