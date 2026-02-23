@@ -171,6 +171,11 @@ function parsePositiveInteger(value: string, fallback = 1): number {
   return parsed;
 }
 
+function normalizeOptionalItemText(value: string): string | null {
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact ? compact : null;
+}
+
 function formatCollaboratorName(value: {
   nome?: string | null;
   mat?: string | null;
@@ -526,10 +531,24 @@ function resumeConferenceIcon() {
 }
 
 function normalizeRpcErrorMessage(value: string): string {
+  if (value.includes("AUTH_REQUIRED")) return "Sessão inválida. Faça login novamente.";
+  if (value.includes("PROFILE_NAO_ENCONTRADO")) return "Perfil do usuário não encontrado. Atualize a página e tente novamente.";
+  if (value.includes("NFD_OU_CHAVE_OBRIGATORIO")) return "Informe a NFD ou a chave para iniciar a devolução.";
   if (value.includes("VOLUME_NAO_ENCONTRADO")) return "NFD/Chave não encontrado na base do dia.";
+  if (value.includes("NFD_OU_CHAVE_NAO_ENCONTRADA")) return "NFD/Chave não encontrado na base do dia.";
   if (value.includes("NFD_AMBIGUA_INFORME_CHAVE")) return "Esta NFD está associada a mais de uma chave. Informe a chave para abrir a devolução correta.";
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
+  if (value.includes("CONFERENCIA_EM_USO")) return "Este volume já está em conferência por outro usuário.";
   if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário hoje.";
+  if (value.includes("CONFERENCIA_JA_CONCLUIDA_POR_OUTRO_USUARIO")) return "Este volume já foi concluído por outro usuário.";
+  if (value.includes("CONFERENCIA_EM_ABERTO_OUTRA_DEVOLUCAO")) return "Você já possui outra devolução em andamento. Finalize ou cancele para continuar.";
+  if (value.includes("NFO_OBRIGATORIO")) return "Informe a NFO para concluir a devolução sem NFD.";
+  if (value.includes("MOTIVO_SEM_NFD_OBRIGATORIO")) return "Informe o motivo da devolução sem NFD.";
+  if (value.includes("QTD_INVALIDA")) return "Quantidade inválida.";
+  if (value.includes("QTD_MANUAL_INVALIDA")) return "Quantidade manual inválida.";
+  if (value.includes("ITEM_NAO_ENCONTRADO")) return "Item não encontrado nesta devolução.";
+  if (value.includes("PAYLOAD_INVALIDO")) return "Dados inválidos para sincronização. Tente novamente.";
+  if (value.includes("BASE_DEVOLUCAO_VAZIA")) return "A base de Devolução está vazia para este CD.";
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";
   if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SOBRA_PENDENTE")) return "Existem sobras. Corrija antes de finalizar.";
@@ -759,6 +778,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const [editingCoddv, setEditingCoddv] = useState<number | null>(null);
   const [lastAddedItemMarker, setLastAddedItemMarker] = useState<LastAddedItemMarker | null>(null);
   const [editQtdInput, setEditQtdInput] = useState("0");
+  const [editLotesInput, setEditLotesInput] = useState("");
+  const [editValidadesInput, setEditValidadesInput] = useState("");
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<"etiqueta" | "barras">("barras");
@@ -1110,6 +1131,21 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     }
   }, []);
 
+  const startItemEdit = useCallback((item: DevolucaoMercadoriaLocalItem) => {
+    if (item.qtd_conferida <= 0) return;
+    setEditingCoddv(item.coddv);
+    setEditQtdInput(String(item.qtd_conferida));
+    setEditLotesInput(item.lotes ?? "");
+    setEditValidadesInput(item.validades ?? "");
+  }, []);
+
+  const cancelItemEdit = useCallback(() => {
+    setEditingCoddv(null);
+    setEditQtdInput("0");
+    setEditLotesInput("");
+    setEditValidadesInput("");
+  }, []);
+
   const refreshPendingState = useCallback(async () => {
     const pending = await getPendingSummary(profile.user_id);
     setPendingCount(pending.pending_count);
@@ -1433,8 +1469,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
             setActiveVolume(reopenedLocalVolume);
             setEtiquetaInput(reopenedLocalVolume.ref);
             setExpandedCoddv(null);
-            setEditingCoddv(null);
-            setEditQtdInput("0");
+            cancelItemEdit();
             setStatusMessage("Conferência retomada. Continue informando os itens pendentes.");
             focusBarras();
           } catch (reopenError) {
@@ -1451,6 +1486,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
     return true;
   }, [
+    cancelItemEdit,
     closeDialog,
     focusBarras,
     profile,
@@ -1514,8 +1550,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
               onConfirm: () => {
                 setActiveVolume(existingToday);
                 setExpandedCoddv(null);
-                setEditingCoddv(null);
-                setEditQtdInput("0");
+                cancelItemEdit();
                 setStatusMessage("Volume aberto em modo leitura.");
                 closeDialog();
               }
@@ -1525,8 +1560,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           setActiveVolume(existingToday);
           etiquetaFinal = existingToday.ref;
           setExpandedCoddv(null);
-          setEditingCoddv(null);
-          setEditQtdInput("0");
+          cancelItemEdit();
           setStatusMessage("Volume retomado do cache local.");
           return;
         }
@@ -1625,8 +1659,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     } finally {
       setBusyOpenVolume(false);
       setExpandedCoddv(null);
-      setEditingCoddv(null);
-      setEditQtdInput("0");
+      cancelItemEdit();
       setEtiquetaInput(etiquetaFinal);
       focusBarras();
     }
@@ -1638,6 +1671,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     hasOpenConference,
     isOnline,
     busyManifest,
+    cancelItemEdit,
     manifestReady,
     preferOfflineMode,
     prepareOfflineManifest,
@@ -1693,6 +1727,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       createIfMissing?: boolean;
       descricao?: string;
       tipo?: string;
+      lotes?: string | null;
+      validades?: string | null;
     }
   ) => {
     if (!activeVolume) return;
@@ -1707,6 +1743,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         barras: barras ?? item.barras ?? null,
         qtd_conferida: Math.max(0, Math.trunc(qtd)),
         qtd_manual_total: Math.max(0, (item.qtd_manual_total ?? 0) + qtdManualDelta),
+        lotes: options?.lotes ?? item.lotes ?? null,
+        validades: options?.validades ?? item.validades ?? null,
         updated_at: nowIso
       };
     });
@@ -1720,8 +1758,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         qtd_esperada: 0,
         qtd_conferida: Math.max(0, Math.trunc(qtd)),
         qtd_manual_total: qtdManualDelta,
-        lotes: null,
-        validades: null,
+        lotes: options?.lotes ?? null,
+        validades: options?.validades ?? null,
         updated_at: nowIso
       });
     }
@@ -1763,15 +1801,14 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     setFinalizeMotivoSemNfd("");
     setFinalizeError(null);
     setExpandedCoddv(null);
-    setEditingCoddv(null);
-    setEditQtdInput("0");
+    cancelItemEdit();
     setBarcodeInput("");
     setActiveVolume(null);
     setEtiquetaInput("");
     window.requestAnimationFrame(() => {
       etiquetaRef.current?.focus();
     });
-  }, []);
+  }, [cancelItemEdit]);
 
   const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
@@ -2029,10 +2066,15 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     if (!activeVolume) return;
     if (!canEditActiveVolume) return;
     const qtd = parsePositiveInteger(editQtdInput, 0);
+    const nextLotes = normalizeOptionalItemText(editLotesInput);
+    const nextValidades = normalizeOptionalItemText(editValidadesInput);
 
     try {
       if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
-        await updateItemQtyLocal(coddv, qtd);
+        await updateItemQtyLocal(coddv, qtd, null, {
+          lotes: nextLotes,
+          validades: nextValidades
+        });
         if (isOnline) void runPendingSync(true);
       } else {
         const updated = await setItemQtd(activeVolume.remote_conf_id, coddv, qtd);
@@ -2047,6 +2089,8 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                 qtd_conferida: updated.qtd_conferida,
                 qtd_esperada: updated.qtd_esperada,
                 qtd_manual_total: updated.qtd_manual_total,
+                lotes: nextLotes,
+                validades: nextValidades,
                 updated_at: updated.updated_at
               }
             : item
@@ -2061,8 +2105,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         };
         await applyVolumeUpdate(nextVolume);
       }
-      setEditingCoddv(null);
-      setEditQtdInput("0");
+      cancelItemEdit();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao salvar item.";
       if (await handleClosedConferenceError(message)) return;
@@ -2072,7 +2115,10 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     activeVolume,
     applyVolumeUpdate,
     canEditActiveVolume,
+    cancelItemEdit,
+    editLotesInput,
     editQtdInput,
+    editValidadesInput,
     isOnline,
     preferOfflineMode,
     runPendingSync,
@@ -2124,8 +2170,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
               };
               await applyVolumeUpdate(nextVolume);
             }
-            setEditingCoddv(null);
-            setEditQtdInput("0");
+            cancelItemEdit();
           } catch (error) {
             const message = error instanceof Error ? error.message : "Falha ao limpar item.";
             if (await handleClosedConferenceError(message)) return;
@@ -2140,6 +2185,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     activeVolume,
     applyVolumeUpdate,
     canEditActiveVolume,
+    cancelItemEdit,
     closeDialog,
     isOnline,
     preferOfflineMode,
@@ -3410,13 +3456,25 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                                   onClick={(event) => event.currentTarget.select()}
                                   onChange={(event) => setEditQtdInput(event.target.value.replace(/\D/g, ""))}
                                 />
+                                <input
+                                  type="text"
+                                  value={editLotesInput}
+                                  placeholder="Lote (opcional)"
+                                  onChange={(event) => setEditLotesInput(event.target.value)}
+                                />
+                                <input
+                                  type="text"
+                                  value={editValidadesInput}
+                                  placeholder="Validade(s) (opcional)"
+                                  onChange={(event) => setEditValidadesInput(event.target.value)}
+                                />
                                 <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(item.coddv)}>Salvar</button>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(null); setEditQtdInput("0"); }}>Cancelar</button>
+                                <button className="btn btn-muted" type="button" onClick={cancelItemEdit}>Cancelar</button>
                               </>
                             ) : (
                               <>
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                  <button className="btn btn-muted" type="button" onClick={() => startItemEdit(item)}>
                                     Editar
                                   </button>
                                 ) : null}
@@ -3485,13 +3543,25 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                                   onClick={(event) => event.currentTarget.select()}
                                   onChange={(event) => setEditQtdInput(event.target.value.replace(/\D/g, ""))}
                                 />
+                                <input
+                                  type="text"
+                                  value={editLotesInput}
+                                  placeholder="Lote (opcional)"
+                                  onChange={(event) => setEditLotesInput(event.target.value)}
+                                />
+                                <input
+                                  type="text"
+                                  value={editValidadesInput}
+                                  placeholder="Validade(s) (opcional)"
+                                  onChange={(event) => setEditValidadesInput(event.target.value)}
+                                />
                                 <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(item.coddv)}>Salvar</button>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(null); setEditQtdInput("0"); }}>Cancelar</button>
+                                <button className="btn btn-muted" type="button" onClick={cancelItemEdit}>Cancelar</button>
                               </>
                             ) : (
                               <>
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                  <button className="btn btn-muted" type="button" onClick={() => startItemEdit(item)}>
                                     Editar
                                   </button>
                                 ) : null}
@@ -3567,13 +3637,25 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                                   onClick={(event) => event.currentTarget.select()}
                                   onChange={(event) => setEditQtdInput(event.target.value.replace(/\D/g, ""))}
                                 />
+                                <input
+                                  type="text"
+                                  value={editLotesInput}
+                                  placeholder="Lote (opcional)"
+                                  onChange={(event) => setEditLotesInput(event.target.value)}
+                                />
+                                <input
+                                  type="text"
+                                  value={editValidadesInput}
+                                  placeholder="Validade(s) (opcional)"
+                                  onChange={(event) => setEditValidadesInput(event.target.value)}
+                                />
                                 <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(item.coddv)}>Salvar</button>
-                                <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(null); setEditQtdInput("0"); }}>Cancelar</button>
+                                <button className="btn btn-muted" type="button" onClick={cancelItemEdit}>Cancelar</button>
                               </>
                             ) : (
                               <>
                                 {item.qtd_conferida > 0 ? (
-                                  <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>
+                                  <button className="btn btn-muted" type="button" onClick={() => startItemEdit(item)}>
                                     Editar
                                   </button>
                                 ) : null}
