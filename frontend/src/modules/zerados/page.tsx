@@ -419,6 +419,15 @@ function formatPercent(value: number): string {
   return `${value.toFixed(0)}%`;
 }
 
+function formatDateTime(value: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(parsed);
+}
+
 function labelByCount(count: number, singular: string, plural: string): string {
   return formatCountLabel(count, singular, plural);
 }
@@ -632,6 +641,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [remoteState, setRemoteState] = useState<InventarioSyncPullState>(defaultState);
   const [pendingCount, setPendingCount] = useState(0);
   const [dbBarrasCount, setDbBarrasCount] = useState(0);
+  const [dbBarrasLastSyncAt, setDbBarrasLastSyncAt] = useState<string | null>(null);
 
   const [tab, setTab] = useState<InventarioStageView>("s1");
   const [statusFilter, setStatusFilter] = useState<StageStatusFilter>("pendente");
@@ -997,6 +1007,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       await pull();
       const bm = await getDbBarrasMeta();
       setDbBarrasCount(bm.row_count);
+      setDbBarrasLastSyncAt(bm.last_sync_at);
       setMsg("Sincronização concluída.");
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error ?? "");
@@ -1305,6 +1316,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           throw new Error("Sem base local de barras. Conecte-se e ative o modo offline para sincronizar.");
         }
         setDbBarrasCount(localBarrasMeta.row_count);
+        setDbBarrasLastSyncAt(localBarrasMeta.last_sync_at);
         if (!background) {
           setMsg("Offline ativo com bases locais já disponíveis.");
         }
@@ -1326,6 +1338,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       const barrasMetaAfterSync = await getDbBarrasMeta();
       const barrasTotal = barrasMetaAfterSync.row_count || barrasSync.total;
       setDbBarrasCount(barrasTotal);
+      setDbBarrasLastSyncAt(barrasMetaAfterSync.last_sync_at);
       setMsg("Offline ativo. Bases do inventário e de barras atualizadas neste dispositivo.");
     } catch (error) {
       setErr(parseErr(error));
@@ -1419,7 +1432,20 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     barcodeLookupCacheRef.current.clear();
     barcodeLookupInFlightRef.current.clear();
   }, [cd, dbBarrasCount]);
-  useEffect(() => { if (cd != null) { void loadLocal(); void refreshPending(); void getDbBarrasMeta().then((m) => setDbBarrasCount(m.row_count)); if (isOnline) void syncNow(false); } }, [cd, isOnline, loadLocal, refreshPending, syncNow]);
+  useEffect(() => {
+    if (cd == null) {
+      setDbBarrasCount(0);
+      setDbBarrasLastSyncAt(null);
+      return;
+    }
+    void loadLocal();
+    void refreshPending();
+    void getDbBarrasMeta().then((m) => {
+      setDbBarrasCount(m.row_count);
+      setDbBarrasLastSyncAt(m.last_sync_at);
+    });
+    if (isOnline) void syncNow(false);
+  }, [cd, isOnline, loadLocal, refreshPending, syncNow]);
   useEffect(() => {
     if (!preferOffline || !isOnline || cd == null) return;
     const key = `${cd}|${preferOffline ? "1" : "0"}|${isOnline ? "1" : "0"}`;
@@ -1841,6 +1867,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const showTopContextBlocks = canShowStageSelector;
   const isAdminZonaFlow = adminManageMode === "zona";
   const isAdminCoddvFlow = adminManageMode === "coddv";
+  const dbBarrasSyncLabel = dbBarrasLastSyncAt
+    ? `db_barras atualizada em ${formatDateTime(dbBarrasLastSyncAt)}`
+    : "db_barras sem atualização local";
   const handleToggleOffline = useCallback(() => {
     const nextMode = !preferOffline;
     setPreferOffline(nextMode);
@@ -2719,6 +2748,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <span className={`inventario-base-chip ${manifestMeta && manifestItems.length >= manifestMeta.row_count ? "ok" : "warn"}`}>{`db_inventario ${manifestItems.length}/${manifestMeta?.row_count ?? 0}`}</span>
                 <span className={`inventario-base-chip ${dbBarrasCount > 0 ? "ok" : "warn"}`}>{`db_barras ${dbBarrasCount}`}</span>
               </div>
+              <p className={`inventario-base-sync-info ${dbBarrasLastSyncAt ? "ok" : "warn"}`}>{dbBarrasSyncLabel}</p>
             </div>
             {err ? <div className="alert error">{err}</div> : null}
             {msg ? <div className="alert success">{msg}</div> : null}

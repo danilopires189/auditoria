@@ -4287,6 +4287,21 @@ small {
   gap: 8px;
 }
 
+.inventario-base-sync-info {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #5a6f95;
+}
+
+.inventario-base-sync-info.ok {
+  color: #1f6f34;
+}
+
+.inventario-base-sync-info.warn {
+  color: #8a5d10;
+}
+
 .inventario-base-chip {
   font-size: 0.76rem;
   border-radius: 999px;
