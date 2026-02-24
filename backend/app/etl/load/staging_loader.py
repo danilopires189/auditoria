@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from io import StringIO
+import time
 
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from app.utils.timezone import now_brasilia
+
+COPY_CHUNK_ROWS = 100_000
+COPY_MAX_ATTEMPTS = 2
 
 
 def _quoted(identifier: str) -> str:
@@ -40,6 +44,32 @@ def clear_staging_for_table(engine: Engine, table_name: str) -> None:
         conn.execute(text(f'truncate table staging."{table_name}"'))
 
 
+def _is_transient_copy_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    transient_tokens = (
+        "server closed the connection unexpectedly",
+        "connection already closed",
+        "invalid socket",
+        "could not receive data from server",
+        "terminating connection",
+        "connection not open",
+    )
+    return any(token in message for token in transient_tokens)
+
+
+def _copy_in_chunks(
+    data: pd.DataFrame,
+    copy_sql: str,
+    cursor,
+) -> None:
+    for start in range(0, len(data), COPY_CHUNK_ROWS):
+        chunk = data.iloc[start : start + COPY_CHUNK_ROWS]
+        csv_buffer = StringIO()
+        chunk.to_csv(csv_buffer, index=False, header=False, na_rep="\\N")
+        csv_buffer.seek(0)
+        cursor.copy_expert(copy_sql, csv_buffer)
+
+
 def load_dataframe_to_staging(
     engine: Engine,
     table_name: str,
@@ -67,25 +97,41 @@ def load_dataframe_to_staging(
 
     data = data[columns]
 
-    csv_buffer = StringIO()
-    data.to_csv(csv_buffer, index=False, header=False, na_rep="\\N")
-    csv_buffer.seek(0)
-
     quoted_cols = ", ".join(_quoted(col) for col in columns)
     copy_sql = (
         f'COPY staging."{table_name}" ({quoted_cols}) '
         "FROM STDIN WITH (FORMAT CSV, NULL '\\N')"
     )
 
-    raw_conn = engine.raw_connection()
-    try:
-        with raw_conn.cursor() as cursor:
-            cursor.copy_expert(copy_sql, csv_buffer)
-        raw_conn.commit()
-    except Exception:
-        raw_conn.rollback()
-        raise
-    finally:
-        raw_conn.close()
+    last_exc: Exception | None = None
+    for attempt in range(1, COPY_MAX_ATTEMPTS + 1):
+        raw_conn = engine.raw_connection()
+        try:
+            with raw_conn.cursor() as cursor:
+                _copy_in_chunks(data, copy_sql, cursor)
+            raw_conn.commit()
+            last_exc = None
+            break
+        except Exception as exc:
+            last_exc = exc
+            try:
+                if not getattr(raw_conn, "closed", False):
+                    raw_conn.rollback()
+            except Exception:
+                pass
+
+            can_retry = attempt < COPY_MAX_ATTEMPTS and _is_transient_copy_error(exc)
+            if can_retry:
+                time.sleep(2)
+                continue
+            raise
+        finally:
+            try:
+                raw_conn.close()
+            except Exception:
+                pass
+
+    if last_exc is not None:
+        raise last_exc
 
     return len(data)

@@ -41,6 +41,7 @@ class SyncService:
         self.audit = AuditWriter(engine)
         self.app_version = app_version
         self.logger = get_logger()
+        self._last_source_fingerprints: dict[str, dict[str, object]] | None = None
 
     @property
     def _config_hash(self) -> str:
@@ -213,6 +214,67 @@ class SyncService:
 
             return valid, validation.rows_in, rejected_rows
 
+    def _source_fingerprint(self, table_cfg: TableConfig) -> dict[str, object] | None:
+        source_path = self.config.data_dir_path / table_cfg.file
+        if not source_path.exists():
+            return None
+
+        stat = source_path.stat()
+        mtime_ns = getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000))
+        return {
+            "file": table_cfg.file,
+            "size": int(stat.st_size),
+            "mtime_ns": int(mtime_ns),
+        }
+
+    def _load_last_source_fingerprints(self) -> dict[str, dict[str, object]]:
+        sql = text(
+            """
+            select distinct on (m.table_name)
+                m.table_name,
+                m.meta_value
+            from audit.runs_metadata m
+            join audit.runs r
+              on r.run_id = m.run_id
+            where m.meta_key = 'source_fingerprint'
+              and r.triggered_by = 'sync'
+              and r.status in ('success', 'partial')
+            order by m.table_name, r.started_at desc
+            """
+        )
+
+        with self.engine.begin() as conn:
+            rows = conn.execute(sql).mappings().all()
+
+        fingerprints: dict[str, dict[str, object]] = {}
+        for row in rows:
+            value = row["meta_value"]
+            if isinstance(value, dict):
+                fingerprints[str(row["table_name"])] = value
+        return fingerprints
+
+    def _get_last_source_fingerprint(self, table_name: str) -> dict[str, object] | None:
+        if self._last_source_fingerprints is None:
+            self._last_source_fingerprints = self._load_last_source_fingerprints()
+        return self._last_source_fingerprints.get(table_name)
+
+    def _same_source_fingerprint(
+        self,
+        previous: dict[str, object],
+        current: dict[str, object],
+    ) -> bool:
+        def _as_int(value: object) -> int | None:
+            try:
+                return int(value) if value is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        return (
+            str(previous.get("file", "")) == str(current.get("file", ""))
+            and _as_int(previous.get("size")) == _as_int(current.get("size"))
+            and _as_int(previous.get("mtime_ns")) == _as_int(current.get("mtime_ns"))
+        )
+
     def _promote_table(
         self,
         run_id: str,
@@ -301,6 +363,8 @@ class SyncService:
             with lock_context:
                 for table_name, table_cfg in self.config.tables.items():
                     try:
+                        source_fingerprint = self._source_fingerprint(table_cfg)
+
                         if table_cfg.refresh_before_load:
                             source_path = self.config.data_dir_path / table_cfg.file
                             with self.audit.step(run_id, "refresh", table_name) as counters:
@@ -316,6 +380,24 @@ class SyncService:
                                 if not refresh_result.ok:
                                     counters.details["error"] = refresh_result.error
                                     raise RuntimeError(refresh_result.error)
+
+                        if not (dry_run or validate_only) and source_fingerprint:
+                            previous_fingerprint = self._get_last_source_fingerprint(table_name)
+                            if previous_fingerprint and self._same_source_fingerprint(
+                                previous_fingerprint,
+                                source_fingerprint,
+                            ):
+                                with self.audit.step(run_id, "validate", table_name) as counters:
+                                    counters.details = {
+                                        "skipped": True,
+                                        "reason": "source_unchanged",
+                                        "source_fingerprint": source_fingerprint,
+                                    }
+                                self.logger.info(
+                                    "table={} skipped reason=source_unchanged",
+                                    table_name,
+                                )
+                                continue
 
                         valid_frame, rows_in, rejected_rows = self._prepare_table_dataset(
                             run_id,
@@ -349,6 +431,16 @@ class SyncService:
                                 clear_staging_for_run(self.engine, table_name, run_id)
                                 counters.rows_in = rows_loaded
                                 counters.rows_out = 0
+
+                            if source_fingerprint:
+                                self.audit.write_metadata(
+                                    run_id,
+                                    table_name,
+                                    "source_fingerprint",
+                                    source_fingerprint,
+                                )
+                                if self._last_source_fingerprints is not None:
+                                    self._last_source_fingerprints[table_name] = source_fingerprint
 
                         self.logger.info(
                             "table={} rows_in={} rows_valid={} rows_rejected={}",
