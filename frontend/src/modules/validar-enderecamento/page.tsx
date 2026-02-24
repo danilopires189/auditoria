@@ -1065,7 +1065,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
         <form className="coleta-form validar-end-form" onSubmit={onProdutoSubmit}>
           <div className="coleta-form-grid validar-end-form-grid">
             <label>
-              Produto (barras ou CODDV)
+              Produto (código de barras)
               <div className="input-icon-wrap with-action">
                 <span className={produtoIconClassName} aria-hidden="true">
                   {barcodeIcon()}

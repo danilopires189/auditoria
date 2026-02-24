@@ -7,8 +7,7 @@ import type { DbEndCacheRow } from "../../shared/db-end/types";
 import type { ValidarEnderecamentoLookupResult } from "./types";
 
 interface ParsedProductInput {
-  barras: string | null;
-  coddv: number | null;
+  barras: string;
 }
 
 function parseInteger(value: unknown, fallback = 0): number {
@@ -34,8 +33,7 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Faça login novamente.";
   if (normalized.includes("CD_NAO_DEFINIDO_USUARIO")) return "CD não definido para este usuário.";
   if (normalized.includes("CD_SEM_ACESSO")) return "Sem acesso ao CD selecionado.";
-  if (normalized.includes("PARAMS_BUSCA_OBRIGATORIOS")) return "Informe código de barras ou Código e Dígito (CODDV).";
-  if (normalized.includes("CODDV_INVALIDO")) return "Código e Dígito (CODDV) inválido.";
+  if (normalized.includes("PARAMS_BUSCA_OBRIGATORIOS")) return "Informe código de barras.";
   if (normalized.includes("PRODUTO_NAO_ENCONTRADO")) return "Produto não encontrado.";
   return raw;
 }
@@ -75,12 +73,8 @@ function parseProductInput(rawInput: string): ParsedProductInput | null {
   if (!original) return null;
 
   const barras = normalizeBarcode(original);
-  const coddv = /^\d+$/.test(original) ? Number.parseInt(original, 10) : Number.NaN;
-
-  return {
-    barras: barras || null,
-    coddv: Number.isFinite(coddv) && coddv > 0 ? coddv : null
-  };
+  if (!barras) return null;
+  return { barras };
 }
 
 function mapLookupRow(raw: Record<string, unknown>): ValidarEnderecamentoLookupResult {
@@ -116,49 +110,16 @@ async function lookupProdutoOnlineByParsed(cd: number, parsedInput: ParsedProduc
   if (!supabase) throw new Error("Supabase não inicializado.");
   const client = supabase;
 
-  const callLookup = async (params: {
-    barras?: string | null;
-    coddv?: number | null;
-  }): Promise<ValidarEnderecamentoLookupResult> => {
-    const { data, error } = await client.rpc("rpc_busca_produto_lookup", {
-      p_cd: cd,
-      p_barras: params.barras ?? null,
-      p_coddv: params.coddv ?? null
-    });
-    if (error) throw new Error(toErrorMessage(error));
+  const { data, error } = await client.rpc("rpc_busca_produto_lookup", {
+    p_cd: cd,
+    p_barras: parsedInput.barras,
+    p_coddv: null
+  });
+  if (error) throw new Error(toErrorMessage(error));
 
-    const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-    if (!first) throw new Error("Produto não encontrado.");
-    return mapLookupRow(first);
-  };
-
-  let lastError: unknown = null;
-
-  // 1) tenta barras primeiro quando informado
-  if (parsedInput.barras) {
-    try {
-      return await callLookup({
-        barras: parsedInput.barras,
-        coddv: null
-      });
-    } catch (error) {
-      lastError = error;
-      if (!containsNotFoundError(error)) {
-        throw error;
-      }
-    }
-  }
-
-  // 2) fallback para CODDV (inclusive quando input é numérico manual)
-  if (parsedInput.coddv && parsedInput.coddv > 0) {
-    return callLookup({
-      barras: null,
-      coddv: parsedInput.coddv
-    });
-  }
-
-  if (lastError) throw (lastError instanceof Error ? lastError : new Error(toErrorMessage(lastError)));
-  throw new Error("Produto não encontrado.");
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Produto não encontrado.");
+  return mapLookupRow(first);
 }
 
 async function lookupProdutoOfflineByParsed(
@@ -166,8 +127,8 @@ async function lookupProdutoOfflineByParsed(
   parsedInput: ParsedProductInput
 ): Promise<ValidarEnderecamentoLookupResult | null> {
   const barcode = parsedInput.barras;
-  const barcodeRow = barcode ? await getDbBarrasByBarcode(barcode) : null;
-  const coddv = parsedInput.coddv ?? barcodeRow?.coddv ?? null;
+  const barcodeRow = await getDbBarrasByBarcode(barcode);
+  const coddv = barcodeRow?.coddv ?? null;
   if (coddv == null || coddv <= 0) return null;
 
   const sepRows = await getDbEndRowsByCoddv(cd, coddv, "SEP");
@@ -178,11 +139,10 @@ async function lookupProdutoOfflineByParsed(
     || sepRows[0]?.descricao?.trim()
     || `CODDV ${coddv}`;
 
-  const barrasLista = barcode
-    ? [barcode]
-    : barcodeRow?.barras
-      ? [normalizeBarcode(barcodeRow.barras)]
-      : [];
+  const barrasLista = Array.from(new Set([
+    barcode,
+    normalizeBarcode(String(barcodeRow?.barras ?? ""))
+  ].filter(Boolean)));
 
   return {
     cd,
@@ -229,8 +189,8 @@ export async function resolveProdutoForValidacao(params: {
   preferOfflineMode: boolean;
 }): Promise<ValidarEnderecamentoLookupResult> {
   const parsedInput = parseProductInput(params.rawInput);
-  if (!parsedInput || (!parsedInput.barras && !parsedInput.coddv)) {
-    throw new Error("Informe código de barras ou Código e Dígito (CODDV).");
+  if (!parsedInput) {
+    throw new Error("Informe código de barras.");
   }
 
   let offlineResult: ValidarEnderecamentoLookupResult | null = null;
