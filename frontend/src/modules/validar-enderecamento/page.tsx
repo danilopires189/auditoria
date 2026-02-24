@@ -235,6 +235,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   const [dbBarrasLastSyncAt, setDbBarrasLastSyncAt] = useState<string | null>(null);
   const [dbEndCount, setDbEndCount] = useState(0);
   const [dbEndLastSyncAt, setDbEndLastSyncAt] = useState<string | null>(null);
+  const [offlineMetaReady, setOfflineMetaReady] = useState(false);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -298,17 +299,24 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       setDbBarrasLastSyncAt(null);
       setDbEndCount(0);
       setDbEndLastSyncAt(null);
+      setOfflineMetaReady(true);
       return;
     }
 
-    const [barrasMeta, endMeta] = await Promise.all([
-      getDbBarrasMeta(),
-      getDbEndMeta(currentCd)
-    ]);
-    setDbBarrasCount(barrasMeta.row_count);
-    setDbBarrasLastSyncAt(barrasMeta.last_sync_at);
-    setDbEndCount(endMeta.row_count);
-    setDbEndLastSyncAt(endMeta.last_sync_at);
+    try {
+      const [barrasMeta, endMeta] = await Promise.all([
+        getDbBarrasMeta(),
+        getDbEndMeta(currentCd)
+      ]);
+      setDbBarrasCount(barrasMeta.row_count);
+      setDbBarrasLastSyncAt(barrasMeta.last_sync_at);
+      setDbEndCount(endMeta.row_count);
+      setDbEndLastSyncAt(endMeta.last_sync_at);
+    } catch {
+      setErrorMessage((current) => current ?? "Falha ao ler base local. Tente atualizar a página.");
+    } finally {
+      setOfflineMetaReady(true);
+    }
   }, [currentCd]);
 
   const clearValidationCycle = useCallback(() => {
@@ -838,8 +846,15 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   }, [preferencesReady, preferOfflineMode, profile.user_id]);
 
   useEffect(() => {
+    setOfflineMetaReady(false);
     void refreshOfflineMeta();
   }, [refreshOfflineMeta]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    if (!navigator.storage || typeof navigator.storage.persist !== "function") return;
+    void navigator.storage.persist().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1041,18 +1056,29 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   }, [commitScannerInput, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch]);
 
   const onToggleOfflineMode = async () => {
+    if (!offlineMetaReady) {
+      setStatusMessage("Carregando base local, aguarde alguns segundos.");
+      return;
+    }
+
     const next = !preferOfflineMode;
     setPreferOfflineMode(next);
     setErrorMessage(null);
     setStatusMessage(null);
+    const hasLocalBase = dbBarrasCount > 0 && dbEndCount > 0;
 
     if (next) {
       if (!isOnline) {
-        if (dbBarrasCount > 0 && dbEndCount > 0) {
+        if (hasLocalBase) {
           setStatusMessage("Modo offline ativado com base local existente.");
         } else {
           setErrorMessage("Sem base local completa. Conecte-se para sincronizar db_barras e db_end.");
         }
+        return;
+      }
+
+      if (hasLocalBase) {
+        setStatusMessage("Modo offline ativado com base local já sincronizada.");
         return;
       }
 
@@ -1107,6 +1133,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {!offlineMetaReady ? <div className="alert success">Carregando base local...</div> : null}
 
         {preferOfflineMode ? (
           <div className="alert success">
@@ -1132,12 +1159,17 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
               type="button"
               className={`btn btn-muted validar-end-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
               onClick={() => void onToggleOfflineMode()}
-              disabled={busySync}
+              disabled={busySync || !offlineMetaReady}
             >
               {preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
             </button>
           ) : null}
-          <button className="btn btn-primary validar-end-sync-btn" type="button" onClick={() => void runOfflineSync()} disabled={!isOnline || busySync}>
+          <button
+            className="btn btn-primary validar-end-sync-btn"
+            type="button"
+            onClick={() => void runOfflineSync()}
+            disabled={!isOnline || busySync || !offlineMetaReady}
+          >
             <span aria-hidden="true">{refreshIcon()}</span>
             {busySync ? "Sincronizando..." : "Sincronizar base"}
           </button>
