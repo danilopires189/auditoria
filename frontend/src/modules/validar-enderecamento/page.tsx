@@ -49,6 +49,7 @@ const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+const SCANNER_WEDGE_FLUSH_DELAY_MS = 120;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
 
@@ -684,6 +685,15 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
   }, []);
 
+  const resolveActiveScannerTarget = useCallback((): ScannerInputTarget => {
+    if (typeof document !== "undefined") {
+      const activeElement = document.activeElement;
+      if (activeElement === produtoRef.current) return "produto";
+      if (activeElement === enderecoRef.current && currentProduct) return "endereco";
+    }
+    return currentProduct ? "endereco" : "produto";
+  }, [currentProduct]);
+
   const onProdutoInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = event.target.value;
     setProdutoInput(nextValue);
@@ -721,6 +731,77 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     event.preventDefault();
     void commitScannerInput("endereco", enderecoInput);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (scannerOpen) return undefined;
+
+    let buffer = "";
+    let lastKeyAt = 0;
+    let flushTimerId: number | null = null;
+
+    const clearFlushTimer = () => {
+      if (flushTimerId != null) {
+        window.clearTimeout(flushTimerId);
+        flushTimerId = null;
+      }
+    };
+
+    const flushBufferedScan = () => {
+      const normalized = buffer.replace(/\s+/g, "").trim();
+      buffer = "";
+      clearFlushTimer();
+      if (!normalized) return;
+      const target = resolveActiveScannerTarget();
+      void commitScannerInput(target, normalized);
+    };
+
+    const scheduleFlush = () => {
+      clearFlushTimer();
+      flushTimerId = window.setTimeout(() => {
+        flushBufferedScan();
+      }, SCANNER_WEDGE_FLUSH_DELAY_MS);
+    };
+
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (scannerOpen) return;
+      if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey) return;
+
+      const key = event.key;
+      const isTerminator = key === "Enter" || key === "Tab";
+      const isChar = key.length === 1;
+      if (!isTerminator && !isChar) return;
+
+      const activeElement = document.activeElement;
+      const isEditableElsewhere = (
+        activeElement instanceof HTMLInputElement
+        || activeElement instanceof HTMLTextAreaElement
+      ) && activeElement !== produtoRef.current && activeElement !== enderecoRef.current;
+      if (isEditableElsewhere) return;
+
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (now - lastKeyAt > SCANNER_INPUT_MAX_INTERVAL_MS * 4) {
+        buffer = "";
+      }
+      lastKeyAt = now;
+
+      if (isChar) {
+        buffer += key;
+        scheduleFlush();
+        return;
+      }
+
+      if (!buffer) return;
+      event.preventDefault();
+      flushBufferedScan();
+    };
+
+    window.addEventListener("keydown", onWindowKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onWindowKeyDown, true);
+      clearFlushTimer();
+    };
+  }, [commitScannerInput, resolveActiveScannerTarget, scannerOpen]);
 
   useEffect(() => {
     focusProduto();
