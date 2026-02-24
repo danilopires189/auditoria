@@ -207,6 +207,15 @@ function refreshIcon() {
   );
 }
 
+function searchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-4-4" />
+    </svg>
+  );
+}
+
 function asLookupSummary(result: ValidarEnderecamentoLookupResult): string {
   return `${result.descricao || `CODDV ${result.coddv}`} | CODDV ${result.coddv}`;
 }
@@ -1080,6 +1089,10 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
               </div>
             </label>
           </div>
+          <button className="btn btn-primary validar-end-submit-btn" type="submit" disabled={busySync}>
+            <span aria-hidden="true">{searchIcon()}</span>
+            Buscar produto
+          </button>
         </form>
 
         <form className="coleta-form validar-end-form" onSubmit={onEnderecoSubmit}>
@@ -1122,6 +1135,10 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
               </div>
             </label>
           </div>
+          <button className="btn btn-primary validar-end-submit-btn" type="submit" disabled={busySync || !currentProduct}>
+            <span aria-hidden="true">{searchIcon()}</span>
+            Validar endereço
+          </button>
         </form>
 
         {currentProduct ? (

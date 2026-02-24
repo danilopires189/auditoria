@@ -7582,6 +7582,22 @@ small {
   grid-template-columns: 1fr;
 }
 
+.validar-end-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.validar-end-submit-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .validar-end-product-card {
   background: #ffffff;
   border: 1px solid #dbe5f1;
