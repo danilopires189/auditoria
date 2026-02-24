@@ -8,10 +8,6 @@ from pathlib import Path
 from app.automation.models import AutomationConfig, TaskCommandResult
 
 
-WEEK_DAYS_MON_SAT = "MON,TUE,WED,THU,FRI,SAT"
-WEEK_DAYS_ALL = "MON,TUE,WED,THU,FRI,SAT,SUN"
-
-
 def _is_windows() -> bool:
     return os.name == "nt"
 
@@ -80,7 +76,6 @@ def build_create_task_args(
     config: AutomationConfig,
     run_command: str,
 ) -> list[str]:
-    days = WEEK_DAYS_MON_SAT if config.exclude_sunday else WEEK_DAYS_ALL
     return [
         "/Create",
         "/TN",
@@ -95,8 +90,6 @@ def build_create_task_args(
         config.window_start,
         "/ET",
         config.window_end,
-        "/D",
-        days,
         "/RL",
         "LIMITED",
         "/IT",
