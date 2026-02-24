@@ -7697,6 +7697,12 @@ small {
   font-weight: 700;
 }
 
+.validar-end-popup-close-btn {
+  margin-top: 4px;
+  justify-self: end;
+  min-width: 120px;
+}
+
 @media (max-width: 980px) {
   .validar-end-actions-row {
     display: grid;
