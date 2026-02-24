@@ -591,7 +591,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     setEnderecoValidationState("validating");
 
     const sepList = currentProduct.enderecos_sep;
-    const matched = sepList.some((item) => enderecoMatchesForCompare(endereco, item));
+    const matched = sepList.some((item) => enderecoMatchesForCompare(endereco, item, { cd: currentProduct.cd }));
 
     if (matched) {
       setEnderecoValidationState("valid");
