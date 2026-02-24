@@ -19,3 +19,22 @@ export interface ValidarEnderecamentoLookupResult {
   barras_lista: string[];
   enderecos_sep: string[];
 }
+
+export interface ValidarEnderecamentoAuditPayload {
+  cd: number;
+  barras: string;
+  coddv: number;
+  descricao: string;
+  end_infor: string;
+  end_corret: string;
+  validado: boolean;
+  data_hr?: string | null;
+}
+
+export interface ValidarEnderecamentoPendingAuditRow {
+  local_id: string;
+  created_at: string;
+  attempts: number;
+  last_error: string | null;
+  payload: ValidarEnderecamentoAuditPayload;
+}
