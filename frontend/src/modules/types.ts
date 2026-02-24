@@ -19,6 +19,7 @@ export type DashboardModuleKey =
   | "pvps-alocacao"
   | "atividade-extra"
   | "busca-produto"
+  | "validar-enderecamento"
   | "coleta-mercadoria"
   | "check-list"
   | "conferencia-termo"
