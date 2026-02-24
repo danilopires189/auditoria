@@ -64,8 +64,11 @@ function uniqueNonEmpty(values: string[]): string[] {
   return Array.from(unique);
 }
 
-function replaceLeadingLetterWithZero(value: string): string {
-  return value.replace(/^[A-Z]+/i, "0");
+function removeLeadingLetterAndReplaceNextWithZero(value: string): string {
+  if (!/^[A-Z]/i.test(value)) return value;
+  const withoutLeadingLetter = value.slice(1);
+  if (!withoutLeadingLetter) return "0";
+  return `0${withoutLeadingLetter.slice(1)}`;
 }
 
 function stripSeparators(value: string): string {
@@ -80,7 +83,7 @@ export function buildEnderecoCompareKeys(value: string): string[] {
   const base = normalizeEnderecoForCompare(value);
   if (!base) return [];
 
-  const withZeroPrefix = replaceLeadingLetterWithZero(base);
+  const withZeroPrefix = removeLeadingLetterAndReplaceNextWithZero(base);
   return uniqueNonEmpty([
     base,
     withZeroPrefix,
