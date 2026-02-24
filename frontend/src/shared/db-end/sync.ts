@@ -64,8 +64,8 @@ function uniqueNonEmpty(values: string[]): string[] {
   return Array.from(unique);
 }
 
-function stripLeadingBlock(value: string): string {
-  return value.replace(/^[A-Z]+[.\-_/]*/i, "");
+function replaceLeadingLetterWithZero(value: string): string {
+  return value.replace(/^[A-Z]+/i, "0");
 }
 
 function stripSeparators(value: string): string {
@@ -80,13 +80,14 @@ export function buildEnderecoCompareKeys(value: string): string[] {
   const base = normalizeEnderecoForCompare(value);
   if (!base) return [];
 
-  const withoutPrefix = stripLeadingBlock(base);
+  const withZeroPrefix = replaceLeadingLetterWithZero(base);
   return uniqueNonEmpty([
     base,
-    withoutPrefix,
+    withZeroPrefix,
     stripSeparators(base),
-    stripSeparators(withoutPrefix),
-    digitsOnly(base)
+    stripSeparators(withZeroPrefix),
+    digitsOnly(base),
+    digitsOnly(withZeroPrefix)
   ]);
 }
 
