@@ -87,7 +87,7 @@ function parsePendingRows(raw: string | null): ValidarEnderecamentoPendingAuditR
     }
 
     result.sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return result.slice(0, MAX_PENDING_ROWS);
+    return result.slice(-MAX_PENDING_ROWS);
   } catch {
     return [];
   }
@@ -98,7 +98,7 @@ function savePendingRows(userId: string, rows: ValidarEnderecamentoPendingAuditR
   try {
     const normalizedRows = [...rows]
       .sort((a, b) => a.created_at.localeCompare(b.created_at))
-      .slice(0, MAX_PENDING_ROWS);
+      .slice(-MAX_PENDING_ROWS);
     window.localStorage.setItem(pendingKey(userId), JSON.stringify(normalizedRows));
   } catch {
     // Ignore storage failures.
