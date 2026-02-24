@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from app.automation.models import AutomationConfig, TaskCommandResult
@@ -10,6 +11,18 @@ from app.automation.models import AutomationConfig, TaskCommandResult
 
 def _is_windows() -> bool:
     return os.name == "nt"
+
+
+def _compute_window_duration(window_start: str, window_end: str) -> str:
+    start_dt = datetime.strptime(window_start, "%H:%M")
+    end_dt = datetime.strptime(window_end, "%H:%M")
+    if end_dt <= start_dt:
+        end_dt = end_dt + timedelta(days=1)
+    minutes = int((end_dt - start_dt).total_seconds() // 60)
+    if minutes <= 0:
+        minutes = 1
+    hours, mins = divmod(minutes, 60)
+    return f"{hours:02d}:{mins:02d}"
 
 
 def resolve_runtime_command_prefix() -> list[str]:
@@ -76,6 +89,7 @@ def build_create_task_args(
     config: AutomationConfig,
     run_command: str,
 ) -> list[str]:
+    duration = _compute_window_duration(config.window_start, config.window_end)
     return [
         "/Create",
         "/TN",
@@ -83,13 +97,15 @@ def build_create_task_args(
         "/TR",
         run_command,
         "/SC",
-        "MINUTE",
+        "DAILY",
         "/MO",
-        str(max(1, int(config.interval_minutes))),
+        "1",
         "/ST",
         config.window_start,
-        "/ET",
-        config.window_end,
+        "/RI",
+        str(max(1, int(config.interval_minutes))),
+        "/DU",
+        duration,
         "/RL",
         "LIMITED",
         "/IT",
