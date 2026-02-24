@@ -64,11 +64,14 @@ function uniqueNonEmpty(values: string[]): string[] {
   return Array.from(unique);
 }
 
-function removeLeadingLetterAndReplaceNextWithZero(value: string): string {
-  if (!/^[A-Z]/i.test(value)) return value;
-  const withoutLeadingLetter = value.slice(1);
-  if (!withoutLeadingLetter) return "0";
-  return `0${withoutLeadingLetter.slice(1)}`;
+function startsWithLetter(value: string): boolean {
+  return /^[A-Z]/i.test(value);
+}
+
+function extractAfterFirstDot(value: string): string {
+  const firstDotIndex = value.indexOf(".");
+  if (firstDotIndex < 0) return "";
+  return value.slice(firstDotIndex + 1);
 }
 
 function stripSeparators(value: string): string {
@@ -79,25 +82,64 @@ function digitsOnly(value: string): string {
   return value.replace(/\D+/g, "");
 }
 
-export function buildEnderecoCompareKeys(value: string): string[] {
+function buildStrictCompareKeys(value: string): string[] {
   const base = normalizeEnderecoForCompare(value);
   if (!base) return [];
-
-  const withZeroPrefix = removeLeadingLetterAndReplaceNextWithZero(base);
   return uniqueNonEmpty([
     base,
-    withZeroPrefix,
-    stripSeparators(base),
-    stripSeparators(withZeroPrefix),
-    digitsOnly(base),
-    digitsOnly(withZeroPrefix)
+    stripSeparators(base)
   ]);
 }
 
+function buildLooseCompareKeys(
+  value: string,
+  options?: { includeLetterPrefixSuffix?: boolean }
+): string[] {
+  const base = normalizeEnderecoForCompare(value);
+  if (!base) return [];
+
+  const keys = [
+    base,
+    stripSeparators(base),
+    digitsOnly(base)
+  ];
+
+  const includeLetterPrefixSuffix = options?.includeLetterPrefixSuffix ?? false;
+  if (includeLetterPrefixSuffix && startsWithLetter(base)) {
+    const suffix = extractAfterFirstDot(base);
+    if (suffix) {
+      keys.push(
+        suffix,
+        stripSeparators(suffix),
+        digitsOnly(suffix)
+      );
+    }
+  }
+
+  return uniqueNonEmpty(keys);
+}
+
+export function buildEnderecoCompareKeys(value: string): string[] {
+  return buildLooseCompareKeys(value, { includeLetterPrefixSuffix: true });
+}
+
 export function enderecoMatchesForCompare(input: string, candidate: string): boolean {
-  const inputKeys = new Set(buildEnderecoCompareKeys(input));
+  const normalizedInput = normalizeEnderecoForCompare(input);
+  if (!normalizedInput) return false;
+
+  const inputStartsWithLetter = startsWithLetter(normalizedInput);
+  const inputKeys = new Set(
+    inputStartsWithLetter
+      ? buildStrictCompareKeys(normalizedInput)
+      : buildLooseCompareKeys(normalizedInput, { includeLetterPrefixSuffix: false })
+  );
   if (inputKeys.size <= 0) return false;
-  for (const key of buildEnderecoCompareKeys(candidate)) {
+
+  const candidateKeys = inputStartsWithLetter
+    ? buildStrictCompareKeys(candidate)
+    : buildLooseCompareKeys(candidate, { includeLetterPrefixSuffix: true });
+
+  for (const key of candidateKeys) {
     if (inputKeys.has(key)) return true;
   }
   return false;
