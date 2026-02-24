@@ -6,8 +6,7 @@ import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getDbBarrasMeta } from "../../shared/db-barras/storage";
 import { refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
 import { getDbEndMeta } from "../../shared/db-end/storage";
-import { normalizeEnderecoForCompare, refreshDbEndCacheSmart } from "../../shared/db-end/sync";
-import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
+import { enderecoMatchesForCompare, refreshDbEndCacheSmart } from "../../shared/db-end/sync";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import { getValidarEnderecamentoPreferences, saveValidarEnderecamentoPreferences } from "./storage";
@@ -33,6 +32,7 @@ interface ValidationPopupState {
   title: string;
   detail: string | null;
   sepList: string[];
+  manualClose: boolean;
 }
 
 interface ScannerInputState {
@@ -49,8 +49,7 @@ const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
-const POPUP_SUCCESS_MS = 1300;
-const POPUP_ERROR_MS = 2200;
+const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
 
 function createScannerInputState(): ScannerInputState {
@@ -207,15 +206,6 @@ function refreshIcon() {
   );
 }
 
-function searchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="11" cy="11" r="7" />
-      <path d="M20 20l-4-4" />
-    </svg>
-  );
-}
-
 function asLookupSummary(result: ValidarEnderecamentoLookupResult): string {
   return `${result.descricao || `CODDV ${result.coddv}`} | CODDV ${result.coddv}`;
 }
@@ -234,16 +224,6 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   const popupTimerRef = useRef<number | null>(null);
   const resolveScanFeedbackAnchor = useCallback(() => enderecoRef.current ?? produtoRef.current, []);
   const { triggerScanErrorAlert } = useScanFeedback(resolveScanFeedbackAnchor);
-  const {
-    inputMode: produtoInputMode,
-    enableSoftKeyboard: enableProdutoSoftKeyboard,
-    disableSoftKeyboard: disableProdutoSoftKeyboard
-  } = useOnDemandSoftKeyboard("numeric");
-  const {
-    inputMode: enderecoInputMode,
-    enableSoftKeyboard: enableEnderecoSoftKeyboard,
-    disableSoftKeyboard: disableEnderecoSoftKeyboard
-  } = useOnDemandSoftKeyboard("text");
 
   const [produtoInput, setProdutoInput] = useState("");
   const [enderecoInput, setEnderecoInput] = useState("");
@@ -300,18 +280,16 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   }, []);
 
   const focusProduto = useCallback(() => {
-    disableProdutoSoftKeyboard();
     window.requestAnimationFrame(() => {
       produtoRef.current?.focus();
     });
-  }, [disableProdutoSoftKeyboard]);
+  }, []);
 
   const focusEndereco = useCallback(() => {
-    disableEnderecoSoftKeyboard();
     window.requestAnimationFrame(() => {
       enderecoRef.current?.focus();
     });
-  }, [disableEnderecoSoftKeyboard]);
+  }, []);
 
   const refreshOfflineMeta = useCallback(async () => {
     if (currentCd == null || currentCd <= 0) {
@@ -346,7 +324,8 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     title: string;
     detail: string | null;
     sepList: string[];
-    durationMs: number;
+    durationMs?: number;
+    manualClose?: boolean;
   }) => {
     const popupId = Math.trunc(Date.now() + Math.random() * 1000);
     clearPopupTimer();
@@ -355,14 +334,23 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       tone: params.tone,
       title: params.title,
       detail: params.detail,
-      sepList: params.sepList
+      sepList: params.sepList,
+      manualClose: Boolean(params.manualClose)
     });
+    if (params.manualClose) return;
     if (typeof window === "undefined") return;
+    const durationMs = params.durationMs ?? POPUP_SUCCESS_MS;
     popupTimerRef.current = window.setTimeout(() => {
       setValidationPopup((current) => (current?.id === popupId ? null : current));
       popupTimerRef.current = null;
       clearValidationCycle();
-    }, params.durationMs);
+    }, durationMs);
+  }, [clearPopupTimer, clearValidationCycle]);
+
+  const closeValidationPopup = useCallback(() => {
+    clearPopupTimer();
+    setValidationPopup(null);
+    clearValidationCycle();
   }, [clearPopupTimer, clearValidationCycle]);
 
   const runOfflineSync = useCallback(async () => {
@@ -581,10 +569,8 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     setStatusMessage(null);
     setEnderecoValidationState("validating");
 
-    const enteredKey = normalizeEnderecoForCompare(endereco);
     const sepList = currentProduct.enderecos_sep;
-    const sepKeys = new Set(sepList.map((item) => normalizeEnderecoForCompare(item)));
-    const matched = sepKeys.has(enteredKey);
+    const matched = sepList.some((item) => enderecoMatchesForCompare(endereco, item));
 
     if (matched) {
       setEnderecoValidationState("valid");
@@ -606,7 +592,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       title: "Endereço não pertence ao produto",
       detail: `${asLookupSummary(currentProduct)} | Informado: ${endereco}`,
       sepList,
-      durationMs: POPUP_ERROR_MS
+      manualClose: true
     });
   }, [currentProduct, focusProduto, showValidationPopup, triggerScanErrorAlert]);
 
@@ -1025,7 +1011,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       <section className="modules-shell validar-end-shell">
         <div className="validar-end-head">
           <h2>Olá, {displayUserName}</h2>
-          <p>Bipe ou digite produto e endereço para validação instantânea.</p>
+          <p>Bipe no coletor ou use a câmera para validação instantânea.</p>
           <p className="validar-end-meta-line">
             CD: <strong>{currentCdLabel}</strong>
             {" | "}db_barras: <strong>{dbBarrasCount}</strong> itens
@@ -1087,19 +1073,16 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
                 <input
                   ref={produtoRef}
                   type="text"
-                  inputMode={produtoInputMode}
+                  inputMode="none"
                   value={produtoInput}
                   onChange={onProdutoInputChange}
                   onKeyDown={onProdutoKeyDown}
-                  onFocus={enableProdutoSoftKeyboard}
-                  onPointerDown={enableProdutoSoftKeyboard}
-                  onBlur={disableProdutoSoftKeyboard}
                   autoComplete="off"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
                   enterKeyHint="next"
-                  placeholder="Bipe, digite ou use câmera"
+                  placeholder="Bipe no coletor ou use câmera"
                   required
                 />
                 <button
@@ -1115,10 +1098,6 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
               </div>
             </label>
           </div>
-          <button className="btn btn-primary validar-end-submit-btn" type="submit" disabled={busySync}>
-            <span aria-hidden="true">{searchIcon()}</span>
-            Buscar produto
-          </button>
         </form>
 
         <form className="coleta-form validar-end-form" onSubmit={onEnderecoSubmit}>
@@ -1132,19 +1111,16 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
                 <input
                   ref={enderecoRef}
                   type="text"
-                  inputMode={enderecoInputMode}
+                  inputMode="none"
                   value={enderecoInput}
                   onChange={onEnderecoInputChange}
                   onKeyDown={onEnderecoKeyDown}
-                  onFocus={enableEnderecoSoftKeyboard}
-                  onPointerDown={enableEnderecoSoftKeyboard}
-                  onBlur={disableEnderecoSoftKeyboard}
                   autoComplete="off"
                   autoCapitalize="characters"
                   autoCorrect="off"
                   spellCheck={false}
                   enterKeyHint="done"
-                  placeholder="Bipe, digite ou use câmera"
+                  placeholder="Bipe no coletor ou use câmera"
                   disabled={!currentProduct}
                   required
                 />
@@ -1161,10 +1137,6 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
               </div>
             </label>
           </div>
-          <button className="btn btn-primary validar-end-submit-btn" type="submit" disabled={busySync || !currentProduct}>
-            <span aria-hidden="true">{searchIcon()}</span>
-            Validar endereço
-          </button>
         </form>
 
         {currentProduct ? (
@@ -1199,6 +1171,15 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
                         <p>Nenhum endereço SEP disponível para este produto.</p>
                       )}
                     </div>
+                  ) : null}
+                  {validationPopup.manualClose ? (
+                    <button
+                      type="button"
+                      className="btn btn-danger validar-end-popup-close-btn"
+                      onClick={closeValidationPopup}
+                    >
+                      Fechar
+                    </button>
                   ) : null}
                 </div>
               </div>,

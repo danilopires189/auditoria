@@ -54,6 +54,51 @@ export function normalizeEnderecoForCompare(value: string): string {
   return normalizeEnderecoDisplay(value).replace(/\s+/g, "");
 }
 
+function uniqueNonEmpty(values: string[]): string[] {
+  const unique = new Set<string>();
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (!normalized) continue;
+    unique.add(normalized);
+  }
+  return Array.from(unique);
+}
+
+function stripLeadingBlock(value: string): string {
+  return value.replace(/^[A-Z]+[.\-_/]*/i, "");
+}
+
+function stripSeparators(value: string): string {
+  return value.replace(/[.\-_/ ]+/g, "");
+}
+
+function digitsOnly(value: string): string {
+  return value.replace(/\D+/g, "");
+}
+
+export function buildEnderecoCompareKeys(value: string): string[] {
+  const base = normalizeEnderecoForCompare(value);
+  if (!base) return [];
+
+  const withoutPrefix = stripLeadingBlock(base);
+  return uniqueNonEmpty([
+    base,
+    withoutPrefix,
+    stripSeparators(base),
+    stripSeparators(withoutPrefix),
+    digitsOnly(base)
+  ]);
+}
+
+export function enderecoMatchesForCompare(input: string, candidate: string): boolean {
+  const inputKeys = new Set(buildEnderecoCompareKeys(input));
+  if (inputKeys.size <= 0) return false;
+  for (const key of buildEnderecoCompareKeys(candidate)) {
+    if (inputKeys.has(key)) return true;
+  }
+  return false;
+}
+
 function parseDbEndRow(raw: Record<string, unknown>): DbEndCacheRow | null {
   const cd = parseInteger(raw.cd, 0);
   const coddv = parseInteger(raw.coddv, 0);
