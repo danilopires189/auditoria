@@ -58,6 +58,7 @@ const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
 const AUDIT_FLUSH_INTERVAL_MS = 15000;
+const STATUS_MESSAGE_AUTO_HIDE_MS = 2800;
 
 function createScannerInputState(): ScannerInputState {
   return {
@@ -93,20 +94,6 @@ function fixedCdFromProfile(profile: ValidarEnderecamentoModuleProfile): number 
     return Math.trunc(profile.cd_default);
   }
   return parseCdFromLabel(profile.cd_nome);
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(parsed);
 }
 
 function normalizeEnderecoDisplay(value: string): string {
@@ -239,6 +226,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     endereco: createScannerInputState()
   });
   const popupTimerRef = useRef<number | null>(null);
+  const statusTimerRef = useRef<number | null>(null);
   const resolveScanFeedbackAnchor = useCallback(() => produtoRef.current, []);
   const { triggerScanErrorAlert } = useScanFeedback(resolveScanFeedbackAnchor);
   const {
@@ -258,9 +246,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [busySync, setBusySync] = useState(false);
   const [dbBarrasCount, setDbBarrasCount] = useState(0);
-  const [dbBarrasLastSyncAt, setDbBarrasLastSyncAt] = useState<string | null>(null);
   const [dbEndCount, setDbEndCount] = useState(0);
-  const [dbEndLastSyncAt, setDbEndLastSyncAt] = useState<string | null>(null);
   const [offlineMetaReady, setOfflineMetaReady] = useState(false);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -284,14 +270,6 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
 
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const currentCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
-  const currentCdLabel = useMemo(() => {
-    const profileLabel = typeof profile.cd_nome === "string"
-      ? profile.cd_nome.trim().replace(/\s+/g, " ")
-      : "";
-    if (profileLabel) return profileLabel;
-    if (currentCd != null) return `CD ${String(currentCd).padStart(2, "0")}`;
-    return "CD não definido";
-  }, [currentCd, profile.cd_nome]);
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -302,8 +280,8 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   const activeInputMode = activeInputTarget === "produto" ? produtoInputMode : enderecoInputMode;
   const activeFieldLabel = activeInputTarget === "produto" ? "Produto (código de barras)" : "Endereço";
   const activeFieldPlaceholder = activeInputTarget === "produto"
-    ? "Bipe no coletor ou use câmera"
-    : "Bipe endereço no coletor ou use câmera";
+    ? "Leia produto pelo coletor ou câmera"
+    : "Leia endereço pelo coletor ou câmera";
   const activeEnterKeyHint: "next" | "done" = activeInputTarget === "produto" ? "next" : "done";
   const activeIconClassName = `field-icon validation-status${activeValidationState === "validating" ? " is-validating" : ""}${activeValidationState === "valid" ? " is-valid" : ""}${activeValidationState === "invalid" ? " is-invalid" : ""}`;
 
@@ -312,6 +290,14 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     if (popupTimerRef.current != null) {
       window.clearTimeout(popupTimerRef.current);
       popupTimerRef.current = null;
+    }
+  }, []);
+
+  const clearStatusTimer = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (statusTimerRef.current != null) {
+      window.clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = null;
     }
   }, []);
 
@@ -325,9 +311,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   const refreshOfflineMeta = useCallback(async () => {
     if (currentCd == null || currentCd <= 0) {
       setDbBarrasCount(0);
-      setDbBarrasLastSyncAt(null);
       setDbEndCount(0);
-      setDbEndLastSyncAt(null);
       setOfflineMetaReady(true);
       return;
     }
@@ -338,9 +322,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
         getDbEndMeta(currentCd)
       ]);
       setDbBarrasCount(barrasMeta.row_count);
-      setDbBarrasLastSyncAt(barrasMeta.last_sync_at);
       setDbEndCount(endMeta.row_count);
-      setDbEndLastSyncAt(endMeta.last_sync_at);
     } catch {
       setErrorMessage((current) => current ?? "Falha ao ler base local. Tente atualizar a página.");
     } finally {
@@ -445,7 +427,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
 
       try {
         await refreshDbEndCacheSmart(currentCd, (progress) => {
-          setProgressMessage(`db_end (${currentCdLabel}): ${progress.rowsFetched} itens (${progress.percent}%)`);
+          setProgressMessage(`db_end: ${progress.rowsFetched} itens (${progress.percent}%)`);
         }, { allowFullReconcile: true });
       } catch (error) {
         endError = normalizeLookupError(error);
@@ -475,7 +457,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     } finally {
       setBusySync(false);
     }
-  }, [currentCd, currentCdLabel, isOnline, refreshOfflineMeta]);
+  }, [currentCd, isOnline, refreshOfflineMeta]);
 
   const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
     const videoEl = scannerVideoRef.current;
@@ -607,7 +589,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       setProdutoValidationState("valid");
       setProdutoInput("");
       setEnderecoInput("");
-      setStatusMessage(`Produto carregado: ${asLookupSummary(resolved)}.`);
+      setStatusMessage(null);
       focusProduto();
     } catch (error) {
       setCurrentProduct(null);
@@ -829,6 +811,19 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   }, []);
 
   useEffect(() => {
+    clearStatusTimer();
+    if (!statusMessage) return;
+    if (typeof window === "undefined") return;
+    statusTimerRef.current = window.setTimeout(() => {
+      setStatusMessage((current) => (current === statusMessage ? null : current));
+      statusTimerRef.current = null;
+    }, STATUS_MESSAGE_AUTO_HIDE_MS);
+    return () => {
+      clearStatusTimer();
+    };
+  }, [clearStatusTimer, statusMessage]);
+
+  useEffect(() => {
     if (!isOnline) return;
     void flushPendingValidarEnderecamentoAudits(profile.user_id).catch(() => undefined);
   }, [isOnline, profile.user_id]);
@@ -854,6 +849,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   useEffect(() => {
     return () => {
       clearPopupTimer();
+      clearStatusTimer();
       if (typeof window === "undefined") return;
       const state = scannerInputStateRef.current;
       for (const target of ["produto", "endereco"] as const) {
@@ -863,7 +859,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
         }
       }
     };
-  }, [clearPopupTimer]);
+  }, [clearPopupTimer, clearStatusTimer]);
 
   useEffect(() => {
     if (!scannerOpen) return;
@@ -1113,28 +1109,12 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       <section className="modules-shell validar-end-shell">
         <div className="validar-end-head">
           <h2>Olá, {displayUserName}</h2>
-          <p>Bipe no coletor ou use a câmera para validação instantânea.</p>
-          <p className="validar-end-meta-line">
-            CD: <strong>{currentCdLabel}</strong>
-            {" | "}db_barras: <strong>{dbBarrasCount}</strong> itens
-            {" | "}db_end: <strong>{dbEndCount}</strong> itens
-          </p>
-          <p className="validar-end-meta-line">
-            Última sync barras: {formatDateTime(dbBarrasLastSyncAt)}
-            {" | "}Última sync endereços: {formatDateTime(dbEndLastSyncAt)}
-          </p>
         </div>
 
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
         {!offlineMetaReady ? <div className="alert success">Carregando base local...</div> : null}
-
-        {preferOfflineMode ? (
-          <div className="alert success">
-            Modo offline ativo: validação usa base local quando disponível.
-          </div>
-        ) : null}
 
         {preferOfflineMode && dbBarrasCount <= 0 && dbEndCount <= 0 ? (
           isOnline ? (
