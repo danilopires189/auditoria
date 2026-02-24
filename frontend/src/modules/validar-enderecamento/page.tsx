@@ -380,21 +380,47 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     setStatusMessage(null);
     setProgressMessage("Iniciando sincronização de bases offline...");
 
-    try {
-      await refreshDbBarrasCacheSmart((progress) => {
-        setProgressMessage(`db_barras: ${progress.rowsFetched} itens (${progress.percent}%)`);
-      }, { allowFullReconcile: true });
+    let barrasError: string | null = null;
+    let endError: string | null = null;
 
-      await refreshDbEndCacheSmart(currentCd, (progress) => {
-        setProgressMessage(`db_end (${currentCdLabel}): ${progress.rowsFetched} itens (${progress.percent}%)`);
-      }, { allowFullReconcile: true });
+    try {
+      try {
+        await refreshDbBarrasCacheSmart((progress) => {
+          setProgressMessage(`db_barras: ${progress.rowsFetched} itens (${progress.percent}%)`);
+        }, { allowFullReconcile: true });
+      } catch (error) {
+        barrasError = normalizeLookupError(error);
+      }
+
+      try {
+        await refreshDbEndCacheSmart(currentCd, (progress) => {
+          setProgressMessage(`db_end (${currentCdLabel}): ${progress.rowsFetched} itens (${progress.percent}%)`);
+        }, { allowFullReconcile: true });
+      } catch (error) {
+        endError = normalizeLookupError(error);
+      }
 
       await refreshOfflineMeta();
-      setStatusMessage("Base offline atualizada com sucesso.");
       setProgressMessage(null);
-    } catch (error) {
-      setProgressMessage(null);
-      setErrorMessage(normalizeLookupError(error));
+
+      if (!barrasError && !endError) {
+        setStatusMessage("Bases offline atualizadas com sucesso.");
+        return;
+      }
+
+      if (!barrasError && endError) {
+        setStatusMessage("db_barras sincronizada.");
+        setErrorMessage(`Falha ao sincronizar db_end: ${endError}`);
+        return;
+      }
+
+      if (barrasError && !endError) {
+        setStatusMessage("db_end sincronizada.");
+        setErrorMessage(`Falha ao sincronizar db_barras: ${barrasError}`);
+        return;
+      }
+
+      setErrorMessage(`Falha ao sincronizar bases. db_barras: ${barrasError} | db_end: ${endError}`);
     } finally {
       setBusySync(false);
     }

@@ -112,22 +112,53 @@ function toDbEndCacheRows(result: ValidarEnderecamentoLookupResult): DbEndCacheR
   }));
 }
 
-async function lookupProdutoOnlineByParsed(
-  cd: number,
-  parsedInput: ParsedProductInput
-): Promise<ValidarEnderecamentoLookupResult> {
+async function lookupProdutoOnlineByParsed(cd: number, parsedInput: ParsedProductInput): Promise<ValidarEnderecamentoLookupResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
+  const client = supabase;
 
-  const { data, error } = await supabase.rpc("rpc_busca_produto_lookup", {
-    p_cd: cd,
-    p_barras: parsedInput.barras,
-    p_coddv: parsedInput.coddv
-  });
-  if (error) throw new Error(toErrorMessage(error));
+  const callLookup = async (params: {
+    barras?: string | null;
+    coddv?: number | null;
+  }): Promise<ValidarEnderecamentoLookupResult> => {
+    const { data, error } = await client.rpc("rpc_busca_produto_lookup", {
+      p_cd: cd,
+      p_barras: params.barras ?? null,
+      p_coddv: params.coddv ?? null
+    });
+    if (error) throw new Error(toErrorMessage(error));
 
-  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-  if (!first) throw new Error("Produto não encontrado.");
-  return mapLookupRow(first);
+    const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+    if (!first) throw new Error("Produto não encontrado.");
+    return mapLookupRow(first);
+  };
+
+  let lastError: unknown = null;
+
+  // 1) tenta barras primeiro quando informado
+  if (parsedInput.barras) {
+    try {
+      return await callLookup({
+        barras: parsedInput.barras,
+        coddv: null
+      });
+    } catch (error) {
+      lastError = error;
+      if (!containsNotFoundError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  // 2) fallback para CODDV (inclusive quando input é numérico manual)
+  if (parsedInput.coddv && parsedInput.coddv > 0) {
+    return callLookup({
+      barras: null,
+      coddv: parsedInput.coddv
+    });
+  }
+
+  if (lastError) throw (lastError instanceof Error ? lastError : new Error(toErrorMessage(lastError)));
+  throw new Error("Produto não encontrado.");
 }
 
 async function lookupProdutoOfflineByParsed(
@@ -170,7 +201,9 @@ async function lookupProdutoOfflineByParsed(
 }
 
 function containsNotFoundError(error: unknown): boolean {
-  return toErrorMessage(error).toUpperCase().includes("PRODUTO NÃO ENCONTRADO");
+  const normalized = toErrorMessage(error).toUpperCase();
+  return normalized.includes("PRODUTO NÃO ENCONTRADO")
+    || normalized.includes("PRODUTO_NAO_ENCONTRADO");
 }
 
 async function warmupCachesFromOnline(result: ValidarEnderecamentoLookupResult): Promise<void> {
