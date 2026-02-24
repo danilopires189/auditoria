@@ -45,8 +45,7 @@ class TaskSchedulerTests(unittest.TestCase):
         self.assertEqual(args[0], "/Create")
         self.assertIn("/TN", args)
         self.assertIn("AUDITORIA_SYNC_AUTO", args)
-        self.assertIn("/D", args)
-        self.assertIn("MON,TUE,WED,THU,FRI,SAT", args)
+        self.assertNotIn("/D", args)
 
 
 if __name__ == "__main__":
