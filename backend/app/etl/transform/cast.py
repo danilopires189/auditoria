@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Any
 
 import pandas as pd
@@ -18,35 +17,26 @@ def _safe_payload(row: pd.Series) -> dict[str, Any]:
     return payload
 
 
-def _parse_numeric_scalar(value: Any) -> float | None:
-    if value is None or pd.isna(value):
-        return None
-    if isinstance(value, (int, float, Decimal)):
-        return float(value)
-
-    text = str(value).strip()
-    if text == "":
-        return None
-
-    if "," in text:
-        text = text.replace(".", "").replace(",", ".")
-
-    parsed = pd.to_numeric(pd.Series([text]), errors="coerce").iloc[0]
-    if pd.isna(parsed):
-        return None
-    return float(parsed)
-
-
 def _cast_numeric(series: pd.Series) -> pd.Series:
-    return series.map(_parse_numeric_scalar).astype("Float64")
+    cleaned = series.astype("string").str.strip()
+    cleaned = cleaned.replace({"": pd.NA})
+
+    has_comma = cleaned.str.contains(",", regex=False, na=False)
+    if bool(has_comma.any()):
+        cleaned.loc[has_comma] = (
+            cleaned.loc[has_comma]
+            .str.replace(".", "", regex=False)
+            .str.replace(",", ".", regex=False)
+        )
+
+    return pd.to_numeric(cleaned, errors="coerce").astype("Float64")
 
 
 def _cast_integer(series: pd.Series) -> pd.Series:
     numeric = _cast_numeric(series)
-    invalid_fraction = numeric.dropna().map(lambda x: abs(x - int(x)) > 0)
-    if invalid_fraction.any():
-        invalid_index = invalid_fraction[invalid_fraction].index
-        numeric.loc[invalid_index] = pd.NA
+    invalid_fraction = numeric.notna() & ((numeric % 1).abs() > 0)
+    if bool(invalid_fraction.any()):
+        numeric.loc[invalid_fraction] = pd.NA
     return numeric.round().astype("Int64")
 
 
