@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
@@ -32,6 +32,8 @@ class CommandResult:
     run_id: str
     status: str
     message: str
+    errors: list[str] = field(default_factory=list)
+    table_errors: dict[str, str] = field(default_factory=dict)
 
 
 class SyncService:
@@ -119,14 +121,45 @@ class SyncService:
             self.audit.finish_run(run_id, "failed", notes=str(exc))
             raise
 
-    def validate_only(self) -> CommandResult:
-        return self._run_sync(dry_run=True, validate_only=True)
+    def validate_only(
+        self,
+        table_filter: list[str] | None = None,
+        force_tables: list[str] | None = None,
+    ) -> CommandResult:
+        return self._run_sync(
+            dry_run=True,
+            validate_only=True,
+            table_filter=table_filter,
+            force_tables=force_tables,
+        )
 
-    def sync(self, dry_run: bool = False) -> CommandResult:
-        return self._run_sync(dry_run=dry_run, validate_only=False)
+    def sync(
+        self,
+        dry_run: bool = False,
+        table_filter: list[str] | None = None,
+        force_tables: list[str] | None = None,
+    ) -> CommandResult:
+        return self._run_sync(
+            dry_run=dry_run,
+            validate_only=False,
+            table_filter=table_filter,
+            force_tables=force_tables,
+        )
 
     def _normalize_list(self, values: list[str]) -> list[str]:
         return [snake_case(value) for value in values]
+
+    def _normalize_table_names(self, values: list[str] | None) -> set[str] | None:
+        if not values:
+            return None
+
+        normalized: set[str] = set()
+        for value in values:
+            item = snake_case(value)
+            if not item:
+                continue
+            normalized.add(item)
+        return normalized if normalized else None
 
     def _effective_types(self, table_name: str, table_cfg: TableConfig) -> dict[str, str]:
         spec = get_table_spec(table_name)
@@ -340,8 +373,29 @@ class SyncService:
 
         raise ValueError(f"[{table_name}] unsupported sync mode: {mode}")
 
-    def _run_sync(self, dry_run: bool, validate_only: bool) -> CommandResult:
+    def _run_sync(
+        self,
+        dry_run: bool,
+        validate_only: bool,
+        table_filter: list[str] | None = None,
+        force_tables: list[str] | None = None,
+    ) -> CommandResult:
         run_kind = "validate" if validate_only else ("dry-run" if dry_run else "sync")
+        selected_tables = self._normalize_table_names(table_filter)
+        forced_tables = self._normalize_table_names(force_tables) or set()
+        configured_tables = set(self.config.tables.keys())
+
+        if selected_tables:
+            unknown_tables = selected_tables - configured_tables
+            if unknown_tables:
+                joined = ", ".join(sorted(unknown_tables))
+                raise ValueError(f"Unknown table(s) in table_filter: {joined}")
+
+        if forced_tables:
+            unknown_forced = forced_tables - configured_tables
+            if unknown_forced:
+                joined = ", ".join(sorted(unknown_forced))
+                raise ValueError(f"Unknown table(s) in force_tables: {joined}")
 
         run_id = self.audit.start_run(
             app_version=self.app_version,
@@ -353,6 +407,7 @@ class SyncService:
 
         status = "success"
         errors: list[str] = []
+        table_errors: dict[str, str] = {}
         inventory_seed_source_tables = {"db_end", "db_estq_entr"}
         inventory_seed_tables_synced: set[str] = set()
 
@@ -362,6 +417,8 @@ class SyncService:
             lock_context = advisory_lock(self.engine) if not validate_only else nullcontext()
             with lock_context:
                 for table_name, table_cfg in self.config.tables.items():
+                    if selected_tables and table_name not in selected_tables:
+                        continue
                     try:
                         source_fingerprint = self._source_fingerprint(table_cfg)
 
@@ -381,7 +438,11 @@ class SyncService:
                                     counters.details["error"] = refresh_result.error
                                     raise RuntimeError(refresh_result.error)
 
-                        if not (dry_run or validate_only) and source_fingerprint:
+                        if (
+                            not (dry_run or validate_only)
+                            and source_fingerprint
+                            and table_name not in forced_tables
+                        ):
                             previous_fingerprint = self._get_last_source_fingerprint(table_name)
                             if previous_fingerprint and self._same_source_fingerprint(
                                 previous_fingerprint,
@@ -451,7 +512,11 @@ class SyncService:
                         )
 
                     except Exception as table_exc:
-                        errors.append(f"{table_name}: {table_exc}")
+                        summary = " ".join(str(table_exc).splitlines()).strip()
+                        if len(summary) > 320:
+                            summary = f"{summary[:317]}..."
+                        errors.append(f"{table_name}: {summary}")
+                        table_errors[table_name] = summary
                         self.logger.exception("table sync failed: {}", table_name)
                         if self.config.app.stop_on_error:
                             raise
@@ -496,8 +561,16 @@ class SyncService:
                 status = "partial"
 
             notes = "; ".join(errors) if errors else f"{run_kind} completed"
+            if len(notes) > 2000:
+                notes = f"{notes[:1997]}..."
             self.audit.finish_run(run_id, status, notes=notes)
-            return CommandResult(run_id=run_id, status=status, message=notes)
+            return CommandResult(
+                run_id=run_id,
+                status=status,
+                message=notes,
+                errors=errors,
+                table_errors=table_errors,
+            )
 
         except Exception as exc:
             self.audit.finish_run(run_id, "failed", notes=str(exc))
