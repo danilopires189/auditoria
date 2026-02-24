@@ -57,6 +57,7 @@ const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
+const AUDIT_FLUSH_INTERVAL_MS = 15000;
 
 function createScannerInputState(): ScannerInputState {
   return {
@@ -830,6 +831,24 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   useEffect(() => {
     if (!isOnline) return;
     void flushPendingValidarEnderecamentoAudits(profile.user_id).catch(() => undefined);
+  }, [isOnline, profile.user_id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const silentFlush = () => {
+      const browserOnline = typeof navigator === "undefined" ? true : navigator.onLine;
+      if (!isOnline && !browserOnline) return;
+      void flushPendingValidarEnderecamentoAudits(profile.user_id).catch(() => undefined);
+    };
+
+    const intervalId = window.setInterval(silentFlush, AUDIT_FLUSH_INTERVAL_MS);
+    window.addEventListener("online", silentFlush);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("online", silentFlush);
+    };
   }, [isOnline, profile.user_id]);
 
   useEffect(() => {

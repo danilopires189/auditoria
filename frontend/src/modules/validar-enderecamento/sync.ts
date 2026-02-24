@@ -335,5 +335,9 @@ export async function enqueueValidarEnderecamentoAudit(params: {
   await enqueueAuditPending(params.userId, normalized);
 
   if (!params.isOnline) return;
-  await flushPendingValidarEnderecamentoAudits(params.userId);
+  try {
+    await flushPendingValidarEnderecamentoAudits(params.userId);
+  } catch {
+    // Mantem registro local para retry silencioso quando houver conexão estável.
+  }
 }
