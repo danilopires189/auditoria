@@ -70,6 +70,17 @@ def _copy_in_chunks(
         cursor.copy_expert(copy_sql, csv_buffer)
 
 
+def _copy_single_batch(
+    data: pd.DataFrame,
+    copy_sql: str,
+    cursor,
+) -> None:
+    csv_buffer = StringIO()
+    data.to_csv(csv_buffer, index=False, header=False, na_rep="\\N")
+    csv_buffer.seek(0)
+    cursor.copy_expert(copy_sql, csv_buffer)
+
+
 def load_dataframe_to_staging(
     engine: Engine,
     table_name: str,
@@ -105,10 +116,17 @@ def load_dataframe_to_staging(
 
     last_exc: Exception | None = None
     for attempt in range(1, COPY_MAX_ATTEMPTS + 1):
+        if attempt > 1:
+            clear_staging_for_table(engine, table_name)
+
         raw_conn = engine.raw_connection()
         try:
             with raw_conn.cursor() as cursor:
-                _copy_in_chunks(data, copy_sql, cursor)
+                cursor.execute("set local synchronous_commit = off")
+                if attempt == 1:
+                    _copy_single_batch(data, copy_sql, cursor)
+                else:
+                    _copy_in_chunks(data, copy_sql, cursor)
             raw_conn.commit()
             last_exc = None
             break
