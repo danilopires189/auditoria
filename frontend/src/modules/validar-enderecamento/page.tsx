@@ -213,7 +213,6 @@ function asLookupSummary(result: ValidarEnderecamentoLookupResult): string {
 
 export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarEnderecamentoPageProps) {
   const produtoRef = useRef<HTMLInputElement | null>(null);
-  const enderecoRef = useRef<HTMLInputElement | null>(null);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -223,7 +222,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     endereco: createScannerInputState()
   });
   const popupTimerRef = useRef<number | null>(null);
-  const resolveScanFeedbackAnchor = useCallback(() => enderecoRef.current ?? produtoRef.current, []);
+  const resolveScanFeedbackAnchor = useCallback(() => produtoRef.current, []);
   const { triggerScanErrorAlert } = useScanFeedback(resolveScanFeedbackAnchor);
   const {
     inputMode: produtoInputMode,
@@ -280,8 +279,16 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
   }, []);
-  const produtoIconClassName = `field-icon validation-status${produtoValidationState === "validating" ? " is-validating" : ""}${produtoValidationState === "valid" ? " is-valid" : ""}${produtoValidationState === "invalid" ? " is-invalid" : ""}`;
-  const enderecoIconClassName = `field-icon validation-status${enderecoValidationState === "validating" ? " is-validating" : ""}${enderecoValidationState === "valid" ? " is-valid" : ""}${enderecoValidationState === "invalid" ? " is-invalid" : ""}`;
+  const activeInputTarget: ScannerInputTarget = currentProduct ? "endereco" : "produto";
+  const activeInputValue = activeInputTarget === "produto" ? produtoInput : enderecoInput;
+  const activeValidationState = activeInputTarget === "produto" ? produtoValidationState : enderecoValidationState;
+  const activeInputMode = activeInputTarget === "produto" ? produtoInputMode : enderecoInputMode;
+  const activeFieldLabel = activeInputTarget === "produto" ? "Produto (código de barras)" : "Endereço";
+  const activeFieldPlaceholder = activeInputTarget === "produto"
+    ? "Bipe no coletor ou use câmera"
+    : "Bipe endereço no coletor ou use câmera";
+  const activeEnterKeyHint: "next" | "done" = activeInputTarget === "produto" ? "next" : "done";
+  const activeIconClassName = `field-icon validation-status${activeValidationState === "validating" ? " is-validating" : ""}${activeValidationState === "valid" ? " is-valid" : ""}${activeValidationState === "invalid" ? " is-invalid" : ""}`;
 
   const clearPopupTimer = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -297,13 +304,6 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       produtoRef.current?.focus();
     });
   }, [disableProdutoSoftKeyboard]);
-
-  const focusEndereco = useCallback(() => {
-    disableEnderecoSoftKeyboard();
-    window.requestAnimationFrame(() => {
-      enderecoRef.current?.focus();
-    });
-  }, [disableEnderecoSoftKeyboard]);
 
   const refreshOfflineMeta = useCallback(async () => {
     if (currentCd == null || currentCd <= 0) {
@@ -566,14 +566,14 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       setProdutoInput("");
       setEnderecoInput("");
       setStatusMessage(`Produto carregado: ${asLookupSummary(resolved)}.`);
-      focusEndereco();
+      focusProduto();
     } catch (error) {
       setCurrentProduct(null);
       setProdutoValidationState("invalid");
       setErrorMessage(normalizeLookupError(error));
       focusProduto();
     }
-  }, [currentCd, focusEndereco, focusProduto, isOnline, preferOfflineMode]);
+  }, [currentCd, focusProduto, isOnline, preferOfflineMode]);
 
   const commitEnderecoInput = useCallback(async (rawValue: string) => {
     const endereco = normalizeEnderecoDisplay(rawValue);
@@ -705,42 +705,28 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
   }, []);
 
-  const onProdutoInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const onScanInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = event.target.value;
-    setProdutoInput(nextValue);
-    setProdutoValidationState("idle");
-    handleScannerInputChange("produto", nextValue);
+    if (activeInputTarget === "produto") {
+      setProdutoInput(nextValue);
+      setProdutoValidationState("idle");
+    } else {
+      setEnderecoInput(nextValue);
+      setEnderecoValidationState("idle");
+    }
+    handleScannerInputChange(activeInputTarget, nextValue);
   };
 
-  const onEnderecoInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextValue = event.target.value;
-    setEnderecoInput(nextValue);
-    setEnderecoValidationState("idle");
-    handleScannerInputChange("endereco", nextValue);
-  };
-
-  const onProdutoSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const onScanSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void commitScannerInput("produto", produtoInput);
+    void commitScannerInput(activeInputTarget, activeInputValue);
   };
 
-  const onEnderecoSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void commitScannerInput("endereco", enderecoInput);
-  };
-
-  const onProdutoKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Tab" && !shouldHandleScannerTab("produto", produtoInput)) return;
+  const onScanKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab(activeInputTarget, activeInputValue)) return;
     if (event.key !== "Enter" && event.key !== "Tab") return;
     event.preventDefault();
-    void commitScannerInput("produto", produtoInput);
-  };
-
-  const onEnderecoKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Tab" && !shouldHandleScannerTab("endereco", enderecoInput)) return;
-    if (event.key !== "Enter" && event.key !== "Tab") return;
-    event.preventDefault();
-    void commitScannerInput("endereco", enderecoInput);
+    void commitScannerInput(activeInputTarget, activeInputValue);
   };
 
   useEffect(() => {
@@ -1107,81 +1093,54 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
           </button>
         </div>
 
-        <form className="coleta-form validar-end-form" onSubmit={onProdutoSubmit}>
+        <form className="coleta-form validar-end-form" onSubmit={onScanSubmit}>
           <div className="coleta-form-grid validar-end-form-grid">
             <label>
-              Produto (código de barras)
+              {activeFieldLabel}
               <div className="input-icon-wrap with-action">
-                <span className={produtoIconClassName} aria-hidden="true">
-                  {barcodeIcon()}
+                <span className={activeIconClassName} aria-hidden="true">
+                  {activeInputTarget === "produto" ? barcodeIcon() : addressIcon()}
                 </span>
                 <input
                   ref={produtoRef}
                   type="text"
-                  inputMode={produtoInputMode}
-                  value={produtoInput}
-                  onChange={onProdutoInputChange}
-                  onKeyDown={onProdutoKeyDown}
-                  onFocus={enableProdutoSoftKeyboard}
-                  onPointerDown={enableProdutoSoftKeyboard}
-                  onBlur={disableProdutoSoftKeyboard}
+                  inputMode={activeInputMode}
+                  value={activeInputValue}
+                  onChange={onScanInputChange}
+                  onKeyDown={onScanKeyDown}
+                  onFocus={() => {
+                    if (activeInputTarget === "produto") {
+                      enableProdutoSoftKeyboard();
+                    } else {
+                      enableEnderecoSoftKeyboard();
+                    }
+                  }}
+                  onPointerDown={() => {
+                    if (activeInputTarget === "produto") {
+                      enableProdutoSoftKeyboard();
+                    } else {
+                      enableEnderecoSoftKeyboard();
+                    }
+                  }}
+                  onBlur={() => {
+                    disableProdutoSoftKeyboard();
+                    disableEnderecoSoftKeyboard();
+                  }}
                   autoComplete="off"
-                  autoCapitalize="none"
+                  autoCapitalize={activeInputTarget === "produto" ? "none" : "characters"}
                   autoCorrect="off"
                   spellCheck={false}
-                  enterKeyHint="next"
-                  placeholder="Bipe no coletor ou use câmera"
+                  enterKeyHint={activeEnterKeyHint}
+                  placeholder={activeFieldPlaceholder}
                   required
                 />
                 <button
                   type="button"
                   className="input-action-btn"
-                  onClick={() => openCameraScanner("produto")}
-                  title="Ler produto pela câmera"
-                  aria-label="Ler produto pela câmera"
+                  onClick={() => openCameraScanner(activeInputTarget)}
+                  title={activeInputTarget === "produto" ? "Ler produto pela câmera" : "Ler endereço pela câmera"}
+                  aria-label={activeInputTarget === "produto" ? "Ler produto pela câmera" : "Ler endereço pela câmera"}
                   disabled={!cameraSupported || busySync}
-                >
-                  {cameraIcon()}
-                </button>
-              </div>
-            </label>
-          </div>
-        </form>
-
-        <form className="coleta-form validar-end-form" onSubmit={onEnderecoSubmit}>
-          <div className="coleta-form-grid validar-end-form-grid">
-            <label>
-              Endereço
-              <div className="input-icon-wrap with-action">
-                <span className={enderecoIconClassName} aria-hidden="true">
-                  {addressIcon()}
-                </span>
-                <input
-                  ref={enderecoRef}
-                  type="text"
-                  inputMode={enderecoInputMode}
-                  value={enderecoInput}
-                  onChange={onEnderecoInputChange}
-                  onKeyDown={onEnderecoKeyDown}
-                  onFocus={enableEnderecoSoftKeyboard}
-                  onPointerDown={enableEnderecoSoftKeyboard}
-                  onBlur={disableEnderecoSoftKeyboard}
-                  autoComplete="off"
-                  autoCapitalize="characters"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  enterKeyHint="done"
-                  placeholder="Bipe no coletor ou use câmera"
-                  disabled={!currentProduct}
-                  required
-                />
-                <button
-                  type="button"
-                  className="input-action-btn"
-                  onClick={() => openCameraScanner("endereco")}
-                  title="Ler endereço pela câmera"
-                  aria-label="Ler endereço pela câmera"
-                  disabled={!cameraSupported || busySync || !currentProduct}
                 >
                   {cameraIcon()}
                 </button>
