@@ -14,7 +14,8 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "conferencia-entrada-notas",
   "devolucao-mercadoria",
   "zerados",
-  "busca-produto"
+  "busca-produto",
+  "validar-enderecamento"
 ]);
 
 interface HomePageProps {
