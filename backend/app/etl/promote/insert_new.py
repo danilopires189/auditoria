@@ -24,25 +24,26 @@ def promote_insert_new(
         _validate_identifier(col)
 
     quoted_insert_cols = ", ".join(f'"{col}"' for col in [*business_columns, "source_run_id", "updated_at"])
-    select_business_cols = ", ".join(f's."{col}"' for col in business_columns)
-
-    row_match = " and ".join(
-        f't."{col}" is not distinct from s."{col}"'
-        for col in business_columns
-    )
+    quoted_business_cols = ", ".join(f'"{col}"' for col in business_columns)
 
     sql = text(
         f"""
-        with inserted as (
-            insert into app."{table_name}" ({quoted_insert_cols})
-            select {select_business_cols}, :run_id, now()
+        with incoming as (
+            select distinct {quoted_business_cols}
             from staging."{table_name}" s
             where s.run_id = :run_id
-              and not exists (
-                  select 1
-                  from app."{table_name}" t
-                  where {row_match}
-              )
+        ),
+        to_insert as (
+            select {quoted_business_cols}
+            from incoming
+            except
+            select {quoted_business_cols}
+            from app."{table_name}"
+        ),
+        inserted as (
+            insert into app."{table_name}" ({quoted_insert_cols})
+            select {quoted_business_cols}, :run_id, now()
+            from to_insert
             returning 1
         )
         select count(*) from inserted
