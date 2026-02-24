@@ -54,95 +54,68 @@ export function normalizeEnderecoForCompare(value: string): string {
   return normalizeEnderecoDisplay(value).replace(/\s+/g, "");
 }
 
-function uniqueNonEmpty(values: string[]): string[] {
-  const unique = new Set<string>();
-  for (const value of values) {
-    const normalized = String(value ?? "").trim();
-    if (!normalized) continue;
-    unique.add(normalized);
+function splitEnderecoBlocks(value: string): string[] {
+  const normalized = normalizeEnderecoForCompare(value);
+  if (!normalized) return [];
+  return normalized
+    .split(".")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+function normalizeCd(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.trunc(value);
+}
+
+function computeCd02PrefixFromMBlock(realFirstBlock: string): string | null {
+  const matched = /^M(\d+)$/i.exec(realFirstBlock);
+  if (!matched) return null;
+
+  const digits = matched[1];
+  if (digits.length < 2) return null;
+  const firstLast = Number.parseInt(`${digits[0]}${digits[digits.length - 1]}`, 10);
+  if (!Number.isFinite(firstLast)) return null;
+
+  const computed = firstLast - 10;
+  if (!Number.isFinite(computed) || computed < 0) return null;
+  return String(computed).padStart(3, "0");
+}
+
+function matchesCd02PrefixRule(input: string, candidate: string): boolean {
+  const inputBlocks = splitEnderecoBlocks(input);
+  const candidateBlocks = splitEnderecoBlocks(candidate);
+  if (inputBlocks.length <= 0 || candidateBlocks.length <= 0) return false;
+  if (inputBlocks.length !== candidateBlocks.length) return false;
+
+  const computedPrefix = computeCd02PrefixFromMBlock(candidateBlocks[0]);
+  if (!computedPrefix) return false;
+  if (inputBlocks[0] !== computedPrefix) return false;
+
+  for (let index = 1; index < candidateBlocks.length; index += 1) {
+    if (inputBlocks[index] !== candidateBlocks[index]) return false;
   }
-  return Array.from(unique);
-}
-
-function startsWithLetter(value: string): boolean {
-  return /^[A-Z]/i.test(value);
-}
-
-function extractAfterFirstDot(value: string): string {
-  const firstDotIndex = value.indexOf(".");
-  if (firstDotIndex < 0) return "";
-  return value.slice(firstDotIndex + 1);
-}
-
-function stripSeparators(value: string): string {
-  return value.replace(/[.\-_/ ]+/g, "");
-}
-
-function digitsOnly(value: string): string {
-  return value.replace(/\D+/g, "");
-}
-
-function buildStrictCompareKeys(value: string): string[] {
-  const base = normalizeEnderecoForCompare(value);
-  if (!base) return [];
-  return uniqueNonEmpty([
-    base,
-    stripSeparators(base)
-  ]);
-}
-
-function buildLooseCompareKeys(
-  value: string,
-  options?: { includeLetterPrefixSuffix?: boolean }
-): string[] {
-  const base = normalizeEnderecoForCompare(value);
-  if (!base) return [];
-
-  const keys = [
-    base,
-    stripSeparators(base),
-    digitsOnly(base)
-  ];
-
-  const includeLetterPrefixSuffix = options?.includeLetterPrefixSuffix ?? false;
-  if (includeLetterPrefixSuffix && startsWithLetter(base)) {
-    const suffix = extractAfterFirstDot(base);
-    if (suffix) {
-      keys.push(
-        suffix,
-        stripSeparators(suffix),
-        digitsOnly(suffix)
-      );
-    }
-  }
-
-  return uniqueNonEmpty(keys);
+  return true;
 }
 
 export function buildEnderecoCompareKeys(value: string): string[] {
-  return buildLooseCompareKeys(value, { includeLetterPrefixSuffix: true });
+  const normalized = normalizeEnderecoForCompare(value);
+  return normalized ? [normalized] : [];
 }
 
-export function enderecoMatchesForCompare(input: string, candidate: string): boolean {
+export function enderecoMatchesForCompare(
+  input: string,
+  candidate: string,
+  options?: { cd?: number | null }
+): boolean {
   const normalizedInput = normalizeEnderecoForCompare(input);
-  if (!normalizedInput) return false;
+  const normalizedCandidate = normalizeEnderecoForCompare(candidate);
+  if (!normalizedInput || !normalizedCandidate) return false;
+  if (normalizedInput === normalizedCandidate) return true;
 
-  const inputStartsWithLetter = startsWithLetter(normalizedInput);
-  const inputKeys = new Set(
-    inputStartsWithLetter
-      ? buildStrictCompareKeys(normalizedInput)
-      : buildLooseCompareKeys(normalizedInput, { includeLetterPrefixSuffix: false })
-  );
-  if (inputKeys.size <= 0) return false;
-
-  const candidateKeys = inputStartsWithLetter
-    ? buildStrictCompareKeys(candidate)
-    : buildLooseCompareKeys(candidate, { includeLetterPrefixSuffix: true });
-
-  for (const key of candidateKeys) {
-    if (inputKeys.has(key)) return true;
-  }
-  return false;
+  const cd = normalizeCd(options?.cd);
+  if (cd !== 2) return false;
+  return matchesCd02PrefixRule(normalizedInput, normalizedCandidate);
 }
 
 function parseDbEndRow(raw: Record<string, unknown>): DbEndCacheRow | null {
