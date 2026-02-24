@@ -7,6 +7,7 @@ import { getDbBarrasMeta } from "../../shared/db-barras/storage";
 import { refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
 import { getDbEndMeta } from "../../shared/db-end/storage";
 import { enderecoMatchesForCompare, refreshDbEndCacheSmart } from "../../shared/db-end/sync";
+import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import { getValidarEnderecamentoPreferences, saveValidarEnderecamentoPreferences } from "./storage";
@@ -49,7 +50,6 @@ const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
-const SCANNER_WEDGE_FLUSH_DELAY_MS = 120;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
 
@@ -225,6 +225,16 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   const popupTimerRef = useRef<number | null>(null);
   const resolveScanFeedbackAnchor = useCallback(() => enderecoRef.current ?? produtoRef.current, []);
   const { triggerScanErrorAlert } = useScanFeedback(resolveScanFeedbackAnchor);
+  const {
+    inputMode: produtoInputMode,
+    enableSoftKeyboard: enableProdutoSoftKeyboard,
+    disableSoftKeyboard: disableProdutoSoftKeyboard
+  } = useOnDemandSoftKeyboard("numeric");
+  const {
+    inputMode: enderecoInputMode,
+    enableSoftKeyboard: enableEnderecoSoftKeyboard,
+    disableSoftKeyboard: disableEnderecoSoftKeyboard
+  } = useOnDemandSoftKeyboard("text");
 
   const [produtoInput, setProdutoInput] = useState("");
   const [enderecoInput, setEnderecoInput] = useState("");
@@ -282,16 +292,18 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   }, []);
 
   const focusProduto = useCallback(() => {
+    disableProdutoSoftKeyboard();
     window.requestAnimationFrame(() => {
       produtoRef.current?.focus();
     });
-  }, []);
+  }, [disableProdutoSoftKeyboard]);
 
   const focusEndereco = useCallback(() => {
+    disableEnderecoSoftKeyboard();
     window.requestAnimationFrame(() => {
       enderecoRef.current?.focus();
     });
-  }, []);
+  }, [disableEnderecoSoftKeyboard]);
 
   const refreshOfflineMeta = useCallback(async () => {
     if (currentCd == null || currentCd <= 0) {
@@ -693,15 +705,6 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
   }, []);
 
-  const resolveActiveScannerTarget = useCallback((): ScannerInputTarget => {
-    if (typeof document !== "undefined") {
-      const activeElement = document.activeElement;
-      if (activeElement === produtoRef.current) return "produto";
-      if (activeElement === enderecoRef.current && currentProduct) return "endereco";
-    }
-    return currentProduct ? "endereco" : "produto";
-  }, [currentProduct]);
-
   const onProdutoInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = event.target.value;
     setProdutoInput(nextValue);
@@ -739,77 +742,6 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     event.preventDefault();
     void commitScannerInput("endereco", enderecoInput);
   };
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    if (scannerOpen) return undefined;
-
-    let buffer = "";
-    let lastKeyAt = 0;
-    let flushTimerId: number | null = null;
-
-    const clearFlushTimer = () => {
-      if (flushTimerId != null) {
-        window.clearTimeout(flushTimerId);
-        flushTimerId = null;
-      }
-    };
-
-    const flushBufferedScan = () => {
-      const normalized = buffer.replace(/\s+/g, "").trim();
-      buffer = "";
-      clearFlushTimer();
-      if (!normalized) return;
-      const target = resolveActiveScannerTarget();
-      void commitScannerInput(target, normalized);
-    };
-
-    const scheduleFlush = () => {
-      clearFlushTimer();
-      flushTimerId = window.setTimeout(() => {
-        flushBufferedScan();
-      }, SCANNER_WEDGE_FLUSH_DELAY_MS);
-    };
-
-    const onWindowKeyDown = (event: KeyboardEvent) => {
-      if (scannerOpen) return;
-      if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey) return;
-
-      const key = event.key;
-      const isTerminator = key === "Enter" || key === "Tab";
-      const isChar = key.length === 1;
-      if (!isTerminator && !isChar) return;
-
-      const activeElement = document.activeElement;
-      const isEditableElsewhere = (
-        activeElement instanceof HTMLInputElement
-        || activeElement instanceof HTMLTextAreaElement
-      ) && activeElement !== produtoRef.current && activeElement !== enderecoRef.current;
-      if (isEditableElsewhere) return;
-
-      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      if (now - lastKeyAt > SCANNER_INPUT_MAX_INTERVAL_MS * 4) {
-        buffer = "";
-      }
-      lastKeyAt = now;
-
-      if (isChar) {
-        buffer += key;
-        scheduleFlush();
-        return;
-      }
-
-      if (!buffer) return;
-      event.preventDefault();
-      flushBufferedScan();
-    };
-
-    window.addEventListener("keydown", onWindowKeyDown, true);
-    return () => {
-      window.removeEventListener("keydown", onWindowKeyDown, true);
-      clearFlushTimer();
-    };
-  }, [commitScannerInput, resolveActiveScannerTarget, scannerOpen]);
 
   useEffect(() => {
     focusProduto();
@@ -1186,10 +1118,13 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
                 <input
                   ref={produtoRef}
                   type="text"
-                  inputMode="none"
+                  inputMode={produtoInputMode}
                   value={produtoInput}
                   onChange={onProdutoInputChange}
                   onKeyDown={onProdutoKeyDown}
+                  onFocus={enableProdutoSoftKeyboard}
+                  onPointerDown={enableProdutoSoftKeyboard}
+                  onBlur={disableProdutoSoftKeyboard}
                   autoComplete="off"
                   autoCapitalize="none"
                   autoCorrect="off"
@@ -1224,10 +1159,13 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
                 <input
                   ref={enderecoRef}
                   type="text"
-                  inputMode="none"
+                  inputMode={enderecoInputMode}
                   value={enderecoInput}
                   onChange={onEnderecoInputChange}
                   onKeyDown={onEnderecoKeyDown}
+                  onFocus={enableEnderecoSoftKeyboard}
+                  onPointerDown={enableEnderecoSoftKeyboard}
+                  onBlur={disableEnderecoSoftKeyboard}
                   autoComplete="off"
                   autoCapitalize="characters"
                   autoCorrect="off"
