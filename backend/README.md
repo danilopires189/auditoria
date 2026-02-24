@@ -20,12 +20,18 @@ py -3 main.py validate --config .\config.yml --env-file .\.env
 py -3 main.py sync --config .\config.yml --env-file .\.env
 py -3 main.py dry-run --config .\config.yml --env-file .\.env
 py -3 main.py refresh --config .\config.yml --env-file .\.env
+py -3 main.py automation-cycle --scheduled --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
+py -3 main.py automation-task install --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
+py -3 main.py automation-task status --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
+py -3 main.py gui --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
 ```
+
+Sem argumentos (`py -3 main.py`) o app abre a interface Tkinter.
 
 ## 3. Empacotamento com PyInstaller
 
 ```powershell
-py -3 -m PyInstaller --onefile --name sync_backend --add-data "config.yml;." main.py
+py -3 -m PyInstaller sync_backend.spec
 ```
 
 Artefato gerado em `dist\sync_backend.exe`.
@@ -35,6 +41,7 @@ Artefato gerado em `dist\sync_backend.exe`.
 1. Copiar para a máquina de destino:
    - `dist\sync_backend.exe`
    - `config.yml`
+   - `automation_config.json`
    - `.env`
    - pasta `data\`
    - `run_bootstrap.bat`
