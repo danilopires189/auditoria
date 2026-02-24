@@ -11,7 +11,12 @@ import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboar
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import { getValidarEnderecamentoPreferences, saveValidarEnderecamentoPreferences } from "./storage";
-import { normalizeLookupError, resolveProdutoForValidacao } from "./sync";
+import {
+  enqueueValidarEnderecamentoAudit,
+  flushPendingValidarEnderecamentoAudits,
+  normalizeLookupError,
+  resolveProdutoForValidacao
+} from "./sync";
 import type {
   ValidarEnderecamentoLookupResult,
   ValidarEnderecamentoModuleProfile
@@ -211,6 +216,17 @@ function asLookupSummary(result: ValidarEnderecamentoLookupResult): string {
   return `${result.descricao || `CODDV ${result.coddv}`} | CODDV ${result.coddv}`;
 }
 
+function pickMainBarcode(result: ValidarEnderecamentoLookupResult): string {
+  const direct = String(result.barras ?? "").replace(/\s+/g, "").trim();
+  if (direct) return direct;
+
+  for (const value of result.barras_lista) {
+    const normalized = String(value ?? "").replace(/\s+/g, "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
 export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarEnderecamentoPageProps) {
   const produtoRef = useRef<HTMLInputElement | null>(null);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -373,6 +389,31 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     setValidationPopup(null);
     clearValidationCycle();
   }, [clearPopupTimer, clearValidationCycle]);
+
+  const queueValidationAudit = useCallback((params: {
+    product: ValidarEnderecamentoLookupResult;
+    enderecoInformado: string;
+    endCorreto: string;
+    validado: boolean;
+  }) => {
+    const barras = pickMainBarcode(params.product);
+    if (!barras) return;
+
+    void enqueueValidarEnderecamentoAudit({
+      userId: profile.user_id,
+      isOnline,
+      payload: {
+        cd: params.product.cd > 0 ? params.product.cd : (currentCd ?? 0),
+        barras,
+        coddv: params.product.coddv,
+        descricao: params.product.descricao,
+        end_infor: params.enderecoInformado,
+        end_corret: params.endCorreto,
+        validado: params.validado,
+        data_hr: new Date().toISOString()
+      }
+    }).catch(() => undefined);
+  }, [currentCd, isOnline, profile.user_id]);
 
   const runOfflineSync = useCallback(async () => {
     if (!isOnline) {
@@ -591,10 +632,16 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     setEnderecoValidationState("validating");
 
     const sepList = currentProduct.enderecos_sep;
-    const matched = sepList.some((item) => enderecoMatchesForCompare(endereco, item, { cd: currentProduct.cd }));
+    const matchedSep = sepList.find((item) => enderecoMatchesForCompare(endereco, item, { cd: currentProduct.cd }));
 
-    if (matched) {
+    if (matchedSep) {
       setEnderecoValidationState("valid");
+      queueValidationAudit({
+        product: currentProduct,
+        enderecoInformado: endereco,
+        endCorreto: matchedSep,
+        validado: true
+      });
       playSuccessChime();
       showValidationPopup({
         tone: "success",
@@ -607,6 +654,12 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     }
 
     setEnderecoValidationState("invalid");
+    queueValidationAudit({
+      product: currentProduct,
+      enderecoInformado: endereco,
+      endCorreto: sepList.length > 0 ? sepList.join(" | ") : "SEM ENDERECO SEP",
+      validado: false
+    });
     triggerScanErrorAlert("Endereço inválido.");
     showValidationPopup({
       tone: "error",
@@ -615,7 +668,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       sepList,
       manualClose: true
     });
-  }, [currentProduct, focusProduto, showValidationPopup, triggerScanErrorAlert]);
+  }, [currentProduct, focusProduto, queueValidationAudit, showValidationPopup, triggerScanErrorAlert]);
 
   const clearScannerInputTimer = useCallback((target: ScannerInputTarget) => {
     if (typeof window === "undefined") return;
@@ -773,6 +826,11 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     if (!navigator.storage || typeof navigator.storage.persist !== "function") return;
     void navigator.storage.persist().catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!isOnline) return;
+    void flushPendingValidarEnderecamentoAudits(profile.user_id).catch(() => undefined);
+  }, [isOnline, profile.user_id]);
 
   useEffect(() => {
     return () => {

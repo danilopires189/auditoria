@@ -4,7 +4,16 @@ import { normalizeBarcode } from "../../shared/db-barras/sync";
 import { normalizeEnderecoDisplay } from "../../shared/db-end/sync";
 import { getDbEndRowsByCoddv, upsertDbEndCacheRows } from "../../shared/db-end/storage";
 import type { DbEndCacheRow } from "../../shared/db-end/types";
-import type { ValidarEnderecamentoLookupResult } from "./types";
+import {
+  enqueueValidarEnderecamentoAudit as enqueueAuditPending,
+  getPendingValidarEnderecamentoAudits,
+  markPendingValidarEnderecamentoAuditError,
+  removePendingValidarEnderecamentoAudit
+} from "./storage";
+import type {
+  ValidarEnderecamentoAuditPayload,
+  ValidarEnderecamentoLookupResult
+} from "./types";
 
 interface ParsedProductInput {
   barras: string;
@@ -166,6 +175,30 @@ function containsNotFoundError(error: unknown): boolean {
     || normalized.includes("PRODUTO_NAO_ENCONTRADO");
 }
 
+function normalizeAuditPayload(input: ValidarEnderecamentoAuditPayload): ValidarEnderecamentoAuditPayload {
+  const parsedDate = input.data_hr ? new Date(input.data_hr) : null;
+  return {
+    cd: Number.isFinite(input.cd) ? Math.trunc(input.cd) : 0,
+    barras: normalizeBarcode(String(input.barras ?? "")),
+    coddv: Number.isFinite(input.coddv) ? Math.trunc(input.coddv) : 0,
+    descricao: String(input.descricao ?? "").trim(),
+    end_infor: normalizeEnderecoDisplay(String(input.end_infor ?? "")),
+    end_corret: normalizeEnderecoDisplay(String(input.end_corret ?? "")),
+    validado: Boolean(input.validado),
+    data_hr: parsedDate && !Number.isNaN(parsedDate.getTime())
+      ? parsedDate.toISOString()
+      : null
+  };
+}
+
+function isValidAuditPayload(payload: ValidarEnderecamentoAuditPayload): boolean {
+  return payload.cd > 0
+    && payload.coddv > 0
+    && Boolean(payload.barras)
+    && Boolean(payload.end_infor)
+    && Boolean(payload.end_corret);
+}
+
 async function warmupCachesFromOnline(result: ValidarEnderecamentoLookupResult): Promise<void> {
   const bars = result.barras_lista.length > 0 ? result.barras_lista : (result.barras ? [result.barras] : []);
   const barsRows = bars.map((barras) => ({
@@ -231,4 +264,76 @@ export async function resolveProdutoForValidacao(params: {
 
 export function normalizeLookupError(error: unknown): string {
   return toErrorMessage(error);
+}
+
+export async function sendValidarEnderecamentoAuditOnline(payload: ValidarEnderecamentoAuditPayload): Promise<void> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const normalized = normalizeAuditPayload(payload);
+  if (!isValidAuditPayload(normalized)) {
+    throw new Error("Registro de endereçamento inválido.");
+  }
+
+  const { data, error } = await supabase.rpc("rpc_aud_endereco_insert", {
+    p_cd: normalized.cd,
+    p_barras: normalized.barras,
+    p_coddv: normalized.coddv,
+    p_descricao: normalized.descricao,
+    p_end_infor: normalized.end_infor,
+    p_end_corret: normalized.end_corret,
+    p_validado: normalized.validado,
+    p_data_hr: normalized.data_hr
+  });
+
+  if (error) {
+    throw new Error(toErrorMessage(error));
+  }
+
+  const first = Array.isArray(data) ? data[0] : null;
+  if (!first || typeof first !== "object") {
+    throw new Error("Resposta inválida ao gravar validação de endereçamento.");
+  }
+}
+
+export async function flushPendingValidarEnderecamentoAudits(userId: string): Promise<{
+  processed: number;
+  synced: number;
+  failed: number;
+  pending: number;
+}> {
+  const rows = await getPendingValidarEnderecamentoAudits(userId);
+  let synced = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    try {
+      await sendValidarEnderecamentoAuditOnline(row.payload);
+      await removePendingValidarEnderecamentoAudit(userId, row.local_id);
+      synced += 1;
+    } catch (error) {
+      failed += 1;
+      await markPendingValidarEnderecamentoAuditError(userId, row.local_id, toErrorMessage(error));
+    }
+  }
+
+  const pending = (await getPendingValidarEnderecamentoAudits(userId)).length;
+  return {
+    processed: rows.length,
+    synced,
+    failed,
+    pending
+  };
+}
+
+export async function enqueueValidarEnderecamentoAudit(params: {
+  userId: string;
+  payload: ValidarEnderecamentoAuditPayload;
+  isOnline: boolean;
+}): Promise<void> {
+  const normalized = normalizeAuditPayload(params.payload);
+  if (!isValidAuditPayload(normalized)) return;
+
+  await enqueueAuditPending(params.userId, normalized);
+
+  if (!params.isOnline) return;
+  await flushPendingValidarEnderecamentoAudits(params.userId);
 }
