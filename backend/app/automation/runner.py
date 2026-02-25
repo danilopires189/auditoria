@@ -10,6 +10,10 @@ from app.automation.config_store import (
     load_automation_config,
     save_automation_config,
 )
+from app.automation.edge_sync import (
+    is_edge_transport_enabled,
+    sync_tables_via_edge,
+)
 from app.automation.models import (
     AutomationConfig,
     AutomationCycleResult,
@@ -115,6 +119,9 @@ class AutomationRunner:
         return config_path
 
     def fetch_last_run_summary(self) -> dict[str, object] | None:
+        if is_edge_transport_enabled():
+            return None
+
         runtime = self._load_runtime()
         service = self._build_service(runtime)
         with service.engine.begin() as conn:
@@ -234,12 +241,19 @@ class AutomationRunner:
         sync_success_tables: list[str] = []
 
         if tables_to_sync:
-            service = self._build_service(runtime)
-            sync_result = service.sync(
-                dry_run=dry_run,
-                table_filter=tables_to_sync,
-                force_tables=force_tables,
-            )
+            if is_edge_transport_enabled():
+                sync_result = sync_tables_via_edge(
+                    runtime=runtime,
+                    table_names=tables_to_sync,
+                    dry_run=dry_run,
+                )
+            else:
+                service = self._build_service(runtime)
+                sync_result = service.sync(
+                    dry_run=dry_run,
+                    table_filter=tables_to_sync,
+                    force_tables=force_tables,
+                )
             result.run_id = sync_result.run_id
             result.sync_status = sync_result.status
             result.sync_message = sync_result.message

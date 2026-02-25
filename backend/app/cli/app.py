@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typer
 
+from app.automation.edge_sync import edge_healthcheck, is_edge_transport_enabled
 from app.automation.runner import AutomationRunner
 from app.automation.task_scheduler import (
     install_or_update_task,
@@ -177,6 +178,14 @@ def healthcheck_command(
     try:
         runtime = load_runtime_config(config, env_file)
         configure_logging(runtime.app.log_level, runtime.config_path.parent / "logs")
+
+        if is_edge_transport_enabled():
+            ok, message = edge_healthcheck()
+            _safe_echo(f"edge_transport=enabled")
+            _safe_echo(f"edge_healthcheck={message}")
+            if not ok:
+                raise typer.Exit(code=1)
+            return
 
         engine = create_db_engine(
             runtime.db,

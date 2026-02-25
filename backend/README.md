@@ -11,6 +11,19 @@ copy .env.example .env
 
 Preencha `.env` com as credenciais reais do banco Supabase Postgres.
 
+Se a rede bloquear PostgreSQL (`5432/6543`), use modo HTTPS:
+
+```env
+SYNC_TRANSPORT=edge
+EDGE_FUNCTION_URL=https://<project-ref>.functions.supabase.co/sync_ingest
+EDGE_FUNCTION_BEARER_TOKEN=<anon-or-service-role-key>
+EDGE_FUNCTION_SHARED_SECRET=<secret>
+EDGE_FUNCTION_TIMEOUT_SECONDS=120
+EDGE_FUNCTION_CHUNK_SIZE=1000
+```
+
+Template da function: `edge_function/sync_ingest/index.ts`.
+
 ## 2. Comandos CLI
 
 ```powershell
@@ -25,6 +38,9 @@ py -3 main.py automation-task install --config .\config.yml --env-file .\.env --
 py -3 main.py automation-task status --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
 py -3 main.py gui --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
 ```
+
+No modo `SYNC_TRANSPORT=edge`, `healthcheck` valida a Edge Function (HTTPS) e
+`automation-cycle` envia dados para o Supabase via função HTTP.
 
 Sem argumentos (`py -3 main.py`) o app abre a interface Tkinter.
 
