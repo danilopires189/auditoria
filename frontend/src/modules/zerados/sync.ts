@@ -522,7 +522,7 @@ export async function applyInventarioAdminSeed(params: {
   mode: InventarioAdminApplyMode;
 }): Promise<InventarioAdminSeedSummary> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_apply_seed", {
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_apply_seed_v2", {
     p_cd: params.cd,
     p_zonas: params.zonas,
     p_estoque_ini: Math.max(Math.trunc(params.estoque_ini), 0),
@@ -538,7 +538,11 @@ export async function applyInventarioAdminSeed(params: {
   return {
     itens_afetados: Math.max(parseInteger(first.itens_afetados), 0),
     zonas_afetadas: Math.max(parseInteger(first.zonas_afetadas), 0),
-    total_geral: Math.max(parseInteger(first.total_geral), 0)
+    total_geral: Math.max(parseInteger(first.total_geral), 0),
+    usuario_id: parseNullableString(first.usuario_id),
+    usuario_mat: parseNullableString(first.usuario_mat),
+    usuario_nome: parseNullableString(first.usuario_nome),
+    atualizado_em: parseNullableString(first.atualizado_em)
   };
 }
 
@@ -549,7 +553,7 @@ export async function clearInventarioAdminBase(params: {
   hard_reset: boolean;
 }): Promise<InventarioAdminSeedSummary> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_clear_base", {
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_clear_base_v2", {
     p_cd: params.cd,
     p_scope: params.scope,
     p_zonas: params.zonas,
@@ -562,7 +566,11 @@ export async function clearInventarioAdminBase(params: {
   return {
     itens_afetados: Math.max(parseInteger(first.itens_afetados), 0),
     zonas_afetadas: Math.max(parseInteger(first.zonas_afetadas), 0),
-    total_geral: Math.max(parseInteger(first.total_geral), 0)
+    total_geral: Math.max(parseInteger(first.total_geral), 0),
+    usuario_id: parseNullableString(first.usuario_id),
+    usuario_mat: parseNullableString(first.usuario_mat),
+    usuario_nome: parseNullableString(first.usuario_nome),
+    atualizado_em: parseNullableString(first.atualizado_em)
   };
 }
 
@@ -572,7 +580,7 @@ export async function applyInventarioAdminManualCoddv(params: {
   incluir_pul: boolean;
 }): Promise<InventarioAdminSeedSummary> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_apply_manual_coddv", {
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_apply_manual_coddv_v2", {
     p_cd: params.cd,
     p_manual_coddv_csv: params.manual_coddv_csv,
     p_incluir_pul: Boolean(params.incluir_pul)
@@ -584,6 +592,10 @@ export async function applyInventarioAdminManualCoddv(params: {
   return {
     itens_afetados: Math.max(parseInteger(first.itens_afetados), 0),
     zonas_afetadas: Math.max(parseInteger(first.zonas_afetadas), 0),
-    total_geral: Math.max(parseInteger(first.total_geral), 0)
+    total_geral: Math.max(parseInteger(first.total_geral), 0),
+    usuario_id: parseNullableString(first.usuario_id),
+    usuario_mat: parseNullableString(first.usuario_mat),
+    usuario_nome: parseNullableString(first.usuario_nome),
+    atualizado_em: parseNullableString(first.atualizado_em)
   };
 }

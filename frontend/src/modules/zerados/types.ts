@@ -228,4 +228,8 @@ export interface InventarioAdminSeedSummary {
   itens_afetados: number;
   zonas_afetadas: number;
   total_geral: number;
+  usuario_id: string | null;
+  usuario_mat: string | null;
+  usuario_nome: string | null;
+  atualizado_em: string | null;
 }
