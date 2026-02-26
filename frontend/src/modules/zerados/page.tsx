@@ -195,6 +195,9 @@ function resultOf(estoque: number, qtd: number, discarded: boolean): InventarioR
 
 function parseErr(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "Erro inesperado");
+  if (raw.includes("rpc_conf_inventario_manifest_meta_v2") || raw.includes("Could not find the function public.rpc_conf_inventario_manifest_meta_v2")) {
+    return "Backend desatualizado para metadados de autoria da base. Execute as migrações mais recentes e tente novamente.";
+  }
   if (raw.includes("rpc_conf_inventario_admin_apply_seed_v2") || raw.includes("rpc_conf_inventario_admin_clear_base_v2") || raw.includes("rpc_conf_inventario_admin_apply_manual_coddv_v2")) {
     return "Backend desatualizado para metadados da gestão de base. Execute as migrações mais recentes e tente novamente.";
   }
@@ -1947,6 +1950,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const dbBarrasSyncLabel = dbBarrasLastSyncAt
     ? `db_barras atualizada em ${formatDateTime(dbBarrasLastSyncAt)}`
     : "db_barras sem atualização local";
+  const dbInventarioActorLabel = useMemo(() => {
+    if (!manifestMeta) return null;
+    const nome = (manifestMeta.base_usuario_nome ?? "").trim();
+    const mat = (manifestMeta.base_usuario_mat ?? "").trim();
+    const at = manifestMeta.base_atualizado_em ? formatDateTime(manifestMeta.base_atualizado_em) : null;
+    const who = nome || mat ? [nome, mat ? `MAT ${mat}` : null].filter(Boolean).join(" | ") : null;
+    if (!who && !at) return null;
+    if (who && at) return `db_inventario atualizada por ${who} em ${at}`;
+    if (who) return `db_inventario atualizada por ${who}`;
+    return `db_inventario atualizada em ${at}`;
+  }, [manifestMeta]);
   const handleToggleOffline = useCallback(() => {
     const nextMode = !preferOffline;
     setPreferOffline(nextMode);
@@ -2832,6 +2846,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <span className={`inventario-base-chip ${manifestMeta && manifestItems.length >= manifestMeta.row_count ? "ok" : "warn"}`}>{`db_inventario ${manifestItems.length}/${manifestMeta?.row_count ?? 0}`}</span>
                 <span className={`inventario-base-chip ${dbBarrasCount > 0 ? "ok" : "warn"}`}>{`db_barras ${dbBarrasCount}`}</span>
               </div>
+              {dbInventarioActorLabel ? <p className="inventario-base-sync-info ok">{dbInventarioActorLabel}</p> : null}
               <p className={`inventario-base-sync-info ${dbBarrasLastSyncAt ? "ok" : "warn"}`}>{dbBarrasSyncLabel}</p>
             </div>
             {err ? <div className="alert error">{err}</div> : null}

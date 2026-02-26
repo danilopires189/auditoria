@@ -28,6 +28,10 @@ export interface InventarioManifestMeta {
   source_run_id: string | null;
   manifest_hash: string;
   generated_at: string;
+  base_usuario_id: string | null;
+  base_usuario_mat: string | null;
+  base_usuario_nome: string | null;
+  base_atualizado_em: string | null;
 }
 
 export interface InventarioManifestItemRow {
