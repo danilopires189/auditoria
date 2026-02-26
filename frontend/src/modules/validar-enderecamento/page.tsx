@@ -57,7 +57,6 @@ const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
-const INPUT_ERROR_CHIME_DURATION_MS = 320;
 const NOT_FOUND_CHIME_DURATION_MS = 300;
 const AUDIT_FLUSH_INTERVAL_MS = 15000;
 const STATUS_MESSAGE_AUTO_HIDE_MS = 2800;
@@ -204,38 +203,6 @@ function playNotFoundChime(): void {
     window.setTimeout(() => {
       void ctx.close().catch(() => undefined);
     }, NOT_FOUND_CHIME_DURATION_MS);
-  } catch {
-    // Browser pode bloquear audio programatico.
-  }
-}
-
-function playInputErrorChime(): void {
-  if (typeof window === "undefined") return;
-  const audioCtor = window.AudioContext
-    ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!audioCtor) return;
-
-  try {
-    const ctx = new audioCtor();
-    const start = ctx.currentTime + 0.01;
-    const end = start + 0.24;
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(0.0001, start);
-    master.gain.exponentialRampToValueAtTime(0.12, start + 0.04);
-    master.gain.exponentialRampToValueAtTime(0.0001, end);
-    master.connect(ctx.destination);
-
-    const toneA = ctx.createOscillator();
-    toneA.type = "triangle";
-    toneA.frequency.setValueAtTime(420, start);
-    toneA.frequency.exponentialRampToValueAtTime(320, end);
-    toneA.connect(master);
-    toneA.start(start);
-    toneA.stop(end);
-
-    window.setTimeout(() => {
-      void ctx.close().catch(() => undefined);
-    }, INPUT_ERROR_CHIME_DURATION_MS);
   } catch {
     // Browser pode bloquear audio programatico.
   }
@@ -700,6 +667,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       setProdutoValidationState("invalid");
       setErrorMessage(normalizedError);
       if (isProdutoNaoEncontradoMessage(normalizedError)) {
+        setProdutoInput("");
         playNotFoundChime();
       }
       focusProduto();
@@ -724,6 +692,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     const sepList = currentProduct.enderecos_sep;
     if (sepList.length <= 0) {
       setEnderecoValidationState("invalid");
+      setEnderecoInput("");
       queueValidationAudit({
         product: currentProduct,
         enderecoInformado: endereco,
@@ -764,13 +733,14 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     }
 
     setEnderecoValidationState("invalid");
+    setEnderecoInput("");
     queueValidationAudit({
       product: currentProduct,
       enderecoInformado: endereco,
       endCorreto: sepList.length > 0 ? sepList.join(" | ") : "SEM ENDERECO SEP",
       validado: false
     });
-    triggerScanErrorAlert("Endereço inválido.");
+    playNotFoundChime();
     showValidationPopup({
       tone: "error",
       title: "Endereço não pertence ao produto",
@@ -819,8 +789,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
         setProdutoInput("");
         setErrorMessage(formatError);
         setStatusMessage(null);
-        triggerScanErrorAlert("Código de barras inválido.");
-        playInputErrorChime();
+        playNotFoundChime();
         focusProduto();
         return;
       }
@@ -835,15 +804,14 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       setEnderecoInput("");
       setErrorMessage(formatError);
       setStatusMessage(null);
-      triggerScanErrorAlert("Endereço inválido.");
-      playInputErrorChime();
+      playNotFoundChime();
       focusProduto();
       return;
     }
 
     setEnderecoInput(normalized);
     await commitEnderecoInput(normalized);
-  }, [clearScannerInputTimer, commitEnderecoInput, commitProdutoInput, focusProduto, triggerScanErrorAlert]);
+  }, [clearScannerInputTimer, commitEnderecoInput, commitProdutoInput, focusProduto]);
 
   const scheduleScannerInputAutoSubmit = useCallback((target: ScannerInputTarget, value: string) => {
     if (typeof window === "undefined") return;
