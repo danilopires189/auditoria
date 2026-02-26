@@ -322,18 +322,21 @@ function createLocalVolumeFromManifest(
   const confDate = todayIsoBrasilia();
   const first = manifestItems[0];
   const localKey = buildDevolucaoMercadoriaVolumeKey(profile.user_id, cd, confDate, idEtiqueta);
-  const items: DevolucaoMercadoriaLocalItem[] = manifestItems.map((row) => ({
-    coddv: row.coddv,
-    barras: null,
-    descricao: row.descricao,
-    tipo: row.tipo ?? "UN",
-    qtd_esperada: row.qtd_esperada,
-    qtd_conferida: 0,
-    qtd_manual_total: 0,
-    lotes: row.lotes ?? null,
-    validades: row.validades ?? null,
-    updated_at: nowIso
-  }));
+  const freeCollectionByMotivo = motivoAtivaColetaLivreSemDivergencia(first?.motivo ?? null);
+  const items: DevolucaoMercadoriaLocalItem[] = freeCollectionByMotivo
+    ? []
+    : manifestItems.map((row) => ({
+        coddv: row.coddv,
+        barras: null,
+        descricao: row.descricao,
+        tipo: row.tipo ?? "UN",
+        qtd_esperada: row.qtd_esperada,
+        qtd_conferida: 0,
+        qtd_manual_total: 0,
+        lotes: row.lotes ?? null,
+        validades: row.validades ?? null,
+        updated_at: nowIso
+      }));
 
   return {
     local_key: localKey,
@@ -584,6 +587,10 @@ function motivoPermiteSemBipagem(motivo: string | null | undefined): boolean {
   return normalizeSearchText(motivo ?? "").includes("falta");
 }
 
+function motivoAtivaColetaLivreSemDivergencia(motivo: string | null | undefined): boolean {
+  return normalizeSearchText(motivo ?? "").includes("desacordo");
+}
+
 function conferenceActionLabel(status: DevolucaoMercadoriaStoreStatus): string {
   return status === "pendente" ? "Iniciar conferência" : "Retornar conferência";
 }
@@ -828,7 +835,11 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       correto: [] as Array<ReturnType<typeof withDivergencia>>
     };
     if (!activeVolume) return empty;
-    const mapped = activeVolume.conference_kind === "sem_nfd"
+    const freeCollectionMode = (
+      activeVolume.conference_kind === "sem_nfd"
+      || motivoAtivaColetaLivreSemDivergencia(activeVolume.source_motivo)
+    );
+    const mapped = freeCollectionMode
       ? activeVolume.items.map((item) => ({
           item,
           divergencia: "correto" as const,
@@ -870,6 +881,16 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
   const hasAnyItemInformed = useMemo(() => (
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
+  ), [activeVolume]);
+
+  const isFreeCollectionMode = useMemo(() => (
+    Boolean(
+      activeVolume
+      && (
+        activeVolume.conference_kind === "sem_nfd"
+        || motivoAtivaColetaLivreSemDivergencia(activeVolume.source_motivo)
+      )
+    )
   ), [activeVolume]);
 
   const canRegisterWithoutScan = useMemo(() => (
@@ -1897,7 +1918,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           return;
         }
         const target = activeVolume.items.find((item) => item.coddv === lookup.coddv) ?? null;
-        if (!target && activeVolume.conference_kind !== "sem_nfd") {
+        if (!target && !isFreeCollectionMode) {
           const produtoNome = `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
           showDialog({
             title: "Produto fora da NFD",
@@ -1920,7 +1941,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           barrasRegistrada,
           {
             qtdManualDelta: qtdManual,
-            createIfMissing: activeVolume.conference_kind === "sem_nfd" && !target,
+            createIfMissing: isFreeCollectionMode && !target,
             descricao: lookup.descricao || target?.descricao || `SKU ${lookup.coddv}`,
             tipo
           }
@@ -2054,6 +2075,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     multiploInput,
     persistPreferences,
     preferOfflineMode,
+    isFreeCollectionMode,
     resolveBarcodeProduct,
     runPendingSync,
     showDialog,
@@ -3418,7 +3440,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
               </button>
             </form>
 
-            {activeVolume.conference_kind === "com_nfd" ? (
+            {!isFreeCollectionMode ? (
               <>
             <div className="termo-list-block">
               <h4>Falta ({groupedItems.falta.length})</h4>
@@ -3596,10 +3618,10 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
             ) : null}
 
             <div className="termo-list-block">
-              <h4>{activeVolume.conference_kind === "sem_nfd" ? `Produtos bipados (${groupedItems.correto.length})` : `Correto (${groupedItems.correto.length})`}</h4>
+              <h4>{isFreeCollectionMode ? `Produtos bipados (${groupedItems.correto.length})` : `Correto (${groupedItems.correto.length})`}</h4>
               {groupedItems.correto.length === 0 ? (
                 <div className="coleta-empty">
-                  {activeVolume.conference_kind === "sem_nfd" ? "Nenhum produto bipado ainda." : "Sem itens corretos ainda."}
+                  {isFreeCollectionMode ? "Nenhum produto bipado ainda." : "Sem itens corretos ainda."}
                 </div>
               ) : (
                 groupedItems.correto.map(({ item }) => {
@@ -3614,7 +3636,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                           <p>Barras: {item.barras ?? "-"}</p>
                         ) : null}
                         <p>
-                          {activeVolume.conference_kind === "sem_nfd"
+                          {isFreeCollectionMode
                             ? `Quantidade bipada: ${item.qtd_conferida}`
                             : `Esperada: ${item.qtd_esperada} | Conferida: ${item.qtd_conferida}`}
                         </p>
@@ -3626,7 +3648,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                             Último adicionado
                           </span>
                         ) : null}
-                        <span className="termo-divergencia correto">{activeVolume.conference_kind === "sem_nfd" ? "Bipado" : "Correto"}</span>
+                        <span className="termo-divergencia correto">{isFreeCollectionMode ? "Bipado" : "Correto"}</span>
                         <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
                       </div>
                     </button>
