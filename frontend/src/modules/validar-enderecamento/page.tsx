@@ -62,6 +62,7 @@ const AUDIT_FLUSH_INTERVAL_MS = 15000;
 const STATUS_MESSAGE_AUTO_HIDE_MS = 2800;
 const BARCODE_DIGITS_PATTERN = /^\d+$/;
 const ADDRESS_BARCODE_LIKE_MIN_LENGTH = 8;
+let sharedAudioContext: AudioContext | null = null;
 
 function createScannerInputState(): ScannerInputState {
   return {
@@ -131,19 +132,49 @@ function isProdutoNaoEncontradoMessage(message: string): boolean {
     || normalized.includes("PRODUTO_NAO_ENCONTRADO");
 }
 
-function playSuccessChime(): void {
-  if (typeof window === "undefined") return;
+function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
   const audioCtor = window.AudioContext
     ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!audioCtor) return;
+  if (!audioCtor) return null;
+  if (!sharedAudioContext) {
+    sharedAudioContext = new audioCtor();
+  }
+  return sharedAudioContext;
+}
 
-  try {
-    const ctx = new audioCtor();
-    const start = ctx.currentTime + 0.01;
-    const end = start + 0.35;
+function unlockAudioContextFromGesture(): void {
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    void ctx.resume().catch(() => undefined);
+  }
+}
+
+function runWithAudioContext(play: (ctx: AudioContext) => void): void {
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+  const run = () => {
+    try {
+      play(ctx);
+    } catch {
+      // Browser pode bloquear audio programatico.
+    }
+  };
+  if (ctx.state === "suspended") {
+    void ctx.resume().then(run).catch(() => undefined);
+    return;
+  }
+  run();
+}
+
+function playSuccessChime(): void {
+  runWithAudioContext((ctx) => {
+    const start = ctx.currentTime + 0.005;
+    const end = start + (SUCCESS_CHIME_DURATION_MS / 1000);
     const master = ctx.createGain();
     master.gain.setValueAtTime(0.0001, start);
-    master.gain.exponentialRampToValueAtTime(0.5, start + 0.03);
+    master.gain.exponentialRampToValueAtTime(0.35, start + 0.03);
     master.gain.exponentialRampToValueAtTime(0.0001, end);
     master.connect(ctx.destination);
 
@@ -160,52 +191,34 @@ function playSuccessChime(): void {
     toneB.connect(master);
     toneB.start(start + 0.11);
     toneB.stop(end);
-
-    window.setTimeout(() => {
-      void ctx.close().catch(() => undefined);
-    }, SUCCESS_CHIME_DURATION_MS);
-  } catch {
-    // Browser pode bloquear audio programatico.
-  }
+  });
 }
 
 function playNotFoundChime(): void {
-  if (typeof window === "undefined") return;
-  const audioCtor = window.AudioContext
-    ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!audioCtor) return;
-
-  try {
-    const ctx = new audioCtor();
-    const start = ctx.currentTime + 0.01;
-    const mid = start + 0.11;
-    const end = start + 0.24;
+  runWithAudioContext((ctx) => {
+    const start = ctx.currentTime + 0.005;
+    const end = start + (NOT_FOUND_CHIME_DURATION_MS / 1000);
+    const mid = start + ((NOT_FOUND_CHIME_DURATION_MS / 1000) * 0.55);
     const master = ctx.createGain();
     master.gain.setValueAtTime(0.0001, start);
-    master.gain.exponentialRampToValueAtTime(0.08, start + 0.03);
+    master.gain.exponentialRampToValueAtTime(0.14, start + 0.03);
     master.gain.exponentialRampToValueAtTime(0.0001, end);
     master.connect(ctx.destination);
 
     const toneA = ctx.createOscillator();
     toneA.type = "sine";
-    toneA.frequency.setValueAtTime(350, start);
+    toneA.frequency.setValueAtTime(520, start);
     toneA.connect(master);
     toneA.start(start);
     toneA.stop(mid);
 
     const toneB = ctx.createOscillator();
     toneB.type = "sine";
-    toneB.frequency.setValueAtTime(300, mid - 0.01);
+    toneB.frequency.setValueAtTime(430, mid - 0.01);
     toneB.connect(master);
     toneB.start(mid - 0.01);
     toneB.stop(end);
-
-    window.setTimeout(() => {
-      void ctx.close().catch(() => undefined);
-    }, NOT_FOUND_CHIME_DURATION_MS);
-  } catch {
-    // Browser pode bloquear audio programatico.
-  }
+  });
 }
 
 function barcodeIcon() {
@@ -1285,6 +1298,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
                   onChange={onScanInputChange}
                   onKeyDown={onScanKeyDown}
                   onFocus={() => {
+                    unlockAudioContextFromGesture();
                     if (activeInputTarget === "produto") {
                       enableProdutoSoftKeyboard();
                     } else {
@@ -1292,6 +1306,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
                     }
                   }}
                   onPointerDown={() => {
+                    unlockAudioContextFromGesture();
                     if (activeInputTarget === "produto") {
                       enableProdutoSoftKeyboard();
                     } else {
