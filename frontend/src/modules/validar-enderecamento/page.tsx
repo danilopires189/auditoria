@@ -57,7 +57,7 @@ const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
-const NOT_FOUND_CHIME_DURATION_MS = 300;
+const NOT_FOUND_CHIME_DURATION_MS = 420;
 const AUDIT_FLUSH_INTERVAL_MS = 15000;
 const STATUS_MESSAGE_AUTO_HIDE_MS = 2800;
 const BARCODE_DIGITS_PATTERN = /^\d+$/;
@@ -198,23 +198,26 @@ function playNotFoundChime(): void {
   runWithAudioContext((ctx) => {
     const start = ctx.currentTime + 0.005;
     const end = start + (NOT_FOUND_CHIME_DURATION_MS / 1000);
-    const mid = start + ((NOT_FOUND_CHIME_DURATION_MS / 1000) * 0.55);
+    const mid = start + ((NOT_FOUND_CHIME_DURATION_MS / 1000) * 0.52);
     const master = ctx.createGain();
     master.gain.setValueAtTime(0.0001, start);
-    master.gain.exponentialRampToValueAtTime(0.14, start + 0.03);
+    master.gain.exponentialRampToValueAtTime(0.28, start + 0.025);
+    master.gain.exponentialRampToValueAtTime(0.2, mid);
     master.gain.exponentialRampToValueAtTime(0.0001, end);
     master.connect(ctx.destination);
 
     const toneA = ctx.createOscillator();
-    toneA.type = "sine";
-    toneA.frequency.setValueAtTime(520, start);
+    toneA.type = "triangle";
+    toneA.frequency.setValueAtTime(700, start);
+    toneA.frequency.exponentialRampToValueAtTime(560, mid);
     toneA.connect(master);
     toneA.start(start);
     toneA.stop(mid);
 
     const toneB = ctx.createOscillator();
-    toneB.type = "sine";
-    toneB.frequency.setValueAtTime(430, mid - 0.01);
+    toneB.type = "triangle";
+    toneB.frequency.setValueAtTime(560, mid - 0.01);
+    toneB.frequency.exponentialRampToValueAtTime(460, end);
     toneB.connect(master);
     toneB.start(mid - 0.01);
     toneB.stop(end);
