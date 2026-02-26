@@ -84,7 +84,11 @@ function mapManifestMeta(raw: Record<string, unknown>): InventarioManifestMeta {
     zonas_count: parseInteger(raw.zonas_count),
     source_run_id: parseNullableString(raw.source_run_id),
     manifest_hash: parseString(raw.manifest_hash),
-    generated_at: parseString(raw.generated_at, new Date().toISOString())
+    generated_at: parseString(raw.generated_at, new Date().toISOString()),
+    base_usuario_id: parseNullableString(raw.base_usuario_id),
+    base_usuario_mat: parseNullableString(raw.base_usuario_mat),
+    base_usuario_nome: parseNullableString(raw.base_usuario_nome),
+    base_atualizado_em: parseNullableString(raw.base_atualizado_em)
   };
 }
 
@@ -225,7 +229,7 @@ export async function fetchCdOptions(): Promise<CdOption[]> {
 
 export async function fetchManifestMeta(cd: number): Promise<InventarioManifestMeta> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_inventario_manifest_meta", { p_cd: cd });
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_manifest_meta_v2", { p_cd: cd });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) throw new Error("Manifesto do inventário não encontrado.");

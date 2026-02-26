@@ -269,7 +269,11 @@ export async function getManifestMetaLocal(userId: string, cd: number): Promise<
     zonas_count: row.zonas_count,
     source_run_id: row.source_run_id,
     manifest_hash: row.manifest_hash,
-    generated_at: row.generated_at
+    generated_at: row.generated_at,
+    base_usuario_id: parseNullableString((row as { base_usuario_id?: string | null }).base_usuario_id),
+    base_usuario_mat: parseNullableString((row as { base_usuario_mat?: string | null }).base_usuario_mat),
+    base_usuario_nome: parseNullableString((row as { base_usuario_nome?: string | null }).base_usuario_nome),
+    base_atualizado_em: parseNullableString((row as { base_atualizado_em?: string | null }).base_atualizado_em)
   };
 }
 
@@ -321,6 +325,10 @@ export async function saveManifestSnapshot(params: {
       source_run_id: parseNullableString(params.meta.source_run_id),
       manifest_hash: String(params.meta.manifest_hash ?? ""),
       generated_at: String(params.meta.generated_at ?? new Date().toISOString()),
+      base_usuario_id: parseNullableString(params.meta.base_usuario_id),
+      base_usuario_mat: parseNullableString(params.meta.base_usuario_mat),
+      base_usuario_nome: parseNullableString(params.meta.base_usuario_nome),
+      base_atualizado_em: parseNullableString(params.meta.base_atualizado_em),
       cached_at: new Date().toISOString()
     };
     metaStore.put(payload);
