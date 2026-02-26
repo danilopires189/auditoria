@@ -58,6 +58,7 @@ const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
 const INPUT_ERROR_CHIME_DURATION_MS = 320;
+const NOT_FOUND_CHIME_DURATION_MS = 300;
 const AUDIT_FLUSH_INTERVAL_MS = 15000;
 const STATUS_MESSAGE_AUTO_HIDE_MS = 2800;
 const BARCODE_DIGITS_PATTERN = /^\d+$/;
@@ -124,6 +125,13 @@ function detectEnderecoInputFormatError(value: string): string | null {
   return null;
 }
 
+function isProdutoNaoEncontradoMessage(message: string): boolean {
+  const normalized = String(message ?? "").toUpperCase();
+  return normalized.includes("PRODUTO NÃO ENCONTRADO")
+    || normalized.includes("PRODUTO NAO ENCONTRADO")
+    || normalized.includes("PRODUTO_NAO_ENCONTRADO");
+}
+
 function playSuccessChime(): void {
   if (typeof window === "undefined") return;
   const audioCtor = window.AudioContext
@@ -157,6 +165,45 @@ function playSuccessChime(): void {
     window.setTimeout(() => {
       void ctx.close().catch(() => undefined);
     }, SUCCESS_CHIME_DURATION_MS);
+  } catch {
+    // Browser pode bloquear audio programatico.
+  }
+}
+
+function playNotFoundChime(): void {
+  if (typeof window === "undefined") return;
+  const audioCtor = window.AudioContext
+    ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!audioCtor) return;
+
+  try {
+    const ctx = new audioCtor();
+    const start = ctx.currentTime + 0.01;
+    const mid = start + 0.11;
+    const end = start + 0.24;
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, start);
+    master.gain.exponentialRampToValueAtTime(0.08, start + 0.03);
+    master.gain.exponentialRampToValueAtTime(0.0001, end);
+    master.connect(ctx.destination);
+
+    const toneA = ctx.createOscillator();
+    toneA.type = "sine";
+    toneA.frequency.setValueAtTime(350, start);
+    toneA.connect(master);
+    toneA.start(start);
+    toneA.stop(mid);
+
+    const toneB = ctx.createOscillator();
+    toneB.type = "sine";
+    toneB.frequency.setValueAtTime(300, mid - 0.01);
+    toneB.connect(master);
+    toneB.start(mid - 0.01);
+    toneB.stop(end);
+
+    window.setTimeout(() => {
+      void ctx.close().catch(() => undefined);
+    }, NOT_FOUND_CHIME_DURATION_MS);
   } catch {
     // Browser pode bloquear audio programatico.
   }
@@ -648,9 +695,13 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       setStatusMessage(null);
       focusProduto();
     } catch (error) {
+      const normalizedError = normalizeLookupError(error);
       setCurrentProduct(null);
       setProdutoValidationState("invalid");
-      setErrorMessage(normalizeLookupError(error));
+      setErrorMessage(normalizedError);
+      if (isProdutoNaoEncontradoMessage(normalizedError)) {
+        playNotFoundChime();
+      }
       focusProduto();
     }
   }, [currentCd, focusProduto, isOnline, preferOfflineMode]);
@@ -671,6 +722,26 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     setEnderecoValidationState("validating");
 
     const sepList = currentProduct.enderecos_sep;
+    if (sepList.length <= 0) {
+      setEnderecoValidationState("invalid");
+      queueValidationAudit({
+        product: currentProduct,
+        enderecoInformado: endereco,
+        endCorreto: "SEM ENDERECO SEP",
+        validado: false
+      });
+      setErrorMessage("Produto sem endereço SEP cadastrado.");
+      playNotFoundChime();
+      showValidationPopup({
+        tone: "error",
+        title: "Endereço não encontrado",
+        detail: `${asLookupSummary(currentProduct)} | Informado: ${endereco}`,
+        sepList: [],
+        manualClose: true
+      });
+      return;
+    }
+
     const matchedSep = sepList.find((item) => enderecoMatchesForCompare(endereco, item, { cd: currentProduct.cd }));
 
     if (matchedSep) {
