@@ -57,8 +57,11 @@ const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
+const INPUT_ERROR_CHIME_DURATION_MS = 320;
 const AUDIT_FLUSH_INTERVAL_MS = 15000;
 const STATUS_MESSAGE_AUTO_HIDE_MS = 2800;
+const BARCODE_DIGITS_PATTERN = /^\d+$/;
+const ADDRESS_BARCODE_LIKE_MIN_LENGTH = 8;
 
 function createScannerInputState(): ScannerInputState {
   return {
@@ -100,6 +103,27 @@ function normalizeEnderecoDisplay(value: string): string {
   return String(value ?? "").trim().toUpperCase();
 }
 
+function normalizeBarcodeInput(value: string): string {
+  return String(value ?? "").replace(/\s+/g, "").trim();
+}
+
+function detectProdutoInputFormatError(value: string): string | null {
+  if (!value) return "Informe o código de barras.";
+  if (!BARCODE_DIGITS_PATTERN.test(value)) {
+    return "Código de barras inválido. Informe somente números.";
+  }
+  return null;
+}
+
+function detectEnderecoInputFormatError(value: string): string | null {
+  if (!value) return "Informe o endereço.";
+  const hasAddressDelimiter = /[.\-/]/.test(value);
+  if (!hasAddressDelimiter && BARCODE_DIGITS_PATTERN.test(value) && value.length >= ADDRESS_BARCODE_LIKE_MIN_LENGTH) {
+    return "Endereço inválido. Parece código de barras.";
+  }
+  return null;
+}
+
 function playSuccessChime(): void {
   if (typeof window === "undefined") return;
   const audioCtor = window.AudioContext
@@ -133,6 +157,38 @@ function playSuccessChime(): void {
     window.setTimeout(() => {
       void ctx.close().catch(() => undefined);
     }, SUCCESS_CHIME_DURATION_MS);
+  } catch {
+    // Browser pode bloquear audio programatico.
+  }
+}
+
+function playInputErrorChime(): void {
+  if (typeof window === "undefined") return;
+  const audioCtor = window.AudioContext
+    ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!audioCtor) return;
+
+  try {
+    const ctx = new audioCtor();
+    const start = ctx.currentTime + 0.01;
+    const end = start + 0.24;
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, start);
+    master.gain.exponentialRampToValueAtTime(0.12, start + 0.04);
+    master.gain.exponentialRampToValueAtTime(0.0001, end);
+    master.connect(ctx.destination);
+
+    const toneA = ctx.createOscillator();
+    toneA.type = "triangle";
+    toneA.frequency.setValueAtTime(420, start);
+    toneA.frequency.exponentialRampToValueAtTime(320, end);
+    toneA.connect(master);
+    toneA.start(start);
+    toneA.stop(end);
+
+    window.setTimeout(() => {
+      void ctx.close().catch(() => undefined);
+    }, INPUT_ERROR_CHIME_DURATION_MS);
   } catch {
     // Browser pode bloquear audio programatico.
   }
@@ -664,7 +720,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
 
   const commitScannerInput = useCallback(async (target: ScannerInputTarget, rawValue: string) => {
     const normalized = target === "produto"
-      ? String(rawValue ?? "").replace(/\s+/g, "").trim()
+      ? normalizeBarcodeInput(rawValue)
       : normalizeEnderecoDisplay(rawValue);
     if (!normalized) return;
 
@@ -685,14 +741,38 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     state.burstChars = 0;
 
     if (target === "produto") {
+      const formatError = detectProdutoInputFormatError(normalized);
+      if (formatError) {
+        setProdutoValidationState("invalid");
+        setEnderecoValidationState("idle");
+        setProdutoInput("");
+        setErrorMessage(formatError);
+        setStatusMessage(null);
+        triggerScanErrorAlert("Código de barras inválido.");
+        playInputErrorChime();
+        focusProduto();
+        return;
+      }
       setProdutoInput(normalized);
       await commitProdutoInput(normalized);
       return;
     }
 
+    const formatError = detectEnderecoInputFormatError(normalized);
+    if (formatError) {
+      setEnderecoValidationState("invalid");
+      setEnderecoInput("");
+      setErrorMessage(formatError);
+      setStatusMessage(null);
+      triggerScanErrorAlert("Endereço inválido.");
+      playInputErrorChime();
+      focusProduto();
+      return;
+    }
+
     setEnderecoInput(normalized);
     await commitEnderecoInput(normalized);
-  }, [clearScannerInputTimer, commitEnderecoInput, commitProdutoInput]);
+  }, [clearScannerInputTimer, commitEnderecoInput, commitProdutoInput, focusProduto, triggerScanErrorAlert]);
 
   const scheduleScannerInputAutoSubmit = useCallback((target: ScannerInputTarget, value: string) => {
     if (typeof window === "undefined") return;
