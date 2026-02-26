@@ -195,6 +195,9 @@ function resultOf(estoque: number, qtd: number, discarded: boolean): InventarioR
 
 function parseErr(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? "Erro inesperado");
+  if (raw.includes("rpc_conf_inventario_admin_apply_seed_v2") || raw.includes("rpc_conf_inventario_admin_clear_base_v2") || raw.includes("rpc_conf_inventario_admin_apply_manual_coddv_v2")) {
+    return "Backend desatualizado para metadados da gestão de base. Execute as migrações mais recentes e tente novamente.";
+  }
   if (raw.includes("rpc_conf_inventario_admin_apply_manual_coddv") || raw.includes("Could not find the function public.rpc_conf_inventario_admin_apply_manual_coddv")) {
     return "Backend desatualizado para Código e Dígito (CODDV) manual. Execute as migrações mais recentes e tente novamente.";
   }
@@ -1069,6 +1072,19 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     () => adminPreviewRows.length > 0 ? adminPreviewRows[0].total_geral : 0,
     [adminPreviewRows]
   );
+  const adminSummaryActorLabel = useMemo(() => {
+    if (!adminSummary) return null;
+    const nome = (adminSummary.usuario_nome ?? "").trim();
+    const mat = (adminSummary.usuario_mat ?? "").trim();
+    const at = adminSummary.atualizado_em ? formatDateTime(adminSummary.atualizado_em) : null;
+    const who = nome || mat
+      ? [nome, mat ? `MAT ${mat}` : null].filter(Boolean).join(" | ")
+      : null;
+    if (who && at) return `${who} em ${at}`;
+    if (who) return who;
+    if (at) return at;
+    return null;
+  }, [adminSummary]);
   const filteredAdminZones = useMemo(() => {
     const query = adminZoneSearch.trim().toUpperCase();
     if (!query) return adminZones;
@@ -3645,9 +3661,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 </div>
 
                 {adminSummary ? (
-                  <p className="inventario-popup-note ok">
-                    {`Itens afetados: ${adminSummary.itens_afetados} | Zonas atuais: ${adminSummary.zonas_afetadas} | Total atual: ${adminSummary.total_geral}`}
-                  </p>
+                  <div className="inventario-popup-note ok">
+                    <p>{`Itens afetados: ${adminSummary.itens_afetados} | Zonas atuais: ${adminSummary.zonas_afetadas} | Total atual: ${adminSummary.total_geral}`}</p>
+                    {adminSummaryActorLabel ? <p>{`Atualizado por: ${adminSummaryActorLabel}`}</p> : null}
+                  </div>
                 ) : null}
               </div>
             </div>
