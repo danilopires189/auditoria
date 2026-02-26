@@ -756,7 +756,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
       endCorreto: sepList.length > 0 ? sepList.join(" | ") : "SEM ENDERECO SEP",
       validado: false
     });
-    playNotFoundChime();
+    triggerScanErrorAlert("Endereço inválido.");
     showValidationPopup({
       tone: "error",
       title: "Endereço não pertence ao produto",
