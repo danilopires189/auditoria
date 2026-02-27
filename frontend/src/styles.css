@@ -3128,6 +3128,19 @@ small {
   opacity: 0.86;
 }
 
+.termo-route-note-falta {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  line-height: 1;
+  font-weight: 700;
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+}
+
 .termo-route-store-row strong {
   color: #12305e;
   font-size: 0.86rem;

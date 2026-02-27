@@ -495,6 +495,7 @@ function buildVolumeSearchBlob(row: VolumeAvulsoModalVolumeRow): string {
     `${row.itens_total}`,
     `${row.qtd_esperada_total}`,
     routeStatusLabel(row.status, row.tem_falta),
+    row.tem_falta ? "falta" : "",
     row.colaborador_nome ?? "",
     row.colaborador_mat ?? "",
     conferenceActionLabel(row.status)
@@ -502,7 +503,7 @@ function buildVolumeSearchBlob(row: VolumeAvulsoModalVolumeRow): string {
 }
 
 function routeStatusLabel(status: VolumeAvulsoStoreStatus | string, temFalta = false): string {
-  if (status === "concluido" || status === "conferido") return temFalta ? "Concluído - Falta" : "Concluído";
+  if (status === "concluido" || status === "conferido") return "Concluído";
   if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
   return "Pendente";
 }
@@ -3157,6 +3158,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                                 <span className={`termo-divergencia ${routeStatusClass(row.status)}`}>
                                   {routeStatusLabel(row.status, row.tem_falta)}
                                 </span>
+                                {row.status === "concluido" && row.tem_falta ? <span className="termo-route-note-falta">Falta</span> : null}
                                 <span
                                   className="termo-route-open-icon"
                                   title={conferenceActionLabel(row.status)}
