@@ -593,6 +593,8 @@ begin
 end;
 $$;
 
+drop function if exists public.rpc_conf_devolucao_manifest_notas(integer);
+
 create or replace function public.rpc_conf_devolucao_manifest_notas(
     p_cd integer default null
 )
