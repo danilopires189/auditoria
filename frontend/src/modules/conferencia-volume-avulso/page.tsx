@@ -494,15 +494,15 @@ function buildVolumeSearchBlob(row: VolumeAvulsoModalVolumeRow): string {
     row.nr_volume,
     `${row.itens_total}`,
     `${row.qtd_esperada_total}`,
-    routeStatusLabel(row.status),
+    routeStatusLabel(row.status, row.tem_falta),
     row.colaborador_nome ?? "",
     row.colaborador_mat ?? "",
     conferenceActionLabel(row.status)
   ].join(" "));
 }
 
-function routeStatusLabel(status: VolumeAvulsoStoreStatus | string): string {
-  if (status === "concluido" || status === "conferido") return "Concluído";
+function routeStatusLabel(status: VolumeAvulsoStoreStatus | string, temFalta = false): string {
+  if (status === "concluido" || status === "conferido") return temFalta ? "Concluído - Falta" : "Concluído";
   if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
   return "Pendente";
 }
@@ -765,6 +765,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
     const withStatus = manifestVolumeRows.map((row) => {
       let status: VolumeAvulsoStoreStatus = row.status ?? "pendente";
+      let tem_falta = Boolean(row.tem_falta);
       let colaborador_nome = row.colaborador_nome ?? null;
       let colaborador_mat = row.colaborador_mat ?? null;
       let status_at = row.status_at ?? null;
@@ -777,6 +778,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         && !activeVolume.is_read_only
       ) {
         status = "em_andamento";
+        tem_falta = false;
         colaborador_nome = activeVolume.started_nome || null;
         colaborador_mat = activeVolume.started_mat || null;
         status_at = activeVolume.started_at ?? null;
@@ -785,6 +787,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         if (latestLocal) {
           if (latestLocal.status === "em_conferencia" && !latestLocal.is_read_only) {
             status = "em_andamento";
+            tem_falta = false;
             colaborador_nome = latestLocal.started_nome || null;
             colaborador_mat = latestLocal.started_mat || null;
             status_at = latestLocal.started_at ?? null;
@@ -794,6 +797,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             || latestLocal.is_read_only
           ) {
             status = "concluido";
+            tem_falta = latestLocal.status === "finalizado_falta";
             colaborador_nome = latestLocal.started_nome || null;
             colaborador_mat = latestLocal.started_mat || null;
             status_at = latestLocal.finalized_at ?? latestLocal.updated_at ?? null;
@@ -804,6 +808,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       const base: VolumeAvulsoModalVolumeRow = {
         ...row,
         status,
+        tem_falta,
         colaborador_nome,
         colaborador_mat,
         status_at,
@@ -3150,7 +3155,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                               <span className="termo-route-actions-row">
                                 <span className="termo-route-items-count">{row.itens_total} item(ns)</span>
                                 <span className={`termo-divergencia ${routeStatusClass(row.status)}`}>
-                                  {routeStatusLabel(row.status)}
+                                  {routeStatusLabel(row.status, row.tem_falta)}
                                 </span>
                                 <span
                                   className="termo-route-open-icon"

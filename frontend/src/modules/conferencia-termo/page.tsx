@@ -485,7 +485,7 @@ function buildStoreSearchBlob(item: TermoRouteOverviewRow): string {
     item.filial_nome ?? "",
     item.filial != null ? String(item.filial) : "",
     `${item.conferidas}/${item.total_etiquetas}`,
-    routeStatusLabel(item.status),
+    routeStatusLabel(item.status, item.tem_falta),
     item.tem_falta ? "falta" : "",
     item.colaborador_nome ?? "",
     item.colaborador_mat ?? ""
@@ -518,8 +518,8 @@ function resolveRouteGroupStatus(filiais: TermoRouteOverviewRow[]): TermoRouteSt
   return "iniciado";
 }
 
-function routeStatusLabel(status: TermoRouteStatus | TermoStoreStatus | string): string {
-  if (status === "concluido" || status === "conferido") return "Concluído";
+function routeStatusLabel(status: TermoRouteStatus | TermoStoreStatus | string, temFalta = false): string {
+  if (status === "concluido" || status === "conferido") return temFalta ? "Concluído - Falta" : "Concluído";
   if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
   if (status === "iniciado") return "Iniciado";
   return "Pendente";
@@ -3212,6 +3212,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                       const routeKey = `${group.rota}::${index}`;
                       const isOpen = group.force_open || expandedRoute === routeKey;
                       const groupStatus = group.status;
+                      const groupTemFalta = groupStatus === "concluido" && group.filiais.some((item) => item.tem_falta);
                       const canToggle = !group.force_open;
                       const toggleRoute = () => {
                         if (!canToggle) return;
@@ -3244,12 +3245,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                                 {" | "}
                                 Etiquetas: {group.etiquetas_conferidas}/{group.etiquetas_total}
                               </span>
-                              <span className="termo-route-sub">Status da rota: {routeStatusLabel(groupStatus)}</span>
+                              <span className="termo-route-sub">Status da rota: {routeStatusLabel(groupStatus, groupTemFalta)}</span>
                             </span>
                             <span className="termo-route-metrics">
                               <span>{group.lojas_conferidas}/{group.lojas_total}</span>
                               <span className={`termo-divergencia ${routeStatusClass(groupStatus)}`}>
-                                {routeStatusLabel(groupStatus)}
+                                {routeStatusLabel(groupStatus, groupTemFalta)}
                               </span>
                               {canToggle ? (
                                 <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
@@ -3260,7 +3261,6 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                             <div className="termo-route-stores">
                               {group.visible_filiais.map((row) => {
                                 const lojaStatus = normalizeStoreStatus(row.status);
-                                const lojaConcluidaComFalta = lojaStatus === "concluido" && row.tem_falta;
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
                                 const colaboradorMat = row.colaborador_mat?.trim() || "";
                                 const startEtiqueta = routeStartEtiquetaByStore[buildRouteStoreKey(group.rota, row.filial)] ?? null;
@@ -3269,7 +3269,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                                     <div>
                                       <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
                                       <p>Etiquetas: {row.conferidas}/{row.total_etiquetas}</p>
-                                      <p>Status da loja: {routeStatusLabel(lojaStatus)}</p>
+                                      <p>Status da loja: {routeStatusLabel(lojaStatus, row.tem_falta)}</p>
                                       <button
                                         className="btn btn-primary"
                                         type="button"
@@ -3302,11 +3302,8 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                                     </div>
                                     <div className="termo-route-store-status">
                                       <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
-                                        {routeStatusLabel(lojaStatus)}
+                                        {routeStatusLabel(lojaStatus, row.tem_falta)}
                                       </span>
-                                      {lojaConcluidaComFalta ? (
-                                        <span className="termo-route-store-note-falta">Falta</span>
-                                      ) : null}
                                     </div>
                                   </div>
                                 );

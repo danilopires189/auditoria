@@ -51,6 +51,7 @@ export interface DevolucaoMercadoriaManifestNotaRow {
   itens_total: number;
   qtd_esperada_total: number;
   status: "pendente" | "em_andamento" | "concluido" | null;
+  tem_falta: boolean;
   colaborador_nome: string | null;
   colaborador_mat: string | null;
   status_at: string | null;

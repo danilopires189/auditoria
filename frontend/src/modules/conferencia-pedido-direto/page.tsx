@@ -432,7 +432,7 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("ID_VOL_INVALIDO")) return "PedidoSeq inválido. Use apenas números (pedido+seq).";
   if (value.includes("ID_VOL_AMBIGUO")) return "PedidoSeq ambíguo na base. Valide pedido/seq com o suporte.";
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
-  if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário hoje.";
+  if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário.";
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";
   if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SOBRA_PENDENTE")) return "Existem sobras. Corrija antes de finalizar.";
@@ -479,7 +479,7 @@ function buildStoreSearchBlob(item: PedidoDiretoRouteOverviewRow): string {
     item.filial != null ? String(item.filial) : "",
     item.pedidos_seq ?? "",
     `${item.conferidas}/${item.total_etiquetas}`,
-    routeStatusLabel(item.status),
+    routeStatusLabel(item.status, item.tem_falta),
     item.tem_falta ? "falta" : "",
     item.colaborador_nome ?? "",
     item.colaborador_mat ?? ""
@@ -535,8 +535,8 @@ function resolveRouteGroupStatus(filiais: PedidoDiretoRouteOverviewRow[]): Pedid
   return "iniciado";
 }
 
-function routeStatusLabel(status: PedidoDiretoRouteStatus | PedidoDiretoStoreStatus | string): string {
-  if (status === "concluido" || status === "conferido") return "Concluído";
+function routeStatusLabel(status: PedidoDiretoRouteStatus | PedidoDiretoStoreStatus | string, temFalta = false): string {
+  if (status === "concluido" || status === "conferido") return temFalta ? "Concluído - Falta" : "Concluído";
   if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
   if (status === "iniciado") return "Iniciado";
   return "Pendente";
@@ -1170,10 +1170,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
         const existingToday = await getLocalVolume(profile.user_id, currentCd, today, etiqueta);
         if (existingToday) {
-          if (existingToday.status !== "em_conferencia") {
+          if (existingToday.status !== "em_conferencia" || existingToday.is_read_only) {
             showDialog({
-              title: "Conferência já finalizada",
-              message: "Este volume já foi finalizado por você hoje. Deseja abrir em modo leitura?",
+              title: "Volume com conferência existente",
+              message: "Este volume já possui conferência registrada. Deseja abrir em modo leitura?",
               confirmLabel: "Abrir leitura",
               cancelLabel: "Cancelar",
               onConfirm: () => {
@@ -1205,7 +1205,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           etiquetaFinal = localVolume.id_vol;
           setStatusMessage(
             remoteVolume.is_read_only
-              ? "Volume já finalizado. Aberto em leitura."
+              ? "Volume com conferência existente. Aberto em leitura."
               : waitingOfflineBase
                 ? "Volume aberto online enquanto a base offline é sincronizada em segundo plano."
                 : "Volume aberto para conferência."
@@ -1243,8 +1243,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
       if (remoteVolume.is_read_only) {
         showDialog({
-          title: "Volume já conferido",
-          message: "Este volume já foi finalizado por você hoje. Deseja abrir em modo leitura?",
+          title: "Volume com conferência existente",
+          message: "Este volume já possui conferência registrada. Deseja abrir em modo leitura?",
           confirmLabel: "Abrir leitura",
           cancelLabel: "Cancelar",
           onConfirm: () => {
@@ -3037,6 +3037,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                       const routeKey = `${group.rota}::${index}`;
                       const isOpen = group.force_open || expandedRoute === routeKey;
                       const groupStatus = group.status;
+                      const groupTemFalta = groupStatus === "concluido" && group.filiais.some((item) => item.tem_falta);
                       const canToggle = !group.force_open;
                       const toggleRoute = () => {
                         if (!canToggle) return;
@@ -3069,12 +3070,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                 {" | "}
                                 Volumes: {group.etiquetas_conferidas}/{group.etiquetas_total}
                               </span>
-                              <span className="termo-route-sub">Status da rota: {routeStatusLabel(groupStatus)}</span>
+                              <span className="termo-route-sub">Status da rota: {routeStatusLabel(groupStatus, groupTemFalta)}</span>
                             </span>
                             <span className="termo-route-metrics">
                               <span>{group.lojas_conferidas}/{group.lojas_total}</span>
                               <span className={`termo-divergencia ${routeStatusClass(groupStatus)}`}>
-                                {routeStatusLabel(groupStatus)}
+                                {routeStatusLabel(groupStatus, groupTemFalta)}
                               </span>
                               {canToggle ? (
                                 <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
@@ -3085,7 +3086,6 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                             <div className="termo-route-stores">
                               {group.visible_filiais.map((row) => {
                                 const lojaStatus = normalizeStoreStatus(row.status);
-                                const lojaConcluidaComFalta = lojaStatus === "concluido" && row.tem_falta;
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
                                 const colaboradorMat = row.colaborador_mat?.trim() || "";
                                 const idVolFromRoute = resolveIdVolFromPedidosSeq(row.pedidos_seq);
@@ -3095,7 +3095,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                       <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
                                       <p>Volumes: {row.conferidas}/{row.total_etiquetas}</p>
                                       <p>Pedidos/Seq: {row.pedidos_seq ?? "-"}</p>
-                                      <p>Status da loja: {routeStatusLabel(lojaStatus)}</p>
+                                      <p>Status da loja: {routeStatusLabel(lojaStatus, row.tem_falta)}</p>
                                       <button
                                         className="btn btn-primary"
                                         type="button"
@@ -3106,7 +3106,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                         }}
                                         disabled={!idVolFromRoute}
                                       >
-                                        {lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
+                                        {lojaStatus === "pendente" ? "Iniciar conferência" : "Abrir leitura"}
                                       </button>
                                       {lojaStatus === "em_andamento" && colaboradorNome ? (
                                         <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
@@ -3123,11 +3123,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                     </div>
                                     <div className="termo-route-store-status">
                                       <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
-                                        {routeStatusLabel(lojaStatus)}
+                                        {routeStatusLabel(lojaStatus, row.tem_falta)}
                                       </span>
-                                      {lojaConcluidaComFalta ? (
-                                        <span className="termo-route-store-note-falta">Falta</span>
-                                      ) : null}
                                     </div>
                                   </div>
                                 );
