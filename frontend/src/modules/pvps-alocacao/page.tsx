@@ -1203,9 +1203,35 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         });
         continue;
       }
-      const pulItemsByRow = feedPulBySepKey[baseKey];
-      if (!pulItemsByRow) continue;
+      const pulItemsByRow = getPulItemsByRowKey(feedPulBySepKey, row.coddv, row.end_sep);
+      if (!pulItemsByRow.length) {
+        // Keep old/legacy pending PUL rows visible even before PUL cache is loaded.
+        const feedKey = `sep:${baseKey}`;
+        if (seen.has(feedKey)) continue;
+        seen.add(feedKey);
+        items.push({
+          kind: "sep",
+          feedKey,
+          row,
+          zone: row.zona,
+          endereco: row.end_sep
+        });
+        continue;
+      }
       const pendingPulItems = pulItemsByRow.filter((item) => !item.auditado);
+      if (!pendingPulItems.length) {
+        const feedKey = `sep:${baseKey}`;
+        if (seen.has(feedKey)) continue;
+        seen.add(feedKey);
+        items.push({
+          kind: "sep",
+          feedKey,
+          row,
+          zone: row.zona,
+          endereco: row.end_sep
+        });
+        continue;
+      }
       for (const item of pendingPulItems) {
         const feedKey = `pul:${baseKey}:${item.end_pul}`;
         if (seen.has(feedKey)) continue;
@@ -1776,7 +1802,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openNextPvpsSepFrom(currentFeedKey: string): void {
-    const sepItems = pvpsFeedItems.filter((item): item is Extract<PvpsFeedItem, { kind: "sep" }> => item.kind === "sep");
+    const sepItems = pvpsFeedItems.filter(
+      (item): item is Extract<PvpsFeedItem, { kind: "sep" }> => item.kind === "sep" && item.row.status === "pendente_sep"
+    );
     if (!sepItems.length) {
       closePvpsPopup();
       return;
