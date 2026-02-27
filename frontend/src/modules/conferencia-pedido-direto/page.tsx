@@ -536,7 +536,7 @@ function resolveRouteGroupStatus(filiais: PedidoDiretoRouteOverviewRow[]): Pedid
 }
 
 function routeStatusLabel(status: PedidoDiretoRouteStatus | PedidoDiretoStoreStatus | string, temFalta = false): string {
-  if (status === "concluido" || status === "conferido") return temFalta ? "Concluído - Falta" : "Concluído";
+  if (status === "concluido" || status === "conferido") return "Concluído";
   if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
   if (status === "iniciado") return "Iniciado";
   return "Pendente";
@@ -3077,6 +3077,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                               <span className={`termo-divergencia ${routeStatusClass(groupStatus)}`}>
                                 {routeStatusLabel(groupStatus, groupTemFalta)}
                               </span>
+                              {groupTemFalta ? <span className="termo-route-note-falta">Falta</span> : null}
                               {canToggle ? (
                                 <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
                               ) : null}
@@ -3125,6 +3126,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                       <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
                                         {routeStatusLabel(lojaStatus, row.tem_falta)}
                                       </span>
+                                      {lojaStatus === "concluido" && row.tem_falta ? <span className="termo-route-note-falta">Falta</span> : null}
                                     </div>
                                   </div>
                                 );
