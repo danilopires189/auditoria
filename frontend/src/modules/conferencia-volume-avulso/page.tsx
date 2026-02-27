@@ -47,13 +47,11 @@ import {
   fetchManifestBundle,
   fetchManifestMeta,
   fetchManifestVolumes,
-  fetchPartialReopenInfo,
   fetchRouteOverview,
   fetchVolumeItems,
   finalizeVolume,
   normalizeBarcode,
   openVolume,
-  reopenPartialConference,
   scanBarcode,
   setItemQtd,
   syncPendingVolumeAvulsoVolumes
@@ -163,18 +161,6 @@ function parsePositiveInteger(value: string, fallback = 1): number {
   const parsed = Number.parseInt(value.replace(/\D/g, ""), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return parsed;
-}
-
-function formatCollaboratorName(value: {
-  nome?: string | null;
-  mat?: string | null;
-}): string {
-  const nome = value.nome?.trim() ?? "";
-  const mat = value.mat?.trim() ?? "";
-  if (nome && mat) return `${nome} (${mat})`;
-  if (nome) return nome;
-  if (mat) return `Matrícula ${mat}`;
-  return "outro usuário";
 }
 
 function formatDateTime(value: string | null): string {
@@ -452,7 +438,7 @@ function resumeConferenceIcon() {
 function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("VOLUME_NAO_ENCONTRADO")) return "NR Volume não encontrado na base do dia.";
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
-  if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário hoje.";
+  if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário.";
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";
   if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SOBRA_PENDENTE")) return "Existem sobras. Corrija antes de finalizar.";
@@ -484,7 +470,7 @@ function normalizeSearchText(value: string): string {
 }
 
 function conferenceActionLabel(status: VolumeAvulsoStoreStatus): string {
-  return status === "pendente" ? "Iniciar conferência" : "Retornar conferência";
+  return status === "pendente" ? "Iniciar conferência" : "Abrir leitura";
 }
 
 function conferenceActionIcon(status: VolumeAvulsoStoreStatus) {
@@ -1164,68 +1150,6 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     return localVolume;
   }, [cdAtivo, isGlobalAdmin, isOnline, profile]);
 
-  const promptPartialReopen = useCallback(async (
-    etiqueta: string,
-    selectedCd: number
-  ): Promise<boolean> => {
-    const reopenInfo = await fetchPartialReopenInfo(etiqueta, selectedCd);
-    if (!reopenInfo.can_reopen) {
-      return false;
-    }
-
-    const reopenedBySameUser = reopenInfo.previous_started_by === profile.user_id;
-    const previousCollaborator = formatCollaboratorName({
-      nome: reopenInfo.previous_started_nome,
-      mat: reopenInfo.previous_started_mat
-    });
-
-    showDialog({
-      title: "Conferência parcialmente finalizada",
-      message:
-        `O NR Volume ${etiqueta} foi finalizado em parte por ${reopenedBySameUser ? "você" : previousCollaborator}.\n\n`
-        + `Itens já conferidos: ${reopenInfo.locked_items}\n`
-        + `Itens pendentes: ${reopenInfo.pending_items}\n\n`
-        + "Deseja reabrir a conferência para concluir os itens pendentes?",
-      confirmLabel: "Reabrir conferência",
-      cancelLabel: "Cancelar",
-      onConfirm: () => {
-        void (async () => {
-          closeDialog();
-          setBusyOpenVolume(true);
-          setStatusMessage(null);
-          setErrorMessage(null);
-          try {
-            const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd);
-            const reopenedItems = await fetchVolumeItems(reopenedVolume.conf_id);
-            const reopenedLocalVolume = createLocalVolumeFromRemote(profile, reopenedVolume, reopenedItems);
-            await saveLocalVolume(reopenedLocalVolume);
-            setActiveVolume(reopenedLocalVolume);
-            setEtiquetaInput(reopenedLocalVolume.nr_volume);
-            setExpandedCoddv(null);
-            setEditingCoddv(null);
-            setEditQtdInput("0");
-            setStatusMessage("Conferência retomada. Continue informando os itens pendentes.");
-            focusBarras();
-          } catch (reopenError) {
-            const reopenMessage = reopenError instanceof Error
-              ? reopenError.message
-              : "Falha ao reabrir conferência parcial.";
-            setErrorMessage(normalizeRpcErrorMessage(reopenMessage));
-          } finally {
-            setBusyOpenVolume(false);
-          }
-        })();
-      }
-    });
-
-    return true;
-  }, [
-    closeDialog,
-    focusBarras,
-    profile,
-    showDialog
-  ]);
-
   const openVolumeFromEtiqueta = useCallback(async (rawEtiqueta: string) => {
     const etiqueta = rawEtiqueta.trim();
     if (!etiqueta) {
@@ -1267,17 +1191,9 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         const existingToday = await getLocalVolume(profile.user_id, currentCd, today, etiqueta);
         if (existingToday) {
           if (existingToday.status !== "em_conferencia") {
-            if (isOnline) {
-              try {
-                const reopenPrompted = await promptPartialReopen(etiqueta, currentCd);
-                if (reopenPrompted) return;
-              } catch {
-                // Em falha de validação de reabertura, mantém opção de leitura.
-              }
-            }
             showDialog({
-              title: "Conferência já finalizada",
-              message: "Este volume já foi finalizado por você hoje. Deseja abrir em modo leitura?",
+              title: "Volume com conferência existente",
+              message: "Este volume já possui conferência registrada. Deseja abrir em modo leitura?",
               confirmLabel: "Abrir leitura",
               cancelLabel: "Cancelar",
               onConfirm: () => {
@@ -1305,19 +1221,11 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
           const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
           await saveLocalVolume(localVolume);
-          if (remoteVolume.is_read_only) {
-            try {
-              const reopenPrompted = await promptPartialReopen(etiqueta, currentCd);
-              if (reopenPrompted) return;
-            } catch {
-              // Em falha de validação de reabertura, mantém abertura em leitura.
-            }
-          }
           setActiveVolume(localVolume);
           etiquetaFinal = localVolume.nr_volume;
           setStatusMessage(
             remoteVolume.is_read_only
-              ? "Volume já finalizado. Aberto em leitura."
+              ? "Volume com conferência existente. Aberto em leitura."
               : waitingOfflineBase
                 ? "Volume aberto online enquanto a base offline é sincronizada em segundo plano."
                 : "Volume aberto para conferência."
@@ -1354,15 +1262,9 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       etiquetaFinal = localVolume.nr_volume;
 
       if (remoteVolume.is_read_only) {
-        try {
-          const reopenPrompted = await promptPartialReopen(etiqueta, currentCd);
-          if (reopenPrompted) return;
-        } catch {
-          // Em falha de validação de reabertura, mantém abertura em leitura.
-        }
         showDialog({
-          title: "Volume já conferido",
-          message: "Este volume já foi finalizado por você hoje. Deseja abrir em modo leitura?",
+          title: "Volume com conferência existente",
+          message: "Este volume já possui conferência registrada. Deseja abrir em modo leitura?",
           confirmLabel: "Abrir leitura",
           cancelLabel: "Cancelar",
           onConfirm: () => {
@@ -1410,7 +1312,6 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     manifestReady,
     preferOfflineMode,
     prepareOfflineManifest,
-    promptPartialReopen,
     profile,
     resumeRemoteActiveVolume,
     showDialog
