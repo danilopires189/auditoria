@@ -114,11 +114,21 @@ function toDisplayName(value: string): string {
 }
 
 function keyOfPvps(row: PvpsManifestRow): string {
-  return `${row.coddv}|${row.end_sep}`;
+  return keyOfPvpsByValues(row.coddv, row.end_sep);
 }
 
 function keyOfPvpsByValues(coddv: number, endSep: string): string {
   return `${Math.trunc(coddv)}|${endSep.trim().toUpperCase()}`;
+}
+
+function normalizePulCacheKey(rawKey: string): string {
+  const separatorIndex = rawKey.indexOf("|");
+  if (separatorIndex <= 0) return rawKey.trim().toUpperCase();
+  const coddvPart = rawKey.slice(0, separatorIndex).trim();
+  const endSepPart = rawKey.slice(separatorIndex + 1);
+  const coddv = Number.parseInt(coddvPart, 10);
+  if (!Number.isFinite(coddv)) return rawKey.trim().toUpperCase();
+  return keyOfPvpsByValues(coddv, endSepPart);
 }
 
 function getPulItemsByRowKey(
@@ -153,7 +163,7 @@ function applyPendingEventsToOfflineData(input: {
   const alocRows = [...input.alocRows];
   const pulBySepKey: Record<string, PvpsPulItemRow[]> = {};
   for (const [sepKey, items] of Object.entries(input.pulBySepKey)) {
-    pulBySepKey[sepKey] = Array.isArray(items) ? [...items] : [];
+    pulBySepKey[normalizePulCacheKey(sepKey)] = Array.isArray(items) ? [...items] : [];
   }
 
   for (const event of input.events) {
@@ -648,7 +658,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     for (const row of pvpsManifest) {
       const rowKey = keyOfPvps(row);
-      const cached = previousSnapshot?.pul_by_sep_key[rowKey];
+      const cached = previousSnapshot
+        ? getPulItemsByRowKey(previousSnapshot.pul_by_sep_key, row.coddv, row.end_sep)
+        : [];
       if (Array.isArray(cached) && cached.length > 0) {
         pulBySepKey[rowKey] = cached;
       } else {
@@ -1672,7 +1684,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setEditingPvpsCompleted(row);
     setActivePvpsMode("sep");
     setActivePulEnd(null);
-    const key = `${row.coddv}|${row.end_sep}`;
+    const key = keyOfPvps(row);
     setPvpsRows((current) => {
       const existing = current.find((item) => keyOfPvps(item) === key);
       if (existing) {
@@ -1860,26 +1872,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           openNextPvpsSepFrom(currentFeedKey);
         } else {
           const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
-          const updatedRow: PvpsManifestRow = {
-            ...activePvps,
-            status: "pendente_pul",
-            end_sit: null,
-            val_sep: localVal
-          };
           setPvpsRows((current) => current.map((row) => (
             keyOfPvps(row) === currentKey
               ? { ...row, status: "pendente_pul", val_sep: localVal, end_sit: null }
               : row
           )));
-          const cachedPulItems = getPulItemsByRowKey(feedPulBySepKey, activePvps.coddv, activePvps.end_sep);
-          const nextPulItem = cachedPulItems.find((item) => !item.auditado) ?? cachedPulItems[0];
-          if (nextPulItem) {
-            setStatusMessage("Separação salva offline. Pulmão liberado para auditoria separada.");
-            openPvpsPulPopup(updatedRow, nextPulItem.end_pul, { motion: "next" });
-          } else {
-            setStatusMessage("Separação salva offline. Pulmão ficará pendente para auditoria separada.");
-            openNextPvpsFrom(currentFeedKey, activePvps.zona);
-          }
+          setStatusMessage("Separação salva offline. Pulmão ficará pendente para auditoria separada.");
+          openNextPvpsSepFrom(currentFeedKey);
         }
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Separação offline.");
@@ -1899,14 +1898,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         val_sep: hasOcorrencia ? null : normalizedValSep
       });
       const normalizedResultValSep = normalizeMmaa(result.val_sep ?? normalizedValSep);
-      const updatedRow: PvpsManifestRow = {
-        ...activePvps,
-        status: result.status,
-        end_sit: result.end_sit,
-        val_sep: normalizedResultValSep,
-        pul_total: result.pul_total,
-        pul_auditados: result.pul_auditados
-      };
       if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
         setStatusMessage("Separação com ocorrência. Item removido do feed e não será enviado ao frontend.");
       } else {
@@ -1950,12 +1941,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             pulItemsByRow = [];
           }
 
-          const firstPendingPul = pulItemsByRow.find((item) => !item.auditado);
-          if (firstPendingPul) {
-            openPvpsPulPopup(updatedRow, firstPendingPul.end_pul, { motion: "next" });
-          } else {
-            openNextPvpsFrom(currentFeedKey, activePvps.zona);
-          }
+          openNextPvpsSepFrom(currentFeedKey);
 
           void loadCurrent({ silent: true });
         }
