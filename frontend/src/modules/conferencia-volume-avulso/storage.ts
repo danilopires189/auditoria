@@ -468,6 +468,7 @@ export async function listManifestVolumes(
         itens_total: 1,
         qtd_esperada_total: Math.max(Number(row.qtd_esperada ?? 0), 0),
         status: null,
+        tem_falta: false,
         colaborador_nome: null,
         colaborador_mat: null,
         status_at: null

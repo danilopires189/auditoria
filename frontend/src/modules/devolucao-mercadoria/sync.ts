@@ -117,6 +117,7 @@ function mapManifestVolume(raw: Record<string, unknown>): DevolucaoMercadoriaMan
     itens_total: Math.max(parseInteger(raw.itens_total), 0),
     qtd_esperada_total: Math.max(parseInteger(raw.qtd_esperada_total), 0),
     status,
+    tem_falta: parseBoolean(raw.tem_falta),
     colaborador_nome: parseNullableString(raw.colaborador_nome),
     colaborador_mat: parseNullableString(raw.colaborador_mat),
     status_at: parseNullableString(raw.status_at)

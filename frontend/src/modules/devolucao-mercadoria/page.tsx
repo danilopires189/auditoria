@@ -638,15 +638,15 @@ function buildVolumeSearchBlob(row: DevolucaoMercadoriaModalVolumeRow): string {
     row.ref,
     `${row.itens_total}`,
     `${row.qtd_esperada_total}`,
-    routeStatusLabel(row.status),
+    routeStatusLabel(row.status, row.tem_falta),
     row.colaborador_nome ?? "",
     row.colaborador_mat ?? "",
     conferenceActionLabel(row.status)
   ].join(" "));
 }
 
-function routeStatusLabel(status: DevolucaoMercadoriaStoreStatus | string): string {
-  if (status === "concluido" || status === "conferido") return "Concluído";
+function routeStatusLabel(status: DevolucaoMercadoriaStoreStatus | string, temFalta = false): string {
+  if (status === "concluido" || status === "conferido") return temFalta ? "Concluído - Falta" : "Concluído";
   if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
   return "Pendente";
 }
@@ -947,6 +947,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
     const withStatus = manifestVolumeRows.map((row) => {
       let status: DevolucaoMercadoriaStoreStatus = row.status ?? "pendente";
+      let tem_falta = Boolean(row.tem_falta);
       let colaborador_nome = row.colaborador_nome ?? null;
       let colaborador_mat = row.colaborador_mat ?? null;
       let status_at = row.status_at ?? null;
@@ -959,6 +960,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         && !activeVolume.is_read_only
       ) {
         status = "em_andamento";
+        tem_falta = false;
         colaborador_nome = activeVolume.started_nome || null;
         colaborador_mat = activeVolume.started_mat || null;
         status_at = activeVolume.started_at ?? null;
@@ -967,6 +969,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         if (latestLocal) {
           if (latestLocal.status === "em_conferencia" && !latestLocal.is_read_only) {
             status = "em_andamento";
+            tem_falta = false;
             colaborador_nome = latestLocal.started_nome || null;
             colaborador_mat = latestLocal.started_mat || null;
             status_at = latestLocal.started_at ?? null;
@@ -976,6 +979,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
             || latestLocal.is_read_only
           ) {
             status = "concluido";
+            tem_falta = latestLocal.status === "finalizado_falta";
             colaborador_nome = latestLocal.started_nome || null;
             colaborador_mat = latestLocal.started_mat || null;
             status_at = latestLocal.finalized_at ?? latestLocal.updated_at ?? null;
@@ -986,6 +990,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       const base: DevolucaoMercadoriaModalVolumeRow = {
         ...row,
         status,
+        tem_falta,
         colaborador_nome,
         colaborador_mat,
         status_at,
@@ -1034,6 +1039,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
           itens_total: row.items.length,
           qtd_esperada_total: row.items.reduce((acc, item) => acc + Math.max(item.qtd_esperada, 0), 0),
           status: (row.status === "em_conferencia" ? "em_andamento" : "concluido") as DevolucaoMercadoriaStoreStatus,
+          tem_falta: row.status === "finalizado_falta",
           colaborador_nome: row.started_nome,
           colaborador_mat: row.started_mat,
           status_at: row.finalized_at ?? row.started_at
@@ -3776,7 +3782,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                               <span className="termo-route-actions-row">
                                 <span className="termo-route-items-count">{row.itens_total} item(ns)</span>
                                 <span className={`termo-divergencia ${routeStatusClass(row.status)}`}>
-                                  {routeStatusLabel(row.status)}
+                                  {routeStatusLabel(row.status, row.tem_falta)}
                                 </span>
                                 <span
                                   className="termo-route-open-icon"
