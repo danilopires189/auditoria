@@ -36,7 +36,6 @@ import {
 } from "./storage";
 import {
   applyInventarioAdminManualCoddv,
-  acquireZoneLock,
   applyInventarioAdminSeed,
   applyInventarioEvent,
   clearInventarioAdminBase,
@@ -47,9 +46,7 @@ import {
   fetchManifestMeta,
   previewInventarioAdminSeed,
   fetchReportRows,
-  fetchSyncPull,
-  heartbeatZoneLock,
-  releaseZoneLock
+  fetchSyncPull
 } from "./sync";
 import type {
   CdOption,
@@ -60,7 +57,6 @@ import type {
   InventarioAddressBucket,
   InventarioCountRow,
   InventarioEventType,
-  InventarioLockAcquireResponse,
   InventarioManifestItemRow,
   InventarioManifestMeta,
   InventarioModuleProfile,
@@ -88,6 +84,7 @@ type InventarioAdminConfirmAction =
   | { kind: "apply_zona"; mode: InventarioAdminApplyMode }
   | { kind: "apply_coddv" }
   | { kind: "clear_all" };
+type SendEventResult = "queued" | "applied" | "discarded";
 
 interface InventarioAdminConfirmState {
   title: string;
@@ -115,6 +112,13 @@ type ZoneBucketView = {
   done_addresses: number;
   pending_addresses: number;
 };
+
+interface PendingSyncSummary {
+  synced: number;
+  failed: number;
+  discarded: number;
+  remaining: number;
+}
 
 const MODULE_DEF = getModuleByKeyOrThrow("zerados");
 const CYCLE_DATE = new Intl.DateTimeFormat("en-CA", {
@@ -217,6 +221,7 @@ function parseErr(error: unknown): string {
   if (raw.includes("MANIFESTO_INCOMPLETO")) return "Base local incompleta. Sincronize novamente para baixar todos os endereços.";
   if (raw.includes("ETAPA1_APENAS_AUTOR")) return "Apenas o autor pode editar a 1ª verificação.";
   if (raw.includes("ETAPA2_APENAS_AUTOR")) return "Apenas o autor pode editar a 2ª verificação.";
+  if (raw.includes("COUNT_DISCARDED_OUTRO_USUARIO")) return "Endereço já concluído por outro usuário e descartado.";
   if (raw.includes("ETAPA1_BLOQUEADA_SEGUNDA_EXISTE")) return "A 1ª verificação não pode ser alterada após existir 2ª verificação.";
   if (raw.includes("ITEM_JA_RESOLVIDO")) return "Endereço já resolvido na conciliação.";
   if (raw.includes("ESTOQUE_FAIXA_INVALIDA")) return "Faixa de estoque inválida. O final deve ser maior ou igual ao inicial.";
@@ -226,6 +231,18 @@ function parseErr(error: unknown): string {
   if (raw.includes("MODE_INVALIDO")) return "Modo de aplicação inválido.";
   if (raw.includes("SCOPE_INVALIDO")) return "Escopo de limpeza inválido.";
   return raw;
+}
+
+function extractDiscardConflictCode(rawValue: string): string | null {
+  const upper = rawValue.toUpperCase();
+  if (upper.includes("COUNT_DISCARDED_OUTRO_USUARIO")) return "COUNT_DISCARDED_OUTRO_USUARIO";
+  if (upper.includes("ETAPA1_APENAS_AUTOR")) return "ETAPA1_APENAS_AUTOR";
+  if (upper.includes("ETAPA2_APENAS_AUTOR")) return "ETAPA2_APENAS_AUTOR";
+  return null;
+}
+
+function isDiscardConflict(rawValue: string): boolean {
+  return extractDiscardConflictCode(rawValue) != null;
 }
 
 function defaultState(): InventarioSyncPullState {
@@ -667,9 +684,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [finalQtd, setFinalQtd] = useState("0");
   const [finalBarras, setFinalBarras] = useState("");
 
-  const [lock, setLock] = useState<InventarioLockAcquireResponse | null>(null);
-  const lockRef = useRef<InventarioLockAcquireResponse | null>(null);
-
   const [busy, setBusy] = useState(false);
   const [busyOfflineBase, setBusyOfflineBase] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -771,7 +785,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     disableSoftKeyboard: disableBarcodeSoftKeyboard
   } = useOnDemandSoftKeyboard("numeric");
 
-  useEffect(() => { lockRef.current = lock; }, [lock]);
   useEffect(() => {
     if (didNormalizeInitialScrollRef.current) return;
     didNormalizeInitialScrollRef.current = true;
@@ -990,18 +1003,37 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     await saveRemoteStateCache({ user_id: profile.user_id, cd, cycle_date: CYCLE_DATE, state: pulled });
   }, [cd, profile.user_id]);
 
-  const syncPending = useCallback(async () => {
-    if (!isOnline || cd == null) return;
+  const syncPending = useCallback(async (): Promise<PendingSyncSummary> => {
+    if (!isOnline || cd == null) {
+      return { synced: 0, failed: 0, discarded: 0, remaining: 0 };
+    }
     const queue = await listPendingEventsByCycle(profile.user_id, cd, CYCLE_DATE);
+    let synced = 0;
+    let failed = 0;
+    let discarded = 0;
     for (const e of queue) {
       try {
-        await applyInventarioEvent({ event_type: e.event_type, payload: e.payload, client_event_id: e.client_event_id });
+        const result = await applyInventarioEvent({ event_type: e.event_type, payload: e.payload, client_event_id: e.client_event_id });
         await removePendingEvent(e.event_id);
+        if (isDiscardConflict(result.info)) {
+          discarded += 1;
+          continue;
+        }
+        synced += 1;
       } catch (error) {
+        const raw = error instanceof Error ? error.message : String(error ?? "");
+        if (isDiscardConflict(raw)) {
+          await removePendingEvent(e.event_id);
+          discarded += 1;
+          continue;
+        }
+        failed += 1;
         await updatePendingEventStatus({ event_id: e.event_id, status: "error", error_message: parseErr(error), increment_attempt: true });
       }
     }
-    await refreshPending();
+    const remaining = await countPendingEventsByCycle(profile.user_id, cd, CYCLE_DATE);
+    setPendingCount(remaining);
+    return { synced, failed, discarded, remaining };
   }, [cd, isOnline, profile.user_id, refreshPending]);
 
   const syncNow = useCallback(async (forceManifest = false) => {
@@ -1028,12 +1060,18 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           setManifestItems(localRows);
         }
       }
-      await syncPending();
+      const pendingSync = await syncPending();
       await pull();
       const bm = await getDbBarrasMeta();
       setDbBarrasCount(bm.row_count);
       setDbBarrasLastSyncAt(bm.last_sync_at);
-      setMsg("Sincronização concluída.");
+      if (pendingSync.discarded > 0) {
+        setMsg(`${formatCountLabel(pendingSync.discarded, "endereço já concluído por outro usuário e descartado", "endereços já concluídos por outro usuário e descartados")}.`);
+      } else if (pendingSync.failed > 0 && pendingSync.remaining > 0) {
+        setMsg(`Sincronização parcial: ${formatCountLabel(pendingSync.failed, "evento", "eventos")} com erro para nova tentativa.`);
+      } else {
+        setMsg("Sincronização concluída.");
+      }
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error ?? "");
       if (raw.includes("BASE_INVENTARIO_VAZIA")) {
@@ -1416,8 +1454,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }, BACKGROUND_PULL_DELAY_MS);
   }, [pull]);
 
-  const send = useCallback(async (eventType: InventarioEventType, payload: Record<string, unknown>) => {
-    if (cd == null) return;
+  const send = useCallback(async (eventType: InventarioEventType, payload: Record<string, unknown>): Promise<SendEventResult> => {
+    if (cd == null) return "discarded";
     if (!isOnline || preferOffline) {
       const id = (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `inv-${Date.now()}`;
       const p: InventarioPendingEvent = {
@@ -1442,23 +1480,50 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       });
       await refreshPending();
       setMsg("Evento salvo offline.");
-      return;
+      return "queued";
     }
 
-    await applyInventarioEvent({
-      event_type: eventType,
-      payload,
-      client_event_id: (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `inv-${Date.now()}`
-    });
-    setRemoteState((prev) => {
-      const next = optimistic(prev, payload, profile);
-      void saveRemoteStateCache({ user_id: profile.user_id, cd, cycle_date: CYCLE_DATE, state: next });
-      return next;
-    });
-    void refreshPending();
-    scheduleBackgroundPull();
-    setMsg("Evento aplicado.");
-  }, [cd, isOnline, preferOffline, profile, refreshPending, scheduleBackgroundPull]);
+    try {
+      const result = await applyInventarioEvent({
+        event_type: eventType,
+        payload,
+        client_event_id: (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `inv-${Date.now()}`
+      });
+      if (isDiscardConflict(result.info)) {
+        setMsg("Endereço já concluído por outro usuário e descartado.");
+        try {
+          await pull();
+        } catch {
+          scheduleBackgroundPull();
+        }
+        void refreshPending();
+        return "discarded";
+      }
+
+      setRemoteState((prev) => {
+        const next = optimistic(prev, payload, profile);
+        void saveRemoteStateCache({ user_id: profile.user_id, cd, cycle_date: CYCLE_DATE, state: next });
+        return next;
+      });
+      void refreshPending();
+      scheduleBackgroundPull();
+      setMsg("Evento aplicado.");
+      return "applied";
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : String(error ?? "");
+      if (isDiscardConflict(raw)) {
+        setMsg("Endereço já concluído por outro usuário e descartado.");
+        try {
+          await pull();
+        } catch {
+          scheduleBackgroundPull();
+        }
+        void refreshPending();
+        return "discarded";
+      }
+      throw error;
+    }
+  }, [cd, isOnline, preferOffline, profile, pull, refreshPending, scheduleBackgroundPull]);
 
   useEffect(() => {
     let canceled = false;
@@ -1678,43 +1743,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [adminConfirm, adminEntryOpen, adminOpen, adminZonePickerOpen, closeAllAdminPopups, closeCameraScanner, closeEditorPopup, editorOpen, reportOpen, scannerOpen]);
-
-  useEffect(() => {
-    const needsLock = (tab === "s1" || tab === "s2") && isOnline && cd != null && zone && canEdit;
-    if (!needsLock) { if (lockRef.current) void releaseZoneLock(lockRef.current.lock_id); setLock(null); return; }
-    let canceled = false;
-    void (async () => {
-      try {
-        if (lockRef.current) {
-          await releaseZoneLock(lockRef.current.lock_id);
-          lockRef.current = null;
-          setLock(null);
-        }
-        const l = await acquireZoneLock(cd!, CYCLE_DATE, zone!, tab === "s2" ? 2 : 1, 900);
-        if (!canceled) {
-          setLock(l);
-          lockRef.current = l;
-        } else {
-          await releaseZoneLock(l.lock_id);
-        }
-      } catch (e) {
-        if (!canceled) setErr(parseErr(e));
-      }
-    })();
-    return () => { canceled = true; };
-  }, [canEdit, cd, isOnline, tab, zone]);
-
-  useEffect(() => {
-    if (!lock || !isOnline) return;
-    const id = window.setInterval(() => { void heartbeatZoneLock(lock.lock_id, 900).then((l) => { setLock(l); lockRef.current = l; }).catch(() => { }); }, 60000);
-    return () => window.clearInterval(id);
-  }, [isOnline, lock]);
-
-  useEffect(() => {
-    return () => {
-      if (lockRef.current) void releaseZoneLock(lockRef.current.lock_id);
-    };
-  }, []);
 
   const rows = useMemo(() => derive(manifestItems, remoteState), [manifestItems, remoteState]);
   const stageUniverse = useMemo(() => rows.filter((r) => rowMatchesStageUniverse(r, tab)), [rows, tab]);
@@ -2437,7 +2465,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           return;
         }
       }
-      await send("count_upsert", {
+      const sendResult = await send("count_upsert", {
         cycle_date: CYCLE_DATE,
         cd,
         zona: active.zona,
@@ -2450,6 +2478,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         barras: b,
         discarded
       });
+      if (sendResult === "discarded") {
+        setValidatedBarras(null);
+        advanceAfterAction(currentAddressKey, currentItemKey);
+        return;
+      }
       setValidatedBarras(null);
       showScanFeedback("success", active.descricao, discarded ? "Descartado" : `+ ${qty}`);
       advanceAfterAction(currentAddressKey, currentItemKey);
@@ -2511,7 +2544,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           return;
         }
       }
-      await send("review_resolve", {
+      const sendResult = await send("review_resolve", {
         cycle_date: CYCLE_DATE,
         cd,
         zona: active.zona,
@@ -2521,6 +2554,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         final_qtd: qty,
         final_barras: b
       });
+      if (sendResult === "discarded") {
+        advanceAfterAction(currentAddressKey, currentItemKey);
+        return;
+      }
       showScanFeedback("success", active.descricao, `Qtd final: ${qty}`);
       advanceAfterAction(currentAddressKey, currentItemKey);
     } catch (error) {
@@ -3362,7 +3399,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           <>
                             {active.review?.reason_code === "conflito_lock" && active.c2 == null ? (
                               <p className="inventario-popup-note warn">
-                                2ª verificação não registrada por conflito de lock. Resolve pela conciliação.
+                                2ª verificação não registrada por conflito com outro usuário. Resolva pela conciliação.
                               </p>
                             ) : null}
                             <div className="inventario-conciliation-grid">
