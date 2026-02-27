@@ -1873,6 +1873,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         end_sit: endSit || null,
         val_sep: hasOcorrencia ? null : normalizedValSep
       });
+      const normalizedResultValSep = normalizeMmaa(result.val_sep ?? normalizedValSep);
+      const updatedRow: PvpsManifestRow = {
+        ...activePvps,
+        status: result.status,
+        end_sit: result.end_sit,
+        val_sep: normalizedResultValSep,
+        pul_total: result.pul_total,
+        pul_auditados: result.pul_auditados
+      };
       if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
         setStatusMessage("Separação com ocorrência. Item removido do feed e não será enviado ao frontend.");
       } else {
@@ -1884,14 +1893,47 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         coddv: activePvps.coddv,
         end_sep: activePvps.end_sep,
         end_sit: result.end_sit,
-        val_sep: normalizeMmaa(result.val_sep ?? normalizedValSep)
+        val_sep: normalizedResultValSep
       });
-      await loadCurrent();
       if (isEditingCompleted) {
+        await loadCurrent();
         setEditingPvpsCompleted(null);
         closePvpsPopup();
       } else {
-        openNextPvpsSepFrom(currentFeedKey);
+        if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
+          await loadCurrent();
+          openNextPvpsSepFrom(currentFeedKey);
+        } else {
+          setPvpsRows((current) => current.map((row) => (
+            keyOfPvps(row) === currentKey
+              ? {
+                  ...row,
+                  status: result.status,
+                  end_sit: result.end_sit,
+                  val_sep: normalizedResultValSep,
+                  pul_total: result.pul_total,
+                  pul_auditados: result.pul_auditados
+                }
+              : row
+          )));
+
+          let pulItemsByRow: PvpsPulItemRow[] = [];
+          try {
+            pulItemsByRow = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
+            setFeedPulBySepKey((current) => ({ ...current, [currentKey]: pulItemsByRow }));
+          } catch {
+            pulItemsByRow = [];
+          }
+
+          const firstPendingPul = pulItemsByRow.find((item) => !item.auditado);
+          if (firstPendingPul) {
+            openPvpsPulPopup(updatedRow, firstPendingPul.end_pul, { motion: "next" });
+          } else {
+            openNextPvpsFrom(currentFeedKey, activePvps.zona);
+          }
+
+          void loadCurrent({ silent: true });
+        }
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Separação.");
