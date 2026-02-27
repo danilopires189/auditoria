@@ -113,7 +113,7 @@ function toDisplayName(value: string): string {
     .join(" ");
 }
 
-function keyOfPvps(row: PvpsManifestRow): string {
+function keyOfPvps(row: { coddv: number; end_sep: string }): string {
   return keyOfPvpsByValues(row.coddv, row.end_sep);
 }
 
