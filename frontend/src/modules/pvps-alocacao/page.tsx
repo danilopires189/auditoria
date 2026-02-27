@@ -121,6 +121,18 @@ function keyOfPvpsByValues(coddv: number, endSep: string): string {
   return `${Math.trunc(coddv)}|${endSep.trim().toUpperCase()}`;
 }
 
+function getPulItemsByRowKey(
+  cache: Record<string, PvpsPulItemRow[]>,
+  coddv: number,
+  endSep: string
+): PvpsPulItemRow[] {
+  const rawKey = `${Math.trunc(coddv)}|${endSep}`;
+  const normalizedKey = keyOfPvpsByValues(coddv, endSep);
+  if (Array.isArray(cache[rawKey])) return cache[rawKey];
+  if (Array.isArray(cache[normalizedKey])) return cache[normalizedKey];
+  return [];
+}
+
 function formatMmaaDigits(value: string | null | undefined): string | null {
   const digits = (value ?? "").replace(/\D/g, "").slice(0, 4);
   if (digits.length !== 4) return null;
@@ -1848,13 +1860,26 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           openNextPvpsSepFrom(currentFeedKey);
         } else {
           const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
+          const updatedRow: PvpsManifestRow = {
+            ...activePvps,
+            status: "pendente_pul",
+            end_sit: null,
+            val_sep: localVal
+          };
           setPvpsRows((current) => current.map((row) => (
             keyOfPvps(row) === currentKey
               ? { ...row, status: "pendente_pul", val_sep: localVal, end_sit: null }
               : row
           )));
-          setStatusMessage("Separação salva offline. Pulmão ficará pendente para auditoria separada.");
-          openNextPvpsSepFrom(currentFeedKey);
+          const cachedPulItems = getPulItemsByRowKey(feedPulBySepKey, activePvps.coddv, activePvps.end_sep);
+          const nextPulItem = cachedPulItems.find((item) => !item.auditado) ?? cachedPulItems[0];
+          if (nextPulItem) {
+            setStatusMessage("Separação salva offline. Pulmão liberado para auditoria separada.");
+            openPvpsPulPopup(updatedRow, nextPulItem.end_pul, { motion: "next" });
+          } else {
+            setStatusMessage("Separação salva offline. Pulmão ficará pendente para auditoria separada.");
+            openNextPvpsFrom(currentFeedKey, activePvps.zona);
+          }
         }
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Separação offline.");
