@@ -5,6 +5,7 @@ import type { DisplayContext } from "../types/ui";
 import { LogoutIcon, ModuleIcon } from "../ui/icons";
 
 const AVAILABLE_MODULE_KEYS = new Set([
+  "controle-validade",
   "coleta-mercadoria",
   "pvps-alocacao",
   "atividade-extra",

@@ -2,6 +2,14 @@ import type { ModuleIconName } from "../modules/types";
 
 export function ModuleIcon({ name }: { name: ModuleIconName }) {
   switch (name) {
+    case "expiry":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 3h12v6l-6 4-6-4z" />
+          <path d="M6 21h12" />
+          <path d="M9 17h6" />
+        </svg>
+      );
     case "audit":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
