@@ -682,7 +682,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           barras: coletaLookup.barras,
           endereco_sep: selectedEnderecoSep,
           val_mmaa: valMmaa,
-          qtd: 1,
           data_hr: new Date().toISOString()
         }
       });
@@ -1227,7 +1226,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                       className="btn btn-primary"
                       disabled={activeCd == null || !coletaLookup || !selectedEnderecoSep}
                     >
-                      Salvar coleta (qtd 1)
+                      Salvar coleta
                     </button>
                   </form>
                 ) : (
@@ -1342,6 +1341,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                         <div className="controle-validade-row-grid">
                           <span>CODDV: {row.coddv}</span>
                           <span>Endereço PUL: {row.endereco_pul}</span>
+                          <span>Andar: {row.andar ?? "-"}</span>
                           <span>Validade: {row.val_mmaa}</span>
                           <span>Estoque disponível: {row.qtd_est_disp}</span>
                           <span>Alvo: {row.qtd_alvo}</span>

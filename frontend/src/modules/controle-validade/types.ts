@@ -42,6 +42,7 @@ export interface PulRetiradaRow {
   coddv: number;
   descricao: string;
   endereco_pul: string;
+  andar: string | null;
   val_mmaa: string;
   qtd_alvo: number;
   qtd_retirada: number;
@@ -56,7 +57,6 @@ export interface LinhaColetaPayload {
   barras: string;
   endereco_sep: string;
   val_mmaa: string;
-  qtd: number;
   data_hr: string | null;
 }
 

@@ -127,6 +127,7 @@ function mapPulRow(raw: Record<string, unknown>): PulRetiradaRow {
     coddv: parseInteger(raw.coddv),
     descricao: parseString(raw.descricao),
     endereco_pul: normalizeEnderecoDisplay(parseString(raw.endereco_pul)),
+    andar: parseNullableString(raw.andar),
     val_mmaa: parseString(raw.val_mmaa),
     qtd_alvo: parseInteger(raw.qtd_alvo, 1),
     qtd_retirada: parseInteger(raw.qtd_retirada),
@@ -369,7 +370,6 @@ export async function sendLinhaColetaOnline(payload: LinhaColetaPayload): Promis
     p_barras: normalized.barras,
     p_endereco_sep: normalized.endereco_sep,
     p_val_mmaa: normalized.val_mmaa,
-    p_qtd: normalized.qtd,
     p_data_hr: normalized.data_hr,
     p_client_event_id: normalized.client_event_id
   });

@@ -357,7 +357,6 @@ export function normalizeOfflinePayload<T extends ControleValidadeOfflinePayload
       barras: normalizeText(payload.barras),
       endereco_sep: normalizeText(payload.endereco_sep).toUpperCase(),
       val_mmaa: normalizeText(payload.val_mmaa),
-      qtd: parseInteger(payload.qtd, 1),
       data_hr: payload.data_hr ? normalizeText(payload.data_hr) : null
     } as T;
   }
