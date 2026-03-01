@@ -7,6 +7,7 @@ import logoImage from "../assets/logo.png";
 import pmImage from "../assets/pm.png";
 import { supabase, supabaseInitError } from "./lib/supabase";
 import { findModuleByPath } from "./modules/registry";
+import ControleValidadePage from "./modules/controle-validade/page";
 import AtividadeExtraPage from "./modules/atividade-extra/page";
 import BuscaProdutoPage from "./modules/busca-produto/page";
 import ValidarEnderecamentoPage from "./modules/validar-enderecamento/page";
@@ -43,6 +44,8 @@ import type { InventarioModuleProfile } from "./modules/zerados/types";
 import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
 import type { PvpsAlocacaoModuleProfile } from "./modules/pvps-alocacao/types";
 import type { ProdutividadeModuleProfile } from "./modules/produtividade/types";
+import type { ControleValidadeModuleProfile } from "./modules/controle-validade/types";
+import { clearUserControleValidadeCache } from "./modules/controle-validade/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
@@ -1234,6 +1237,11 @@ export default function App() {
           // Ignore local cleanup failures and proceed with logout.
         }
         try {
+          await clearUserControleValidadeCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
+        try {
           await clearUserTermoSessionCache(currentUserId);
         } catch {
           // Ignore local cleanup failures and proceed with logout.
@@ -1500,6 +1508,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const controleValidadeProfile = useMemo<ControleValidadeModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const atividadeExtraProfile = useMemo<AtividadeExtraModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -1683,6 +1703,16 @@ export default function App() {
                 }}
               />
             )}
+          />
+          <Route
+            path="/modulos/controle-validade"
+            element={
+              controleValidadeProfile ? (
+                <ControleValidadePage isOnline={isOnline} profile={controleValidadeProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
           />
           <Route
             path="/modulos/pvps-alocacao"

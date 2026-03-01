@@ -1,5 +1,6 @@
 export type ModuleIconName =
   | "audit"
+  | "expiry"
   | "extra"
   | "collect"
   | "checklist"
@@ -16,6 +17,7 @@ export type ModuleIconName =
 export type ModuleTone = "blue" | "red" | "teal" | "amber";
 
 export type DashboardModuleKey =
+  | "controle-validade"
   | "pvps-alocacao"
   | "atividade-extra"
   | "busca-produto"

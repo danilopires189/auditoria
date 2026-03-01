@@ -1,6 +1,7 @@
 import type { DashboardModule, DashboardModuleKey } from "./types";
 
 export const DASHBOARD_MODULES: DashboardModule[] = [
+  { key: "controle-validade", path: "/modulos/controle-validade", title: "Controle de Validade", icon: "expiry", tone: "blue" },
   { key: "pvps-alocacao", path: "/modulos/pvps-alocacao", title: "Auditoria de PVPS e Alocação", icon: "audit", tone: "blue" },
   { key: "atividade-extra", path: "/modulos/atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
   { key: "busca-produto", path: "/modulos/busca-produto", title: "Busca por Produto", icon: "notes", tone: "blue" },
