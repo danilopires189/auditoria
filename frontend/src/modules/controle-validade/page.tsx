@@ -1,9 +1,12 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
+import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
 import { getDbBarrasMeta } from "../../shared/db-barras/storage";
-import { refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
+import { normalizeBarcode, refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
 import { getDbEndMeta } from "../../shared/db-end/storage";
 import { refreshDbEndCacheSmart } from "../../shared/db-end/sync";
+import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -44,6 +47,32 @@ type LinhaSubTab = "coleta" | "retirada";
 
 const MODULE_DEF = getModuleByKeyOrThrow("controle-validade");
 const OFFLINE_FLUSH_INTERVAL_MS = 15000;
+const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
+const SCANNER_INPUT_MIN_BURST_CHARS = 5;
+const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
+const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+
+type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
+
+interface ScannerInputState {
+  lastInputAt: number;
+  lastLength: number;
+  burstChars: number;
+  timerId: number | null;
+  lastSubmittedValue: string;
+  lastSubmittedAt: number;
+}
+
+function createScannerInputState(): ScannerInputState {
+  return {
+    lastInputAt: 0,
+    lastLength: 0,
+    burstChars: 0,
+    timerId: null,
+    lastSubmittedValue: "",
+    lastSubmittedAt: 0
+  };
+}
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -98,7 +127,70 @@ function safeUuid(): string {
   return `evt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function barcodeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 6v12" />
+      <path d="M7 6v12" />
+      <path d="M10 6v12" />
+      <path d="M14 6v12" />
+      <path d="M18 6v12" />
+      <path d="M20 6v12" />
+      <path d="M3 4h18" />
+      <path d="M3 20h18" />
+    </svg>
+  );
+}
+
+function cameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h4l1.5-2h5L16 7h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+function closeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
+function flashIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 2h10l-4 7h5l-9 13 2-9H6z" />
+      {!on ? <path d="M4 4l16 16" /> : null}
+    </svg>
+  );
+}
+
+function searchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-4-4" />
+    </svg>
+  );
+}
+
 export default function ControleValidadePage({ isOnline, profile }: ControleValidadePageProps) {
+  const barcodeRef = useRef<HTMLInputElement | null>(null);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
+  const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
+  const scannerInputStateRef = useRef<ScannerInputState>(createScannerInputState());
+  const {
+    inputMode: barcodeInputMode,
+    enableSoftKeyboard: enableBarcodeSoftKeyboard,
+    disableSoftKeyboard: disableBarcodeSoftKeyboard
+  } = useOnDemandSoftKeyboard("numeric");
+
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
 
@@ -122,10 +214,15 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
 
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [validadeInput, setValidadeInput] = useState("");
   const [coletaLookupBusy, setColetaLookupBusy] = useState(false);
   const [coletaLookup, setColetaLookup] = useState<LinhaColetaLookupResult | null>(null);
   const [selectedEnderecoSep, setSelectedEnderecoSep] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
 
   const [linhaRows, setLinhaRows] = useState<LinhaRetiradaRow[]>([]);
   const [pulRows, setPulRows] = useState<PulRetiradaRow[]>([]);
@@ -134,6 +231,11 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
   const flushBusyRef = useRef(false);
   const isOfflineModeActive = preferOfflineMode || !isOnline;
+  const cameraSupported = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return typeof navigator.mediaDevices?.getUserMedia === "function";
+  }, []);
+  const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
 
   const refreshQueueStats = useCallback(async () => {
     if (activeCd == null) {
@@ -305,37 +407,254 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     setPreferOfflineMode(true);
   }, [activeCd, isOnline, preferOfflineMode, profile.user_id, syncOfflineBase]);
 
-  const onLookupProduto = useCallback(async () => {
-    if (activeCd == null) {
-      setErrorMessage("CD não definido para este usuário.");
+  const focusBarcode = useCallback(() => {
+    disableBarcodeSoftKeyboard();
+    window.requestAnimationFrame(() => {
+      barcodeRef.current?.focus();
+    });
+  }, [disableBarcodeSoftKeyboard]);
+
+  const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
+    const videoEl = scannerVideoRef.current;
+    if (videoEl?.srcObject instanceof MediaStream) {
+      const [track] = videoEl.srcObject.getVideoTracks();
+      return track ?? null;
+    }
+    return null;
+  }, []);
+
+  const supportsTrackTorch = useCallback((track: MediaStreamTrack | null): boolean => {
+    if (!track) return false;
+    const trackWithCaps = track as MediaStreamTrack & {
+      getCapabilities?: () => MediaTrackCapabilities;
+    };
+    if (typeof trackWithCaps.getCapabilities !== "function") return false;
+    const capabilities = trackWithCaps.getCapabilities();
+    return Boolean((capabilities as { torch?: boolean } | null)?.torch);
+  }, []);
+
+  const stopCameraScanner = useCallback(() => {
+    const controls = scannerControlsRef.current;
+    const activeTrack = scannerTrackRef.current ?? resolveScannerTrack();
+    if (controls) {
+      if (controls.switchTorch && torchEnabled && scannerTorchModeRef.current === "controls") {
+        void controls.switchTorch(false).catch(() => undefined);
+      }
+      controls.stop();
+      scannerControlsRef.current = null;
+    }
+    if (activeTrack && torchEnabled && scannerTorchModeRef.current === "track") {
+      const trackWithConstraints = activeTrack as MediaStreamTrack & {
+        applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+      };
+      if (typeof trackWithConstraints.applyConstraints === "function") {
+        void trackWithConstraints.applyConstraints({ advanced: [{ torch: false } as MediaTrackConstraintSet] }).catch(() => undefined);
+      }
+    }
+
+    const videoEl = scannerVideoRef.current;
+    if (videoEl && videoEl.srcObject instanceof MediaStream) {
+      for (const track of videoEl.srcObject.getTracks()) {
+        track.stop();
+      }
+      videoEl.srcObject = null;
+    }
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+  }, [resolveScannerTrack, torchEnabled]);
+
+  const openCameraScanner = useCallback(() => {
+    if (!cameraSupported) {
+      setErrorMessage("Câmera não disponível neste navegador/dispositivo.");
       return;
     }
-    if (!barcodeInput.trim()) {
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+    setScannerOpen(true);
+  }, [cameraSupported]);
+
+  const closeCameraScanner = useCallback(() => {
+    stopCameraScanner();
+    setScannerOpen(false);
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+    focusBarcode();
+  }, [focusBarcode, stopCameraScanner]);
+
+  const toggleTorch = useCallback(async () => {
+    const controls = scannerControlsRef.current;
+    const track = scannerTrackRef.current ?? resolveScannerTrack();
+    const hasTrackTorch = supportsTrackTorch(track);
+    if (!controls?.switchTorch && !hasTrackTorch) {
+      setScannerError("Flash não disponível neste dispositivo.");
+      return;
+    }
+    try {
+      const next = !torchEnabled;
+      if (hasTrackTorch && track) {
+        const trackWithConstraints = track as MediaStreamTrack & {
+          applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+        };
+        if (!trackWithConstraints || typeof trackWithConstraints.applyConstraints !== "function") {
+          throw new Error("Track sem suporte de constraints");
+        }
+        await trackWithConstraints.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+        scannerTorchModeRef.current = "track";
+      } else if (controls?.switchTorch) {
+        await controls.switchTorch(next);
+        scannerTorchModeRef.current = "controls";
+      }
+      setTorchEnabled(next);
+      setScannerError(null);
+    } catch {
+      setScannerError("Não foi possível alternar o flash.");
+    }
+  }, [resolveScannerTrack, supportsTrackTorch, torchEnabled]);
+
+  const executeLookup = useCallback(async (rawValue: string) => {
+    const barras = normalizeBarcode(rawValue);
+    if (!barras) {
       setErrorMessage("Informe o código de barras.");
+      setStatusMessage(null);
+      setBarcodeValidationState("invalid");
+      setColetaLookup(null);
+      setSelectedEnderecoSep("");
+      focusBarcode();
+      return;
+    }
+    if (activeCd == null) {
+      setErrorMessage("CD não definido para este usuário.");
+      setStatusMessage(null);
+      setBarcodeValidationState("invalid");
+      setColetaLookup(null);
+      setSelectedEnderecoSep("");
+      focusBarcode();
       return;
     }
 
+    setBarcodeInput(barras);
     setColetaLookupBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
+    setBarcodeValidationState("validating");
     try {
       const result = await resolveLinhaColetaProduto({
         cd: activeCd,
-        rawBarcode: barcodeInput,
+        rawBarcode: barras,
         isOnline,
         preferOfflineMode: isOfflineModeActive
       });
       setColetaLookup(result);
       setSelectedEnderecoSep(result.enderecos_sep[0] ?? "");
       setStatusMessage(`Produto localizado: ${result.descricao}.`);
+      setBarcodeValidationState("valid");
+      focusBarcode();
     } catch (error) {
       setColetaLookup(null);
       setSelectedEnderecoSep("");
       setErrorMessage(normalizeControleValidadeError(error));
+      setBarcodeValidationState("invalid");
+      focusBarcode();
     } finally {
       setColetaLookupBusy(false);
     }
-  }, [activeCd, barcodeInput, isOfflineModeActive, isOnline]);
+  }, [activeCd, focusBarcode, isOfflineModeActive, isOnline]);
+
+  const clearScannerInputTimer = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current;
+    if (state.timerId != null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+  }, []);
+
+  const commitScannerInput = useCallback(async (rawValue: string) => {
+    const normalized = normalizeBarcode(rawValue);
+    if (!normalized) return;
+
+    const state = scannerInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (state.lastSubmittedValue === normalized && now - state.lastSubmittedAt < SCANNER_INPUT_SUBMIT_COOLDOWN_MS) {
+      return;
+    }
+
+    clearScannerInputTimer();
+    state.lastSubmittedValue = normalized;
+    state.lastSubmittedAt = now;
+    state.lastInputAt = 0;
+    state.lastLength = 0;
+    state.burstChars = 0;
+
+    await executeLookup(normalized);
+  }, [clearScannerInputTimer, executeLookup]);
+
+  const scheduleScannerInputAutoSubmit = useCallback((value: string) => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current;
+    clearScannerInputTimer();
+    state.timerId = window.setTimeout(() => {
+      state.timerId = null;
+      void commitScannerInput(value);
+    }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+  }, [clearScannerInputTimer, commitScannerInput]);
+
+  const onBarcodeInputChange = useCallback((nextValue: string) => {
+    setBarcodeInput(nextValue);
+    setBarcodeValidationState("idle");
+
+    const state = scannerInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const elapsed = state.lastInputAt > 0 ? now - state.lastInputAt : Number.POSITIVE_INFINITY;
+    const lengthDelta = Math.max(nextValue.length - state.lastLength, 0);
+
+    if (lengthDelta > 0 && elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+      state.burstChars += lengthDelta;
+    } else {
+      state.burstChars = lengthDelta;
+    }
+    state.lastInputAt = now;
+    state.lastLength = nextValue.length;
+
+    if (!nextValue) {
+      state.burstChars = 0;
+      clearScannerInputTimer();
+      return;
+    }
+
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+      scheduleScannerInputAutoSubmit(nextValue);
+      return;
+    }
+
+    clearScannerInputTimer();
+  }, [clearScannerInputTimer, scheduleScannerInputAutoSubmit]);
+
+  const shouldHandleScannerTab = useCallback((value: string): boolean => {
+    if (!value.trim()) return false;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const state = scannerInputStateRef.current;
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) return true;
+    if (state.lastInputAt <= 0) return false;
+    return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
+  }, []);
+
+  const onBarcodeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab(barcodeInput)) return;
+    if (event.key !== "Enter" && event.key !== "Tab") return;
+    event.preventDefault();
+    void commitScannerInput(barcodeInput);
+  }, [barcodeInput, commitScannerInput, shouldHandleScannerTab]);
+
+  const onLookupProduto = useCallback(async () => {
+    await executeLookup(barcodeInput);
+  }, [barcodeInput, executeLookup]);
 
   const onSubmitColeta = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -370,6 +689,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       await refreshQueueStats();
       setStatusMessage("Coleta da Linha registrada.");
       setBarcodeInput("");
+      setBarcodeValidationState("idle");
       setValidadeInput("");
       setColetaLookup(null);
       setSelectedEnderecoSep("");
@@ -488,6 +808,209 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     };
   }, [activeCd, flushQueue, isOnline]);
 
+  useEffect(() => {
+    if (mainTab !== "linha" || linhaSubTab !== "coleta") return;
+    focusBarcode();
+  }, [focusBarcode, linhaSubTab, mainTab]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      const state = scannerInputStateRef.current;
+      if (state.timerId != null) {
+        window.clearTimeout(state.timerId);
+        state.timerId = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+
+    let cancelled = false;
+    let nativeFrameId: number | null = null;
+    let nativeStream: MediaStream | null = null;
+    let torchProbeTimer: number | null = null;
+    let torchProbeAttempts = 0;
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTorchModeRef.current = "none";
+
+    const startScanner = async () => {
+      try {
+        const videoEl = scannerVideoRef.current;
+        if (!videoEl) {
+          setScannerError("Falha ao abrir visualização da câmera.");
+          return;
+        }
+
+        const nativeBarcodeDetectorCtor = (window as Window & {
+          BarcodeDetector?: new (options?: { formats?: string[] }) => {
+            detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+          };
+        }).BarcodeDetector;
+
+        if (nativeBarcodeDetectorCtor && typeof navigator.mediaDevices?.getUserMedia === "function") {
+          try {
+            const detector = new nativeBarcodeDetectorCtor({
+              formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "codabar"]
+            });
+            nativeStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
+            });
+            if (cancelled) {
+              nativeStream.getTracks().forEach((track) => track.stop());
+              nativeStream = null;
+              return;
+            }
+
+            videoEl.srcObject = nativeStream;
+            await videoEl.play().catch(() => undefined);
+            const track = nativeStream.getVideoTracks()[0] ?? null;
+            if (track) scannerTrackRef.current = track;
+
+            const runNativeDetect = async () => {
+              if (cancelled) return;
+              try {
+                const detections = await detector.detect(videoEl);
+                const first = detections[0];
+                const scanned = normalizeBarcode(first?.rawValue ?? "");
+                if (scanned) {
+                  setBarcodeInput(scanned);
+                  setScannerOpen(false);
+                  stopCameraScanner();
+                  setTorchEnabled(false);
+                  setTorchSupported(false);
+                  void commitScannerInput(scanned);
+                  return;
+                }
+              } catch {
+                // Mantem polling silencioso enquanto a camera busca foco.
+              }
+              nativeFrameId = window.requestAnimationFrame(() => {
+                void runNativeDetect();
+              });
+            };
+
+            nativeFrameId = window.requestAnimationFrame(() => {
+              void runNativeDetect();
+            });
+
+            const probeTorchAvailabilityNative = () => {
+              if (cancelled) return;
+              const trackFromVideo = resolveScannerTrack();
+              if (trackFromVideo) scannerTrackRef.current = trackFromVideo;
+              if (supportsTrackTorch(trackFromVideo)) {
+                scannerTorchModeRef.current = "track";
+                setTorchSupported(true);
+              } else {
+                scannerTorchModeRef.current = "none";
+                setTorchSupported(false);
+              }
+            };
+            probeTorchAvailabilityNative();
+            return;
+          } catch {
+            if (nativeStream) {
+              nativeStream.getTracks().forEach((track) => track.stop());
+              nativeStream = null;
+            }
+          }
+        }
+
+        const zxing = await import("@zxing/browser");
+        if (cancelled) return;
+
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: "environment" }
+            }
+          },
+          videoEl,
+          (scanResult, error) => {
+            if (cancelled) return;
+
+            if (scanResult) {
+              const formatName = scanResult.getBarcodeFormat?.().toString?.() ?? "";
+              if (/QR_CODE/i.test(formatName)) return;
+              const scanned = normalizeBarcode(scanResult.getText() ?? "");
+              if (!scanned) return;
+
+              setBarcodeInput(scanned);
+              setScannerOpen(false);
+              stopCameraScanner();
+              setTorchEnabled(false);
+              setTorchSupported(false);
+              void commitScannerInput(scanned);
+              return;
+            }
+
+            const errorName = (error as { name?: string } | null)?.name;
+            if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
+              setScannerError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
+            }
+          }
+        );
+
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+        scannerControlsRef.current = controls;
+        const probeTorchAvailability = () => {
+          if (cancelled) return;
+          const track = resolveScannerTrack();
+          if (track) scannerTrackRef.current = track;
+          if (supportsTrackTorch(track)) {
+            scannerTorchModeRef.current = "track";
+            setTorchSupported(true);
+            return;
+          }
+          if (typeof controls.switchTorch === "function") {
+            scannerTorchModeRef.current = "controls";
+            setTorchSupported(true);
+            return;
+          }
+          if (torchProbeAttempts < 10) {
+            torchProbeAttempts += 1;
+            torchProbeTimer = window.setTimeout(probeTorchAvailability, 120);
+            return;
+          }
+          scannerTorchModeRef.current = "none";
+          setTorchSupported(false);
+        };
+
+        probeTorchAvailability();
+      } catch (error) {
+        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
+      }
+    };
+
+    void startScanner();
+
+    return () => {
+      cancelled = true;
+      if (nativeFrameId != null) window.cancelAnimationFrame(nativeFrameId);
+      if (nativeStream) {
+        nativeStream.getTracks().forEach((track) => track.stop());
+        nativeStream = null;
+      }
+      if (torchProbeTimer != null) {
+        window.clearTimeout(torchProbeTimer);
+      }
+      stopCameraScanner();
+    };
+  }, [commitScannerInput, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch]);
+
   const linhaRowsFiltered = useMemo(() => {
     if (statusFilter === "todos") return linhaRows;
     return linhaRows.filter((row) => row.status === statusFilter);
@@ -509,7 +1032,11 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
             <span>Início</span>
           </Link>
           <div className="module-topbar-user-side">
-            <span className="module-user-greeting">Olá, {displayUserName}</span>
+            <PendingSyncBadge
+              pendingCount={pendingCount}
+              errorCount={pendingErrors}
+              title="Eventos offline pendentes de sincronização"
+            />
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
               {isOnline ? "🟢 Online" : "🔴 Offline"}
             </span>
@@ -526,40 +1053,37 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       <section className="modules-shell controle-validade-shell">
         <article className="module-screen surface-enter controle-validade-screen">
           <div className="module-screen-header">
-            <div className="module-screen-title">
-              <h2>Controle de Validade</h2>
-              <p>CD ativo: {activeCd != null ? `CD ${String(activeCd).padStart(2, "0")}` : "não definido"}</p>
-            </div>
-            <div className="controle-validade-head-actions">
-              <PendingSyncBadge
-                pendingCount={pendingCount}
-                errorCount={pendingErrors}
-                title="Eventos offline pendentes de sincronização"
-              />
-              <button
-                type="button"
-                className={`btn btn-muted${preferOfflineMode ? " is-active" : ""}`}
-                onClick={() => void onToggleOfflineMode()}
-                disabled={busyOfflineBase}
-              >
-                {preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-muted"
-                onClick={() => void syncOfflineBase()}
-                disabled={!isOnline || busyOfflineBase}
-              >
-                {busyOfflineBase ? "Baixando base..." : "Baixar base offline"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void flushQueue(true)}
-                disabled={!isOnline || busyFlush}
-              >
-                {busyFlush ? "Sincronizando..." : "Sincronizar pendentes"}
-              </button>
+            <div className="module-screen-title-row">
+              <div className="module-screen-title controle-validade-title">
+                <h2>Olá, {displayUserName}</h2>
+                <p>Controle de validade por coleta e retirada</p>
+              </div>
+              <div className="controle-validade-head-actions">
+                <button
+                  type="button"
+                  className={`btn btn-muted${preferOfflineMode ? " is-active" : ""}`}
+                  onClick={() => void onToggleOfflineMode()}
+                  disabled={busyOfflineBase}
+                >
+                  {preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-muted"
+                  onClick={() => void syncOfflineBase()}
+                  disabled={!isOnline || busyOfflineBase}
+                >
+                  {busyOfflineBase ? "Baixando base..." : "Baixar base offline"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void flushQueue(true)}
+                  disabled={!isOnline || busyFlush}
+                >
+                  {busyFlush ? "Sincronizando..." : "Sincronizar pendentes"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -618,19 +1142,46 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     <label>
                       Código de barras
                       <div className="controle-validade-inline-field">
-                        <input
-                          type="text"
-                          value={barcodeInput}
-                          onChange={(event) => setBarcodeInput(event.target.value)}
-                          placeholder="Leia ou digite o código de barras"
-                          required
-                        />
+                        <div className="input-icon-wrap with-action">
+                          <span className={barcodeIconClassName} aria-hidden="true">
+                            {barcodeIcon()}
+                          </span>
+                          <input
+                            ref={barcodeRef}
+                            type="text"
+                            inputMode={barcodeInputMode}
+                            value={barcodeInput}
+                            onChange={(event) => onBarcodeInputChange(event.target.value)}
+                            onKeyDown={onBarcodeKeyDown}
+                            onFocus={enableBarcodeSoftKeyboard}
+                            onPointerDown={enableBarcodeSoftKeyboard}
+                            onBlur={disableBarcodeSoftKeyboard}
+                            autoComplete="off"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            enterKeyHint="search"
+                            placeholder="Bipe, digite ou use câmera"
+                            required
+                          />
+                          <button
+                            type="button"
+                            className="input-action-btn"
+                            onClick={openCameraScanner}
+                            title="Ler código pela câmera"
+                            aria-label="Ler código pela câmera"
+                            disabled={!cameraSupported || coletaLookupBusy}
+                          >
+                            {cameraIcon()}
+                          </button>
+                        </div>
                         <button
                           type="button"
-                          className="btn btn-muted"
+                          className="btn btn-muted controle-validade-search-btn"
                           onClick={() => void onLookupProduto()}
                           disabled={coletaLookupBusy || activeCd == null}
                         >
+                          <span aria-hidden="true">{searchIcon()}</span>
                           {coletaLookupBusy ? "Buscando..." : "Buscar"}
                         </button>
                       </div>
@@ -828,6 +1379,47 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           </div>
         </article>
       </section>
+
+      {scannerOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="controle-validade-scanner-title" onClick={closeCameraScanner}>
+              <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="scanner-head">
+                  <h3 id="controle-validade-scanner-title">Scanner de barras</h3>
+                  <div className="scanner-head-actions">
+                    <button
+                      type="button"
+                      className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
+                      onClick={() => void toggleTorch()}
+                      aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
+                      title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
+                      disabled={!torchSupported}
+                    >
+                      {flashIcon({ on: torchEnabled })}
+                      <span>{torchEnabled ? "Flash on" : "Flash"}</span>
+                    </button>
+                    <button className="scanner-close-btn" type="button" onClick={closeCameraScanner} aria-label="Fechar scanner">
+                      {closeIcon()}
+                    </button>
+                  </div>
+                </div>
+                <div className="scanner-video-wrap">
+                  <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+                  <div className="scanner-frame" aria-hidden="true">
+                    <div className="scanner-frame-corner top-left" />
+                    <div className="scanner-frame-corner top-right" />
+                    <div className="scanner-frame-corner bottom-left" />
+                    <div className="scanner-frame-corner bottom-right" />
+                    <div className="scanner-frame-line" />
+                  </div>
+                </div>
+                <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
+                {scannerError ? <div className="alert error">{scannerError}</div> : null}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

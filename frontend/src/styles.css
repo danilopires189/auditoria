@@ -7743,6 +7743,17 @@ small {
   gap: 12px;
 }
 
+.controle-validade-title {
+  display: grid;
+  gap: 4px;
+}
+
+.controle-validade-title p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .controle-validade-head-actions {
   display: flex;
   flex-wrap: wrap;
@@ -7810,8 +7821,28 @@ small {
   gap: 8px;
 }
 
+.controle-validade-inline-field .input-icon-wrap {
+  min-width: 0;
+}
+
 .controle-validade-inline-field .btn {
   min-width: 110px;
+}
+
+.controle-validade-search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.controle-validade-search-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .controle-validade-lookup-card {
