@@ -338,14 +338,14 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     }
   }, [activeCd, isOnline, loadRows, profile.user_id, refreshQueueStats]);
 
-  const syncOfflineBase = useCallback(async () => {
+  const syncOfflineBase = useCallback(async (): Promise<boolean> => {
     if (!isOnline) {
       setErrorMessage("Sem internet para baixar base offline.");
-      return;
+      return false;
     }
     if (activeCd == null) {
       setErrorMessage("CD não definido para este usuário.");
-      return;
+      return false;
     }
 
     setBusyOfflineBase(true);
@@ -368,8 +368,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       await refreshOfflineMeta();
       await loadRows();
       setStatusMessage("Base offline pronta para uso neste dispositivo.");
+      return true;
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
+      return false;
     } finally {
       setProgressMessage(null);
       setBusyOfflineBase(false);
@@ -395,7 +397,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     if (!isOnline) {
       const snapshotExists = await hasOfflineSnapshot(profile.user_id, activeCd);
       if (!snapshotExists) {
-        setErrorMessage("Sem internet e sem snapshot local. Conecte-se e baixe a base offline.");
+        setErrorMessage("Sem internet e sem snapshot local. Conecte-se e clique em Trabalhar offline.");
         return;
       }
       setPreferOfflineMode(true);
@@ -403,8 +405,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       return;
     }
 
-    await syncOfflineBase();
-    setPreferOfflineMode(true);
+    const synced = await syncOfflineBase();
+    if (synced) {
+      setPreferOfflineMode(true);
+    }
   }, [activeCd, isOnline, preferOfflineMode, profile.user_id, syncOfflineBase]);
 
   const focusBarcode = useCallback(() => {
@@ -1064,15 +1068,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   onClick={() => void onToggleOfflineMode()}
                   disabled={busyOfflineBase}
                 >
-                  {preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-muted"
-                  onClick={() => void syncOfflineBase()}
-                  disabled={!isOnline || busyOfflineBase}
-                >
-                  {busyOfflineBase ? "Baixando base..." : "Baixar base offline"}
+                  {busyOfflineBase ? "Baixando base..." : preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
                 </button>
                 <button
                   type="button"
@@ -1091,7 +1087,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
             {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
             {preferOfflineMode && !offlineSnapshotReady ? (
-              <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Baixar base offline".</div>
+              <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Trabalhar offline".</div>
             ) : null}
 
             <div className="controle-validade-meta">
