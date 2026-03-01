@@ -537,8 +537,8 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("AUTH_REQUIRED")) return "Sessão inválida. Faça login novamente.";
   if (value.includes("PROFILE_NAO_ENCONTRADO")) return "Perfil do usuário não encontrado. Atualize a página e tente novamente.";
   if (value.includes("NFD_OU_CHAVE_OBRIGATORIO")) return "Informe a NFD ou a chave para iniciar a devolução.";
-  if (value.includes("VOLUME_NAO_ENCONTRADO")) return "NFD/Chave não encontrado na base do dia.";
-  if (value.includes("NFD_OU_CHAVE_NAO_ENCONTRADA")) return "NFD/Chave não encontrado na base do dia.";
+  if (value.includes("VOLUME_NAO_ENCONTRADO")) return "NFD/Chave não encontrado na base de Devolução.";
+  if (value.includes("NFD_OU_CHAVE_NAO_ENCONTRADA")) return "NFD/Chave não encontrado na base de Devolução.";
   if (value.includes("NFD_AMBIGUA_INFORME_CHAVE")) return "Esta NFD está associada a mais de uma chave. Informe a chave para abrir a devolução correta.";
   if (value.includes("VOLUME_EM_USO")) return "Este volume já está em conferência por outro usuário.";
   if (value.includes("CONFERENCIA_EM_USO")) return "Este volume já está em conferência por outro usuário.";
@@ -936,11 +936,9 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const filteredModalVolumes = useMemo<DevolucaoMercadoriaModalVolumeRow[]>(() => {
     if (currentCd == null || manifestVolumeRows.length === 0) return [];
 
-    const today = todayIsoBrasilia();
     const latestByNrVolume = new Map<string, DevolucaoMercadoriaLocalVolume>();
     for (const row of modalVolumeHistory) {
       if (row.cd !== currentCd) continue;
-      if (row.conf_date !== today) continue;
       if (!latestByNrVolume.has(row.ref)) {
         latestByNrVolume.set(row.ref, row);
       }
@@ -1019,11 +1017,9 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       return { completed: 0, total: 0, percent: 0 };
     }
 
-    const today = todayIsoBrasilia();
     const latestByRef = new Map<string, DevolucaoMercadoriaLocalVolume>();
     for (const row of modalVolumeHistory) {
       if (row.cd !== currentCd) continue;
-      if (row.conf_date !== today) continue;
       if (row.conference_kind !== "com_nfd") continue;
       if (!latestByRef.has(row.ref)) {
         latestByRef.set(row.ref, row);
@@ -1572,7 +1568,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
             }
             showDialog({
               title: "Conferência já finalizada",
-              message: "Este volume já foi finalizado por você hoje. Deseja abrir em modo leitura?",
+              message: "Este volume já foi finalizado. Deseja abrir em modo leitura?",
               confirmLabel: "Abrir leitura",
               cancelLabel: "Cancelar",
               onConfirm: () => {
@@ -1655,7 +1651,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         }
         showDialog({
           title: "Volume já conferido",
-          message: "Este volume já foi finalizado por você hoje. Deseja abrir em modo leitura?",
+          message: "Este volume já foi finalizado. Deseja abrir em modo leitura?",
           confirmLabel: "Abrir leitura",
           cancelLabel: "Cancelar",
           onConfirm: () => {
@@ -2538,15 +2534,13 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         }
       }
 
-      const today = todayIsoBrasilia();
-      const latestToday = volumes.find(
+      const latestPending = volumes.find(
         (row) => row.cd === currentCd
-          && row.conf_date === today
           && (row.status === "em_conferencia" || row.pending_snapshot || row.pending_finalize || row.pending_cancel)
       );
-      if (latestToday) {
-        setActiveVolume(latestToday);
-        setEtiquetaInput(latestToday.ref);
+      if (latestPending) {
+        setActiveVolume(latestPending);
+        setEtiquetaInput(latestPending.ref);
       } else {
         setActiveVolume(null);
         setEtiquetaInput("");
@@ -3727,7 +3721,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-volumes-title" onClick={() => setShowRoutesModal(false)}>
               <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                <h3 id="termo-volumes-title">Notas do dia</h3>
+                <h3 id="termo-volumes-title">Notas da base</h3>
                 <div className="input-icon-wrap termo-routes-search">
                   <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
                   <input
