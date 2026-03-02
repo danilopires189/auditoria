@@ -229,6 +229,7 @@ class SyncService:
                 table_name=table_name,
                 rejections=rejections,
                 rejections_dir=self.config.rejections_dir_path,
+                retention_days=self.config.app.rejections_retention_days,
             )
 
             valid = validation.valid_frame.copy()

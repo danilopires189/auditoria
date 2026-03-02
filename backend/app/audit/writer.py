@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterator
 
@@ -13,6 +14,21 @@ from sqlalchemy.engine import Engine
 from app.audit.models import StepCounters
 from app.utils.json_safe import to_json_safe
 from app.utils.timezone import now_brasilia
+
+
+def _prune_rejections_exports(rejections_dir: Path, retention_days: int) -> None:
+    if retention_days <= 0 or not rejections_dir.exists():
+        return
+
+    cutoff = now_brasilia() - timedelta(days=retention_days)
+    for csv_path in rejections_dir.glob("rejections_*.csv"):
+        try:
+            modified_at = datetime.fromtimestamp(csv_path.stat().st_mtime, cutoff.tzinfo)
+            if modified_at < cutoff:
+                csv_path.unlink(missing_ok=True)
+        except OSError:
+            # Ignore filesystem races/locks; cleanup is best-effort.
+            continue
 
 
 class AuditWriter:
@@ -247,7 +263,10 @@ class AuditWriter:
         table_name: str,
         rejections: pd.DataFrame,
         rejections_dir: Path,
+        retention_days: int = 14,
     ) -> int:
+        rejections_dir.mkdir(parents=True, exist_ok=True)
+        _prune_rejections_exports(rejections_dir, retention_days)
         if rejections.empty:
             return 0
 
@@ -301,7 +320,6 @@ class AuditWriter:
                 db_rows,
             )
 
-        rejections_dir.mkdir(parents=True, exist_ok=True)
         timestamp = now_brasilia().strftime("%Y%m%dT%H%M%S%z")
         csv_path = rejections_dir / f"rejections_{table_name}_{run_id}_{timestamp}.csv"
         export = normalized.copy()

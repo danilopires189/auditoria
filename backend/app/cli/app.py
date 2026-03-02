@@ -67,6 +67,10 @@ def _build_service(config: str, env_file: str) -> SyncService:
         runtime.db,
         connect_timeout_seconds=runtime.supabase.connect_timeout_seconds,
         statement_timeout_seconds=runtime.supabase.statement_timeout_seconds,
+        pool_size=runtime.supabase.pool_size,
+        max_overflow=runtime.supabase.max_overflow,
+        pool_timeout_seconds=runtime.supabase.pool_timeout_seconds,
+        pool_recycle_seconds=runtime.supabase.pool_recycle_seconds,
     )
     return SyncService(engine=engine, config=runtime)
 
@@ -191,6 +195,10 @@ def healthcheck_command(
             runtime.db,
             connect_timeout_seconds=runtime.supabase.connect_timeout_seconds,
             statement_timeout_seconds=runtime.supabase.statement_timeout_seconds,
+            pool_size=runtime.supabase.pool_size,
+            max_overflow=runtime.supabase.max_overflow,
+            pool_timeout_seconds=runtime.supabase.pool_timeout_seconds,
+            pool_recycle_seconds=runtime.supabase.pool_recycle_seconds,
         )
 
         result = run_healthcheck(engine)
