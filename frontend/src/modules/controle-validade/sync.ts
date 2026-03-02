@@ -42,6 +42,14 @@ function parseNullableString(value: unknown): string | null {
   return normalized || null;
 }
 
+function parseZona(value: unknown, fallbackEndereco: string): string {
+  const explicit = parseString(value).toUpperCase();
+  if (explicit) return explicit.slice(0, 4);
+  const fromEndereco = parseString(fallbackEndereco).toUpperCase();
+  if (!fromEndereco) return "SEM ZONA";
+  return fromEndereco.slice(0, 4);
+}
+
 function parseRetiradaStatus(value: unknown): "pendente" | "concluido" {
   return String(value) === "concluido" ? "concluido" : "pendente";
 }
@@ -122,18 +130,22 @@ function mapLinhaRow(raw: Record<string, unknown>): LinhaRetiradaRow {
 }
 
 function mapPulRow(raw: Record<string, unknown>): PulRetiradaRow {
+  const enderecoPul = normalizeEnderecoDisplay(parseString(raw.endereco_pul));
   return {
     cd: parseInteger(raw.cd),
     coddv: parseInteger(raw.coddv),
     descricao: parseString(raw.descricao),
-    endereco_pul: normalizeEnderecoDisplay(parseString(raw.endereco_pul)),
+    zona: parseZona(raw.zona, enderecoPul),
+    endereco_pul: enderecoPul,
     andar: parseNullableString(raw.andar),
     val_mmaa: parseString(raw.val_mmaa),
     qtd_alvo: parseInteger(raw.qtd_alvo, 1),
     qtd_retirada: parseInteger(raw.qtd_retirada),
     qtd_pendente: parseInteger(raw.qtd_pendente),
     status: parseRetiradaStatus(raw.status),
-    qtd_est_disp: parseInteger(raw.qtd_est_disp)
+    qtd_est_disp: parseInteger(raw.qtd_est_disp),
+    dt_ultima_retirada: parseNullableString(raw.dt_ultima_retirada),
+    auditor_nome_ultima_retirada: parseNullableString(raw.auditor_nome_ultima_retirada)
   };
 }
 
@@ -159,6 +171,8 @@ function sortLinhaRows(rows: LinhaRetiradaRow[]): LinhaRetiradaRow[] {
 function sortPulRows(rows: PulRetiradaRow[]): PulRetiradaRow[] {
   return [...rows].sort((a, b) => {
     if (a.status !== b.status) return a.status === "pendente" ? -1 : 1;
+    const byZona = a.zona.localeCompare(b.zona, "pt-BR");
+    if (byZona !== 0) return byZona;
     const byVal = a.val_mmaa.localeCompare(b.val_mmaa, "pt-BR");
     if (byVal !== 0) return byVal;
     const byEndereco = a.endereco_pul.localeCompare(b.endereco_pul, "pt-BR");
@@ -444,9 +458,11 @@ export async function loadProjectedOfflineRows(params: {
     return { linha_rows: [], pul_rows: [] };
   }
   const events = await listPendingOfflineEvents(params.userId, params.cd);
+  const linhaRows = (snapshot.linha_rows ?? []).map((row) => mapLinhaRow(row as unknown as Record<string, unknown>));
+  const pulRows = (snapshot.pul_rows ?? []).map((row) => mapPulRow(row as unknown as Record<string, unknown>));
   return {
-    linha_rows: applyPendingEventsToLinhaRows(snapshot.linha_rows, events),
-    pul_rows: applyPendingEventsToPulRows(snapshot.pul_rows, events)
+    linha_rows: applyPendingEventsToLinhaRows(linhaRows, events),
+    pul_rows: applyPendingEventsToPulRows(pulRows, events)
   };
 }
 
