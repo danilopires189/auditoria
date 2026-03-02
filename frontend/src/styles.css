@@ -7756,10 +7756,14 @@ small {
 
 .controle-validade-head-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   justify-content: flex-end;
   align-items: center;
+}
+
+.controle-validade-head-actions .btn {
+  white-space: nowrap;
 }
 
 .controle-validade-head-actions .btn.is-active {
@@ -7787,6 +7791,10 @@ small {
   font-size: 0.82rem;
   font-weight: 700;
   padding: 4px 10px;
+}
+
+.controle-validade-meta-inline {
+  margin-top: 4px;
 }
 
 .controle-validade-tabs,
@@ -7932,11 +7940,16 @@ small {
 
 @media (max-width: 980px) {
   .controle-validade-head-actions {
-    justify-content: stretch;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    width: 100%;
   }
 
   .controle-validade-head-actions .btn {
-    width: 100%;
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 0.86rem;
   }
 
   .controle-validade-inline-field {

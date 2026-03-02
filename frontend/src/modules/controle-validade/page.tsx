@@ -1060,6 +1060,11 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               <div className="module-screen-title controle-validade-title">
                 <h2>Olá, {displayUserName}</h2>
                 <p>Controle de validade por coleta e retirada</p>
+                <div className="controle-validade-meta controle-validade-meta-inline">
+                  <span>db_barras local: {dbBarrasCount}</span>
+                  <span>db_end local: {dbEndCount}</span>
+                  <span>Snapshot: {offlineSnapshotReady ? "pronto" : "indisponível"}</span>
+                </div>
               </div>
               <div className="controle-validade-head-actions">
                 <button
@@ -1068,7 +1073,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   onClick={() => void onToggleOfflineMode()}
                   disabled={busyOfflineBase}
                 >
-                  {busyOfflineBase ? "Baixando base..." : preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
+                  {busyOfflineBase ? "Baixando..." : preferOfflineMode ? "📦 Offline ativo" : "📶 Offline"}
                 </button>
                 <button
                   type="button"
@@ -1076,7 +1081,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   onClick={() => void flushQueue(true)}
                   disabled={!isOnline || busyFlush}
                 >
-                  {busyFlush ? "Sincronizando..." : "Sincronizar pendentes"}
+                  {busyFlush ? "Sincrinizando..." : "Sincrinizar"}
                 </button>
               </div>
             </div>
@@ -1089,12 +1094,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
             {preferOfflineMode && !offlineSnapshotReady ? (
               <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Trabalhar offline".</div>
             ) : null}
-
-            <div className="controle-validade-meta">
-              <span>db_barras local: {dbBarrasCount}</span>
-              <span>db_end local: {dbEndCount}</span>
-              <span>Snapshot: {offlineSnapshotReady ? "pronto" : "indisponível"}</span>
-            </div>
 
             <div className="controle-validade-tabs">
               <button
