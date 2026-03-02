@@ -116,7 +116,8 @@ function formatDateTime(value: string | null): string {
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    second: "2-digit"
   }).format(parsed);
 }
 
@@ -742,8 +743,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const submitPulRetirada = useCallback(async (row: PulRetiradaRow) => {
     if (activeCd == null) return;
     const key = `${row.coddv}|${row.endereco_pul}|${row.val_mmaa}`;
-    const parsed = Number.parseInt((pulQtyInputs[key] || "1").replace(/\D/g, ""), 10);
-    const qtd = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    const parsed = Number.parseInt((pulQtyInputs[key] ?? "").replace(/\D/g, ""), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setErrorMessage("Informe a quantidade retirada do Pulmão.");
+      return;
+    }
+    const qtd = parsed;
 
     try {
       await enqueuePulRetirada({
@@ -1082,7 +1087,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   onClick={() => void flushQueue(true)}
                   disabled={!isOnline || busyFlush}
                 >
-                  {busyFlush ? "Sincrinizando..." : "Sincrinizar"}
+                  {busyFlush ? "Sincronizando..." : "Sincronizar"}
                 </button>
               </div>
             </div>
@@ -1323,50 +1328,62 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   <p>Nenhum item de Pulmão para o filtro atual.</p>
                 ) : null}
                 <div className="controle-validade-list">
-                  {pulRowsFiltered.map((row) => {
+                  {pulRowsFiltered.map((row, index) => {
                     const key = `${row.coddv}|${row.endereco_pul}|${row.val_mmaa}`;
+                    const prev = index > 0 ? pulRowsFiltered[index - 1] : null;
+                    const showZoneHeader = !prev || prev.zona !== row.zona;
                     const isPending = row.status === "pendente";
+                    const qtyValue = pulQtyInputs[key] ?? "";
+                    const parsedQty = Number.parseInt(qtyValue.replace(/\D/g, ""), 10);
+                    const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0;
                     return (
-                      <article key={key} className="controle-validade-row-card">
-                        <div className="controle-validade-row-head">
-                          <strong>{row.descricao}</strong>
-                          <span className={`controle-validade-status ${row.status}`}>
-                            {row.status === "pendente" ? "Pendente" : "Concluído"}
-                          </span>
-                        </div>
-                        <div className="controle-validade-row-grid">
-                          <span>CODDV: {row.coddv}</span>
-                          <span>Endereço PUL: {row.endereco_pul}</span>
-                          <span>Andar: {row.andar ?? "-"}</span>
-                          <span>Validade: {row.val_mmaa}</span>
-                          <span>Estoque disponível: {row.qtd_est_disp}</span>
-                          <span>Alvo: {row.qtd_alvo}</span>
-                          <span>Retirado: {row.qtd_retirada}</span>
-                          <span>Pendente: {row.qtd_pendente}</span>
-                        </div>
-                        {isPending ? (
-                          <div className="controle-validade-row-actions">
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={pulQtyInputs[key] ?? "1"}
-                              onChange={(event) =>
-                                setPulQtyInputs((current) => ({
-                                  ...current,
-                                  [key]: event.target.value.replace(/\D/g, "").slice(0, 4)
-                                }))
-                              }
-                            />
-                            <button
-                              type="button"
-                              className="btn btn-primary"
-                              onClick={() => void submitPulRetirada(row)}
-                            >
-                              Registrar retirada
-                            </button>
+                      <div key={key} className="pvps-zone-group">
+                        {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
+                        <article className="controle-validade-row-card">
+                          <div className="controle-validade-row-head">
+                            <strong>{row.descricao}</strong>
+                            <span className={`controle-validade-status ${row.status}`}>
+                              {row.status === "pendente" ? "Pendente" : "Concluído"}
+                            </span>
                           </div>
-                        ) : null}
-                      </article>
+                          <div className="controle-validade-row-grid">
+                            <span>CODDV: {row.coddv}</span>
+                            <span>Endereço PUL: {row.endereco_pul}</span>
+                            <span>Andar: {row.andar ?? "-"}</span>
+                            <span>Validade: {row.val_mmaa}</span>
+                            <span>Estoque disponível: {row.qtd_est_disp}</span>
+                            <span>Alvo: {row.qtd_alvo}</span>
+                            <span>Retirado: {row.qtd_retirada}</span>
+                            <span>Pendente: {row.qtd_pendente}</span>
+                            {!isPending ? <span>Usuário retirada: {row.auditor_nome_ultima_retirada ?? "Aguardando sincronização"}</span> : null}
+                            {!isPending ? <span>Data/hora local: {formatDateTime(row.dt_ultima_retirada)}</span> : null}
+                          </div>
+                          {isPending ? (
+                            <div className="controle-validade-row-actions">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Qtd"
+                                value={qtyValue}
+                                onChange={(event) =>
+                                  setPulQtyInputs((current) => ({
+                                    ...current,
+                                    [key]: event.target.value.replace(/\D/g, "").slice(0, 4)
+                                  }))
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={() => void submitPulRetirada(row)}
+                                disabled={!canSubmit}
+                              >
+                                Registrar retirada
+                              </button>
+                            </div>
+                          ) : null}
+                        </article>
+                      </div>
                     );
                   })}
                 </div>

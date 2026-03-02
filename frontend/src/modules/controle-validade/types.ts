@@ -41,6 +41,7 @@ export interface PulRetiradaRow {
   cd: number;
   coddv: number;
   descricao: string;
+  zona: string;
   endereco_pul: string;
   andar: string | null;
   val_mmaa: string;
@@ -49,6 +50,8 @@ export interface PulRetiradaRow {
   qtd_pendente: number;
   status: RetiradaStatus;
   qtd_est_disp: number;
+  dt_ultima_retirada: string | null;
+  auditor_nome_ultima_retirada: string | null;
 }
 
 export interface LinhaColetaPayload {

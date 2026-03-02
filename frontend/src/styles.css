@@ -7805,12 +7805,29 @@ small {
   gap: 8px;
 }
 
+.controle-validade-tabs .btn,
+.controle-validade-subtabs .btn,
+.controle-validade-status-tabs .btn {
+  background: #f3f6fb;
+  border: 1px solid #d7e1ef;
+  color: #4f627f;
+}
+
+.controle-validade-tabs .btn:hover:not(:disabled),
+.controle-validade-subtabs .btn:hover:not(:disabled),
+.controle-validade-status-tabs .btn:hover:not(:disabled) {
+  background: #eef3fb;
+  border-color: #d2deee;
+  color: #455a78;
+}
+
 .controle-validade-tabs .btn.is-active,
 .controle-validade-subtabs .btn.is-active,
 .controle-validade-status-tabs .btn.is-active {
-  background: #dce9fb;
-  border-color: #9dbbe9;
-  color: #153c73;
+  background: linear-gradient(140deg, #d3e5ff, #c7dcfc);
+  border-color: #8eafd9;
+  color: #10366f;
+  box-shadow: 0 2px 10px rgba(27, 75, 143, 0.16);
 }
 
 .controle-validade-pane {
