@@ -15,6 +15,7 @@ import type {
 
 const MANIFEST_ITEMS_PAGE_SIZE = 1200;
 const MANIFEST_BARRAS_PAGE_SIZE = 1500;
+const MANIFEST_VOLUMES_PAGE_SIZE = 1000;
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -261,12 +262,30 @@ export async function fetchManifestItemsPage(
 
 export async function fetchManifestVolumes(cd: number): Promise<DevolucaoMercadoriaManifestVolumeRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_devolucao_manifest_notas", { p_cd: cd });
-  if (error) throw new Error(toErrorMessage(error));
-  if (!Array.isArray(data)) return [];
-  return data
-    .map((row) => mapManifestVolume(row as Record<string, unknown>))
-    .filter((row) => row.ref);
+  const rows: DevolucaoMercadoriaManifestVolumeRow[] = [];
+  let offset = 0;
+
+  while (true) {
+    const from = offset;
+    const to = offset + MANIFEST_VOLUMES_PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .rpc("rpc_conf_devolucao_manifest_notas", { p_cd: cd })
+      .range(from, to);
+
+    if (error) throw new Error(toErrorMessage(error));
+    if (!Array.isArray(data) || data.length === 0) break;
+
+    rows.push(
+      ...data
+        .map((row) => mapManifestVolume(row as Record<string, unknown>))
+        .filter((row) => row.ref)
+    );
+
+    if (data.length < MANIFEST_VOLUMES_PAGE_SIZE) break;
+    offset += data.length;
+  }
+
+  return rows;
 }
 
 export async function fetchManifestBarrasPage(
