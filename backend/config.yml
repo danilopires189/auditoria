@@ -3,13 +3,18 @@ app:
   stop_on_error: false
   default_sync_mode: "full_replace"
   rejections_dir: "./logs/rejections"
+  rejections_retention_days: 14
   refresh_timeout_seconds: 300
   refresh_poll_seconds: 2
   log_level: "INFO"
 
 supabase:
   connect_timeout_seconds: 15
-  statement_timeout_seconds: 3600
+  statement_timeout_seconds: 900
+  pool_size: 5
+  max_overflow: 5
+  pool_timeout_seconds: 30
+  pool_recycle_seconds: 1800
 
 tables:
   db_entrada_notas:

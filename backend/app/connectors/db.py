@@ -33,6 +33,10 @@ def create_db_engine(
     creds: DbCredentials,
     connect_timeout_seconds: int,
     statement_timeout_seconds: int,
+    pool_size: int,
+    max_overflow: int,
+    pool_timeout_seconds: int,
+    pool_recycle_seconds: int,
 ) -> Engine:
     options = (
         f"-c statement_timeout={statement_timeout_seconds * 1000} "
@@ -41,6 +45,10 @@ def create_db_engine(
     return create_engine(
         build_db_url(creds),
         pool_pre_ping=True,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+        pool_timeout=pool_timeout_seconds,
+        pool_recycle=pool_recycle_seconds,
         future=True,
         connect_args={
             "connect_timeout": connect_timeout_seconds,

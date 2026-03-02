@@ -44,14 +44,46 @@ class AppConfig(BaseModel):
     stop_on_error: bool = False
     default_sync_mode: SyncMode = "full_replace"
     rejections_dir: str = "./logs/rejections"
+    rejections_retention_days: int = 14
     refresh_timeout_seconds: int = 300
     refresh_poll_seconds: int = 2
     log_level: str = "INFO"
+
+    @field_validator("rejections_retention_days")
+    @classmethod
+    def validate_rejections_retention_days(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("rejections_retention_days must be >= 0")
+        return value
 
 
 class SupabaseConfig(BaseModel):
     connect_timeout_seconds: int = 15
     statement_timeout_seconds: int = 300
+    pool_size: int = 5
+    max_overflow: int = 5
+    pool_timeout_seconds: int = 30
+    pool_recycle_seconds: int = 1800
+
+    @field_validator(
+        "connect_timeout_seconds",
+        "statement_timeout_seconds",
+        "pool_size",
+        "pool_timeout_seconds",
+        "pool_recycle_seconds",
+    )
+    @classmethod
+    def validate_positive_values(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("supabase numeric values must be > 0")
+        return value
+
+    @field_validator("max_overflow")
+    @classmethod
+    def validate_max_overflow(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("max_overflow must be >= 0")
+        return value
 
 
 class ConfigModel(BaseModel):
