@@ -328,6 +328,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       }
 
       if (result.synced > 0 || result.discarded > 0) {
+        await downloadOfflineSnapshot(profile.user_id, activeCd);
+        setOfflineSnapshotReady(true);
         await loadRows();
       }
     } catch (error) {
