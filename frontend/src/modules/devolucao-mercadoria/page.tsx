@@ -963,7 +963,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         colaborador_nome = activeVolume.started_nome || null;
         colaborador_mat = activeVolume.started_mat || null;
         status_at = activeVolume.started_at ?? null;
-      } else if (row.status == null) {
+      } else if (row.status == null && !isOnline) {
         const latestLocal = latestByNrVolume.get(row.ref);
         if (latestLocal) {
           if (latestLocal.status === "em_conferencia" && !latestLocal.is_read_only) {
@@ -1010,7 +1010,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     return filtered.sort((a, b) => (
       a.ref.localeCompare(b.ref, "pt-BR", { numeric: true, sensitivity: "base" })
     ));
-  }, [activeVolume, currentCd, manifestVolumeRows, modalVolumeHistory, routeSearchInput]);
+  }, [activeVolume, currentCd, isOnline, manifestVolumeRows, modalVolumeHistory, routeSearchInput]);
 
   const nfdCompletionStats = useMemo(() => {
     if (currentCd == null) {
@@ -1028,19 +1028,21 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
     const baseRows = manifestVolumeRows.length > 0
       ? manifestVolumeRows
-      : Array.from(latestByRef.values()).map((row) => ({
-          ref: row.ref,
-          nfd: row.nfd,
-          chave: row.chave,
-          motivo: row.source_motivo,
-          itens_total: row.items.length,
-          qtd_esperada_total: row.items.reduce((acc, item) => acc + Math.max(item.qtd_esperada, 0), 0),
-          status: (row.status === "em_conferencia" ? "em_andamento" : "concluido") as DevolucaoMercadoriaStoreStatus,
-          tem_falta: row.status === "finalizado_falta",
-          colaborador_nome: row.started_nome,
-          colaborador_mat: row.started_mat,
-          status_at: row.finalized_at ?? row.started_at
-        }));
+      : !isOnline
+        ? Array.from(latestByRef.values()).map((row) => ({
+            ref: row.ref,
+            nfd: row.nfd,
+            chave: row.chave,
+            motivo: row.source_motivo,
+            itens_total: row.items.length,
+            qtd_esperada_total: row.items.reduce((acc, item) => acc + Math.max(item.qtd_esperada, 0), 0),
+            status: (row.status === "em_conferencia" ? "em_andamento" : "concluido") as DevolucaoMercadoriaStoreStatus,
+            tem_falta: row.status === "finalizado_falta",
+            colaborador_nome: row.started_nome,
+            colaborador_mat: row.started_mat,
+            status_at: row.finalized_at ?? row.started_at
+          }))
+        : [];
 
     const total = baseRows.length;
     if (total <= 0) return { completed: 0, total: 0, percent: 0 };
@@ -1056,7 +1058,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         && !activeVolume.is_read_only
       ) {
         status = "em_andamento";
-      } else if (row.status == null) {
+      } else if (row.status == null && !isOnline) {
         const local = latestByRef.get(row.ref);
         if (local) {
           status = local.status === "em_conferencia" && !local.is_read_only ? "em_andamento" : "concluido";
@@ -1067,7 +1069,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
     const percent = total > 0 ? (completed / total) * 100 : 0;
     return { completed, total, percent };
-  }, [activeVolume, currentCd, manifestVolumeRows, modalVolumeHistory]);
+  }, [activeVolume, currentCd, isOnline, manifestVolumeRows, modalVolumeHistory]);
 
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
@@ -2520,6 +2522,19 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       setRouteRows(localRoutes);
       setManifestVolumeRows(localManifestVolumes);
       setModalVolumeHistory(volumes);
+
+      if (isOnline) {
+        void fetchManifestVolumes(currentCd)
+          .then((remoteManifestVolumes) => {
+            if (cancelled) return;
+            if (remoteManifestVolumes.length > 0) {
+              setManifestVolumeRows(remoteManifestVolumes);
+            }
+          })
+          .catch(() => {
+            // Mantém fallback local quando não for possível consultar o status online.
+          });
+      }
 
       const latestOpen = volumes.find((row) => row.status === "em_conferencia" && !row.is_read_only) ?? null;
       if (latestOpen) {
