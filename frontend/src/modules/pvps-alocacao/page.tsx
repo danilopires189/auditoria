@@ -2773,6 +2773,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         {open ? (
                           <div className="pvps-row-details">
                             <small>Andar {formatAndar(row.nivel)}</small>
+                            <small>Validade sistema: {row.val_sist}</small>
                             <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
                           </div>
                         ) : null}
