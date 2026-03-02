@@ -1063,7 +1063,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 <div className="controle-validade-meta controle-validade-meta-inline">
                   <span>db_barras local: {dbBarrasCount}</span>
                   <span>db_end local: {dbEndCount}</span>
-                  <span>Snapshot: {offlineSnapshotReady ? "pronto" : "indisponível"}</span>
                 </div>
               </div>
               <div className="controle-validade-head-actions">
@@ -1073,7 +1072,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   onClick={() => void onToggleOfflineMode()}
                   disabled={busyOfflineBase}
                 >
-                  {busyOfflineBase ? "Baixando..." : preferOfflineMode ? "📦 Offline ativo" : "📶 Offline"}
+                  {busyOfflineBase ? "Baixando base..." : preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
                 </button>
                 <button
                   type="button"
