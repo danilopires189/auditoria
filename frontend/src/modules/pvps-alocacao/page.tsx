@@ -460,6 +460,17 @@ function pvpsStatusLabel(status: PvpsManifestRow["status"]): string {
   return "Concluído";
 }
 
+function shouldRefreshAfterAlreadyAudited(message: string): boolean {
+  const normalized = message.toUpperCase();
+  return (
+    normalized.includes("ITEM_PVPS_AUDITADO_POR_OUTRO_USUARIO")
+    || normalized.includes("ITEM_PVPS_AUDITADO_PELO_USUARIO")
+    || normalized.includes("ITEM_ALOCACAO_AUDITADO_POR_OUTRO_USUARIO")
+    || normalized.includes("ITEM_ALOCACAO_AUDITADO_PELO_USUARIO")
+    || normalized.includes("ITEM_ALOCACAO_JA_AUDITADO")
+  );
+}
+
 function ruleKindLabel(value: PvpsRuleKind): string {
   return value === "blacklist" ? "Blacklist" : "Prioridade";
 }
@@ -1529,9 +1540,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   useEffect(() => {
     if (tab !== "pvps" || feedView !== "pendentes" || activeCd == null || !isOnline) return;
-    const activeCoddvSet = new Set(pvpsActiveCoddvList);
     const pendingPulRows = sortedPvpsAllRows.filter(
-      (row) => row.status === "pendente_pul" && activeCoddvSet.has(row.coddv)
+      (row) => row.status === "pendente_pul"
     );
     const missingRows = pendingPulRows.filter((row) => feedPulBySepKey[keyOfPvps(row)] == null);
     if (!missingRows.length) return;
@@ -1556,7 +1566,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return () => {
       cancelled = true;
     };
-  }, [tab, feedView, sortedPvpsAllRows, pvpsActiveCoddvList, activeCd, feedPulBySepKey, isOnline]);
+  }, [tab, feedView, sortedPvpsAllRows, activeCd, feedPulBySepKey, isOnline]);
 
   useEffect(() => {
     if (tab === "pvps") {
@@ -1975,7 +1985,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         }
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Separação.");
+      const message = error instanceof Error ? error.message : "Falha ao salvar etapa de Separação.";
+      setErrorMessage(message);
+      if (isOnline && shouldRefreshAfterAlreadyAudited(message)) {
+        await loadCurrent({ silent: true });
+        setStatusMessage("Item já auditado por outro usuário. Lista atualizada; confira a aba de concluídos.");
+      }
     } finally {
       setBusy(false);
     }
@@ -2128,7 +2143,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         void loadCurrent({ silent: true });
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar etapa de Pulmão.");
+      const message = error instanceof Error ? error.message : "Falha ao salvar etapa de Pulmão.";
+      setErrorMessage(message);
+      if (isOnline && shouldRefreshAfterAlreadyAudited(message)) {
+        await loadCurrent({ silent: true });
+        setStatusMessage("Item já auditado por outro usuário. Lista atualizada; confira a aba de concluídos.");
+      }
     } finally {
       setBusy(false);
     }
@@ -2237,7 +2257,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         void loadCurrent({ silent: true });
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar auditoria de alocação.");
+      const message = error instanceof Error ? error.message : "Falha ao salvar auditoria de alocação.";
+      setErrorMessage(message);
+      if (isOnline && shouldRefreshAfterAlreadyAudited(message)) {
+        await loadCurrent({ silent: true });
+        setStatusMessage("Item já auditado por outro usuário. Lista atualizada; confira a aba de concluídos.");
+      }
     } finally {
       setBusy(false);
     }
