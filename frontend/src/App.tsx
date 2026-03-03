@@ -55,6 +55,9 @@ const SESSION_ACTIVITY_STORAGE_PREFIX = "auditoria.last_activity.v1:";
 const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
 const SESSION_GUARD_CHECK_INTERVAL_MS = 60 * 1000;
 const SESSION_ACTIVITY_PING_THROTTLE_MS = 15 * 1000;
+const AUTH_REQUEST_TIMEOUT_MS = 12_000;
+const LOGIN_RPC_TIMEOUT_MS = 6_000;
+const PROFILE_RPC_TIMEOUT_MS = 6_000;
 const ADMIN_EMAIL_CANDIDATES = [
   "1@pmenos.com.br",
   "0001@pmenos.com.br",
@@ -138,6 +141,45 @@ function canonicalMat(value: string): string {
   return stripped || normalized;
 }
 
+type RequestTimeoutError = Error & { code: "REQUEST_TIMEOUT" };
+
+function createRequestTimeoutError(operation: string, timeoutMs: number): RequestTimeoutError {
+  const error = new Error(`REQUEST_TIMEOUT:${operation}:${timeoutMs}`) as RequestTimeoutError;
+  error.code = "REQUEST_TIMEOUT";
+  return error;
+}
+
+function isRequestTimeoutError(error: unknown): error is RequestTimeoutError {
+  if (!error || typeof error !== "object") return false;
+  return (error as { code?: string }).code === "REQUEST_TIMEOUT";
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let finished = false;
+    const timeoutId = setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      reject(createRequestTimeoutError(operation, timeoutMs));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
+
 function extractMatFromLoginEmail(email: string | undefined): string {
   if (!email) return "";
   const matched = /^(?:mat_)?(\d+)@(login\.auditoria\.local|pmenos\.com\.br)$/i.exec(email);
@@ -149,6 +191,10 @@ function passwordIsStrong(password: string): boolean {
 }
 
 function asErrorMessage(error: unknown): string {
+  if (isRequestTimeoutError(error)) {
+    return "Tempo de resposta do servidor excedido. Tente novamente.";
+  }
+
   let raw = "Erro inesperado.";
   if (error instanceof Error) {
     raw = error.message;
@@ -181,6 +227,9 @@ function asErrorMessage(error: unknown): string {
   }
   if (raw.includes("SENHA_FRACA_MIN_8") || raw.includes("SENHA_DEVE_TER_LETRAS_E_NUMEROS")) {
     return PASSWORD_HINT;
+  }
+  if (raw.includes("Failed to fetch") || raw.includes("NetworkError") || raw.includes("Load failed")) {
+    return "Sem conexão com o servidor. Verifique sua internet e tente novamente.";
   }
   if (raw.includes("AUTH_REQUIRED")) return "Sessão não autenticada para concluir cadastro.";
   if (raw.includes("JÃ¡ utilizada") || raw.includes("Já utilizada")) {
@@ -530,9 +579,13 @@ function DateInputField({ value, disabled, required, onChange }: DateInputFieldP
 }
 
 async function rpcLoginEmailFromMat(mat: string): Promise<string> {
-  const { data, error } = await supabase!.rpc("rpc_login_email_from_mat", {
-    p_mat: normalizeMat(mat)
-  });
+  const { data, error } = await withTimeout(
+    supabase!.rpc("rpc_login_email_from_mat", {
+      p_mat: normalizeMat(mat)
+    }),
+    LOGIN_RPC_TIMEOUT_MS,
+    "rpc_login_email_from_mat"
+  );
   if (error) throw error;
   if (typeof data !== "string" || !data) {
     throw new Error("Não foi possível resolver o login por matrícula.");
@@ -541,25 +594,50 @@ async function rpcLoginEmailFromMat(mat: string): Promise<string> {
 }
 
 async function rpcHasProfileByMat(mat: string): Promise<boolean> {
-  const { data, error } = await supabase!.rpc("rpc_has_profile_by_mat", {
-    p_mat: normalizeMat(mat)
-  });
+  const { data, error } = await withTimeout(
+    supabase!.rpc("rpc_has_profile_by_mat", {
+      p_mat: normalizeMat(mat)
+    }),
+    LOGIN_RPC_TIMEOUT_MS,
+    "rpc_has_profile_by_mat"
+  );
   if (error) throw error;
   return data === true;
 }
 
 async function loginWithMatAndPassword(mat: string, password: string): Promise<Session> {
+  const trySignIn = async (email: string): Promise<{ session: Session | null; invalid: boolean }> => {
+    const { data, error } = await withTimeout(
+      supabase!.auth.signInWithPassword({
+        email,
+        password
+      }),
+      AUTH_REQUEST_TIMEOUT_MS,
+      "auth.signInWithPassword"
+    );
+
+    if (!error && data.session) {
+      return { session: data.session, invalid: false };
+    }
+
+    if (!error && !data.session) {
+      return { session: null, invalid: true };
+    }
+
+    if (error?.message?.includes("Invalid login credentials")) {
+      return { session: null, invalid: true };
+    }
+
+    throw error;
+  };
+
   const rawLogin = mat.trim();
   if (rawLogin.includes("@")) {
-    const { data, error } = await supabase!.auth.signInWithPassword({
-      email: rawLogin.toLowerCase(),
-      password
-    });
-    if (error) throw error;
-    if (!data.session) {
+    const direct = await trySignIn(rawLogin.toLowerCase());
+    if (!direct.session) {
       throw new Error("Invalid login credentials");
     }
-    return data.session;
+    return direct.session;
   }
 
   const normalizedMat = normalizeMat(rawLogin);
@@ -567,13 +645,12 @@ async function loginWithMatAndPassword(mat: string, password: string): Promise<S
     throw new Error("Matrícula ou login inválido.");
   }
   const canonical = canonicalMat(normalizedMat);
-
-  const candidates = new Set<string>();
+  const loginCandidates = new Set<string>();
 
   const addPatternCandidates = (matToken: string) => {
     if (!matToken) return;
-    candidates.add(`${matToken}@pmenos.com.br`.toLowerCase());
-    candidates.add(`mat_${matToken}@login.auditoria.local`.toLowerCase());
+    loginCandidates.add(`${matToken}@pmenos.com.br`.toLowerCase());
+    loginCandidates.add(`mat_${matToken}@login.auditoria.local`.toLowerCase());
   };
 
   addPatternCandidates(normalizedMat);
@@ -581,48 +658,53 @@ async function loginWithMatAndPassword(mat: string, password: string): Promise<S
     addPatternCandidates(canonical);
   }
 
+  if (normalizedMat === "1" || canonical === "1") {
+    for (const email of ADMIN_EMAIL_CANDIDATES) {
+      loginCandidates.add(email.toLowerCase());
+    }
+  }
+
+  const resolvedByRpc = new Set<string>();
   try {
-    const firstEmail = await rpcLoginEmailFromMat(normalizedMat);
-    candidates.add(firstEmail.toLowerCase());
+    resolvedByRpc.add((await rpcLoginEmailFromMat(normalizedMat)).toLowerCase());
   } catch {
-    // Keep local fallback candidates when RPC is unavailable in the current environment.
+    // RPC is best-effort. Keep local pattern candidates.
   }
 
   if (canonical && canonical !== normalizedMat) {
     try {
-      const canonicalEmail = await rpcLoginEmailFromMat(canonical);
-      candidates.add(canonicalEmail.toLowerCase());
+      resolvedByRpc.add((await rpcLoginEmailFromMat(canonical)).toLowerCase());
     } catch {
-      // Keep local fallback candidates.
-    }
-  }
-
-  if (normalizedMat === "1" || canonical === "1") {
-    for (const email of ADMIN_EMAIL_CANDIDATES) {
-      candidates.add(email.toLowerCase());
+      // RPC is best-effort. Keep local pattern candidates.
     }
   }
 
   let gotInvalidCredentials = false;
+  const attemptedEmails = new Set<string>();
 
-  for (const email of candidates) {
-    const { data, error } = await supabase!.auth.signInWithPassword({
-      email,
-      password
-    });
+  const tryCandidate = async (email: string): Promise<Session | null> => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || attemptedEmails.has(normalizedEmail)) return null;
+    attemptedEmails.add(normalizedEmail);
 
-    if (!error && data.session) {
-      return data.session;
+    const attempt = await trySignIn(normalizedEmail);
+    if (attempt.session) {
+      return attempt.session;
     }
-
-    if (error?.message?.includes("Invalid login credentials")) {
+    if (attempt.invalid) {
       gotInvalidCredentials = true;
-      continue;
     }
+    return null;
+  };
 
-    if (error) {
-      throw error;
-    }
+  for (const email of loginCandidates) {
+    const session = await tryCandidate(email);
+    if (session) return session;
+  }
+
+  for (const email of resolvedByRpc) {
+    const session = await tryCandidate(email);
+    if (session) return session;
   }
 
   if (gotInvalidCredentials) {
@@ -723,21 +805,37 @@ function fallbackProfileFromSession(session: Session): ProfileContext {
 }
 
 async function rpcCurrentProfileContext(session: Session): Promise<ProfileContext> {
-  const v2Result = await supabase!.rpc("rpc_current_profile_context_v2");
-  if (!v2Result.error) {
-    const row = Array.isArray(v2Result.data) ? v2Result.data[0] : null;
-    if (row && typeof row === "object") {
-      return row as ProfileContext;
+  try {
+    const v2Result = await withTimeout(
+      supabase!.rpc("rpc_current_profile_context_v2"),
+      PROFILE_RPC_TIMEOUT_MS,
+      "rpc_current_profile_context_v2"
+    );
+    if (!v2Result.error) {
+      const row = Array.isArray(v2Result.data) ? v2Result.data[0] : null;
+      if (row && typeof row === "object") {
+        return row as ProfileContext;
+      }
+    }
+  } catch (error) {
+    if (isRequestTimeoutError(error)) {
+      return fallbackProfileFromSession(session);
     }
   }
 
-  const legacyResult = await supabase!.rpc("rpc_current_profile_context");
-  if (legacyResult.error) {
+  let legacyResult: Awaited<ReturnType<typeof supabase.rpc>>;
+  try {
+    legacyResult = await withTimeout(
+      supabase!.rpc("rpc_current_profile_context"),
+      PROFILE_RPC_TIMEOUT_MS,
+      "rpc_current_profile_context"
+    );
+  } catch {
     return fallbackProfileFromSession(session);
   }
 
   const legacyRow = Array.isArray(legacyResult.data) ? legacyResult.data[0] : null;
-  if (!legacyRow || typeof legacyRow !== "object") {
+  if (legacyResult.error || !legacyRow || typeof legacyRow !== "object") {
     return fallbackProfileFromSession(session);
   }
 
@@ -846,7 +944,11 @@ export default function App() {
     const cachedContext = readCachedProfileContext(activeSession.user.id);
 
     try {
-      await supabase!.rpc("rpc_reconcile_current_profile");
+      await withTimeout(
+        supabase!.rpc("rpc_reconcile_current_profile"),
+        PROFILE_RPC_TIMEOUT_MS,
+        "rpc_reconcile_current_profile"
+      );
     } catch {
       // Keep login flow resilient if reconcile RPC is unavailable.
     }
@@ -866,7 +968,11 @@ export default function App() {
 
     if (matHint) {
       try {
-        await supabase!.rpc("rpc_reconcile_profile_by_mat", { p_mat: matHint });
+        await withTimeout(
+          supabase!.rpc("rpc_reconcile_profile_by_mat", { p_mat: matHint }),
+          PROFILE_RPC_TIMEOUT_MS,
+          "rpc_reconcile_profile_by_mat"
+        );
       } catch {
         // Keep login resilient even when reconcile by mat is unavailable.
       }
@@ -892,7 +998,7 @@ export default function App() {
         const { data } = await supabase!.auth.getSession();
         if (!mounted) return;
         setSession(data.session);
-        await refreshProfile(data.session);
+        void refreshProfile(data.session);
       } catch (error) {
         if (!mounted) return;
         setErrorMessage(asErrorMessage(error));
@@ -1003,7 +1109,7 @@ export default function App() {
     setBusy(true);
     try {
       const activeSession = await loginWithMatAndPassword(loginMat, loginPassword);
-      await refreshProfile(activeSession);
+      void refreshProfile(activeSession);
       setSuccessMessage("Login realizado com sucesso.");
       setLoginPassword("");
       navigate("/inicio", { replace: true });
