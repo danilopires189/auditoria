@@ -20,6 +20,7 @@ import type {
 } from "./types";
 
 const DB_BARRAS_PAGE_SIZE = 1000;
+const DB_BARRAS_RETRY_PAGE_SIZE = 300;
 
 type DbBarrasProgress = {
   mode: "full" | "delta";
@@ -30,15 +31,41 @@ type DbBarrasProgress = {
 };
 
 function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
+  if (error instanceof Error) {
+    const message = error.message;
+    if (/statement timeout|canceling statement/i.test(message)) {
+      return "A consulta demorou além do limite. Tente atualizar novamente em alguns segundos.";
+    }
+    return message;
+  }
+  if (typeof error === "string") {
+    if (/statement timeout|canceling statement/i.test(error)) {
+      return "A consulta demorou além do limite. Tente atualizar novamente em alguns segundos.";
+    }
+    return error;
+  }
   if (error && typeof error === "object") {
     const candidate = error as Record<string, unknown>;
-    if (typeof candidate.message === "string") return candidate.message;
-    if (typeof candidate.error_description === "string") return candidate.error_description;
-    if (typeof candidate.details === "string") return candidate.details;
+    const rawMessage = typeof candidate.message === "string"
+      ? candidate.message
+      : typeof candidate.error_description === "string"
+        ? candidate.error_description
+        : typeof candidate.details === "string"
+          ? candidate.details
+          : "";
+    if (/statement timeout|canceling statement/i.test(rawMessage)) {
+      return "A consulta demorou além do limite. Tente atualizar novamente em alguns segundos.";
+    }
+    if (rawMessage) return rawMessage;
   }
   return "Erro inesperado";
+}
+
+function isStatementTimeout(error: unknown): boolean {
+  const message = toErrorMessage(error).toLowerCase();
+  return message.includes("statement timeout")
+    || message.includes("canceling statement due to statement timeout")
+    || message.includes("canceling statement");
 }
 
 function parseInteger(value: unknown, fallback = 0): number {
@@ -185,16 +212,26 @@ export async function refreshDbBarrasCache(
   const remoteMeta = await fetchDbBarrasMetaRemote();
   const totalRows = Math.max(remoteMeta.row_count, 0);
   let offset = 0;
+  let pageSize = DB_BARRAS_PAGE_SIZE;
+  let retriedWithSmallerPage = false;
   let pages = 0;
   const allRows: DbBarrasCacheRow[] = [];
 
   while (true) {
     const { data, error } = await supabase.rpc("rpc_db_barras_page", {
       p_offset: offset,
-      p_limit: DB_BARRAS_PAGE_SIZE
+      p_limit: pageSize
     });
 
     if (error) {
+      if (isStatementTimeout(error) && !retriedWithSmallerPage && pageSize > DB_BARRAS_RETRY_PAGE_SIZE) {
+        retriedWithSmallerPage = true;
+        pageSize = DB_BARRAS_RETRY_PAGE_SIZE;
+        offset = 0;
+        pages = 0;
+        allRows.length = 0;
+        continue;
+      }
       throw new Error(`Falha ao carregar base de barras: ${toErrorMessage(error)}`);
     }
 
@@ -228,7 +265,7 @@ export async function refreshDbBarrasCache(
       percent: toPercent(allRows.length, totalRows)
     });
 
-    if (page.length < DB_BARRAS_PAGE_SIZE) break;
+    if (page.length < pageSize) break;
   }
 
   await replaceDbBarrasCache(allRows);
@@ -277,6 +314,8 @@ export async function refreshDbBarrasCacheSmart(
   }
 
   let offset = 0;
+  let pageSize = DB_BARRAS_PAGE_SIZE;
+  let retriedWithSmallerPage = false;
   let pages = 0;
   const changedRows: DbBarrasCacheRow[] = [];
   let maxSeenUpdatedAt: string | null = null;
@@ -285,10 +324,19 @@ export async function refreshDbBarrasCacheSmart(
     const { data, error } = await supabase.rpc("rpc_db_barras_delta", {
       p_updated_after: meta.last_sync_at,
       p_offset: offset,
-      p_limit: DB_BARRAS_PAGE_SIZE
+      p_limit: pageSize
     });
 
     if (error) {
+      if (isStatementTimeout(error) && !retriedWithSmallerPage && pageSize > DB_BARRAS_RETRY_PAGE_SIZE) {
+        retriedWithSmallerPage = true;
+        pageSize = DB_BARRAS_RETRY_PAGE_SIZE;
+        offset = 0;
+        pages = 0;
+        changedRows.length = 0;
+        maxSeenUpdatedAt = null;
+        continue;
+      }
       throw new Error(`Falha ao atualizar base de barras: ${toErrorMessage(error)}`);
     }
 
@@ -331,7 +379,7 @@ export async function refreshDbBarrasCacheSmart(
       percent: toPercent(changedRows.length, deltaTotal)
     });
 
-    if (page.length < DB_BARRAS_PAGE_SIZE) break;
+    if (page.length < pageSize) break;
   }
 
   if (changedRows.length > 0) {

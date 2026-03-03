@@ -1866,10 +1866,27 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       try {
         let manifestItems: PedidoDiretoManifestItemRow[] = [];
         if (isOnline) {
-          const pageSize = 1200;
+          let pageSize = 1200;
+          let retriedWithSmallerPage = false;
           let offset = 0;
           while (true) {
-            const page = await fetchManifestItemsPage(currentCd, offset, pageSize);
+            let page: PedidoDiretoManifestItemRow[];
+            try {
+              page = await fetchManifestItemsPage(currentCd, offset, pageSize);
+            } catch (error) {
+              const message = error instanceof Error ? error.message.toLowerCase() : "";
+              const isTimeout = message.includes("statement timeout")
+                || message.includes("canceling statement due to statement timeout")
+                || message.includes("canceling statement");
+              if (isTimeout && !retriedWithSmallerPage && pageSize > 300) {
+                retriedWithSmallerPage = true;
+                pageSize = 300;
+                offset = 0;
+                manifestItems = [];
+                continue;
+              }
+              throw error;
+            }
             if (!page.length) break;
             manifestItems.push(...page);
             if (page.length < pageSize) break;

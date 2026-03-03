@@ -23,8 +23,9 @@ import type {
 } from "./types";
 
 const MANIFEST_PAGE_SIZE = 1000;
+const MANIFEST_RETRY_PAGE_SIZE = 300;
 
-function toErrorMessage(error: unknown): string {
+function extractRawErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   if (error && typeof error === "object") {
@@ -32,6 +33,25 @@ function toErrorMessage(error: unknown): string {
     if (typeof candidate.message === "string") return candidate.message;
     if (typeof candidate.error_description === "string") return candidate.error_description;
     if (typeof candidate.details === "string") return candidate.details;
+  }
+  return "";
+}
+
+function isStatementTimeout(error: unknown): boolean {
+  const message = extractRawErrorMessage(error).toLowerCase();
+  return message.includes("statement timeout")
+    || message.includes("canceling statement due to statement timeout")
+    || message.includes("canceling statement");
+}
+
+function toErrorMessage(error: unknown): string {
+  const raw = extractRawErrorMessage(error);
+  if (raw) {
+    const normalized = raw.trim().toUpperCase();
+    if (normalized.includes("STATEMENT TIMEOUT") || normalized.includes("CANCELING STATEMENT")) {
+      return "A consulta demorou além do limite. Tente atualizar novamente em alguns segundos.";
+    }
+    return raw;
   }
   return "Erro inesperado.";
 }
@@ -262,17 +282,31 @@ export async function fetchManifestBundle(
 
   const items: InventarioManifestItemRow[] = [];
   let offset = 0;
+  let pageSize = MANIFEST_PAGE_SIZE;
+  let retriedWithSmallerPage = false;
   const expectedTotal = Math.max(meta.row_count, 0);
 
   while (true) {
-    const page = await fetchManifestItemsPage(cd, offset, MANIFEST_PAGE_SIZE);
+    let page: InventarioManifestItemRow[];
+    try {
+      page = await fetchManifestItemsPage(cd, offset, pageSize);
+    } catch (error) {
+      if (isStatementTimeout(error) && !retriedWithSmallerPage && pageSize > MANIFEST_RETRY_PAGE_SIZE) {
+        retriedWithSmallerPage = true;
+        pageSize = MANIFEST_RETRY_PAGE_SIZE;
+        offset = 0;
+        items.length = 0;
+        continue;
+      }
+      throw error;
+    }
     if (!page.length) break;
     items.push(...page);
     offset += page.length;
     const percent = expectedTotal > 0 ? Math.round(Math.min(1, items.length / expectedTotal) * 100) : 100;
     onProgress?.({ rows: items.length, total: expectedTotal, percent });
     if (expectedTotal > 0 && items.length >= expectedTotal) break;
-    if (page.length < MANIFEST_PAGE_SIZE) break;
+    if (page.length < pageSize) break;
   }
 
   if (expectedTotal > 0 && items.length !== expectedTotal) {
