@@ -6,6 +6,7 @@ import { formatCountLabel } from "../../shared/inflection";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
+  countVwAuditoriasReportRows,
   createAdminRule,
   fetchAlocacaoCompletedItemsDayAll,
   fetchAdminRulesActive,
@@ -14,6 +15,7 @@ import {
   fetchPvpsCompletedItemsDayAll,
   fetchPvpsManifest,
   fetchPvpsPulItems,
+  fetchVwAuditoriasReportRows,
   previewAdminRuleImpact,
   removeAdminRule,
   submitAlocacao,
@@ -41,6 +43,8 @@ import type {
   AlocacaoCompletedRow,
   AlocacaoManifestRow,
   AlocacaoSubmitResult,
+  PvpsAuditoriasReportFilters,
+  PvpsAuditoriasReportRow,
   PvpsAdminRuleActiveRow,
   PvpsAdminRuleHistoryRow,
   PvpsCompletedRow,
@@ -442,6 +446,18 @@ function closeIcon() {
   );
 }
 
+function reportIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 3h9l3 3v15H6z" />
+      <path d="M15 3v3h3" />
+      <path d="M9 11h6" />
+      <path d="M9 15h6" />
+      <path d="M9 19h4" />
+    </svg>
+  );
+}
+
 type HistoryStatusTone = "ok" | "bad" | "warn" | "wait";
 type PulFeedbackTone = "ok" | "bad" | "warn";
 
@@ -530,6 +546,40 @@ function formatPercent(value: number): string {
   }).format(value)}%`;
 }
 
+function reportColumnLabel(key: string): string {
+  const normalized = key.trim();
+  if (!normalized) return "Coluna";
+  if (normalized.toUpperCase() === normalized && normalized.length <= 5) return normalized;
+  return normalized
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function reportFieldIsDateLike(key: string): boolean {
+  const normalized = key.toLowerCase();
+  return normalized.includes("dt")
+    || normalized.includes("data")
+    || normalized.includes("hora")
+    || normalized.endsWith("_at")
+    || normalized.endsWith("at");
+}
+
+function reportCellToExcelValue(key: string, value: PvpsAuditoriasReportRow[string]): string | number | boolean {
+  if (value == null) return "";
+  if (typeof value === "boolean") return value ? "Sim" : "Não";
+  if (typeof value === "number") return value;
+  if (reportFieldIsDateLike(key)) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return formatDateTime(value);
+    }
+  }
+  return value;
+}
+
 export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPageProps) {
   const displayUserName = toDisplayName(profile.nome);
   const isAdmin = profile.role === "admin";
@@ -555,6 +605,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [pvpsCompletedRows, setPvpsCompletedRows] = useState<PvpsCompletedRow[]>([]);
   const [alocCompletedRows, setAlocCompletedRows] = useState<AlocacaoCompletedRow[]>([]);
   const [todayBrt, setTodayBrt] = useState<string>(() => brtDayKey());
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 980px)").matches;
+  });
+  const [showAuditoriasReportModal, setShowAuditoriasReportModal] = useState(false);
+  const [reportDtIni, setReportDtIni] = useState<string>(() => brtDayKey());
+  const [reportDtFim, setReportDtFim] = useState<string>(() => brtDayKey());
+  const [reportCdMode, setReportCdMode] = useState<"active_cd" | "all_cds">("active_cd");
+  const [reportCount, setReportCount] = useState<number | null>(null);
+  const [reportBusySearch, setReportBusySearch] = useState(false);
+  const [reportBusyExport, setReportBusyExport] = useState(false);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const [activePvpsKey, setActivePvpsKey] = useState<string | null>(null);
   const activePvps = useMemo(
@@ -637,6 +700,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [editingAlocCompleted, setEditingAlocCompleted] = useState<AlocacaoCompletedRow | null>(null);
   const silentRefreshInFlightRef = useRef(false);
   const activeCd = profile.cd_default ?? null;
+  const canUseAuditoriasReport = isAdmin && isDesktop;
 
   async function loadAdminData(): Promise<void> {
     if (!isAdmin) return;
@@ -866,6 +930,142 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
   }
 
+  function resolveReportFilters(): PvpsAuditoriasReportFilters | null {
+    if (!reportDtIni || !reportDtFim) {
+      setReportError("Informe data inicial e final.");
+      return null;
+    }
+
+    const dtIni = new Date(reportDtIni);
+    const dtFim = new Date(reportDtFim);
+    if (Number.isNaN(dtIni.getTime()) || Number.isNaN(dtFim.getTime())) {
+      setReportError("Período inválido.");
+      return null;
+    }
+    if (dtFim < dtIni) {
+      setReportError("A data final não pode ser menor que a data inicial.");
+      return null;
+    }
+
+    if (reportCdMode === "active_cd" && activeCd == null) {
+      setReportError("CD ativo não definido para gerar o relatório.");
+      return null;
+    }
+
+    return {
+      dtIni: reportDtIni,
+      dtFim: reportDtFim,
+      cd: reportCdMode === "all_cds" ? null : activeCd
+    };
+  }
+
+  async function runAuditoriasReportSearch(): Promise<void> {
+    if (!canUseAuditoriasReport) return;
+    setReportError(null);
+    setReportMessage(null);
+    setReportCount(null);
+
+    const filters = resolveReportFilters();
+    if (!filters) return;
+
+    setReportBusySearch(true);
+    try {
+      const count = await countVwAuditoriasReportRows(filters);
+      setReportCount(count);
+      if (count > 0) {
+        setReportMessage(`Foram encontradas ${count} auditorias no período.`);
+      } else {
+        setReportMessage("Nenhuma auditoria encontrada no período informado.");
+      }
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Falha ao consultar relatório.");
+    } finally {
+      setReportBusySearch(false);
+    }
+  }
+
+  async function runAuditoriasReportExport(): Promise<void> {
+    if (!canUseAuditoriasReport) return;
+    setReportError(null);
+    setReportMessage(null);
+
+    const filters = resolveReportFilters();
+    if (!filters) return;
+
+    setReportBusyExport(true);
+    try {
+      const rows = await fetchVwAuditoriasReportRows(filters, 50000);
+      if (rows.length === 0) {
+        setReportCount(0);
+        setReportMessage("Nenhuma auditoria disponível para exportação.");
+        return;
+      }
+
+      const preferredKeys = [
+        "dt_hr",
+        "cd",
+        "modulo",
+        "coddv",
+        "descricao",
+        "zona",
+        "endereco",
+        "auditor_mat",
+        "auditor_nome",
+        "aud_sit",
+        "status",
+        "end_sit",
+        "val_sep",
+        "val_pul",
+        "val_conf",
+        "val_sist"
+      ];
+      const keySet = new Set<string>();
+      for (const row of rows) {
+        for (const key of Object.keys(row)) {
+          keySet.add(key);
+        }
+      }
+      const orderedKeys = [
+        ...preferredKeys.filter((key) => keySet.has(key)),
+        ...Array.from(keySet).filter((key) => !preferredKeys.includes(key)).sort((a, b) => a.localeCompare(b))
+      ];
+
+      const exportRows: Array<Record<string, string | number | boolean>> = rows.map((row) => {
+        const output: Record<string, string | number | boolean> = {};
+        for (const key of orderedKeys) {
+          output[reportColumnLabel(key)] = reportCellToExcelValue(key, row[key] ?? null);
+        }
+        return output;
+      });
+
+      const XLSX = await import("xlsx");
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      worksheet["!cols"] = orderedKeys.map((key) => {
+        const header = reportColumnLabel(key);
+        let maxLen = header.length;
+        for (let index = 0; index < Math.min(exportRows.length, 300); index += 1) {
+          const value = exportRows[index][header];
+          const length = String(value ?? "").length;
+          if (length > maxLen) maxLen = length;
+        }
+        return { wch: Math.max(10, Math.min(maxLen + 2, 62)) };
+      });
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Auditorias");
+      const suffix = filters.cd == null ? "todos-cds" : `cd-${filters.cd}`;
+      const fileName = `relatorio-vw-auditorias-${filters.dtIni}-${filters.dtFim}-${suffix}.xlsx`;
+      XLSX.writeFile(workbook, fileName, { compression: true });
+
+      setReportCount(rows.length);
+      setReportMessage(`Relatório gerado com sucesso (${rows.length} linhas).`);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório Excel.");
+    } finally {
+      setReportBusyExport(false);
+    }
+  }
+
   async function handleToggleOfflineMode(): Promise<void> {
     const nextMode = !preferOfflineMode;
     if (activeCd == null) {
@@ -972,6 +1172,35 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     void loadAdminData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, activeCd]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(min-width: 980px)");
+    const onChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+    setIsDesktop(media.matches);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", onChange);
+      return () => media.removeEventListener("change", onChange);
+    }
+    media.addListener(onChange);
+    return () => media.removeListener(onChange);
+  }, []);
+
+  useEffect(() => {
+    if (canUseAuditoriasReport) return;
+    if (!showAuditoriasReportModal) return;
+    setShowAuditoriasReportModal(false);
+  }, [canUseAuditoriasReport, showAuditoriasReportModal]);
+
+  useEffect(() => {
+    if (!showAuditoriasReportModal) return;
+    setReportDtIni(todayBrt);
+    setReportDtFim(todayBrt);
+    setReportCdMode("active_cd");
+    setReportCount(null);
+    setReportMessage(null);
+    setReportError(null);
+  }, [showAuditoriasReportModal, todayBrt]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -2567,11 +2796,21 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="pvps-tabs">
                 <button
                   type="button"
-                  className={`btn btn-muted${showAdminPanel ? " is-active" : ""}`}
+                  className={`btn btn-muted pvps-toolbar-btn${showAdminPanel ? " is-active" : ""}`}
                   onClick={() => setShowAdminPanel((prev) => !prev)}
                 >
                   {showAdminPanel ? "Ocultar Gestão" : "Admin: Gestão de Regras"}
                 </button>
+                {canUseAuditoriasReport ? (
+                  <button
+                    type="button"
+                    className={`btn btn-muted pvps-toolbar-btn${showAuditoriasReportModal ? " is-active" : ""}`}
+                    onClick={() => setShowAuditoriasReportModal(true)}
+                  >
+                    <span className="pvps-btn-icon" aria-hidden="true">{reportIcon()}</span>
+                    <span>Relatório Excel</span>
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
@@ -3358,6 +3597,106 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {adminBusy ? "Aplicando..." : "Confirmar regra"}
                 </button>
               </div>
+            </div>
+          </div>,
+          document.body
+        ) : null}
+
+      {showAuditoriasReportModal && canUseAuditoriasReport && typeof document !== "undefined"
+        ? createPortal(
+          <div
+            className="confirm-overlay pvps-popup-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pvps-auditorias-report-title"
+            onClick={() => {
+              if (reportBusySearch || reportBusyExport) return;
+              setShowAuditoriasReportModal(false);
+            }}
+          >
+            <div className="confirm-dialog pvps-report-popup-card" onClick={(event) => event.stopPropagation()}>
+              <div className="pvps-zone-popup-header">
+                <div className="pvps-zone-popup-title">
+                  <span className="pvps-zone-popup-icon" aria-hidden="true">{reportIcon()}</span>
+                  <h3 id="pvps-auditorias-report-title">Relatório Excel - vw_auditorias</h3>
+                </div>
+                <button
+                  className="btn btn-muted pvps-zone-close-btn"
+                  type="button"
+                  onClick={() => setShowAuditoriasReportModal(false)}
+                  disabled={reportBusySearch || reportBusyExport}
+                  aria-label="Fechar relatório"
+                >
+                  <span aria-hidden="true">{closeIcon()}</span>
+                </button>
+              </div>
+
+              <p className="pvps-report-note">
+                Selecione o período e o CD para exportar os dados do relatório.
+              </p>
+
+              <form
+                className="pvps-report-grid"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void runAuditoriasReportSearch();
+                }}
+              >
+                <label>
+                  Data inicial
+                  <input
+                    type="date"
+                    value={reportDtIni}
+                    onChange={(event) => setReportDtIni(event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  Data final
+                  <input
+                    type="date"
+                    value={reportDtFim}
+                    onChange={(event) => setReportDtFim(event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  CD
+                  <select value={reportCdMode} onChange={(event) => setReportCdMode(event.target.value as "active_cd" | "all_cds")}>
+                    {activeCd != null ? <option value="active_cd">{`CD ${String(activeCd).padStart(2, "0")} (ativo)`}</option> : null}
+                    <option value="all_cds">Todos CDs com acesso</option>
+                  </select>
+                </label>
+              </form>
+
+              <div className="pvps-actions pvps-report-actions">
+                <button
+                  type="button"
+                  className="btn btn-muted pvps-toolbar-btn"
+                  onClick={() => void runAuditoriasReportSearch()}
+                  disabled={reportBusySearch || reportBusyExport}
+                >
+                  <span className="pvps-btn-icon" aria-hidden="true">{searchIcon()}</span>
+                  <span>{reportBusySearch ? "Buscando..." : "Buscar"}</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary pvps-toolbar-btn"
+                  onClick={() => void runAuditoriasReportExport()}
+                  disabled={reportBusyExport || reportBusySearch || reportCount === 0}
+                >
+                  <span className="pvps-btn-icon" aria-hidden="true">{reportIcon()}</span>
+                  <span>{reportBusyExport ? "Exportando..." : "Exportar Excel"}</span>
+                </button>
+              </div>
+
+              {reportCount != null ? (
+                <p className="pvps-report-count">
+                  Registros encontrados: <strong>{reportCount}</strong>
+                </p>
+              ) : null}
+              {reportError ? <div className="alert error">{reportError}</div> : null}
+              {reportMessage ? <div className="alert success">{reportMessage}</div> : null}
             </div>
           </div>,
           document.body

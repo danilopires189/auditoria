@@ -2,6 +2,8 @@ import { supabase } from "../../lib/supabase";
 import type {
   AlocacaoCompletedRow,
   AlocacaoManifestRow,
+  PvpsAuditoriasReportFilters,
+  PvpsAuditoriasReportRow,
   AlocacaoSubmitResult,
   PvpsAdminBlacklistRow,
   PvpsAdminRuleActiveRow,
@@ -66,6 +68,24 @@ function toErrorMessage(error: unknown): string {
     if (normalized.includes("ITEM_ALOCACAO_JA_AUDITADO")) {
       return "ITEM_ALOCACAO_AUDITADO_POR_OUTRO_USUARIO: Endereço já concluído por outro usuário.";
     }
+    if (normalized.includes("APENAS_ADMIN")) {
+      return "Apenas admin pode gerar este relatório.";
+    }
+    if (normalized.includes("PERIODO_OBRIGATORIO")) {
+      return "Informe data inicial e final para gerar o relatório.";
+    }
+    if (normalized.includes("PERIODO_INVALIDO")) {
+      return "A data final não pode ser menor que a data inicial.";
+    }
+    if (normalized.includes("JANELA_MAX_31_DIAS")) {
+      return "O período máximo permitido é de 31 dias.";
+    }
+    if (normalized.includes("CD_SEM_ACESSO")) {
+      return "Você não possui acesso ao CD informado.";
+    }
+    if (normalized.includes("RELATORIO_MUITO_GRANDE")) {
+      return "O relatório excede o limite de linhas. Reduza o período ou filtre por CD.";
+    }
     return raw;
   };
   const raw = extractRawErrorMessage(error);
@@ -94,6 +114,31 @@ function parseNullableString(value: unknown): string | null {
   if (value == null) return null;
   const parsed = String(value).trim();
   return parsed ? parsed : null;
+}
+
+function parseReportPayload(value: unknown): PvpsAuditoriasReportRow {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: PvpsAuditoriasReportRow = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (raw == null) {
+      result[key] = null;
+      continue;
+    }
+    if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
+      result[key] = raw;
+      continue;
+    }
+    if (typeof raw === "object") {
+      try {
+        result[key] = JSON.stringify(raw);
+      } catch {
+        result[key] = String(raw);
+      }
+      continue;
+    }
+    result[key] = String(raw);
+  }
+  return result;
 }
 
 function parsePvpsStatus(value: unknown): PvpsStatus {
@@ -807,4 +852,39 @@ export async function submitAlocacaoCompletedEdit(params: {
     val_sist: parseString(first.val_sist),
     val_conf: parseNullableString(first.val_conf)
   };
+}
+
+export async function countVwAuditoriasReportRows(filters: PvpsAuditoriasReportFilters): Promise<number> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_vw_auditorias_report_count", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+  return Math.max(parseInteger(data, 0), 0);
+}
+
+export async function fetchVwAuditoriasReportRows(
+  filters: PvpsAuditoriasReportFilters,
+  limit = 20000
+): Promise<PvpsAuditoriasReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_vw_auditorias_report_rows", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd,
+    p_limit: Math.max(1, Math.min(limit, 50000))
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((item) => {
+    const raw = item as Record<string, unknown>;
+    return parseReportPayload(raw.payload);
+  });
 }
