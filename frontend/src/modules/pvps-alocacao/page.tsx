@@ -143,6 +143,27 @@ function getPulItemsByRowKey(
   return [];
 }
 
+function expectedPendingPulCount(
+  row: Pick<PvpsManifestRow, "status" | "pul_total" | "pul_auditados">
+): number {
+  if (row.status !== "pendente_pul") return 0;
+  const total = Math.max(0, row.pul_total);
+  const audited = Math.max(0, row.pul_auditados);
+  return Math.max(total - audited, 0);
+}
+
+function hasUsablePulCacheForRow(
+  row: Pick<PvpsManifestRow, "status" | "pul_total" | "pul_auditados">,
+  items: PvpsPulItemRow[] | null | undefined
+): boolean {
+  const list = Array.isArray(items) ? items : [];
+  const expectedPending = expectedPendingPulCount(row);
+  if (!list.length) return expectedPending === 0;
+  if (expectedPending === 0) return true;
+  const pendingInCache = list.reduce((count, item) => count + (item.auditado ? 0 : 1), 0);
+  return pendingInCache > 0;
+}
+
 function formatMmaaDigits(value: string | null | undefined): string | null {
   const digits = (value ?? "").replace(/\D/g, "").slice(0, 4);
   if (digits.length !== 4) return null;
@@ -1125,7 +1146,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     void fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd)
       .then((items) => {
         if (cancelled) return;
-        setFeedPulBySepKey((current) => ({ ...current, [activeKey]: items }));
+        if (hasUsablePulCacheForRow(activePvps, items)) {
+          setFeedPulBySepKey((current) => ({ ...current, [activeKey]: items }));
+        }
         setPulItems(items);
         const mapped: Record<string, string> = {};
         const mappedEndSit: Record<string, PvpsEndSit | ""> = {};
@@ -1543,7 +1566,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const pendingPulRows = sortedPvpsAllRows.filter(
       (row) => row.status === "pendente_pul"
     );
-    const missingRows = pendingPulRows.filter((row) => feedPulBySepKey[keyOfPvps(row)] == null);
+    const missingRows = pendingPulRows.filter((row) => {
+      const cachedItems = getPulItemsByRowKey(feedPulBySepKey, row.coddv, row.end_sep);
+      return !hasUsablePulCacheForRow(row, cachedItems);
+    });
     if (!missingRows.length) return;
 
     let cancelled = false;
@@ -1554,7 +1580,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (cancelled) return;
         try {
           const items = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
-          updates[keyOfPvps(row)] = items;
+          if (hasUsablePulCacheForRow(row, items)) {
+            updates[keyOfPvps(row)] = items;
+          }
         } catch {
           // Keep row as "missing" to retry automatically.
         }
@@ -1614,12 +1642,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setShowPulOccurrence(false);
     if (row.status === "pendente_pul") {
       const rowKey = keyOfPvps(row);
-      const cachedPulItems = feedPulBySepKey[rowKey];
-      let pulItemsByRow: PvpsPulItemRow[] | null = Array.isArray(cachedPulItems) ? cachedPulItems : null;
+      const cachedPulItems = getPulItemsByRowKey(feedPulBySepKey, row.coddv, row.end_sep);
+      let pulItemsByRow: PvpsPulItemRow[] | null = hasUsablePulCacheForRow(row, cachedPulItems) ? cachedPulItems : null;
       if (!pulItemsByRow && isOnline && activeCd != null) {
         try {
-          pulItemsByRow = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
-          setFeedPulBySepKey((current) => ({ ...current, [rowKey]: pulItemsByRow ?? [] }));
+          const fetchedItems = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
+          pulItemsByRow = fetchedItems;
+          if (hasUsablePulCacheForRow(row, fetchedItems)) {
+            setFeedPulBySepKey((current) => ({ ...current, [rowKey]: fetchedItems }));
+          }
         } catch {
           pulItemsByRow = null;
         }
@@ -1974,7 +2005,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           let pulItemsByRow: PvpsPulItemRow[] = [];
           try {
             pulItemsByRow = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
-            setFeedPulBySepKey((current) => ({ ...current, [currentKey]: pulItemsByRow }));
+            if (hasUsablePulCacheForRow({
+              status: result.status,
+              pul_total: result.pul_total,
+              pul_auditados: result.pul_auditados
+            }, pulItemsByRow)) {
+              setFeedPulBySepKey((current) => ({ ...current, [currentKey]: pulItemsByRow }));
+            }
           } catch {
             pulItemsByRow = [];
           }
