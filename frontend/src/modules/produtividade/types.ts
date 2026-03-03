@@ -61,6 +61,7 @@ export interface ProdutividadeRankingRow {
   user_id: string;
   mat: string;
   nome: string;
+  posicao: number;
   pvps_pontos: number;
   vol_pontos: number;
   blitz_pontos: number;
