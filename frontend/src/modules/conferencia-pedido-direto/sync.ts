@@ -13,8 +13,10 @@ import type {
 
 const MANIFEST_ITEMS_PAGE_SIZE = 1200;
 const MANIFEST_BARRAS_PAGE_SIZE = 1500;
+const MANIFEST_ITEMS_RETRY_PAGE_SIZE = 300;
+const MANIFEST_BARRAS_RETRY_PAGE_SIZE = 400;
 
-function toErrorMessage(error: unknown): string {
+function extractRawErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   if (error && typeof error === "object") {
@@ -22,6 +24,25 @@ function toErrorMessage(error: unknown): string {
     if (typeof candidate.message === "string") return candidate.message;
     if (typeof candidate.error_description === "string") return candidate.error_description;
     if (typeof candidate.details === "string") return candidate.details;
+  }
+  return "";
+}
+
+function isStatementTimeout(error: unknown): boolean {
+  const message = extractRawErrorMessage(error).toLowerCase();
+  return message.includes("statement timeout")
+    || message.includes("canceling statement due to statement timeout")
+    || message.includes("canceling statement");
+}
+
+function toErrorMessage(error: unknown): string {
+  const raw = extractRawErrorMessage(error);
+  if (raw) {
+    const normalized = raw.trim().toUpperCase();
+    if (normalized.includes("STATEMENT TIMEOUT") || normalized.includes("CANCELING STATEMENT")) {
+      return "A consulta demorou além do limite. Tente atualizar novamente em alguns segundos.";
+    }
+    return raw;
   }
   return "Erro inesperado.";
 }
@@ -271,14 +292,26 @@ export async function fetchManifestBundle(
   const meta = await fetchManifestMeta(cd);
 
   let itemsOffset = 0;
-  let itemsPages = 0;
+  let itemsPageSize = MANIFEST_ITEMS_PAGE_SIZE;
+  let itemsRetriedWithSmallerPage = false;
   const items: PedidoDiretoManifestItemRow[] = [];
 
   while (true) {
-    const page = await fetchManifestItemsPage(cd, itemsOffset, MANIFEST_ITEMS_PAGE_SIZE);
+    let page: PedidoDiretoManifestItemRow[];
+    try {
+      page = await fetchManifestItemsPage(cd, itemsOffset, itemsPageSize);
+    } catch (error) {
+      if (isStatementTimeout(error) && !itemsRetriedWithSmallerPage && itemsPageSize > MANIFEST_ITEMS_RETRY_PAGE_SIZE) {
+        itemsRetriedWithSmallerPage = true;
+        itemsPageSize = MANIFEST_ITEMS_RETRY_PAGE_SIZE;
+        itemsOffset = 0;
+        items.length = 0;
+        continue;
+      }
+      throw error;
+    }
     if (!page.length) break;
     items.push(...page);
-    itemsPages += 1;
     itemsOffset += page.length;
     const itemTotal = Math.max(meta.row_count, 0);
     const itemPercent = itemTotal > 0 ? Math.round(Math.min(1, items.length / itemTotal) * 100) : 100;
@@ -288,18 +321,30 @@ export async function fetchManifestBundle(
       total: itemTotal,
       percent: itemPercent
     });
-    if (page.length < MANIFEST_ITEMS_PAGE_SIZE) break;
+    if (page.length < itemsPageSize) break;
   }
 
   const barras: PedidoDiretoManifestBarrasRow[] = [];
   if (includeBarras) {
     let barrasOffset = 0;
-    let barrasPages = 0;
+    let barrasPageSize = MANIFEST_BARRAS_PAGE_SIZE;
+    let barrasRetriedWithSmallerPage = false;
     while (true) {
-      const page = await fetchManifestBarrasPage(cd, barrasOffset, MANIFEST_BARRAS_PAGE_SIZE);
+      let page: PedidoDiretoManifestBarrasRow[];
+      try {
+        page = await fetchManifestBarrasPage(cd, barrasOffset, barrasPageSize);
+      } catch (error) {
+        if (isStatementTimeout(error) && !barrasRetriedWithSmallerPage && barrasPageSize > MANIFEST_BARRAS_RETRY_PAGE_SIZE) {
+          barrasRetriedWithSmallerPage = true;
+          barrasPageSize = MANIFEST_BARRAS_RETRY_PAGE_SIZE;
+          barrasOffset = 0;
+          barras.length = 0;
+          continue;
+        }
+        throw error;
+      }
       if (!page.length) break;
       barras.push(...page);
-      barrasPages += 1;
       barrasOffset += page.length;
       onProgress?.({
         step: "barras",
@@ -307,7 +352,7 @@ export async function fetchManifestBundle(
         total: barras.length,
         percent: 100
       });
-      if (page.length < MANIFEST_BARRAS_PAGE_SIZE) break;
+      if (page.length < barrasPageSize) break;
     }
   }
 
