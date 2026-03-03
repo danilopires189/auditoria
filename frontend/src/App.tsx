@@ -361,9 +361,13 @@ function normalizeCargoLabel(rawCargo: string | null | undefined): string {
   return titleCasePtBr(corrected);
 }
 
+function hasText(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim() !== "";
+}
+
 function hasProfileCargoAndCd(context: ProfileContext): boolean {
-  const hasCargo = typeof context.cargo === "string" && context.cargo.trim() !== "";
-  const hasCd = context.cd_default != null || (typeof context.cd_nome === "string" && context.cd_nome.trim() !== "");
+  const hasCargo = hasText(context.cargo);
+  const hasCd = context.cd_default != null || hasText(context.cd_nome);
   return hasCargo && hasCd;
 }
 
@@ -425,17 +429,19 @@ function mergeProfileContext(primary: ProfileContext, fallback: ProfileContext |
   if (!fallback) return primary;
   const keepPrimaryCd = primary.cd_default != null || (primary.role === "admin" && primary.cd_default == null);
   const mergedCdDefault = keepPrimaryCd ? primary.cd_default : fallback.cd_default;
+  const primaryCdNome = hasText(primary.cd_nome) ? primary.cd_nome : null;
+  const fallbackCdNome = hasText(fallback.cd_nome) ? fallback.cd_nome : null;
   const mergedCdNome =
-    primary.cd_nome
+    primaryCdNome
     || (keepPrimaryCd && primary.role === "admin" && primary.cd_default == null ? "Todos CDs" : null)
-    || fallback.cd_nome;
+    || fallbackCdNome;
 
   return {
     user_id: primary.user_id || fallback.user_id,
     nome: primary.nome || fallback.nome,
     mat: primary.mat || fallback.mat,
     role: primary.role || fallback.role,
-    cargo: primary.cargo || fallback.cargo,
+    cargo: hasText(primary.cargo) ? primary.cargo : (hasText(fallback.cargo) ? fallback.cargo : null),
     cd_default: mergedCdDefault,
     cd_nome: mergedCdNome
   };
@@ -948,6 +954,7 @@ export default function App() {
   const inactivityLastActivityAtRef = useRef<number>(Date.now());
   const lastActivityPingAtRef = useRef(0);
   const forceLogoutInFlightRef = useRef(false);
+  const refreshProfileRunIdRef = useRef(0);
 
   const [loginMat, setLoginMat] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -998,10 +1005,23 @@ export default function App() {
   };
 
   const refreshProfile = useCallback(async (activeSession: Session | null) => {
+    const runId = refreshProfileRunIdRef.current + 1;
+    refreshProfileRunIdRef.current = runId;
+
     if (!activeSession) {
       setProfile(null);
       return;
     }
+
+    const isCurrentRun = () => refreshProfileRunIdRef.current === runId;
+    const commitProfile = (next: ProfileContext) => {
+      if (!isCurrentRun()) return;
+      setProfile((current) => {
+        if (!current || current.user_id !== next.user_id) return next;
+        return mergeProfileContext(next, current);
+      });
+    };
+
     const cachedContext = readCachedProfileContext(activeSession.user.id);
 
     try {
@@ -1013,11 +1033,15 @@ export default function App() {
     } catch {
       // Keep login flow resilient if reconcile RPC is unavailable.
     }
-    const firstContext = mergeProfileContext(await rpcCurrentProfileContext(activeSession), cachedContext);
+    const firstFetchedContext = await rpcCurrentProfileContext(activeSession);
+    if (!isCurrentRun()) return;
+    const firstContext = mergeProfileContext(firstFetchedContext, cachedContext);
 
     if (hasProfileCargoAndCd(firstContext) && hasProfileRole(firstContext)) {
-      setProfile(firstContext);
-      writeCachedProfileContext(firstContext);
+      commitProfile(firstContext);
+      if (isCurrentRun()) {
+        writeCachedProfileContext(firstContext);
+      }
       return;
     }
 
@@ -1039,14 +1063,16 @@ export default function App() {
       }
     }
 
-    const secondContext = mergeProfileContext(await rpcCurrentProfileContext(activeSession), firstContext);
+    const secondFetchedContext = await rpcCurrentProfileContext(activeSession);
+    if (!isCurrentRun()) return;
+    const secondContext = mergeProfileContext(secondFetchedContext, firstContext);
     const resolvedContext =
       hasProfileCargoAndCd(secondContext) && hasProfileRole(secondContext)
         ? secondContext
         : firstContext;
 
-    setProfile(resolvedContext);
-    if (hasProfileCargoAndCd(resolvedContext) || hasProfileRole(resolvedContext)) {
+    commitProfile(resolvedContext);
+    if (isCurrentRun() && hasProfileCargoAndCd(resolvedContext) && hasProfileRole(resolvedContext)) {
       writeCachedProfileContext(resolvedContext);
     }
   }, []);
