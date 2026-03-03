@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -9,6 +9,7 @@ import {
   fetchProdutividadeCollaborators,
   fetchProdutividadeDaily,
   fetchProdutividadeEntries,
+  fetchProdutividadeRanking,
   fetchProdutividadeVisibility,
   setProdutividadeVisibility
 } from "./sync";
@@ -18,6 +19,7 @@ import type {
   ProdutividadeDailyRow,
   ProdutividadeEntryRow,
   ProdutividadeModuleProfile,
+  ProdutividadeRankingRow,
   ProdutividadeVisibilityMode,
   ProdutividadeVisibilityRow
 } from "./types";
@@ -160,6 +162,18 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
 
   const [dateStart, setDateStart] = useState<string>(monthStartIsoBrasilia());
   const [dateEnd, setDateEnd] = useState<string>(todayIsoBrasilia());
+
+  const [viewMode, setViewMode] = useState<"history" | "ranking">("history");
+  const [rankingMonth, setRankingMonth] = useState<string>(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit"
+    }).format(new Date()).slice(0, 7)
+  );
+  const [rankingRows, setRankingRows] = useState<ProdutividadeRankingRow[]>([]);
+  const [loadingRanking, setLoadingRanking] = useState(false);
+  const [expandedRankingUser, setExpandedRankingUser] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -342,10 +356,31 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     }
   }, [activeCd, activityFilter, canLoadRange, dateEnd, dateStart, loadUserPanels, loading, profile.user_id, selectedUserId]);
 
+  const loadRankingData = useCallback(async () => {
+    if (activeCd == null) return;
+    setLoadingRanking(true);
+    setErrorMessage(null);
+    try {
+      const parts = rankingMonth.split("-");
+      const ano = parts[0] ? parseInt(parts[0], 10) : null;
+      const mes = parts[1] ? parseInt(parts[1], 10) : null;
+      const rows = await fetchProdutividadeRanking({ cd: activeCd, ano, mes });
+      setRankingRows(rows);
+    } catch (error) {
+      setErrorMessage(asUnknownErrorMessage(error));
+    } finally {
+      setLoadingRanking(false);
+    }
+  }, [activeCd, rankingMonth]);
+
   useEffect(() => {
-    void loadModuleData(profile.user_id);
+    if (viewMode === "history") {
+      void loadModuleData(profile.user_id);
+    } else {
+      void loadRankingData();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCd, profile.user_id]);
+  }, [activeCd, viewMode]);
 
   const onSelectCollaborator = useCallback((targetUserId: string) => {
     if (targetUserId === selectedUserId) return;
@@ -435,17 +470,26 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           <div className="module-screen-header">
             <div className="module-screen-title-row">
               <div className="module-screen-title">
-                <h2>Painel histórico de produtividade</h2>
+                <h2>{viewMode === "history" ? "Painel histórico de produtividade" : "Ranking de Produtividade"}</h2>
               </div>
               <div className="produtividade-actions-head">
                 <button
                   type="button"
-                  className="btn btn-muted"
-                  onClick={() => void loadModuleData(selectedUserId ?? profile.user_id)}
-                  disabled={busyRefresh || loading || loadingDetail}
+                  className={`btn ${viewMode === "ranking" ? "btn-primary" : "btn-muted"} produtividade-ranking-btn`}
+                  onClick={() => setViewMode(viewMode === "history" ? "ranking" : "history")}
                 >
-                  {busyRefresh ? "Atualizando..." : "Atualizar"}
+                  {viewMode === "history" ? "🏆 Ver Ranking" : "Voltar ao Histórico"}
                 </button>
+                {viewMode === "history" && (
+                  <button
+                    type="button"
+                    className="btn btn-muted"
+                    onClick={() => void loadModuleData(selectedUserId ?? profile.user_id)}
+                    disabled={busyRefresh || loading || loadingDetail}
+                  >
+                    {busyRefresh ? "Atualizando..." : "Atualizar"}
+                  </button>
+                )}
                 {isAdmin && visibility ? (
                   <button
                     type="button"
@@ -462,241 +506,341 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           </div>
 
           <div className="module-screen-body produtividade-body">
-            {loading ? <div className="coleta-empty">Carregando produtividade...</div> : null}
+            {viewMode === "history" && loading ? <div className="coleta-empty">Carregando produtividade...</div> : null}
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
-            <section className="produtividade-period-card">
-              <div className="produtividade-period-row">
-                <label>
-                  Data inicial
-                  <input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} />
-                </label>
-                <label>
-                  Data final
-                  <input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} />
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void loadModuleData(selectedUserId ?? profile.user_id)}
-                  disabled={!canLoadRange || busyRefresh || loading || loadingDetail}
-                >
-                  Aplicar período
-                </button>
-              </div>
-              <div className="produtividade-overview-strip">
-                <article className="produtividade-kpi-card">
-                  <small>Colaboradores ativos</small>
-                  <strong>{collaborators.length}</strong>
-                </article>
-                <article className="produtividade-kpi-card">
-                  <small>Total bruto no período</small>
-                  <strong>{formatMetric(moduleTotals.valorTotal, "")}</strong>
-                </article>
-                <article className="produtividade-kpi-card">
-                  <small>Registros no período</small>
-                  <strong>{formatCountLabel(moduleTotals.registros, "registro", "registros")}</strong>
-                </article>
-                <article className="produtividade-kpi-card">
-                  <small>Colaborador selecionado</small>
-                  <strong>{selectedCollaborator?.nome ?? "-"}</strong>
-                </article>
-              </div>
-            </section>
-
-            <div className="produtividade-grid">
-              <section className="produtividade-collaborators">
-                <div className="produtividade-collaborators-head">
-                  <h3>Colaboradores</h3>
-                  <label className="produtividade-collaborator-search">
-                    <input
-                      type="text"
-                      value={collaboratorSearch}
-                      onChange={(event) => setCollaboratorSearch(event.target.value)}
-                      placeholder="Buscar por nome ou matrícula"
-                    />
-                  </label>
+            {viewMode === "ranking" ? (
+              <section className="produtividade-ranking-view">
+                <div className="produtividade-period-card">
+                  <div className="produtividade-period-row">
+                    <label>
+                      Referência (Mês/Ano)
+                      <input type="month" value={rankingMonth} onChange={(event) => setRankingMonth(event.target.value)} />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void loadRankingData()}
+                      disabled={loadingRanking}
+                    >
+                      {loadingRanking ? "Calculando..." : "Buscar Ranking"}
+                    </button>
+                  </div>
                 </div>
-                {collaborators.length === 0 ? (
-                  <div className="coleta-empty">Sem registros no período selecionado.</div>
-                ) : filteredCollaborators.length === 0 ? (
-                  <div className="coleta-empty">Nenhum colaborador encontrado para o filtro informado.</div>
+
+                {loadingRanking ? (
+                  <div className="coleta-empty">Calculando ranking...</div>
+                ) : rankingRows.length === 0 ? (
+                  <div className="coleta-empty">Nenhum dado de ranking para o mês selecionado.</div>
                 ) : (
-                  <div className="produtividade-collaborator-list">
-                    {filteredCollaborators.map((row) => (
-                      <button
-                        key={`col:${row.user_id}`}
-                        type="button"
-                        className={`produtividade-collaborator-card${row.user_id === selectedUserId ? " is-selected" : ""}`}
-                        onClick={() => onSelectCollaborator(row.user_id)}
-                      >
-                        <div className="produtividade-collaborator-top">
-                          <strong>{row.nome}</strong>
-                          <span>{row.mat}</span>
-                        </div>
-                        <div className="produtividade-collaborator-metrics">
-                          <span>{formatCountLabel(row.dias_ativos, "dia ativo", "dias ativos")}</span>
-                          <span>{formatCountLabel(row.atividades_count, "atividade", "atividades")}</span>
-                          <span>{formatCountLabel(row.registros_count, "registro", "registros")}</span>
-                        </div>
-                        <small>{`Total bruto: ${formatMetric(row.valor_total, "")}`}</small>
-                      </button>
-                    ))}
+                  <div className="produtividade-ranking-table-scroller">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Posição</th>
+                          <th>Colaborador</th>
+                          <th>Pontos Totais</th>
+                          <th style={{ width: "48px" }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rankingRows.map((row, idx) => {
+                          const isExpanded = expandedRankingUser === row.user_id;
+                          return (
+                            <Fragment key={row.user_id}>
+                              <tr className={idx < 3 ? `ranking-top-${idx + 1}` : ""}>
+                                <td align="center">
+                                  {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}º`}
+                                </td>
+                                <td>
+                                  <strong>{row.nome}</strong>
+                                  <br />
+                                  <small>{row.mat}</small>
+                                </td>
+                                <td align="right">
+                                  <strong>{formatMetric(row.total_pontos, "")}</strong>
+                                </td>
+                                <td align="center">
+                                  <button
+                                    type="button"
+                                    className="btn btn-icon"
+                                    onClick={() => setExpandedRankingUser(isExpanded ? null : row.user_id)}
+                                    title="Ver detalhes"
+                                  >
+                                    {isExpanded ? "➖" : "➕"}
+                                  </button>
+                                </td>
+                              </tr>
+                              {isExpanded && (
+                                <tr className="ranking-details-row">
+                                  <td colSpan={4} className="ranking-details-cell">
+                                    <div className="ranking-details-grid" style={{
+                                      display: "grid",
+                                      gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+                                      gap: "8px",
+                                      padding: "16px",
+                                      background: "var(--color-bg-alt)",
+                                      borderRadius: "8px",
+                                      marginTop: "4px"
+                                    }}>
+                                      <div><strong>PVPs:</strong><br />{formatMetric(row.pvps_pontos, "")} pts</div>
+                                      <div><strong>Volume:</strong><br />{formatMetric(row.vol_pontos, "")} pts</div>
+                                      <div><strong>Blitz:</strong><br />{formatMetric(row.blitz_pontos, "")} pts</div>
+                                      <div><strong>Ativ Extra:</strong><br />{formatMetric(row.atividade_extra_pontos, "")} pts</div>
+                                      <div><strong>Alocação:</strong><br />{formatCountLabel(row.alocacao_qtd, "end", "ends")}</div>
+                                      <div><strong>Devolução:</strong><br />{formatCountLabel(row.devolucao_qtd, "nf", "nfs")}</div>
+                                      <div><strong>Ter. Conf:</strong><br />{formatCountLabel(row.conf_termo_qtd, "sku", "skus")}</div>
+                                      <div><strong>Avul. Conf:</strong><br />{formatCountLabel(row.conf_avulso_qtd, "sku", "skus")}</div>
+                                      <div><strong>Ent. Notas:</strong><br />{formatCountLabel(row.conf_entrada_qtd, "sku", "skus")}</div>
+                                      <div><strong>Reg Lojas:</strong><br />{formatCountLabel(row.conf_lojas_qtd, "loja", "lojas")}</div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </section>
-
-              <section className="produtividade-detail">
-                <h3>
-                  Visão do colaborador
-                  {selectedCollaborator ? `: ${selectedCollaborator.nome}` : ""}
-                </h3>
-
-                {selectedCollaborator ? (
-                  <div className="produtividade-summary-strip">
-                    <span>Registros: {selectedCollaborator.registros_count}</span>
-                    <span>Dias ativos: {selectedCollaborator.dias_ativos}</span>
-                    <span>Atividades no período: {selectedCollaborator.atividades_count}</span>
-                    <span>Total bruto: {formatMetric(selectedCollaborator.valor_total, "")}</span>
+            ) : (
+              <>
+                <section className="produtividade-period-card">
+                  <div className="produtividade-period-row">
+                    <label>
+                      Data inicial
+                      <input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} />
+                    </label>
+                    <label>
+                      Data final
+                      <input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void loadModuleData(selectedUserId ?? profile.user_id)}
+                      disabled={!canLoadRange || busyRefresh || loading || loadingDetail}
+                    >
+                      Aplicar período
+                    </button>
                   </div>
-                ) : null}
+                  <div className="produtividade-overview-strip">
+                    <article className="produtividade-kpi-card">
+                      <small>Colaboradores ativos</small>
+                      <strong>{collaborators.length}</strong>
+                    </article>
+                    <article className="produtividade-kpi-card">
+                      <small>Total bruto no período</small>
+                      <strong>{formatMetric(moduleTotals.valorTotal, "")}</strong>
+                    </article>
+                    <article className="produtividade-kpi-card">
+                      <small>Registros no período</small>
+                      <strong>{formatCountLabel(moduleTotals.registros, "registro", "registros")}</strong>
+                    </article>
+                    <article className="produtividade-kpi-card">
+                      <small>Colaborador selecionado</small>
+                      <strong>{selectedCollaborator?.nome ?? "-"}</strong>
+                    </article>
+                  </div>
+                </section>
 
-                <div className="produtividade-detail-grid">
-                  <div className="produtividade-panel produtividade-activity-block">
-                    <h4>Atividades principais</h4>
-                    {activityTotals.length === 0 ? (
-                      <div className="coleta-empty">Sem atividades para o colaborador selecionado.</div>
+                <div className="produtividade-grid">
+                  <section className="produtividade-collaborators">
+                    <div className="produtividade-collaborators-head">
+                      <h3>Colaboradores</h3>
+                      <label className="produtividade-collaborator-search">
+                        <input
+                          type="text"
+                          value={collaboratorSearch}
+                          onChange={(event) => setCollaboratorSearch(event.target.value)}
+                          placeholder="Buscar por nome ou matrícula"
+                        />
+                      </label>
+                    </div>
+                    {collaborators.length === 0 ? (
+                      <div className="coleta-empty">Sem registros no período selecionado.</div>
+                    ) : filteredCollaborators.length === 0 ? (
+                      <div className="coleta-empty">Nenhum colaborador encontrado para o filtro informado.</div>
                     ) : (
-                      <div className="produtividade-activity-grid">
-                        {activityTotals.map((row) => (
+                      <div className="produtividade-collaborator-list">
+                        {filteredCollaborators.map((row) => (
                           <button
-                            key={row.activity_key}
+                            key={`col:${row.user_id}`}
                             type="button"
-                            className={`produtividade-activity-card${row.activity_key === activityFilter ? " is-active" : ""}`}
-                            onClick={() => onToggleActivityFilter(row.activity_key)}
+                            className={`produtividade-collaborator-card${row.user_id === selectedUserId ? " is-selected" : ""}`}
+                            onClick={() => onSelectCollaborator(row.user_id)}
                           >
-                            <strong>{row.activity_label}</strong>
-                            <span>{formatMetricWithUnit(row.valor_total, row.unit_label)}</span>
-                            <small>
-                              {formatCountLabel(row.registros_count, "registro", "registros")}
-                              {row.last_event_date ? ` | Último: ${formatDate(row.last_event_date)}` : ""}
-                            </small>
+                            <div className="produtividade-collaborator-top">
+                              <strong>{row.nome}</strong>
+                              <span>{row.mat}</span>
+                            </div>
+                            <div className="produtividade-collaborator-metrics">
+                              <span>{formatCountLabel(row.dias_ativos, "dia ativo", "dias ativos")}</span>
+                              <span>{formatCountLabel(row.atividades_count, "atividade", "atividades")}</span>
+                              <span>{formatCountLabel(row.registros_count, "registro", "registros")}</span>
+                            </div>
+                            <small>{`Total bruto: ${formatMetric(row.valor_total, "")}`}</small>
                           </button>
                         ))}
                       </div>
                     )}
-                  </div>
+                  </section>
 
-                  <div className="produtividade-panel produtividade-daily-block">
-                    <h4>Produtividade diária</h4>
-                    {dailyGroups.length === 0 ? (
-                      <div className="coleta-empty">Sem dados diários no período.</div>
-                    ) : (
-                      <div className="produtividade-daily-list">
-                        {dailyGroups.map((bucket) => (
-                          <article key={bucket.date} className="produtividade-day-card">
-                            <strong>{formatDate(bucket.date)}</strong>
-                            <span>Total bruto do dia: {formatMetric(bucket.total, "")}</span>
-                            <ul className="produtividade-day-items">
-                              {bucket.items.slice(0, 3).map((row, index) => (
-                                <li key={`${bucket.date}:${row.activity_key}:${index}`}>
-                                  {`${row.activity_label}: ${formatMetricWithUnit(row.valor_total, row.unit_label)}`}
-                                </li>
-                              ))}
-                              {bucket.items.length > 3 ? <li className="is-more">{`+${bucket.items.length - 3} atividade(s)`}</li> : null}
-                            </ul>
-                          </article>
-                        ))}
+                  <section className="produtividade-detail">
+                    <h3>
+                      Visão do colaborador
+                      {selectedCollaborator ? `: ${selectedCollaborator.nome}` : ""}
+                    </h3>
+
+                    {selectedCollaborator ? (
+                      <div className="produtividade-summary-strip">
+                        <span>Registros: {selectedCollaborator.registros_count}</span>
+                        <span>Dias ativos: {selectedCollaborator.dias_ativos}</span>
+                        <span>Atividades no período: {selectedCollaborator.atividades_count}</span>
+                        <span>Total bruto: {formatMetric(selectedCollaborator.valor_total, "")}</span>
                       </div>
-                    )}
-                  </div>
-                </div>
+                    ) : null}
 
-                <div className="produtividade-panel produtividade-entries-block">
-                  <div className="produtividade-filter-line">
-                    <span>
-                      Filtro de detalhes:{" "}
-                      {activityFilter
-                        ? activityTotals.find((row) => row.activity_key === activityFilter)?.activity_label ?? activityFilter
-                        : "Todas as atividades"}
-                    </span>
-                    <button
-                      className="btn btn-muted"
-                      type="button"
-                      onClick={onClearActivityFilter}
-                      disabled={activityFilter == null}
-                    >
-                      Limpar filtro
-                    </button>
-                  </div>
-                  <h4>Detalhes das atividades</h4>
-                  {loadingDetail ? <div className="coleta-empty">Carregando detalhes...</div> : null}
-                  {!loadingDetail && entries.length === 0 ? (
-                    <div className="coleta-empty">Nenhum detalhe para o filtro atual.</div>
-                  ) : null}
-                  {!loadingDetail ? (
-                    <div className="produtividade-entry-list">
-                      {entries.map((entry) => (
-                        <article key={entry.entry_id} className="produtividade-entry-card">
-                          <div className="produtividade-entry-head">
-                            <strong>{entry.activity_label}</strong>
-                            <span>{formatMetricWithUnit(entry.metric_value, entry.unit_label)}</span>
+                    <div className="produtividade-detail-grid">
+                      <div className="produtividade-panel produtividade-activity-block">
+                        <h4>Atividades principais</h4>
+                        {activityTotals.length === 0 ? (
+                          <div className="coleta-empty">Sem atividades para o colaborador selecionado.</div>
+                        ) : (
+                          <div className="produtividade-activity-grid">
+                            {activityTotals.map((row) => (
+                              <button
+                                key={row.activity_key}
+                                type="button"
+                                className={`produtividade-activity-card${row.activity_key === activityFilter ? " is-active" : ""}`}
+                                onClick={() => onToggleActivityFilter(row.activity_key)}
+                              >
+                                <strong>{row.activity_label}</strong>
+                                <span>{formatMetricWithUnit(row.valor_total, row.unit_label)}</span>
+                                <small>
+                                  {formatCountLabel(row.registros_count, "registro", "registros")}
+                                  {row.last_event_date ? ` | Último: ${formatDate(row.last_event_date)}` : ""}
+                                </small>
+                              </button>
+                            ))}
                           </div>
-                          <p>{entry.detail || "-"}</p>
-                          <div className="produtividade-entry-meta">
-                            <span>Data: {formatDate(entry.event_date)}</span>
-                            {entry.event_at ? <span>Registro: {formatDateTime(entry.event_at)}</span> : null}
-                            {entry.source_ref ? <span>Ref: {entry.source_ref}</span> : null}
+                        )}
+                      </div>
+
+                      <div className="produtividade-panel produtividade-daily-block">
+                        <h4>Produtividade diária</h4>
+                        {dailyGroups.length === 0 ? (
+                          <div className="coleta-empty">Sem dados diários no período.</div>
+                        ) : (
+                          <div className="produtividade-daily-list">
+                            {dailyGroups.map((bucket) => (
+                              <article key={bucket.date} className="produtividade-day-card">
+                                <strong>{formatDate(bucket.date)}</strong>
+                                <span>Total bruto do dia: {formatMetric(bucket.total, "")}</span>
+                                <ul className="produtividade-day-items">
+                                  {bucket.items.slice(0, 3).map((row, index) => (
+                                    <li key={`${bucket.date}:${row.activity_key}:${index}`}>
+                                      {`${row.activity_label}: ${formatMetricWithUnit(row.valor_total, row.unit_label)}`}
+                                    </li>
+                                  ))}
+                                  {bucket.items.length > 3 ? <li className="is-more">{`+${bucket.items.length - 3} atividade(s)`}</li> : null}
+                                </ul>
+                              </article>
+                            ))}
                           </div>
-                        </article>
-                      ))}
+                        )}
+                      </div>
                     </div>
-                  ) : null}
+
+                    <div className="produtividade-panel produtividade-entries-block">
+                      <div className="produtividade-filter-line">
+                        <span>
+                          Filtro de detalhes:{" "}
+                          {activityFilter
+                            ? activityTotals.find((row) => row.activity_key === activityFilter)?.activity_label ?? activityFilter
+                            : "Todas as atividades"}
+                        </span>
+                        <button
+                          className="btn btn-muted"
+                          type="button"
+                          onClick={onClearActivityFilter}
+                          disabled={activityFilter == null}
+                        >
+                          Limpar filtro
+                        </button>
+                      </div>
+                      <h4>Detalhes das atividades</h4>
+                      {loadingDetail ? <div className="coleta-empty">Carregando detalhes...</div> : null}
+                      {!loadingDetail && entries.length === 0 ? (
+                        <div className="coleta-empty">Nenhum detalhe para o filtro atual.</div>
+                      ) : null}
+                      {!loadingDetail ? (
+                        <div className="produtividade-entry-list">
+                          {entries.map((entry) => (
+                            <article key={entry.entry_id} className="produtividade-entry-card">
+                              <div className="produtividade-entry-head">
+                                <strong>{entry.activity_label}</strong>
+                                <span>{formatMetricWithUnit(entry.metric_value, entry.unit_label)}</span>
+                              </div>
+                              <p>{entry.detail || "-"}</p>
+                              <div className="produtividade-entry-meta">
+                                <span>Data: {formatDate(entry.event_date)}</span>
+                                {entry.event_at ? <span>Registro: {formatDateTime(entry.event_at)}</span> : null}
+                                {entry.source_ref ? <span>Ref: {entry.source_ref}</span> : null}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
                 </div>
-              </section>
-            </div>
+              </>
+            )}
           </div>
         </article>
       </section>
       {confirmDialog && typeof document !== "undefined"
         ? createPortal(
-            <div
-              className="confirm-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="produtividade-confirm-title"
-              onClick={() => setConfirmDialog(null)}
-            >
-              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                <h3 id="produtividade-confirm-title">Alterar visibilidade</h3>
-                <p>
-                  {confirmDialog.nextMode === "owner_only"
-                    ? "Somente o dono e administradores verão atividades de outros colaboradores. Deseja continuar?"
-                    : "Todos os usuários do CD poderão visualizar as atividades registradas. Deseja continuar?"}
-                </p>
-                <div className="confirm-actions">
-                  <button
-                    className="btn btn-muted"
-                    type="button"
-                    onClick={() => setConfirmDialog(null)}
-                    disabled={busyVisibility}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={() => void onConfirmDialog()}
-                    disabled={busyVisibility}
-                  >
-                    {busyVisibility ? "Salvando..." : "Confirmar"}
-                  </button>
-                </div>
+          <div
+            className="confirm-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="produtividade-confirm-title"
+            onClick={() => setConfirmDialog(null)}
+          >
+            <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+              <h3 id="produtividade-confirm-title">Alterar visibilidade</h3>
+              <p>
+                {confirmDialog.nextMode === "owner_only"
+                  ? "Somente o dono e administradores verão atividades de outros colaboradores. Deseja continuar?"
+                  : "Todos os usuários do CD poderão visualizar as atividades registradas. Deseja continuar?"}
+              </p>
+              <div className="confirm-actions">
+                <button
+                  className="btn btn-muted"
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                  disabled={busyVisibility}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => void onConfirmDialog()}
+                  disabled={busyVisibility}
+                >
+                  {busyVisibility ? "Salvando..." : "Confirmar"}
+                </button>
               </div>
-            </div>,
-            document.body
-          )
+            </div>
+          </div>,
+          document.body
+        )
         : null}
     </>
   );

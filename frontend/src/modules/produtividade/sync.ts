@@ -4,6 +4,7 @@ import type {
   ProdutividadeCollaboratorRow,
   ProdutividadeDailyRow,
   ProdutividadeEntryRow,
+  ProdutividadeRankingRow,
   ProdutividadeVisibilityMode,
   ProdutividadeVisibilityRow
 } from "./types";
@@ -108,6 +109,25 @@ function mapDailyRow(raw: Record<string, unknown>): ProdutividadeDailyRow {
     unit_label: parseString(raw.unit_label),
     registros_count: parseInteger(raw.registros_count),
     valor_total: parseNumber(raw.valor_total)
+  };
+}
+
+function mapRankingRow(raw: Record<string, unknown>): ProdutividadeRankingRow {
+  return {
+    user_id: parseString(raw.user_id),
+    mat: parseString(raw.mat),
+    nome: parseString(raw.nome),
+    pvps_pontos: parseNumber(raw.pvps_pontos),
+    vol_pontos: parseNumber(raw.vol_pontos),
+    blitz_pontos: parseNumber(raw.blitz_pontos),
+    alocacao_qtd: parseNumber(raw.alocacao_qtd),
+    devolucao_qtd: parseNumber(raw.devolucao_qtd),
+    conf_termo_qtd: parseNumber(raw.conf_termo_qtd),
+    conf_avulso_qtd: parseNumber(raw.conf_avulso_qtd),
+    conf_entrada_qtd: parseNumber(raw.conf_entrada_qtd),
+    conf_lojas_qtd: parseNumber(raw.conf_lojas_qtd),
+    atividade_extra_pontos: parseNumber(raw.atividade_extra_pontos),
+    total_pontos: parseNumber(raw.total_pontos)
   };
 }
 
@@ -232,4 +252,22 @@ export async function fetchProdutividadeEntries(params: {
   if (!Array.isArray(data)) return [];
 
   return data.map((row) => mapEntryRow(row as Record<string, unknown>));
+}
+
+export async function fetchProdutividadeRanking(params: {
+  cd: number | null;
+  mes: number | null;
+  ano: number | null;
+}): Promise<ProdutividadeRankingRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_produtividade_ranking", {
+    p_cd: params.cd,
+    p_mes: params.mes,
+    p_ano: params.ano
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapRankingRow(row as Record<string, unknown>));
 }
