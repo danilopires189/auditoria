@@ -56,3 +56,20 @@ export interface ProdutividadeEntryRow {
   detail: string;
   source_ref: string | null;
 }
+
+export interface ProdutividadeRankingRow {
+  user_id: string;
+  mat: string;
+  nome: string;
+  pvps_pontos: number;
+  vol_pontos: number;
+  blitz_pontos: number;
+  alocacao_qtd: number;
+  devolucao_qtd: number;
+  conf_termo_qtd: number;
+  conf_avulso_qtd: number;
+  conf_entrada_qtd: number;
+  conf_lojas_qtd: number;
+  atividade_extra_pontos: number;
+  total_pontos: number;
+}
