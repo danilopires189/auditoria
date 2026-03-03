@@ -52,6 +52,7 @@ import {
   openVolume,
   scanBarcode,
   setItemQtd,
+  syncSnapshot,
   syncPendingTermoVolumes
 } from "./sync";
 import type {
@@ -1839,6 +1840,15 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         await applyVolumeUpdate(nextVolume, false);
         setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outra etiqueta.");
       } else {
+        // Always push the latest local quantities before finalize validation.
+        await syncSnapshot(
+          activeVolume.remote_conf_id,
+          activeVolume.items.map((item) => ({
+            coddv: item.coddv,
+            qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
+            barras: item.barras ?? null
+          }))
+        );
         await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
         await removeLocalVolume(activeVolume.local_key);
         await refreshPendingState();
