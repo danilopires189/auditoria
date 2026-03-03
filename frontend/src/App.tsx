@@ -55,9 +55,12 @@ const SESSION_ACTIVITY_STORAGE_PREFIX = "auditoria.last_activity.v1:";
 const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
 const SESSION_GUARD_CHECK_INTERVAL_MS = 60 * 1000;
 const SESSION_ACTIVITY_PING_THROTTLE_MS = 15 * 1000;
-const AUTH_REQUEST_TIMEOUT_MS = 12_000;
-const LOGIN_RPC_TIMEOUT_MS = 6_000;
-const PROFILE_RPC_TIMEOUT_MS = 6_000;
+const AUTH_REQUEST_TIMEOUT_MS = 25_000;
+const LOGIN_RPC_TIMEOUT_MS = 15_000;
+const PROFILE_RPC_TIMEOUT_MS = 12_000;
+const SESSION_GUARD_RELEASE_TIMEOUT_MS = 8_000;
+const SIGN_OUT_REQUEST_TIMEOUT_MS = 10_000;
+const SIGN_OUT_LOCAL_TIMEOUT_MS = 4_000;
 const ADMIN_EMAIL_CANDIDATES = [
   "1@pmenos.com.br",
   "0001@pmenos.com.br",
@@ -755,11 +758,42 @@ async function rpcSessionGuardPing(params: {
 }
 
 async function rpcSessionGuardRelease(deviceId: string): Promise<boolean> {
-  const { data, error } = await supabase!.rpc("rpc_session_guard_release", {
-    p_device_id: deviceId
-  });
+  const { data, error } = await withTimeout(
+    Promise.resolve(supabase!.rpc("rpc_session_guard_release", {
+      p_device_id: deviceId
+    })),
+    SESSION_GUARD_RELEASE_TIMEOUT_MS,
+    "rpc_session_guard_release"
+  );
   if (error) throw error;
   return data === true;
+}
+
+function isRecoverableSignOutError(error: unknown): boolean {
+  if (isRequestTimeoutError(error)) return true;
+  const friendly = asErrorMessage(error);
+  return friendly === "Sem conexão com o servidor. Verifique sua internet e tente novamente.";
+}
+
+async function signOutWithFallback(): Promise<{ usedLocalFallback: boolean }> {
+  try {
+    const { error } = await withTimeout(
+      Promise.resolve(supabase!.auth.signOut()),
+      SIGN_OUT_REQUEST_TIMEOUT_MS,
+      "auth.signOut"
+    );
+    if (error) throw error;
+    return { usedLocalFallback: false };
+  } catch (error) {
+    if (!isRecoverableSignOutError(error)) throw error;
+    const { error: localError } = await withTimeout(
+      Promise.resolve(supabase!.auth.signOut({ scope: "local" })),
+      SIGN_OUT_LOCAL_TIMEOUT_MS,
+      "auth.signOut.local"
+    );
+    if (localError) throw localError;
+    return { usedLocalFallback: true };
+  }
 }
 
 async function rpcStartIdentityChallenge(
@@ -1378,14 +1412,18 @@ export default function App() {
           // Ignore local cleanup failures and proceed with logout.
         }
       }
-      await supabase!.auth.signOut();
+      const signOutResult = await signOutWithFallback();
       setAuthMode("login");
       clearRegisterValidation();
       clearResetValidation();
-      if (nextSuccessMessage) {
+      if (signOutResult.usedLocalFallback && nextSuccessMessage) {
+        setSuccessMessage("Sessão local encerrada. O servidor não respondeu ao logout.");
+      } else if (nextSuccessMessage) {
         setSuccessMessage(nextSuccessMessage);
       }
       navigate("/", { replace: true });
+    } catch (error) {
+      setErrorMessage(asErrorMessage(error));
     } finally {
       setLogoutBusy(false);
       setShowLogoutConfirm(false);
