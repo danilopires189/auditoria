@@ -118,6 +118,16 @@ export interface PvpsAlocacaoModuleProfile {
   cd_nome: string | null;
 }
 
+export interface PvpsAuditoriasReportFilters {
+  dtIni: string;
+  dtFim: string;
+  cd: number | null;
+}
+
+export type PvpsAuditoriasReportCell = string | number | boolean | null;
+
+export type PvpsAuditoriasReportRow = Record<string, PvpsAuditoriasReportCell>;
+
 export interface PvpsAdminBlacklistRow {
   blacklist_id: string;
   cd: number;

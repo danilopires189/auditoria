@@ -6400,6 +6400,55 @@ small {
   padding: 18px 16px;
 }
 
+.pvps-report-popup-card {
+  width: min(700px, calc(100vw - 14px));
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 20px;
+  box-shadow: 0 -4px 32px rgba(4, 12, 28, 0.18), 0 2px 10px rgba(4, 12, 28, 0.08);
+  animation: pvps-slide-up 280ms ease both;
+  padding: 18px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.pvps-report-note {
+  margin: 0;
+  color: #4f6789;
+  font-size: 0.9rem;
+}
+
+.pvps-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.pvps-report-grid label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e3f70;
+}
+
+.pvps-report-grid input,
+.pvps-report-grid select {
+  min-height: 44px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  padding: 10px 12px;
+}
+
+.pvps-report-actions {
+  justify-content: flex-start;
+}
+
+.pvps-report-count {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #20436f;
+}
+
 /* Occurrence Select — legacy wrap (kept for fallback) */
 .pvps-occurrence-wrap {
   display: flex;
