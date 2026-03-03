@@ -117,6 +117,7 @@ function mapRankingRow(raw: Record<string, unknown>): ProdutividadeRankingRow {
     user_id: parseString(raw.user_id),
     mat: parseString(raw.mat),
     nome: parseString(raw.nome),
+    posicao: parseInteger(raw.posicao),
     pvps_pontos: parseNumber(raw.pvps_pontos),
     vol_pontos: parseNumber(raw.vol_pontos),
     blitz_pontos: parseNumber(raw.blitz_pontos),

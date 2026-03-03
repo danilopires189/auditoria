@@ -547,11 +547,19 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                       <tbody>
                         {rankingRows.map((row, idx) => {
                           const isExpanded = expandedRankingUser === row.user_id;
+                          const rankingPosition = row.posicao > 0 ? row.posicao : idx + 1;
+                          const topClass = rankingPosition <= 3 ? `ranking-top-${rankingPosition}` : "";
                           return (
                             <Fragment key={row.user_id}>
-                              <tr className={idx < 3 ? `ranking-top-${idx + 1}` : ""}>
+                              <tr className={topClass}>
                                 <td align="center">
-                                  {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}º`}
+                                  {rankingPosition === 1
+                                    ? "🥇"
+                                    : rankingPosition === 2
+                                      ? "🥈"
+                                      : rankingPosition === 3
+                                        ? "🥉"
+                                        : `${rankingPosition}º`}
                                 </td>
                                 <td>
                                   <strong>{row.nome}</strong>
