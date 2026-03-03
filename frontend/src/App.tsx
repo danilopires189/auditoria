@@ -580,9 +580,9 @@ function DateInputField({ value, disabled, required, onChange }: DateInputFieldP
 
 async function rpcLoginEmailFromMat(mat: string): Promise<string> {
   const { data, error } = await withTimeout(
-    supabase!.rpc("rpc_login_email_from_mat", {
+    Promise.resolve(supabase!.rpc("rpc_login_email_from_mat", {
       p_mat: normalizeMat(mat)
-    }),
+    })),
     LOGIN_RPC_TIMEOUT_MS,
     "rpc_login_email_from_mat"
   );
@@ -595,9 +595,9 @@ async function rpcLoginEmailFromMat(mat: string): Promise<string> {
 
 async function rpcHasProfileByMat(mat: string): Promise<boolean> {
   const { data, error } = await withTimeout(
-    supabase!.rpc("rpc_has_profile_by_mat", {
+    Promise.resolve(supabase!.rpc("rpc_has_profile_by_mat", {
       p_mat: normalizeMat(mat)
-    }),
+    })),
     LOGIN_RPC_TIMEOUT_MS,
     "rpc_has_profile_by_mat"
   );
@@ -664,21 +664,6 @@ async function loginWithMatAndPassword(mat: string, password: string): Promise<S
     }
   }
 
-  const resolvedByRpc = new Set<string>();
-  try {
-    resolvedByRpc.add((await rpcLoginEmailFromMat(normalizedMat)).toLowerCase());
-  } catch {
-    // RPC is best-effort. Keep local pattern candidates.
-  }
-
-  if (canonical && canonical !== normalizedMat) {
-    try {
-      resolvedByRpc.add((await rpcLoginEmailFromMat(canonical)).toLowerCase());
-    } catch {
-      // RPC is best-effort. Keep local pattern candidates.
-    }
-  }
-
   let gotInvalidCredentials = false;
   const attemptedEmails = new Set<string>();
 
@@ -700,6 +685,21 @@ async function loginWithMatAndPassword(mat: string, password: string): Promise<S
   for (const email of loginCandidates) {
     const session = await tryCandidate(email);
     if (session) return session;
+  }
+
+  const resolvedByRpc = new Set<string>();
+  try {
+    resolvedByRpc.add((await rpcLoginEmailFromMat(normalizedMat)).toLowerCase());
+  } catch {
+    // RPC is best-effort. Keep local pattern candidates.
+  }
+
+  if (canonical && canonical !== normalizedMat) {
+    try {
+      resolvedByRpc.add((await rpcLoginEmailFromMat(canonical)).toLowerCase());
+    } catch {
+      // RPC is best-effort. Keep local pattern candidates.
+    }
   }
 
   for (const email of resolvedByRpc) {
@@ -807,7 +807,7 @@ function fallbackProfileFromSession(session: Session): ProfileContext {
 async function rpcCurrentProfileContext(session: Session): Promise<ProfileContext> {
   try {
     const v2Result = await withTimeout(
-      supabase!.rpc("rpc_current_profile_context_v2"),
+      Promise.resolve(supabase!.rpc("rpc_current_profile_context_v2")),
       PROFILE_RPC_TIMEOUT_MS,
       "rpc_current_profile_context_v2"
     );
@@ -823,10 +823,10 @@ async function rpcCurrentProfileContext(session: Session): Promise<ProfileContex
     }
   }
 
-  let legacyResult: Awaited<ReturnType<typeof supabase.rpc>>;
+  let legacyResult;
   try {
     legacyResult = await withTimeout(
-      supabase!.rpc("rpc_current_profile_context"),
+      Promise.resolve(supabase!.rpc("rpc_current_profile_context")),
       PROFILE_RPC_TIMEOUT_MS,
       "rpc_current_profile_context"
     );
@@ -945,7 +945,7 @@ export default function App() {
 
     try {
       await withTimeout(
-        supabase!.rpc("rpc_reconcile_current_profile"),
+        Promise.resolve(supabase!.rpc("rpc_reconcile_current_profile")),
         PROFILE_RPC_TIMEOUT_MS,
         "rpc_reconcile_current_profile"
       );
@@ -969,7 +969,7 @@ export default function App() {
     if (matHint) {
       try {
         await withTimeout(
-          supabase!.rpc("rpc_reconcile_profile_by_mat", { p_mat: matHint }),
+          Promise.resolve(supabase!.rpc("rpc_reconcile_profile_by_mat", { p_mat: matHint })),
           PROFILE_RPC_TIMEOUT_MS,
           "rpc_reconcile_profile_by_mat"
         );
