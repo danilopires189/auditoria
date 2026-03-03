@@ -183,6 +183,30 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: strin
   });
 }
 
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function withTimeoutRetry<T>(
+  operationFactory: () => Promise<T>,
+  timeoutMs: number,
+  operation: string,
+  retries = 1
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await withTimeout(operationFactory(), timeoutMs, operation);
+    } catch (error) {
+      if (!isRequestTimeoutError(error) || attempt >= retries) {
+        throw error;
+      }
+      attempt += 1;
+      await delayMs(Math.min(600, attempt * 300));
+    }
+  }
+}
+
 function extractMatFromLoginEmail(email: string | undefined): string {
   if (!email) return "";
   const matched = /^(?:mat_)?(\d+)@(login\.auditoria\.local|pmenos\.com\.br)$/i.exec(email);
@@ -582,12 +606,13 @@ function DateInputField({ value, disabled, required, onChange }: DateInputFieldP
 }
 
 async function rpcLoginEmailFromMat(mat: string): Promise<string> {
-  const { data, error } = await withTimeout(
-    Promise.resolve(supabase!.rpc("rpc_login_email_from_mat", {
+  const { data, error } = await withTimeoutRetry(
+    () => Promise.resolve(supabase!.rpc("rpc_login_email_from_mat", {
       p_mat: normalizeMat(mat)
     })),
     LOGIN_RPC_TIMEOUT_MS,
-    "rpc_login_email_from_mat"
+    "rpc_login_email_from_mat",
+    1
   );
   if (error) throw error;
   if (typeof data !== "string" || !data) {
@@ -597,12 +622,13 @@ async function rpcLoginEmailFromMat(mat: string): Promise<string> {
 }
 
 async function rpcHasProfileByMat(mat: string): Promise<boolean> {
-  const { data, error } = await withTimeout(
-    Promise.resolve(supabase!.rpc("rpc_has_profile_by_mat", {
+  const { data, error } = await withTimeoutRetry(
+    () => Promise.resolve(supabase!.rpc("rpc_has_profile_by_mat", {
       p_mat: normalizeMat(mat)
     })),
     LOGIN_RPC_TIMEOUT_MS,
-    "rpc_has_profile_by_mat"
+    "rpc_has_profile_by_mat",
+    1
   );
   if (error) throw error;
   return data === true;
@@ -610,13 +636,14 @@ async function rpcHasProfileByMat(mat: string): Promise<boolean> {
 
 async function loginWithMatAndPassword(mat: string, password: string): Promise<Session> {
   const trySignIn = async (email: string): Promise<{ session: Session | null; invalid: boolean }> => {
-    const { data, error } = await withTimeout(
-      supabase!.auth.signInWithPassword({
+    const { data, error } = await withTimeoutRetry(
+      () => supabase!.auth.signInWithPassword({
         email,
         password
       }),
       AUTH_REQUEST_TIMEOUT_MS,
-      "auth.signInWithPassword"
+      "auth.signInWithPassword",
+      1
     );
 
     if (!error && data.session) {
