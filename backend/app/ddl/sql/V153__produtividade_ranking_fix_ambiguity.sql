@@ -144,7 +144,7 @@ begin
             round(coalesce((select total_val from usuarios_metricas um where um.user_id = u.user_id and um.activity_key = 'atividade_extra_pontos'), 0), 3)
         )::numeric(18,3) as total_pontos
     from usuarios_unicos u
-    order by total_pontos desc, nome asc;
+    order by total_pontos desc, u.nome asc;
 end;
 $$;
 
