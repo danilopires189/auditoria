@@ -23,9 +23,31 @@ import type {
   PvpsEndSit
 } from "./types";
 
+function extractRawErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const candidate = error as Record<string, unknown>;
+    if (typeof candidate.message === "string") return candidate.message;
+    if (typeof candidate.error_description === "string") return candidate.error_description;
+    if (typeof candidate.details === "string") return candidate.details;
+  }
+  return "";
+}
+
+function isStatementTimeout(error: unknown): boolean {
+  const message = extractRawErrorMessage(error).toLowerCase();
+  return message.includes("statement timeout")
+    || message.includes("canceling statement due to statement timeout")
+    || message.includes("canceling statement");
+}
+
 function toErrorMessage(error: unknown): string {
   const translate = (raw: string): string => {
     const normalized = raw.trim().toUpperCase();
+    if (normalized.includes("STATEMENT TIMEOUT") || normalized.includes("CANCELING STATEMENT")) {
+      return "A consulta demorou além do limite. Tente atualizar novamente em alguns segundos.";
+    }
     if (normalized.includes("ITEM_BLOQUEADO_BLACKLIST")) {
       return "Item bloqueado por blacklist ativa. Atualize a fila para continuar.";
     }
@@ -46,14 +68,8 @@ function toErrorMessage(error: unknown): string {
     }
     return raw;
   };
-  if (error instanceof Error) return translate(error.message);
-  if (typeof error === "string") return translate(error);
-  if (error && typeof error === "object") {
-    const candidate = error as Record<string, unknown>;
-    if (typeof candidate.message === "string") return translate(candidate.message);
-    if (typeof candidate.error_description === "string") return translate(candidate.error_description);
-    if (typeof candidate.details === "string") return translate(candidate.details);
-  }
+  const raw = extractRawErrorMessage(error);
+  if (raw) return translate(raw);
   return "Erro inesperado.";
 }
 
@@ -190,7 +206,8 @@ function mapAlocacaoCompleted(raw: Record<string, unknown>): AlocacaoCompletedRo
 
 export async function fetchPvpsManifest(params?: { p_cd?: number | null; zona?: string | null }): Promise<PvpsManifestRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const pageSize = 1000;
+  let pageSize = 1000;
+  let retriedWithSmallerPage = false;
   const rows: PvpsManifestRow[] = [];
   let offset = 0;
   for (;;) {
@@ -200,7 +217,16 @@ export async function fetchPvpsManifest(params?: { p_cd?: number | null; zona?: 
       p_offset: offset,
       p_limit: pageSize
     });
-    if (error) throw new Error(toErrorMessage(error));
+    if (error) {
+      if (isStatementTimeout(error) && !retriedWithSmallerPage && pageSize > 200) {
+        retriedWithSmallerPage = true;
+        pageSize = 200;
+        rows.length = 0;
+        offset = 0;
+        continue;
+      }
+      throw new Error(toErrorMessage(error));
+    }
     const page = Array.isArray(data) ? data.map((row) => mapPvpsManifest(row as Record<string, unknown>)) : [];
     rows.push(...page);
     if (page.length < pageSize) break;
@@ -654,7 +680,8 @@ export async function submitPvpsPul(params: {
 
 export async function fetchAlocacaoManifest(params?: { p_cd?: number | null; zona?: string | null }): Promise<AlocacaoManifestRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const pageSize = 1000;
+  let pageSize = 1000;
+  let retriedWithSmallerPage = false;
   const rows: AlocacaoManifestRow[] = [];
   let offset = 0;
   for (;;) {
@@ -664,7 +691,16 @@ export async function fetchAlocacaoManifest(params?: { p_cd?: number | null; zon
       p_offset: offset,
       p_limit: pageSize
     });
-    if (error) throw new Error(toErrorMessage(error));
+    if (error) {
+      if (isStatementTimeout(error) && !retriedWithSmallerPage && pageSize > 200) {
+        retriedWithSmallerPage = true;
+        pageSize = 200;
+        rows.length = 0;
+        offset = 0;
+        continue;
+      }
+      throw new Error(toErrorMessage(error));
+    }
     const page = Array.isArray(data) ? data.map((row) => mapAlocacaoManifest(row as Record<string, unknown>)) : [];
     rows.push(...page);
     if (page.length < pageSize) break;
