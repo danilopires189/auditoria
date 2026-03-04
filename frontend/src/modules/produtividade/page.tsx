@@ -192,6 +192,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   const [dailyRows, setDailyRows] = useState<ProdutividadeDailyRow[]>([]);
   const [entries, setEntries] = useState<ProdutividadeEntryRow[]>([]);
   const [activityFilter, setActivityFilter] = useState<string | null>(null);
+  const [expandedDailyDates, setExpandedDailyDates] = useState<Set<string>>(new Set());
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const selectedCollaborator = useMemo(
@@ -261,10 +262,12 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       setActivityTotals([]);
       setDailyRows([]);
       setEntries([]);
+      setExpandedDailyDates(new Set());
       return;
     }
 
     setLoadingDetail(true);
+    setExpandedDailyDates(new Set());
     setErrorMessage(null);
     try {
       const [totals, daily, entryRows] = await Promise.all([
@@ -407,6 +410,18 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       setErrorMessage(asUnknownErrorMessage(error));
     });
   }, [loadEntriesOnly, selectedUserId]);
+
+  const onToggleDailyDay = useCallback((dateRef: string) => {
+    setExpandedDailyDates((current) => {
+      const next = new Set(current);
+      if (next.has(dateRef)) {
+        next.delete(dateRef);
+      } else {
+        next.add(dateRef);
+      }
+      return next;
+    });
+  }, []);
 
   const onToggleVisibility = useCallback(() => {
     if (!isAdmin || !visibility || activeCd == null || busyVisibility) return;
@@ -744,20 +759,36 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                           <div className="coleta-empty">Sem dados diários no período.</div>
                         ) : (
                           <div className="produtividade-daily-list">
-                            {dailyGroups.map((bucket) => (
-                              <article key={bucket.date} className="produtividade-day-card">
-                                <strong>{formatDate(bucket.date)}</strong>
-                                <span>Total bruto do dia: {formatMetric(bucket.total, "")}</span>
-                                <ul className="produtividade-day-items">
-                                  {bucket.items.slice(0, 3).map((row, index) => (
-                                    <li key={`${bucket.date}:${row.activity_key}:${index}`}>
-                                      {`${row.activity_label}: ${formatMetricWithUnit(row.valor_total, row.unit_label)}`}
-                                    </li>
-                                  ))}
-                                  {bucket.items.length > 3 ? <li className="is-more">{`+${bucket.items.length - 3} atividade(s)`}</li> : null}
-                                </ul>
-                              </article>
-                            ))}
+                            {dailyGroups.map((bucket) => {
+                              const isExpanded = expandedDailyDates.has(bucket.date);
+                              const visibleItems = isExpanded ? bucket.items : bucket.items.slice(0, 3);
+                              return (
+                                <button
+                                  key={bucket.date}
+                                  type="button"
+                                  className={`produtividade-day-card${isExpanded ? " is-expanded" : ""}`}
+                                  onClick={() => onToggleDailyDay(bucket.date)}
+                                  aria-expanded={isExpanded}
+                                  title={isExpanded ? "Clique para recolher" : "Clique para ver todas as atividades do dia"}
+                                >
+                                  <strong>{formatDate(bucket.date)}</strong>
+                                  <span>Total bruto do dia: {formatMetric(bucket.total, "")}</span>
+                                  <ul className="produtividade-day-items">
+                                    {visibleItems.map((row, index) => (
+                                      <li key={`${bucket.date}:${row.activity_key}:${index}`}>
+                                        {`${row.activity_label}: ${formatMetricWithUnit(row.valor_total, row.unit_label)}`}
+                                      </li>
+                                    ))}
+                                    {!isExpanded && bucket.items.length > 3 ? (
+                                      <li className="is-more">{`+${bucket.items.length - 3} atividade(s) — clique para ver todas`}</li>
+                                    ) : null}
+                                    {isExpanded && bucket.items.length > 3 ? (
+                                      <li className="is-more">Clique para recolher</li>
+                                    ) : null}
+                                  </ul>
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

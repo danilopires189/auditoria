@@ -3934,6 +3934,7 @@ small {
 }
 
 .produtividade-day-card {
+  width: 100%;
   border-radius: 10px;
   border: 1px solid #d8e2f2;
   background: #fbfdff;
@@ -3941,6 +3942,27 @@ small {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.produtividade-day-card:hover {
+  border-color: #c6d6ee;
+  background: #f7fbff;
+}
+
+.produtividade-day-card:focus-visible {
+  outline: none;
+  border-color: #86a8dc;
+  box-shadow: 0 0 0 2px rgba(78, 120, 188, 0.2);
+}
+
+.produtividade-day-card.is-expanded {
+  border-color: #86a8dc;
+  background: #eef5ff;
 }
 
 .produtividade-day-card strong {
