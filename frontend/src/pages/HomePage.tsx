@@ -22,6 +22,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
 
 interface HomePageProps {
   displayContext: DisplayContext;
+  appHeading: string;
   isOnline: boolean;
   onRequestLogout: () => void;
   showCdSwitcher?: boolean;
@@ -40,6 +41,7 @@ function InfoIcon() {
 
 export default function HomePage({
   displayContext,
+  appHeading,
   isOnline,
   onRequestLogout,
   showCdSwitcher = false,
@@ -95,7 +97,7 @@ export default function HomePage({
 
       <section className="modules-shell">
         <div className="modules-head">
-          <h2>Prevenção de Perdas CDs</h2>
+          <h2>{appHeading}</h2>
           <p>Selecione um módulo para iniciar.</p>
         </div>
         <div className="modules-grid">
