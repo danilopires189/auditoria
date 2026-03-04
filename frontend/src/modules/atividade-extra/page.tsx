@@ -5,15 +5,23 @@ import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatCountLabel } from "../../shared/inflection";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
+  approveAtividadeExtra,
   deleteAtividadeExtra,
   fetchAtividadeExtraCollaborators,
   fetchAtividadeExtraEntries,
+  fetchAtividadeExtraPendingEntries,
   fetchAtividadeExtraVisibility,
   insertAtividadeExtra,
   setAtividadeExtraVisibility,
   updateAtividadeExtra
 } from "./sync";
-import type { AtividadeExtraEntryRow, AtividadeExtraModuleProfile, AtividadeExtraVisibilityMode, AtividadeExtraVisibilityRow } from "./types";
+import type {
+  AtividadeExtraCollaboratorRow,
+  AtividadeExtraEntryRow,
+  AtividadeExtraModuleProfile,
+  AtividadeExtraVisibilityMode,
+  AtividadeExtraVisibilityRow
+} from "./types";
 
 interface AtividadeExtraPageProps {
   isOnline: boolean;
@@ -23,6 +31,10 @@ interface AtividadeExtraPageProps {
 type ConfirmDialogState =
   | {
       kind: "delete";
+      entry: AtividadeExtraEntryRow;
+    }
+  | {
+      kind: "approve";
       entry: AtividadeExtraEntryRow;
     }
   | {
@@ -193,6 +205,15 @@ function addIcon() {
   );
 }
 
+function pendingApprovalIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
 function sanitizeDescription(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -216,17 +237,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const [visibility, setVisibility] = useState<AtividadeExtraVisibilityRow | null>(null);
-  const [collaborators, setCollaborators] = useState<{
-    user_id: string;
-    mat: string;
-    nome: string;
-    pontos_soma: number;
-    tempo_total_segundos: number;
-    tempo_total_hms: string;
-    atividades_count: number;
-  }[]>([]);
+  const [collaborators, setCollaborators] = useState<AtividadeExtraCollaboratorRow[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(profile.user_id);
   const [entries, setEntries] = useState<AtividadeExtraEntryRow[]>([]);
+  const [pendingEntries, setPendingEntries] = useState<AtividadeExtraEntryRow[]>([]);
 
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [dataAtividade, setDataAtividade] = useState<string>(todayIsoBrasilia());
@@ -240,6 +254,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     () => collaborators.find((row) => row.user_id === selectedUserId) ?? null,
     [collaborators, selectedUserId]
   );
+  const pendingApprovalsCount = pendingEntries.length;
 
   const previewDurationSeconds = useMemo(
     () => computeDurationSeconds({ dataAtividade, horaInicio, horaFim }),
@@ -274,6 +289,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       setVisibility(null);
       setCollaborators([]);
       setEntries([]);
+      setPendingEntries([]);
       setErrorMessage("CD não definido para este usuário.");
       setLoading(false);
       return;
@@ -289,9 +305,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     setErrorMessage(null);
 
     try {
-      const [visibilityRow, collaboratorRows] = await Promise.all([
+      const [visibilityRow, collaboratorRows, pendingRows] = await Promise.all([
         fetchAtividadeExtraVisibility(activeCd),
-        fetchAtividadeExtraCollaborators(activeCd)
+        fetchAtividadeExtraCollaborators(activeCd),
+        isAdmin ? fetchAtividadeExtraPendingEntries(activeCd) : Promise.resolve<AtividadeExtraEntryRow[]>([])
       ]);
 
       let nextSelectedUserId = targetPreferred;
@@ -312,13 +329,14 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       setCollaborators(collaboratorRows);
       setSelectedUserId(nextSelectedUserId);
       setEntries(detailRows);
+      setPendingEntries(pendingRows);
     } catch (error) {
       setErrorMessage(asUnknownErrorMessage(error));
     } finally {
       setBusyRefresh(false);
       setLoading(false);
     }
-  }, [activeCd, loading, profile.user_id, selectedUserId]);
+  }, [activeCd, isAdmin, loading, profile.user_id, selectedUserId]);
 
   useEffect(() => {
     void loadModuleData();
@@ -358,9 +376,17 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   }, [resetForm]);
 
   const onDeleteEntry = useCallback((entry: AtividadeExtraEntryRow) => {
-    if (!entry.can_edit || busySubmit) return;
+    if (!entry.can_delete || busySubmit) return;
     setConfirmDialog({
       kind: "delete",
+      entry
+    });
+  }, [busySubmit]);
+
+  const onApproveEntry = useCallback((entry: AtividadeExtraEntryRow) => {
+    if (!entry.can_approve || busySubmit) return;
+    setConfirmDialog({
+      kind: "approve",
       entry
     });
   }, [busySubmit]);
@@ -379,7 +405,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
 
     if (confirmDialog.kind === "delete") {
       const entry = confirmDialog.entry;
-      if (!entry.can_edit || busySubmit) {
+      if (!entry.can_delete || busySubmit) {
         setConfirmDialog(null);
         return;
       }
@@ -395,6 +421,29 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
           setEditorOpen(false);
         }
         setStatusMessage("Atividade excluída com sucesso.");
+        await loadModuleData(selectedUserId ?? profile.user_id);
+      } catch (error) {
+        setErrorMessage(asUnknownErrorMessage(error));
+      } finally {
+        setBusySubmit(false);
+      }
+      return;
+    }
+
+    if (confirmDialog.kind === "approve") {
+      const entry = confirmDialog.entry;
+      if (!entry.can_approve || busySubmit) {
+        setConfirmDialog(null);
+        return;
+      }
+
+      setBusySubmit(true);
+      setErrorMessage(null);
+      setStatusMessage(null);
+      setConfirmDialog(null);
+      try {
+        await approveAtividadeExtra(entry.id);
+        setStatusMessage("Atividade aprovada com sucesso.");
         await loadModuleData(selectedUserId ?? profile.user_id);
       } catch (error) {
         setErrorMessage(asUnknownErrorMessage(error));
@@ -463,7 +512,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
           hora_fim: horaFim,
           descricao: cleanDescription
         });
-        setStatusMessage("Atividade atualizada com sucesso.");
+        setStatusMessage("Atividade atualizada e mantida como aguardando aprovação.");
       } else {
         await insertAtividadeExtra({
           cd: activeCd,
@@ -473,12 +522,12 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
           hora_fim: horaFim,
           descricao: cleanDescription
         });
-        setStatusMessage("Atividade registrada com sucesso.");
+        setStatusMessage("Atividade registrada e enviada para aprovação.");
       }
 
       resetForm();
       setEditorOpen(false);
-      await loadModuleData(profile.user_id);
+      await loadModuleData(selectedUserId ?? profile.user_id);
     } catch (error) {
       setErrorMessage(asUnknownErrorMessage(error));
     } finally {
@@ -537,6 +586,14 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                 >
                   {busyRefresh ? "Atualizando..." : "Atualizar"}
                 </button>
+                {isAdmin ? (
+                  <span className="atividade-extra-pending-badge" title="Atividades aguardando aprovação">
+                    <span className="atividade-extra-pending-badge-icon" aria-hidden="true">
+                      {pendingApprovalIcon()}
+                    </span>
+                    <strong>{pendingApprovalsCount}</strong>
+                  </span>
+                ) : null}
                 {isAdmin && visibility ? (
                   <button
                     type="button"
@@ -557,6 +614,53 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             {loading ? <div className="coleta-empty">Carregando atividades...</div> : null}
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
+
+            {isAdmin ? (
+              <section className="atividade-extra-pending-panel">
+                <h3>
+                  Aguardando aprovação
+                  <span className="atividade-extra-pending-panel-count">{pendingApprovalsCount}</span>
+                </h3>
+                {pendingEntries.length === 0 ? (
+                  <div className="coleta-empty">Nenhuma atividade pendente neste CD.</div>
+                ) : (
+                  <div className="atividade-extra-pending-list">
+                    {pendingEntries.map((entry) => (
+                      <article key={`pending:${entry.id}`} className="atividade-extra-pending-card">
+                        <div className="atividade-extra-entry-head">
+                          <strong>{entry.nome} ({entry.mat})</strong>
+                          <span>{formatDate(entry.data_inicio)} | {entry.tempo_gasto_hms}</span>
+                        </div>
+                        <p className="atividade-extra-entry-description">{entry.descricao}</p>
+                        <div className="atividade-extra-entry-meta">
+                          <span>Início: {toTimeInputValue(entry.hora_inicio)}</span>
+                          <span>Final: {toTimeInputValue(entry.hora_fim)}</span>
+                          <span>Criado em: {formatDateTime(entry.created_at)}</span>
+                        </div>
+                        <div className="atividade-extra-entry-actions">
+                          <button
+                            className="btn btn-primary"
+                            type="button"
+                            onClick={() => onApproveEntry(entry)}
+                            disabled={busySubmit || !entry.can_approve}
+                          >
+                            Aprovar
+                          </button>
+                          <button
+                            className="btn btn-danger"
+                            type="button"
+                            onClick={() => void onDeleteEntry(entry)}
+                            disabled={busySubmit || !entry.can_delete}
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : null}
 
             <div className="atividade-extra-grid">
               <section className="atividade-extra-collaborators">
@@ -631,22 +735,46 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                       <article key={entry.id} className="atividade-extra-entry-card">
                         <div className="atividade-extra-entry-head">
                           <strong>{formatDate(entry.data_inicio)} | {entry.tempo_gasto_hms}</strong>
-                          <span>{formatCountLabel(entry.pontos, "ponto", "pontos", { formatValue: formatPoints })}</span>
+                          <div className="atividade-extra-entry-head-side">
+                            <span>{formatCountLabel(entry.pontos, "ponto", "pontos", { formatValue: formatPoints })}</span>
+                            <span className={`atividade-extra-status-badge is-${entry.approval_status}`}>
+                              {entry.approval_status === "approved" ? "Aprovada" : "Aguardando aprovação"}
+                            </span>
+                          </div>
                         </div>
                         <p className="atividade-extra-entry-description">{entry.descricao}</p>
                         <div className="atividade-extra-entry-meta">
                           <span>Início: {toTimeInputValue(entry.hora_inicio)}</span>
                           <span>Final: {toTimeInputValue(entry.hora_fim)}</span>
                           <span>Informado em: {formatDateTime(entry.created_at)}</span>
+                          {entry.approval_status === "approved" ? (
+                            <>
+                              <span>Aprovado em: {formatDateTime(entry.approved_at ?? "")}</span>
+                              <span>
+                                Aprovado por: {entry.approved_by_nome ?? "Usuário"} ({entry.approved_by_mat ?? "-"})
+                              </span>
+                            </>
+                          ) : (
+                            <span>Status: aguardando aprovação</span>
+                          )}
                         </div>
-                        {entry.can_edit ? (
+                        {entry.can_edit || entry.can_approve || entry.can_delete ? (
                           <div className="atividade-extra-entry-actions">
-                            <button className="btn btn-muted" type="button" onClick={() => onEditEntry(entry)} disabled={busySubmit}>
-                              Editar
-                            </button>
-                            <button className="btn btn-danger" type="button" onClick={() => void onDeleteEntry(entry)} disabled={busySubmit}>
-                              Excluir
-                            </button>
+                            {entry.can_edit ? (
+                              <button className="btn btn-muted" type="button" onClick={() => onEditEntry(entry)} disabled={busySubmit}>
+                                Editar
+                              </button>
+                            ) : null}
+                            {entry.can_approve ? (
+                              <button className="btn btn-primary" type="button" onClick={() => onApproveEntry(entry)} disabled={busySubmit}>
+                                Aprovar
+                              </button>
+                            ) : null}
+                            {entry.can_delete ? (
+                              <button className="btn btn-danger" type="button" onClick={() => void onDeleteEntry(entry)} disabled={busySubmit}>
+                                Excluir
+                              </button>
+                            ) : null}
                           </div>
                         ) : null}
                       </article>
@@ -743,11 +871,17 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             >
               <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="atividade-extra-confirm-title">
-                  {confirmDialog.kind === "delete" ? "Excluir atividade" : "Alterar visibilidade"}
+                  {confirmDialog.kind === "delete"
+                    ? "Excluir atividade"
+                    : confirmDialog.kind === "approve"
+                      ? "Aprovar atividade"
+                      : "Alterar visibilidade"}
                 </h3>
                 <p>
                   {confirmDialog.kind === "delete"
                     ? `Deseja excluir a atividade "${confirmDialog.entry.descricao}"? Essa ação não pode ser desfeita.`
+                    : confirmDialog.kind === "approve"
+                      ? `Confirmar aprovação da atividade "${confirmDialog.entry.descricao}"?`
                     : confirmDialog.nextMode === "owner_only"
                       ? "Somente o dono e administradores verão atividades de outros colaboradores. Deseja continuar?"
                       : "Todos os usuários do CD poderão visualizar as atividades registradas. Deseja continuar?"}
@@ -771,6 +905,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                       ? busySubmit
                         ? "Excluindo..."
                         : "Excluir"
+                      : confirmDialog.kind === "approve"
+                        ? busySubmit
+                          ? "Aprovando..."
+                          : "Aprovar"
                       : busyVisibility
                         ? "Salvando..."
                         : "Confirmar"}

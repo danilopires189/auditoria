@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import type {
+  AtividadeExtraApprovalStatus,
   AtividadeExtraCollaboratorRow,
   AtividadeExtraCreatePayload,
   AtividadeExtraEntryRow,
@@ -34,6 +35,7 @@ function toErrorMessage(error: unknown): string {
       return "Você não tem permissão para visualizar este colaborador.";
     }
     if (normalized.includes("ID_OBRIGATORIO")) return "Identificador da atividade é obrigatório.";
+    if (normalized.includes("ATIVIDADE_APROVADA_NAO_EDITAVEL")) return "Atividade já aprovada não pode ser editada.";
     return raw;
   };
 
@@ -74,6 +76,10 @@ function parseVisibility(value: unknown): AtividadeExtraVisibilityMode {
   return String(value) === "owner_only" ? "owner_only" : "public_cd";
 }
 
+function parseApprovalStatus(value: unknown): AtividadeExtraApprovalStatus {
+  return String(value) === "approved" ? "approved" : "pending";
+}
+
 function mapVisibilityRow(raw: Record<string, unknown>): AtividadeExtraVisibilityRow {
   return {
     cd: parseInteger(raw.cd),
@@ -110,9 +116,16 @@ function mapEntryRow(raw: Record<string, unknown>): AtividadeExtraEntryRow {
     tempo_gasto_hms: parseString(raw.tempo_gasto_hms, "00:00:00"),
     pontos: parseNumber(raw.pontos),
     descricao: parseString(raw.descricao),
+    approval_status: parseApprovalStatus(raw.approval_status),
+    approved_at: parseNullableString(raw.approved_at),
+    approved_by: parseNullableString(raw.approved_by),
+    approved_by_mat: parseNullableString(raw.approved_by_mat),
+    approved_by_nome: parseNullableString(raw.approved_by_nome),
     created_at: parseString(raw.created_at),
     updated_at: parseString(raw.updated_at),
-    can_edit: Boolean(raw.can_edit)
+    can_edit: Boolean(raw.can_edit),
+    can_delete: Boolean(raw.can_delete),
+    can_approve: Boolean(raw.can_approve)
   };
 }
 
@@ -217,7 +230,7 @@ export async function fetchAtividadeExtraEntries(params: {
 }): Promise<AtividadeExtraEntryRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
-  const { data, error } = await supabase.rpc("rpc_atividade_extra_entries", {
+  const { data, error } = await supabase.rpc("rpc_atividade_extra_entries_v2", {
     p_cd: params.cd,
     p_target_user_id: params.targetUserId
   });
@@ -225,4 +238,29 @@ export async function fetchAtividadeExtraEntries(params: {
   if (!Array.isArray(data)) return [];
 
   return data.map((row) => mapEntryRow(row as Record<string, unknown>));
+}
+
+export async function fetchAtividadeExtraPendingEntries(cd: number | null): Promise<AtividadeExtraEntryRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_atividade_extra_pending_entries", {
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapEntryRow(row as Record<string, unknown>));
+}
+
+export async function approveAtividadeExtra(entryId: string): Promise<AtividadeExtraEntryRow> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_atividade_extra_approve", {
+    p_id: entryId
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  const row = firstRow(data);
+  if (!row) throw new Error("Falha ao aprovar atividade.");
+  return mapEntryRow(row);
 }

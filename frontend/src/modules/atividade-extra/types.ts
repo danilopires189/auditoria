@@ -1,4 +1,5 @@
 export type AtividadeExtraVisibilityMode = "public_cd" | "owner_only";
+export type AtividadeExtraApprovalStatus = "pending" | "approved";
 
 export interface AtividadeExtraModuleProfile {
   user_id: string;
@@ -40,9 +41,16 @@ export interface AtividadeExtraEntryRow {
   tempo_gasto_hms: string;
   pontos: number;
   descricao: string;
+  approval_status: AtividadeExtraApprovalStatus;
+  approved_at: string | null;
+  approved_by: string | null;
+  approved_by_mat: string | null;
+  approved_by_nome: string | null;
   created_at: string;
   updated_at: string;
   can_edit: boolean;
+  can_delete: boolean;
+  can_approve: boolean;
 }
 
 export interface AtividadeExtraCreatePayload {
