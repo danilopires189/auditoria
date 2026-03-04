@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import pmImage from "../../assets/pm.png";
 import { DASHBOARD_MODULES } from "../modules/registry";
+import type { DashboardModuleKey } from "../modules/types";
 import type { DisplayContext } from "../types/ui";
 import { LogoutIcon, ModuleIcon } from "../ui/icons";
 
@@ -23,6 +24,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
 interface HomePageProps {
   displayContext: DisplayContext;
   appHeading: string;
+  hiddenModuleKeys?: DashboardModuleKey[];
   isOnline: boolean;
   onRequestLogout: () => void;
   showCdSwitcher?: boolean;
@@ -42,11 +44,14 @@ function InfoIcon() {
 export default function HomePage({
   displayContext,
   appHeading,
+  hiddenModuleKeys = [],
   isOnline,
   onRequestLogout,
   showCdSwitcher = false,
   onRequestCdSwitcher
 }: HomePageProps) {
+  const hiddenModuleSet = new Set(hiddenModuleKeys);
+
   return (
     <>
       <header className="app-topbar">
@@ -101,7 +106,7 @@ export default function HomePage({
           <p>Selecione um módulo para iniciar.</p>
         </div>
         <div className="modules-grid">
-          {DASHBOARD_MODULES.map((moduleDef) => (
+          {DASHBOARD_MODULES.filter((moduleDef) => !hiddenModuleSet.has(moduleDef.key)).map((moduleDef) => (
             <Link key={moduleDef.key} to={moduleDef.path} className={`module-card tone-${moduleDef.tone}`}>
               <span className="module-icon" aria-hidden="true">
                 <ModuleIcon name={moduleDef.icon} />
