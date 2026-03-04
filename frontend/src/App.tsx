@@ -59,6 +59,9 @@ const SESSION_ACTIVITY_PING_THROTTLE_MS = 15 * 1000;
 const AUTH_REQUEST_TIMEOUT_MS = 25_000;
 const LOGIN_RPC_TIMEOUT_MS = 15_000;
 const PROFILE_RPC_TIMEOUT_MS = 12_000;
+const PROFILE_SYNC_RETRY_BASE_MS = 5_000;
+const PROFILE_SYNC_RETRY_MAX_MS = 60_000;
+const PROFILE_SYNC_MAX_RETRIES = 6;
 const SESSION_GUARD_RELEASE_TIMEOUT_MS = 8_000;
 const SIGN_OUT_REQUEST_TIMEOUT_MS = 10_000;
 const SIGN_OUT_LOCAL_TIMEOUT_MS = 4_000;
@@ -405,6 +408,11 @@ function hasProfileCargoAndCd(context: ProfileContext): boolean {
 
 function hasProfileRole(context: ProfileContext): boolean {
   return context.role === "admin" || context.role === "auditor" || context.role === "viewer";
+}
+
+function isProfileContextComplete(context: ProfileContext | null): boolean {
+  if (!context) return false;
+  return hasProfileCargoAndCd(context) && hasProfileRole(context);
 }
 
 const PROFILE_CACHE_PREFIX = "auditoria.profile_context.v1:";
@@ -1002,6 +1010,7 @@ export default function App() {
   const [globalCdLoading, setGlobalCdLoading] = useState(false);
   const [showGlobalCdSwitcher, setShowGlobalCdSwitcher] = useState(false);
   const [pendingGlobalCdSelection, setPendingGlobalCdSelection] = useState<number | null>(null);
+  const [profileSyncRetryCount, setProfileSyncRetryCount] = useState(0);
 
   const [registerMat, setRegisterMat] = useState("");
   const [registerDtNasc, setRegisterDtNasc] = useState("");
@@ -1144,6 +1153,41 @@ export default function App() {
       listener.subscription.unsubscribe();
     };
   }, [refreshProfile]);
+
+  useEffect(() => {
+    if (!session) {
+      if (profileSyncRetryCount !== 0) {
+        setProfileSyncRetryCount(0);
+      }
+      return;
+    }
+
+    const isComplete = profile?.user_id === session.user.id && isProfileContextComplete(profile);
+    if (isComplete && profileSyncRetryCount !== 0) {
+      setProfileSyncRetryCount(0);
+    }
+  }, [profile, profileSyncRetryCount, session]);
+
+  useEffect(() => {
+    if (!session || !isOnline) return;
+    const isComplete = profile?.user_id === session.user.id && isProfileContextComplete(profile);
+    if (isComplete) return;
+    if (profileSyncRetryCount >= PROFILE_SYNC_MAX_RETRIES) return;
+
+    const delayMs = Math.min(
+      PROFILE_SYNC_RETRY_MAX_MS,
+      PROFILE_SYNC_RETRY_BASE_MS * (2 ** profileSyncRetryCount)
+    );
+
+    const timeoutId = window.setTimeout(() => {
+      setProfileSyncRetryCount((current) => current + 1);
+      void refreshProfile(session);
+    }, delayMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isOnline, profile, profileSyncRetryCount, refreshProfile, session]);
 
   useEffect(() => {
     if (!session) {
@@ -1893,6 +1937,10 @@ export default function App() {
     const merged = effectiveProfileWithCd;
     const role = merged.role || "auditor";
     const isGlobalAdmin = role === "admin" && merged.cd_default == null;
+    const shouldShowSyncState =
+      !isProfileContextComplete(merged)
+      && isOnline
+      && profileSyncRetryCount < PROFILE_SYNC_MAX_RETRIES;
     const rawCd =
       merged.cd_nome
       || (isGlobalAdmin ? "Todos CDs" : merged.cd_default != null ? `CD ${merged.cd_default}` : "CD não definido");
@@ -1900,11 +1948,11 @@ export default function App() {
     return {
       nome: merged.nome || "Usuário",
       mat: merged.mat || normalizeMat(extractMatFromLoginEmail(session.user.email)),
-      cargo: normalizeCargoLabel(merged.cargo),
-      cdLabel: formatCdLabel(rawCd, merged.cd_default, isGlobalAdmin),
+      cargo: shouldShowSyncState ? "Sincronizando cargo..." : normalizeCargoLabel(merged.cargo),
+      cdLabel: shouldShowSyncState ? "Sincronizando CD..." : formatCdLabel(rawCd, merged.cd_default, isGlobalAdmin),
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
-  }, [effectiveProfileWithCd, session]);
+  }, [effectiveProfileWithCd, isOnline, profileSyncRetryCount, session]);
 
   const isModuleRoute = useMemo(() => findModuleByPath(location.pathname) != null, [location.pathname]);
   if (loadingSession) {
