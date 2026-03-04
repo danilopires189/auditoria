@@ -24,6 +24,7 @@ import PvpsAlocacaoPage from "./modules/pvps-alocacao/page";
 import RegistroEmbarquePage from "./modules/registro-embarque/page";
 import ZeradosPage from "./modules/zerados/page";
 import HomePage from "./pages/HomePage";
+import type { DashboardModuleKey } from "./modules/types";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
@@ -71,21 +72,25 @@ const ADMIN_EMAIL_CANDIDATES = [
 interface AuthBranding {
   appLabel: string;
   authCaption: string;
+  hiddenModuleKeys: DashboardModuleKey[];
 }
 
 const DEFAULT_AUTH_BRANDING: AuthBranding = {
   appLabel: "Auditoria",
-  authCaption: "Prevenção de Perdas CDs"
+  authCaption: "Prevenção de Perdas CDs",
+  hiddenModuleKeys: []
 };
 
 const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   "prevencaocd.vercel.app": {
     appLabel: "Prevenção CDs",
-    authCaption: "Prevenção de Perdas CDs"
+    authCaption: "Prevenção de Perdas CDs",
+    hiddenModuleKeys: []
   },
   "logisticacd.vercel.app": {
     appLabel: "Logística CDs",
-    authCaption: "Logística CDs"
+    authCaption: "Logística CDs",
+    hiddenModuleKeys: ["atividade-extra", "produtividade", "meta-mes"]
   }
 };
 
@@ -971,6 +976,7 @@ export default function App() {
     () => resolveAuthBranding(typeof window === "undefined" ? undefined : window.location.hostname),
     []
   );
+  const hiddenModuleKeySet = useMemo(() => new Set(authBranding.hiddenModuleKeys), [authBranding.hiddenModuleKeys]);
 
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [session, setSession] = useState<Session | null>(null);
@@ -1925,6 +1931,7 @@ export default function App() {
               <HomePage
                 displayContext={displayContext}
                 appHeading={authBranding.authCaption}
+                hiddenModuleKeys={authBranding.hiddenModuleKeys}
                 isOnline={isOnline}
                 onRequestLogout={openLogoutConfirm}
                 showCdSwitcher={isGlobalProfile && globalCdOptions.length > 0}
@@ -1958,7 +1965,9 @@ export default function App() {
           <Route
             path="/modulos/atividade-extra"
             element={
-              atividadeExtraProfile ? (
+              hiddenModuleKeySet.has("atividade-extra") ? (
+                <Navigate to="/inicio" replace />
+              ) : atividadeExtraProfile ? (
                 <AtividadeExtraPage isOnline={isOnline} profile={atividadeExtraProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
@@ -2047,11 +2056,22 @@ export default function App() {
             }
           />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
-          <Route path="/modulos/meta-mes" element={<MetaMesPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/meta-mes"
+            element={
+              hiddenModuleKeySet.has("meta-mes") ? (
+                <Navigate to="/inicio" replace />
+              ) : (
+                <MetaMesPage isOnline={isOnline} userName={displayContext.nome} />
+              )
+            }
+          />
           <Route
             path="/modulos/produtividade"
             element={
-              produtividadeProfile ? (
+              hiddenModuleKeySet.has("produtividade") ? (
+                <Navigate to="/inicio" replace />
+              ) : produtividadeProfile ? (
                 <ProdutividadePage isOnline={isOnline} profile={produtividadeProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
