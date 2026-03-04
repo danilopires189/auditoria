@@ -1509,10 +1509,31 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }
       const pulItemsByRow = getPulItemsByRowKey(feedPulBySepKey, row.coddv, row.end_sep);
       if (!pulItemsByRow.length) {
+        // Preserve visibility when PUL cache is not available yet.
+        const feedKey = `sep:${baseKey}`;
+        if (seen.has(feedKey)) continue;
+        seen.add(feedKey);
+        items.push({
+          kind: "sep",
+          feedKey,
+          row,
+          zone: row.zona,
+          endereco: row.end_sep
+        });
         continue;
       }
       const pendingPulItems = pulItemsByRow.filter((item) => !item.auditado);
       if (!pendingPulItems.length) {
+        const feedKey = `sep:${baseKey}`;
+        if (seen.has(feedKey)) continue;
+        seen.add(feedKey);
+        items.push({
+          kind: "sep",
+          feedKey,
+          row,
+          zone: row.zona,
+          endereco: row.end_sep
+        });
         continue;
       }
       for (const item of pendingPulItems) {
@@ -1612,14 +1633,36 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [selectedZones, alocQueueProducts, sortedAlocAllRows, zoneFilterSet]);
 
   const pvpsActiveCoddvList = useMemo(() => {
+    const pendingPulCoddv = new Set<number>();
+    for (const row of sortedPvpsAllRows) {
+      if (row.status === "pendente_pul" && pvpsEligibleCoddv.has(row.coddv)) {
+        pendingPulCoddv.add(row.coddv);
+      }
+    }
+
     const list: number[] = [];
+    const seen = new Set<number>();
+
+    // Always keep PUL-pending products visible until conclusion.
+    for (const item of pvpsQueueProducts) {
+      if (!pendingPulCoddv.has(item.coddv)) continue;
+      if (seen.has(item.coddv)) continue;
+      seen.add(item.coddv);
+      list.push(item.coddv);
+    }
+
+    // Fill remaining slots with the regular prioritized queue.
     for (const item of pvpsQueueProducts) {
       if (!pvpsEligibleCoddv.has(item.coddv)) continue;
+      if (seen.has(item.coddv)) continue;
+      seen.add(item.coddv);
       list.push(item.coddv);
-      if (list.length >= FEED_ACTIVE_CODDV_LIMIT) break;
+      if (list.length >= FEED_ACTIVE_CODDV_LIMIT && pendingPulCoddv.size === 0) break;
+      if (list.length >= FEED_ACTIVE_CODDV_LIMIT && list.length >= pendingPulCoddv.size + FEED_ACTIVE_CODDV_LIMIT) break;
     }
+
     return list;
-  }, [pvpsQueueProducts, pvpsEligibleCoddv]);
+  }, [pvpsQueueProducts, pvpsEligibleCoddv, sortedPvpsAllRows]);
 
   const alocActiveCoddvList = useMemo(() => {
     const list: number[] = [];
