@@ -15,6 +15,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "conferencia-entrada-notas",
   "devolucao-mercadoria",
   "zerados",
+  "produtividade",
   "busca-produto",
   "validar-enderecamento"
 ]);
