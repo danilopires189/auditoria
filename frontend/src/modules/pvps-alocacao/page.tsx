@@ -1633,8 +1633,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [selectedZones, alocQueueProducts, sortedAlocAllRows, zoneFilterSet]);
 
   const pvpsActiveCoddvList = useMemo(() => {
+    const pendingSepCoddv = new Set<number>();
     const pendingPulCoddv = new Set<number>();
     for (const row of sortedPvpsAllRows) {
+      if (!pvpsEligibleCoddv.has(row.coddv)) continue;
+      if (row.status === "pendente_sep") {
+        pendingSepCoddv.add(row.coddv);
+      }
       if (row.status === "pendente_pul" && pvpsEligibleCoddv.has(row.coddv)) {
         pendingPulCoddv.add(row.coddv);
       }
@@ -1643,7 +1648,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const list: number[] = [];
     const seen = new Set<number>();
 
-    // Always keep PUL-pending products visible until conclusion.
+    // PUL pending: keep all corresponding products visible until conclusion.
     for (const item of pvpsQueueProducts) {
       if (!pendingPulCoddv.has(item.coddv)) continue;
       if (seen.has(item.coddv)) continue;
@@ -1651,14 +1656,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       list.push(item.coddv);
     }
 
-    // Fill remaining slots with the regular prioritized queue.
+    // SEP pending: apply the 50-products cap.
+    let sepCount = 0;
     for (const item of pvpsQueueProducts) {
-      if (!pvpsEligibleCoddv.has(item.coddv)) continue;
+      if (!pendingSepCoddv.has(item.coddv)) continue;
       if (seen.has(item.coddv)) continue;
       seen.add(item.coddv);
       list.push(item.coddv);
-      if (list.length >= FEED_ACTIVE_CODDV_LIMIT && pendingPulCoddv.size === 0) break;
-      if (list.length >= FEED_ACTIVE_CODDV_LIMIT && list.length >= pendingPulCoddv.size + FEED_ACTIVE_CODDV_LIMIT) break;
+      sepCount += 1;
+      if (sepCount >= FEED_ACTIVE_CODDV_LIMIT) break;
     }
 
     return list;
