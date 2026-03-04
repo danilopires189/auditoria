@@ -68,6 +68,33 @@ const ADMIN_EMAIL_CANDIDATES = [
   "mat_0001@login.auditoria.local"
 ];
 
+interface AuthBranding {
+  appLabel: string;
+  authCaption: string;
+}
+
+const DEFAULT_AUTH_BRANDING: AuthBranding = {
+  appLabel: "Auditoria",
+  authCaption: "Prevenção de Perdas CDs"
+};
+
+const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
+  "prevencaocd.vercel.app": {
+    appLabel: "Prevenção CDs",
+    authCaption: "Prevenção de Perdas CDs"
+  },
+  "logisticacd.vercel.app": {
+    appLabel: "Logística CDs",
+    authCaption: "Logística CDs"
+  }
+};
+
+function resolveAuthBranding(hostname: string | undefined): AuthBranding {
+  if (!hostname) return DEFAULT_AUTH_BRANDING;
+  const normalized = hostname.trim().toLowerCase();
+  return AUTH_BRANDING_BY_HOSTNAME[normalized] ?? DEFAULT_AUTH_BRANDING;
+}
+
 interface CdOption {
   cd: number;
   cd_nome: string;
@@ -940,6 +967,11 @@ export default function App() {
     );
   }
 
+  const authBranding = useMemo(
+    () => resolveAuthBranding(typeof window === "undefined" ? undefined : window.location.hostname),
+    []
+  );
+
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileContext | null>(null);
@@ -1109,12 +1141,13 @@ export default function App() {
 
   useEffect(() => {
     if (!session) {
-      document.title = authMode === "register" ? "Cadastro" : authMode === "reset" ? "Redefinir senha" : "Login";
+      const authModeLabel = authMode === "register" ? "Cadastro" : authMode === "reset" ? "Redefinir senha" : "Login";
+      document.title = `${authBranding.appLabel} - ${authModeLabel}`;
       return;
     }
     const activeModule = findModuleByPath(location.pathname);
     document.title = activeModule ? activeModule.title : "Início";
-  }, [authMode, location.pathname, session]);
+  }, [authBranding.appLabel, authMode, location.pathname, session]);
 
   useEffect(() => {
     let mounted = true;
@@ -1891,6 +1924,7 @@ export default function App() {
             element={(
               <HomePage
                 displayContext={displayContext}
+                appHeading={authBranding.authCaption}
                 isOnline={isOnline}
                 onRequestLogout={openLogoutConfirm}
                 showCdSwitcher={isGlobalProfile && globalCdOptions.length > 0}
@@ -2166,7 +2200,7 @@ export default function App() {
           <img className="brand-logo" src={logoImage} alt="Logo Auditoria" />
           <img className="brand-stamp" src={pmImage} alt="Marca interna" />
         </div>
-        <p className="auth-brand-caption">Prevenção de Perdas CDs</p>
+        <p className="auth-brand-caption">{authBranding.authCaption}</p>
 
         <section key={authMode} className="auth-panel panel-enter">
           <h1>{authMode === "login" ? "Login" : authMode === "register" ? "Cadastro" : "Redefinir senha"}</h1>
