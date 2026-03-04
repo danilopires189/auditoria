@@ -738,6 +738,41 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }
   }
 
+  async function hydratePulCacheForRows(rows: PvpsManifestRow[]): Promise<Record<string, PvpsPulItemRow[]>> {
+    if (!isOnline || activeCd == null) return {};
+    const missingRows = rows.filter((row) => {
+      if (row.status !== "pendente_pul") return false;
+      const cachedItems = getPulItemsByRowKey(feedPulBySepKey, row.coddv, row.end_sep);
+      return !hasUsablePulCacheForRow(row, cachedItems);
+    });
+    if (!missingRows.length) return {};
+
+    const updates: Record<string, PvpsPulItemRow[]> = {};
+    let cursor = 0;
+    const concurrency = Math.max(8, Math.min(24, Math.ceil(missingRows.length / 12)));
+
+    const worker = async () => {
+      for (;;) {
+        const index = cursor;
+        cursor += 1;
+        if (index >= missingRows.length) return;
+
+        const row = missingRows[index];
+        try {
+          const items = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
+          if (hasUsablePulCacheForRow(row, items)) {
+            updates[keyOfPvps(row)] = items;
+          }
+        } catch {
+          // Keep row as "missing" to retry automatically.
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    return updates;
+  }
+
   async function downloadOfflineBase(): Promise<void> {
     if (activeCd == null) {
       throw new Error("CD ativo obrigatório para preparar base offline.");
@@ -898,6 +933,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           fetchPvpsManifest({ p_cd: activeCd, zona: null }),
           fetchPvpsCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt })
         ]);
+        if (!silent && feedView === "pendentes") {
+          const updates = await hydratePulCacheForRows(rows);
+          if (Object.keys(updates).length > 0) {
+            setFeedPulBySepKey((current) => ({ ...current, ...updates }));
+          }
+        }
         setPvpsRows(rows);
         setPvpsCompletedRows(completed);
         if (!rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
@@ -1468,31 +1509,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }
       const pulItemsByRow = getPulItemsByRowKey(feedPulBySepKey, row.coddv, row.end_sep);
       if (!pulItemsByRow.length) {
-        // Keep old/legacy pending PUL rows visible even before PUL cache is loaded.
-        const feedKey = `sep:${baseKey}`;
-        if (seen.has(feedKey)) continue;
-        seen.add(feedKey);
-        items.push({
-          kind: "sep",
-          feedKey,
-          row,
-          zone: row.zona,
-          endereco: row.end_sep
-        });
         continue;
       }
       const pendingPulItems = pulItemsByRow.filter((item) => !item.auditado);
       if (!pendingPulItems.length) {
-        const feedKey = `sep:${baseKey}`;
-        if (seen.has(feedKey)) continue;
-        seen.add(feedKey);
-        items.push({
-          kind: "sep",
-          feedKey,
-          row,
-          zone: row.zona,
-          endereco: row.end_sep
-        });
         continue;
       }
       for (const item of pendingPulItems) {
@@ -1792,30 +1812,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   useEffect(() => {
     if (tab !== "pvps" || feedView !== "pendentes" || activeCd == null || !isOnline) return;
-    const pendingPulRows = sortedPvpsAllRows.filter(
-      (row) => row.status === "pendente_pul"
-    );
-    const missingRows = pendingPulRows.filter((row) => {
-      const cachedItems = getPulItemsByRowKey(feedPulBySepKey, row.coddv, row.end_sep);
-      return !hasUsablePulCacheForRow(row, cachedItems);
-    });
-    if (!missingRows.length) return;
-
     let cancelled = false;
     const loadMissing = async () => {
-      const updates: Record<string, PvpsPulItemRow[]> = {};
-      // Avoid overloading RPC; load a small batch and retry remaining on next cycle.
-      for (const row of missingRows.slice(0, 20)) {
-        if (cancelled) return;
-        try {
-          const items = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd);
-          if (hasUsablePulCacheForRow(row, items)) {
-            updates[keyOfPvps(row)] = items;
-          }
-        } catch {
-          // Keep row as "missing" to retry automatically.
-        }
-      }
+      const updates = await hydratePulCacheForRows(sortedPvpsAllRows);
       if (cancelled || !Object.keys(updates).length) return;
       setFeedPulBySepKey((current) => ({ ...current, ...updates }));
     };
