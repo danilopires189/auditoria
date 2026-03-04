@@ -1958,6 +1958,36 @@ small {
   font-size: 0.85rem;
 }
 
+.atividade-extra-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e0d3b0;
+  background: #fff9ed;
+  color: #7a4f14;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.atividade-extra-pending-badge-icon {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+}
+
+.atividade-extra-pending-badge-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .atividade-extra-visibility-btn {
   display: inline-flex;
   align-items: center;
@@ -1978,6 +2008,51 @@ small {
 .atividade-extra-body {
   display: grid;
   gap: 10px;
+}
+
+.atividade-extra-pending-panel {
+  border: 1px solid #e8dabb;
+  border-radius: 14px;
+  background: #fffdf8;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.atividade-extra-pending-panel h3 {
+  margin: 0;
+  color: #6d470f;
+  font-family: "Sora", sans-serif;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.atividade-extra-pending-panel-count {
+  border-radius: 999px;
+  border: 1px solid #debb7f;
+  background: #f9e4be;
+  color: #73470c;
+  min-width: 28px;
+  text-align: center;
+  padding: 2px 8px;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.atividade-extra-pending-list {
+  display: grid;
+  gap: 8px;
+}
+
+.atividade-extra-pending-card {
+  border: 1px solid #eadcbc;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
 }
 
 .atividade-extra-editor-dialog {
@@ -2204,6 +2279,36 @@ small {
   color: #35547f;
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.atividade-extra-entry-head-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.atividade-extra-status-badge {
+  border-radius: 999px;
+  border: 1px solid #d4dded;
+  background: #eef3ff;
+  color: #2f4f7f;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.atividade-extra-status-badge.is-pending {
+  border-color: #e2c089;
+  background: #fff6e8;
+  color: #7f4b10;
+}
+
+.atividade-extra-status-badge.is-approved {
+  border-color: #b6dcbc;
+  background: #edf9ef;
+  color: #176035;
 }
 
 .atividade-extra-entry-description {
