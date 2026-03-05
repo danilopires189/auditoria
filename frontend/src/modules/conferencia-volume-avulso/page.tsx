@@ -27,7 +27,6 @@ import {
   cleanupExpiredVolumeAvulsoVolumes,
   getLocalVolume,
   getManifestItemsByEtiqueta,
-  listManifestItemsByCd,
   listManifestVolumes,
   getManifestMetaLocal,
   getPendingSummary,
@@ -514,14 +513,6 @@ function routeStatusClass(status: VolumeAvulsoStoreStatus | string): "correto" |
   return "falta";
 }
 
-function buildStoreProgressKey(rota: string | null | undefined, filial: number | null | undefined): string {
-  const normalizedRota = (String(rota ?? "SEM ROTA").trim().toLocaleUpperCase("pt-BR") || "SEM ROTA");
-  const normalizedFilial = Number.isFinite(Number(filial))
-    ? String(Math.trunc(Number(filial)))
-    : "na";
-  return `${normalizedRota}::${normalizedFilial}`;
-}
-
 function formatPercent(value: number): string {
   const normalized = Math.max(0, Math.min(value, 100));
   const rounded = Math.round(normalized * 10) / 10;
@@ -626,8 +617,6 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [routeRows, setRouteRows] = useState<VolumeAvulsoRouteOverviewRow[]>([]);
-  const [baseCoddvTotal, setBaseCoddvTotal] = useState(0);
-  const [baseCoddvByStore, setBaseCoddvByStore] = useState<Record<string, number>>({});
   const [manifestVolumeRows, setManifestVolumeRows] = useState<VolumeAvulsoManifestVolumeRow[]>([]);
 
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
@@ -832,29 +821,23 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     ));
   }, [activeVolume, currentCd, manifestVolumeRows, modalVolumeHistory, routeSearchInput]);
 
-  const coddvCompletionStats = useMemo(() => {
-    if (baseCoddvTotal <= 0) {
-      return { completed: 0, total: 0, percent: 0 };
-    }
-
+  const volumeCompletionStats = useMemo(() => {
+    let total = 0;
     let completed = 0;
-    for (const row of routeRows) {
-      const baseCount = baseCoddvByStore[buildStoreProgressKey(row.rota, row.filial)] ?? 0;
-      if (baseCount <= 0) continue;
 
+    for (const row of routeRows) {
       const totalEtiquetas = Math.max(Number(row.total_etiquetas) || 0, 0);
       const conferidas = Math.max(Number(row.conferidas) || 0, 0);
-      const ratio = totalEtiquetas > 0
-        ? Math.max(0, Math.min(conferidas / totalEtiquetas, 1))
-        : row.status === "concluido" ? 1 : 0;
-
-      completed += Math.round(baseCount * ratio);
+      total += totalEtiquetas;
+      completed += Math.max(0, Math.min(conferidas, totalEtiquetas));
     }
 
-    completed = Math.max(0, Math.min(completed, baseCoddvTotal));
-    const percent = baseCoddvTotal > 0 ? (completed / baseCoddvTotal) * 100 : 0;
-    return { completed, total: baseCoddvTotal, percent };
-  }, [baseCoddvByStore, baseCoddvTotal, routeRows]);
+    if (total <= 0) {
+      return { completed: 0, total: 0, percent: 0 };
+    }
+    const percent = (completed / total) * 100;
+    return { completed, total, percent };
+  }, [routeRows]);
 
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
@@ -1893,46 +1876,6 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
   }, [currentCd, persistPreferences]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    if (currentCd == null) {
-      setBaseCoddvTotal(0);
-      setBaseCoddvByStore({});
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const loadProgressBase = async () => {
-      try {
-        const manifestItems = isOnline
-          ? (await fetchManifestBundle(currentCd, undefined, { includeBarras: false })).items
-          : await listManifestItemsByCd(profile.user_id, currentCd);
-        if (cancelled) return;
-
-        const byStore: Record<string, number> = {};
-        for (const item of manifestItems) {
-          const key = buildStoreProgressKey(item.rota, item.filial);
-          byStore[key] = (byStore[key] ?? 0) + 1;
-        }
-
-        setBaseCoddvTotal(manifestItems.length);
-        setBaseCoddvByStore(byStore);
-      } catch {
-        if (cancelled) return;
-        setBaseCoddvTotal(0);
-        setBaseCoddvByStore({});
-      }
-    };
-
-    void loadProgressBase();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentCd, isOnline, profile.user_id]);
-
-  useEffect(() => {
     if (currentCd == null) {
       setManifestReady(false);
       setManifestInfo("");
@@ -2686,17 +2629,17 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           <div className="pvps-progress-card" role="status" aria-live="polite">
             <div className="pvps-progress-head">
               <strong>Conclusão Volume Avulso</strong>
-              <span>{formatPercent(coddvCompletionStats.percent)}</span>
+              <span>{formatPercent(volumeCompletionStats.percent)}</span>
             </div>
             <div className="pvps-progress-track" aria-hidden="true">
               <span
                 className="pvps-progress-fill"
-                style={{ width: `${Math.max(0, Math.min(coddvCompletionStats.percent, 100))}%` }}
+                style={{ width: `${Math.max(0, Math.min(volumeCompletionStats.percent, 100))}%` }}
               />
             </div>
             <small>
-              {coddvCompletionStats.completed} {coddvCompletionStats.completed === 1 ? "SKU conferido" : "SKUs conferidos"}
-              {" "}de {coddvCompletionStats.total} {coddvCompletionStats.total === 1 ? "SKU" : "SKUs"} na base {isOnline ? "online atual" : "local atual"}.
+              {volumeCompletionStats.completed} {volumeCompletionStats.completed === 1 ? "volume conferido" : "volumes conferidos"}
+              {" "}de {volumeCompletionStats.total} {volumeCompletionStats.total === 1 ? "volume" : "volumes"} na base {isOnline ? "online atual" : "local atual"}.
             </small>
           </div>
         ) : null}
