@@ -740,7 +740,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     hasInformedItemsFromPreviousSession
   ]);
 
-  const filteredModalVolumes = useMemo<VolumeAvulsoModalVolumeRow[]>(() => {
+  const modalVolumesWithStatus = useMemo<VolumeAvulsoModalVolumeRow[]>(() => {
     if (currentCd == null || manifestVolumeRows.length === 0) return [];
 
     const today = todayIsoBrasilia();
@@ -811,17 +811,25 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       };
     });
 
-    const query = normalizeSearchText(routeSearchInput);
-    const filtered = query
-      ? withStatus.filter((row) => row.search_blob.includes(query))
-      : withStatus;
-
-    return filtered.sort((a, b) => (
+    return withStatus.sort((a, b) => (
       a.nr_volume.localeCompare(b.nr_volume, "pt-BR", { numeric: true, sensitivity: "base" })
     ));
-  }, [activeVolume, currentCd, manifestVolumeRows, modalVolumeHistory, routeSearchInput]);
+  }, [activeVolume, currentCd, manifestVolumeRows, modalVolumeHistory]);
+
+  const filteredModalVolumes = useMemo<VolumeAvulsoModalVolumeRow[]>(() => {
+    const query = normalizeSearchText(routeSearchInput);
+    if (!query) return modalVolumesWithStatus;
+    return modalVolumesWithStatus.filter((row) => row.search_blob.includes(query));
+  }, [modalVolumesWithStatus, routeSearchInput]);
 
   const volumeCompletionStats = useMemo(() => {
+    if (modalVolumesWithStatus.length > 0) {
+      const total = modalVolumesWithStatus.length;
+      const completed = modalVolumesWithStatus.filter((row) => row.status === "concluido").length;
+      const percent = total > 0 ? (completed / total) * 100 : 0;
+      return { completed, total, percent };
+    }
+
     let total = 0;
     let completed = 0;
 
@@ -837,7 +845,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     }
     const percent = (completed / total) * 100;
     return { completed, total, percent };
-  }, [routeRows]);
+  }, [modalVolumesWithStatus, routeRows]);
 
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
