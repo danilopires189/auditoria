@@ -2636,7 +2636,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         {!activeVolume ? (
           <div className="pvps-progress-card" role="status" aria-live="polite">
             <div className="pvps-progress-head">
-              <strong>Conclusão Volume Avulso</strong>
+              <strong>Concluído Volume Avulso</strong>
               <span>{formatPercent(volumeCompletionStats.percent)}</span>
             </div>
             <div className="pvps-progress-track" aria-hidden="true">

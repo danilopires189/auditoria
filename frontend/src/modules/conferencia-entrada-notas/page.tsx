@@ -5090,7 +5090,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         {!activeVolume ? (
           <div className="pvps-progress-card" role="status" aria-live="polite">
             <div className="pvps-progress-head">
-              <strong>Conclusão Entrada de Notas</strong>
+              <strong>Concluído Entrada de Notas</strong>
               <span>{formatPercent(valorRecebimentoStats.percent)}</span>
             </div>
             <div className="pvps-progress-track" aria-hidden="true">

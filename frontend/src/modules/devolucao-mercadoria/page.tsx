@@ -3257,7 +3257,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         {!activeVolume ? (
           <div className="pvps-progress-card" role="status" aria-live="polite">
             <div className="pvps-progress-head">
-              <strong>Conclusão Devolução</strong>
+              <strong>Concluído Devolução</strong>
               <span>{formatPercent(nfdCompletionStats.percent)}</span>
             </div>
             <div className="pvps-progress-track" aria-hidden="true">

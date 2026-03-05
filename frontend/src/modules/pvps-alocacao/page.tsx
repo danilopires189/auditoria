@@ -3146,7 +3146,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="pvps-list">
                 <div className="pvps-progress-card" role="status" aria-live="polite">
                   <div className="pvps-progress-head">
-                    <strong>Conclusão PVPS</strong>
+                    <strong>Concluído PVPS</strong>
                     <span>{formatPercent(pvpsStats.percent)}</span>
                   </div>
                   <div className="pvps-progress-track" aria-hidden="true">
@@ -3223,7 +3223,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="pvps-list">
                 <div className="pvps-progress-card" role="status" aria-live="polite">
                   <div className="pvps-progress-head">
-                    <strong>Conclusão Alocação</strong>
+                    <strong>Concluído Alocação</strong>
                     <span>{formatPercent(alocStats.percent)}</span>
                   </div>
                   <div className="pvps-progress-track" aria-hidden="true">
