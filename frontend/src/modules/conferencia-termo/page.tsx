@@ -2784,7 +2784,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         {!activeVolume ? (
           <div className="pvps-progress-card" role="status" aria-live="polite">
             <div className="pvps-progress-head">
-              <strong>Conclusão Termo</strong>
+              <strong>Concluído Termo</strong>
               <span>{formatPercent(coddvCompletionStats.percent)}</span>
             </div>
             <div className="pvps-progress-track" aria-hidden="true">

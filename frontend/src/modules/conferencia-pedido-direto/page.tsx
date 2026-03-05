@@ -2616,7 +2616,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         {!activeVolume ? (
           <div className="pvps-progress-card" role="status" aria-live="polite">
             <div className="pvps-progress-head">
-              <strong>Conclusão Pedido Direto</strong>
+              <strong>Concluído Pedido Direto</strong>
               <span>{formatPercent(coddvCompletionStats.percent)}</span>
             </div>
             <div className="pvps-progress-track" aria-hidden="true">
