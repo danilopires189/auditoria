@@ -1707,11 +1707,6 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     const sobra = divergenciaTotals.sobra;
     const falta = divergenciaTotals.falta;
 
-    if (sobra > 0) {
-      setFinalizeError("Existem sobras no volume. Corrija antes de finalizar.");
-      return;
-    }
-
     const motivo = finalizeMotivo.trim();
     if (falta > 0 && !motivo) {
       setFinalizeError("Informe o motivo de falta para concluir.");
@@ -3189,6 +3184,23 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
               <div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="termo-finalizar-title">Finalizar conferência</h3>
                 <p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>
+                {divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? (
+                  <div className="termo-item-detail">
+                    <p>Itens com divergência:</p>
+                    <div className="termo-routes-list termo-finalize-list">
+                      {groupedItems.falta.map(({ item, qtd_falta }) => (
+                        <p key={`fim-falta-${item.coddv}`}>
+                          {item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}
+                        </p>
+                      ))}
+                      {groupedItems.sobra.map(({ item, qtd_sobra }) => (
+                        <p key={`fim-sobra-${item.coddv}`}>
+                          {item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {divergenciaTotals.falta > 0 ? (
                   <label>
                     Motivo da falta
