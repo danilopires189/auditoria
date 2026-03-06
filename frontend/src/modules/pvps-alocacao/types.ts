@@ -31,6 +31,8 @@ export interface PvpsPulItemRow {
   val_pul: string | null;
   end_sit: PvpsEndSit | null;
   auditado: boolean;
+  dt_hr?: string | null;
+  auditor_nome?: string | null;
 }
 
 export interface PvpsSepSubmitResult {

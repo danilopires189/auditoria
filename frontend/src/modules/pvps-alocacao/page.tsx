@@ -604,6 +604,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [alocRows, setAlocRows] = useState<AlocacaoManifestRow[]>([]);
   const [pvpsCompletedRows, setPvpsCompletedRows] = useState<PvpsCompletedRow[]>([]);
   const [alocCompletedRows, setAlocCompletedRows] = useState<AlocacaoCompletedRow[]>([]);
+  const [sepConcludedDayByKey, setSepConcludedDayByKey] = useState<Record<string, string>>({});
   const [todayBrt, setTodayBrt] = useState<string>(() => brtDayKey());
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -701,6 +702,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const silentRefreshInFlightRef = useRef(false);
   const activeCd = profile.cd_default ?? null;
   const canUseAuditoriasReport = isAdmin && isDesktop;
+
+  function rememberSepConcludedAt(coddv: number, endSep: string, dtHr?: string | null): void {
+    const rowKey = keyOfPvpsByValues(coddv, endSep);
+    const parsed = dtHr ? new Date(dtHr).getTime() : Number.NaN;
+    const safeTimestamp = Number.isNaN(parsed) ? new Date().toISOString() : (dtHr as string);
+    setSepConcludedDayByKey((current) => {
+      if (current[rowKey]) return current;
+      return { ...current, [rowKey]: safeTimestamp };
+    });
+  }
 
   async function loadAdminData(): Promise<void> {
     if (!isAdmin) return;
@@ -941,6 +952,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         }
         setPvpsRows(rows);
         setPvpsCompletedRows(completed);
+        setSepConcludedDayByKey((current) => {
+          const next = { ...current };
+          for (const item of completed) {
+            if (item.status !== "pendente_pul") continue;
+            const rowKey = keyOfPvpsByValues(item.coddv, item.end_sep);
+            if (!next[rowKey]) next[rowKey] = item.dt_hr;
+          }
+          return next;
+        });
         if (!rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
           setActivePvpsKey(rows[0] ? keyOfPvps(rows[0]) : null);
           if (!rows[0]) closePvpsPopup();
@@ -1206,7 +1226,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setActivePulEnd(null);
     setPvpsCompletedPulByAuditId({});
     setPvpsCompletedPulLoading({});
+    setSepConcludedDayByKey({});
   }, [activeCd]);
+
+  useEffect(() => {
+    setSepConcludedDayByKey({});
+  }, [todayBrt]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -1718,6 +1743,46 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       });
   }, [sortedAlocAllRows, alocActiveCoddvSet, selectedZones, zoneFilterSet, alocActiveCoddvList]);
 
+  const pvpsCompletedRowsForView = useMemo(() => {
+    const byRowKey = new Set<string>();
+    const rows = [...pvpsCompletedRows];
+    for (const row of pvpsCompletedRows) {
+      byRowKey.add(keyOfPvpsByValues(row.coddv, row.end_sep));
+    }
+
+    for (const row of pvpsRows) {
+      if (row.status !== "pendente_pul") continue;
+      const pendingPulCount = expectedPendingPulCount(row);
+      if (pendingPulCount < 1) continue;
+      const rowKey = keyOfPvps(row);
+      if (byRowKey.has(rowKey)) continue;
+      const sepDtHr = sepConcludedDayByKey[rowKey];
+      if (!sepDtHr) continue;
+      rows.push({
+        audit_id: `sep-day:${rowKey}`,
+        auditor_id: profile.user_id,
+        cd: row.cd,
+        zona: row.zona,
+        coddv: row.coddv,
+        descricao: row.descricao,
+        end_sep: row.end_sep,
+        status: "pendente_pul",
+        end_sit: row.end_sit,
+        val_sep: row.val_sep,
+        pul_total: row.pul_total,
+        pul_auditados: row.pul_auditados,
+        pul_has_lower: false,
+        pul_lower_end: null,
+        pul_lower_val: null,
+        dt_hr: sepDtHr,
+        auditor_nome: profile.nome || "USUARIO"
+      });
+      byRowKey.add(rowKey);
+    }
+
+    return rows;
+  }, [pvpsCompletedRows, pvpsRows, sepConcludedDayByKey, profile.user_id, profile.nome]);
+
   const zones = useMemo(() => {
     if (feedView === "pendentes") {
       if (tab === "pvps") {
@@ -1738,7 +1803,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       ).sort((a, b) => a.localeCompare(b));
     }
     if (tab === "pvps") {
-      return Array.from(new Set(pvpsCompletedRows.map((row) => row.zona))).sort((a, b) => a.localeCompare(b));
+      return Array.from(new Set(pvpsCompletedRowsForView.map((row) => row.zona))).sort((a, b) => a.localeCompare(b));
     }
     return Array.from(new Set(alocCompletedRows.map((row) => row.zona))).sort((a, b) => a.localeCompare(b));
   }, [
@@ -1748,7 +1813,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     pvpsActiveCoddvSet,
     sortedAlocAllRows,
     alocActiveCoddvSet,
-    pvpsCompletedRows,
+    pvpsCompletedRowsForView,
     alocCompletedRows
   ]);
 
@@ -1769,9 +1834,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [zones, zoneSearch]);
 
   const filteredPvpsCompletedRows = useMemo(() => {
-    if (!selectedZones.length) return pvpsCompletedRows;
-    return pvpsCompletedRows.filter((row) => zoneFilterSet.has(row.zona));
-  }, [pvpsCompletedRows, selectedZones, zoneFilterSet]);
+    if (!selectedZones.length) return pvpsCompletedRowsForView;
+    return pvpsCompletedRowsForView.filter((row) => zoneFilterSet.has(row.zona));
+  }, [pvpsCompletedRowsForView, selectedZones, zoneFilterSet]);
 
   const filteredAlocCompletedRows = useMemo(() => {
     if (!selectedZones.length) return alocCompletedRows;
@@ -2097,15 +2162,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const startAt = index >= 0 ? index + 1 : 0;
     const fallbackZone = index >= 0 ? pvpsFeedItems[index]?.zone ?? null : null;
     const targetZone = currentZone ?? fallbackZone;
+    const candidates = pvpsFeedItems.filter((item) => item.feedKey !== currentFeedKey);
     let next: PvpsFeedItem | undefined;
     if (targetZone) {
-      next = pvpsFeedItems.find((item, itemIndex) => itemIndex >= startAt && item.zone === targetZone);
+      next = pvpsFeedItems.find((item, itemIndex) => itemIndex >= startAt && item.feedKey !== currentFeedKey && item.zone === targetZone);
     }
     if (!next) {
-      next = pvpsFeedItems.find((_, itemIndex) => itemIndex >= startAt);
+      next = pvpsFeedItems.find((item, itemIndex) => itemIndex >= startAt && item.feedKey !== currentFeedKey);
     }
     if (!next) {
-      next = pvpsFeedItems.find((item) => item.feedKey !== currentFeedKey);
+      next = candidates[0];
     }
     if (!next) {
       closePvpsPopup();
@@ -2144,10 +2210,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const startAt = index >= 0 ? index + 1 : 0;
     let next: AlocacaoManifestRow | undefined;
     if (targetZone) {
-      next = visibleAlocRows.find((row, rowIndex) => rowIndex >= startAt && row.zona === targetZone);
+      next = visibleAlocRows.find((row, rowIndex) => rowIndex >= startAt && row.queue_id !== currentQueueId && row.zona === targetZone);
     }
     if (!next) {
-      next = visibleAlocRows.find((_, rowIndex) => rowIndex >= startAt);
+      next = visibleAlocRows.find((row, rowIndex) => rowIndex >= startAt && row.queue_id !== currentQueueId);
     }
     // Se chegou ao fim da lista, volta para o primeiro pendente disponível.
     if (!next) {
@@ -2218,6 +2284,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           openNextPvpsSepFrom(currentFeedKey);
         } else {
           const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
+          rememberSepConcludedAt(activePvps.coddv, activePvps.end_sep);
           setPvpsRows((current) => current.map((row) => (
             keyOfPvps(row) === currentKey
               ? { ...row, status: "pendente_pul", val_sep: localVal, end_sit: null }
@@ -2244,6 +2311,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         val_sep: hasOcorrencia ? null : normalizedValSep
       });
       const normalizedResultValSep = normalizeMmaa(result.val_sep ?? normalizedValSep);
+      if (!(result.end_sit === "vazio" || result.end_sit === "obstruido")) {
+        rememberSepConcludedAt(activePvps.coddv, activePvps.end_sep);
+      }
       if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
         setStatusMessage("Separação com ocorrência. Item removido do feed e não será enviado ao frontend.");
       } else {
@@ -2567,6 +2637,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setShowAlocPopup(false);
       } else {
         setAlocResult(null);
+        setAlocRows((current) => current.filter((row) => row.queue_id !== currentQueueId));
         openNextAlocacaoFrom(currentQueueId, currentZone);
         void loadCurrent({ silent: true });
       }
@@ -3164,7 +3235,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const open = Boolean(expandedPvpsCompleted[row.audit_id]);
                   const previous = index > 0 ? sortedPvpsCompletedRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
-                  const canEdit = canEditAudit(row.auditor_id);
+                  const isSyntheticSepPending = row.audit_id.startsWith("sep-day:");
+                  const canEdit = !isSyntheticSepPending && canEditAudit(row.auditor_id);
                   const statusInfo = pvpsHistoryStatus(row);
                   const pulItemsCompleted = pvpsCompletedPulByAuditId[row.audit_id] ?? [];
                   const pulItemsLoading = Boolean(pvpsCompletedPulLoading[row.audit_id]);
@@ -3191,6 +3263,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
+                            <small>Tipo SEP | {row.end_sep} | {formatDateTime(row.dt_hr)}</small>
                             <small>Pulmão auditados: {row.pul_auditados}/{row.pul_total}</small>
                             {row.pul_auditados > 0 ? (
                               <div className="pvps-pul-completed-group">
@@ -3198,7 +3271,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 {pulItemsLoading ? <small>Carregando endereços de Pulmão...</small> : null}
                                 {!pulItemsLoading ? [...pulItemsCompleted].sort((a, b) => a.end_pul.localeCompare(b.end_pul)).map((item) => (
                                   <small key={`${row.audit_id}:${item.end_pul}`} className="pvps-pul-completed-item">
-                                    {item.end_pul} | Validade {item.val_pul ?? "-"}{item.end_sit ? ` | Ocorrência ${formatOcorrenciaLabel(item.end_sit)}` : ""}
+                                    Tipo PUL | {item.end_pul} | {formatDateTime(item.dt_hr ?? row.dt_hr)} | Validade {item.val_pul ?? "-"}{item.end_sit ? ` | Ocorrência ${formatOcorrenciaLabel(item.end_sit)}` : ""}{` | Auditor ${item.auditor_nome ?? row.auditor_nome}`}
                                   </small>
                                 )) : null}
                               </div>
@@ -3209,7 +3282,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                               </small>
                             ) : null}
                             <small>Auditor: {row.auditor_nome}</small>
-                            <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
+                            <small>{isSyntheticSepPending ? "SEP concluído no dia com PUL pendente." : `Concluído em: ${formatDateTime(row.dt_hr)}`}</small>
                           </div>
                         ) : null}
                       </div>
