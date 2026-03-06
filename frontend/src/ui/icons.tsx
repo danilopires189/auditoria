@@ -77,6 +77,22 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M8 17h5" />
         </svg>
       );
+    case "qr":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="6" height="6" rx="1" />
+          <rect x="14" y="4" width="6" height="6" rx="1" />
+          <rect x="4" y="14" width="6" height="6" rx="1" />
+          <path d="M7 6.5h0" />
+          <path d="M17 6.5h0" />
+          <path d="M7 16.5h0" />
+          <path d="M13 13h2" />
+          <path d="M13 17v3" />
+          <path d="M17 13v2" />
+          <path d="M16 16h4" />
+          <path d="M18 19h2" />
+        </svg>
+      );
     case "return":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">

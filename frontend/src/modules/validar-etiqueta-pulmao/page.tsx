@@ -244,13 +244,17 @@ function barcodeIcon() {
 function qrIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 4h6v6H4z" />
-      <path d="M14 4h6v6h-6z" />
-      <path d="M4 14h6v6H4z" />
-      <path d="M15 15h2v2h-2z" />
-      <path d="M18 14h2v6h-6v-2h4z" />
-      <path d="M12 12h2v2h-2z" />
-      <path d="M12 16h2v4h-2z" />
+      <rect x="4" y="4" width="6" height="6" rx="1" />
+      <rect x="14" y="4" width="6" height="6" rx="1" />
+      <rect x="4" y="14" width="6" height="6" rx="1" />
+      <path d="M7 6.5h0" />
+      <path d="M17 6.5h0" />
+      <path d="M7 16.5h0" />
+      <path d="M13 13h2" />
+      <path d="M13 17v3" />
+      <path d="M17 13v2" />
+      <path d="M16 16h4" />
+      <path d="M18 19h2" />
     </svg>
   );
 }
