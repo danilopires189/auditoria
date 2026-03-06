@@ -6079,10 +6079,10 @@ small {
    ═══════════════════════════════════════════════════════════ */
 
 /* Animations */
-@keyframes pvps-slide-up {
+@keyframes pvps-popup-fade-in {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translateY(10px);
   }
 
   to {
@@ -6091,20 +6091,13 @@ small {
   }
 }
 
-@keyframes pvps-slide-next {
+@keyframes pvps-popup-swap {
   from {
-    opacity: 0.72;
-    transform: translate3d(78%, 0, 0) scale(0.985);
-  }
-
-  76% {
-    opacity: 1;
-    transform: translate3d(-2%, 0, 0) scale(1.002);
+    opacity: 0.82;
   }
 
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
@@ -6434,6 +6427,7 @@ small {
 .pvps-popup-card {
   width: min(760px, calc(100vw - 16px));
   max-height: calc(100dvh - 16px);
+  min-height: clamp(340px, 56dvh, 520px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   scroll-padding-bottom: 120px;
@@ -6441,14 +6435,11 @@ small {
   padding: 18px 16px;
   border-radius: 20px;
   box-shadow: 0 -4px 32px rgba(4, 12, 28, 0.18), 0 2px 10px rgba(4, 12, 28, 0.08);
-  animation: pvps-slide-up 280ms ease both;
+  animation: pvps-popup-fade-in 180ms ease both;
 }
 
 .pvps-popup-card-next {
-  animation: pvps-slide-next 620ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-  will-change: transform, opacity;
-  backface-visibility: hidden;
-  transform: translateZ(0);
+  animation: pvps-popup-swap 180ms ease both;
 }
 
 .pvps-popup-card>p {
@@ -7294,6 +7285,7 @@ small {
     width: 100%;
     max-width: calc(100vw - 8px);
     max-height: calc(100dvh - 8px);
+    min-height: min(72dvh, 520px);
     border-radius: 20px 20px 0 0;
     padding: 20px 16px calc(16px + env(safe-area-inset-bottom, 0px));
   }

@@ -925,7 +925,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setAlocRows(localData.alocRows);
         setPvpsCompletedRows([]);
         setAlocCompletedRows([]);
-        if (!localData.pvpsRows.some((row) => keyOfPvps(row) === activePvpsKey)) {
+        if (!showPvpsPopup && !localData.pvpsRows.some((row) => keyOfPvps(row) === activePvpsKey)) {
           setActivePvpsKey(localData.pvpsRows[0] ? keyOfPvps(localData.pvpsRows[0]) : null);
           if (!localData.pvpsRows[0]) closePvpsPopup();
         }
@@ -961,7 +961,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           }
           return next;
         });
-        if (!rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
+        if (!showPvpsPopup && !rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
           setActivePvpsKey(rows[0] ? keyOfPvps(rows[0]) : null);
           if (!rows[0]) closePvpsPopup();
         }
@@ -1313,6 +1313,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       return;
     }
 
+    if (showPvpsPopup) {
+      setEditorPopupKeyboardInset(0);
+      setEditorPopupViewportHeight(null);
+      return;
+    }
+
     const isMobileViewport = window.matchMedia("(max-width: 980px)").matches;
     if (!isMobileViewport) {
       setEditorPopupKeyboardInset(0);
@@ -1336,28 +1342,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setEditorPopupViewportHeight(inset > 0 ? visibleHeight : null);
     };
 
-    const keepFocusVisible = (event: Event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      if (!target.closest(".pvps-popup-card")) return;
-      window.setTimeout(() => {
-        try {
-          target.scrollIntoView({ block: "center", inline: "nearest" });
-        } catch {
-          // ignore
-        }
-      }, 120);
-    };
-
     updateViewportMetrics();
     vv?.addEventListener("resize", updateViewportMetrics);
     window.addEventListener("orientationchange", updateViewportMetrics);
-    document.addEventListener("focusin", keepFocusVisible);
 
     return () => {
       vv?.removeEventListener("resize", updateViewportMetrics);
       window.removeEventListener("orientationchange", updateViewportMetrics);
-      document.removeEventListener("focusin", keepFocusVisible);
     };
   }, [showAlocPopup, showPvpsPopup]);
 
@@ -3389,7 +3380,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ? createPortal(
           <div
             className="confirm-overlay pvps-popup-overlay"
-            style={editorPopupOverlayStyle}
             role="dialog"
             aria-modal="true"
             aria-labelledby="pvps-inform-title"
@@ -3400,8 +3390,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             }}
           >
             <div
-              className={`confirm-dialog surface-enter pvps-popup-card${pvpsPopupMotion === "next" ? " pvps-popup-card-next" : ""}`}
-              style={editorPopupCardStyle}
+              className={`confirm-dialog pvps-popup-card${pvpsPopupMotion === "next" ? " pvps-popup-card-next" : ""}`}
               onClick={(event) => event.stopPropagation()}
             >
               <h3 id="pvps-inform-title">
@@ -3446,7 +3435,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           inputMode="numeric"
                           pattern="[0-9]*"
                           required
-                          autoFocus
                         />
                       ) : !showSepOccurrence ? (
                         <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(endSit as PvpsEndSit)}</span>
