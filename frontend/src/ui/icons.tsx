@@ -2,6 +2,18 @@ import type { ModuleIconName } from "../modules/types";
 
 export function ModuleIcon({ name }: { name: ModuleIconName }) {
   switch (name) {
+    case "calendar":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="15" rx="2" />
+          <path d="M8 3v4" />
+          <path d="M16 3v4" />
+          <path d="M4 10h16" />
+          <path d="M8 14h3" />
+          <path d="M13 14h3" />
+          <path d="M8 17h3" />
+        </svg>
+      );
     case "expiry":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -24,6 +36,69 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M12 5v14" />
           <path d="M5 12h14" />
           <circle cx="12" cy="12" r="9" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="6" />
+          <path d="M16 16l4 4" />
+        </svg>
+      );
+    case "barcode":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6v12" />
+          <path d="M7 6v12" />
+          <path d="M10 6v12" />
+          <path d="M14 6v12" />
+          <path d="M17 6v12" />
+          <path d="M20 6v12" />
+          <path d="M3 4h18" />
+          <path d="M3 20h18" />
+        </svg>
+      );
+    case "cold":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v18" />
+          <path d="M12 7l-3-2" />
+          <path d="M12 7l3-2" />
+          <path d="M12 17l-3 2" />
+          <path d="M12 17l3 2" />
+          <path d="M4.5 8l15 8" />
+          <path d="M7.5 6.8v3.6" />
+          <path d="M16.5 13.6v3.6" />
+          <path d="M19.5 8L4.5 16" />
+          <path d="M16.5 6.8v3.6" />
+          <path d="M7.5 13.6v3.6" />
+        </svg>
+      );
+    case "carton-meds":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 8l8-4 8 4-8 4-8-4z" />
+          <path d="M4 8v8l8 4 8-4V8" />
+          <path d="M12 12v8" />
+          <path d="M9.5 6.8h5" />
+          <path d="M12 4.8v4" />
+        </svg>
+      );
+    case "worker":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 10V8a5 5 0 0 1 10 0v2" />
+          <path d="M6 10h12v3a6 6 0 0 1-12 0z" />
+          <path d="M4 20a8 8 0 0 1 16 0" />
+          <path d="M9 6h6" />
+        </svg>
+      );
+    case "location":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11z" />
+          <path d="M9.5 10.5h5" />
+          <path d="M12 8v5" />
         </svg>
       );
     case "collect":
