@@ -276,6 +276,30 @@ export function LogoutIcon() {
   );
 }
 
+export function ViewGridIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="4" width="6" height="6" rx="1.5" />
+      <rect x="14" y="4" width="6" height="6" rx="1.5" />
+      <rect x="4" y="14" width="6" height="6" rx="1.5" />
+      <rect x="14" y="14" width="6" height="6" rx="1.5" />
+    </svg>
+  );
+}
+
+export function ViewListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="6" cy="7" r="1.2" />
+      <circle cx="6" cy="12" r="1.2" />
+      <circle cx="6" cy="17" r="1.2" />
+      <path d="M10 7h10" />
+      <path d="M10 12h10" />
+      <path d="M10 17h10" />
+    </svg>
+  );
+}
+
 export function BackIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -1,9 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import pmImage from "../../assets/pm.png";
 import { DASHBOARD_MODULES } from "../modules/registry";
 import type { DashboardModuleKey } from "../modules/types";
 import type { DisplayContext } from "../types/ui";
-import { LogoutIcon, ModuleIcon } from "../ui/icons";
+import { LogoutIcon, ModuleIcon, ViewGridIcon, ViewListIcon } from "../ui/icons";
 
 const AVAILABLE_MODULE_KEYS = new Set([
   "controle-validade",
@@ -21,6 +22,10 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "validar-enderecamento",
   "validar-etiqueta-pulmao"
 ]);
+
+const HOME_MODULES_VIEW_STORAGE_KEY = "auditoria.home.modules_view.v1";
+
+type HomeModulesViewMode = "list" | "grid";
 
 interface HomePageProps {
   displayContext: DisplayContext;
@@ -52,6 +57,26 @@ export default function HomePage({
   onRequestCdSwitcher
 }: HomePageProps) {
   const hiddenModuleSet = new Set(hiddenModuleKeys);
+  const [modulesViewMode, setModulesViewMode] = useState<HomeModulesViewMode>(() => {
+    if (typeof window === "undefined") return "list";
+    try {
+      return window.localStorage.getItem(HOME_MODULES_VIEW_STORAGE_KEY) === "grid" ? "grid" : "list";
+    } catch {
+      return "list";
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(HOME_MODULES_VIEW_STORAGE_KEY, modulesViewMode);
+    } catch {
+      // Ignore storage failures and keep the current session state.
+    }
+  }, [modulesViewMode]);
+
+  const nextViewMode = modulesViewMode === "list" ? "grid" : "list";
+  const viewToggleLabel = nextViewMode === "grid" ? "Mudar visual para ícones" : "Mudar visual para lista";
 
   return (
     <>
@@ -81,6 +106,17 @@ export default function HomePage({
               <LogoutIcon />
             </span>
           </button>
+          <button
+            className="btn btn-view-toggle"
+            onClick={() => setModulesViewMode(nextViewMode)}
+            type="button"
+            aria-label={viewToggleLabel}
+            title={viewToggleLabel}
+          >
+            <span className="view-toggle-icon" aria-hidden="true">
+              {modulesViewMode === "list" ? <ViewGridIcon /> : <ViewListIcon />}
+            </span>
+          </button>
         </div>
         <div className="topbar-meta">
           <span className="topbar-meta-cd">
@@ -106,9 +142,13 @@ export default function HomePage({
           <h2>{appHeading}</h2>
           <p>Selecione um módulo para iniciar.</p>
         </div>
-        <div className="modules-grid">
+        <div className={`modules-grid ${modulesViewMode === "grid" ? "is-icon-view" : "is-list-view"}`}>
           {DASHBOARD_MODULES.filter((moduleDef) => !hiddenModuleSet.has(moduleDef.key)).map((moduleDef) => (
-            <Link key={moduleDef.key} to={moduleDef.path} className={`module-card tone-${moduleDef.tone}`}>
+            <Link
+              key={moduleDef.key}
+              to={moduleDef.path}
+              className={`module-card tone-${moduleDef.tone}${modulesViewMode === "grid" ? " is-icon-view" : ""}`}
+            >
               <span className="module-icon" aria-hidden="true">
                 <ModuleIcon name={moduleDef.icon} />
               </span>
