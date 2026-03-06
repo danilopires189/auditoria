@@ -91,7 +91,7 @@ interface ConferenciaEntradaNotasPageProps {
   profile: EntradaNotasModuleProfile;
 }
 
-type EntradaNotasStoreStatus = "pendente" | "em_andamento" | "concluido";
+type EntradaNotasStoreStatus = "pendente" | "em_andamento" | "concluido" | "conferido_parcialmente";
 type EntradaNotasRouteStatus = "pendente" | "iniciado" | "concluido";
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 type EntradaNotasOcorrenciaTipo = "" | "Avariado" | "Vencido";
@@ -312,7 +312,13 @@ function withDivergencia(item: EntradaNotasLocalItem): {
 } {
   const qtdFalta = Math.max(item.qtd_esperada - item.qtd_conferida, 0);
   const qtdSobra = Math.max(item.qtd_conferida - item.qtd_esperada, 0);
-  const divergencia: EntradaNotasDivergenciaTipo = qtdFalta > 0 ? "falta" : qtdSobra > 0 ? "sobra" : "correto";
+  const divergencia: EntradaNotasDivergenciaTipo = item.qtd_conferida === 0
+    ? "nao_conferido"
+    : qtdFalta > 0
+      ? "falta"
+      : qtdSobra > 0
+        ? "sobra"
+        : "correto";
   return { item, divergencia, qtd_falta: qtdFalta, qtd_sobra: qtdSobra };
 }
 
@@ -437,6 +443,10 @@ function formatLockedItemOwner(item: Pick<EntradaNotasLocalItem, "locked_nome" |
     nome: item.locked_nome ?? null,
     mat: item.locked_mat ?? null
   });
+}
+
+function shouldShowLockedItemOwner(item: Pick<EntradaNotasLocalItem, "qtd_conferida" | "locked_nome" | "locked_mat">): boolean {
+  return item.qtd_conferida > 0 && Boolean(item.locked_nome || item.locked_mat);
 }
 
 function createLocalVolumeFromRemote(
@@ -815,6 +825,7 @@ function buildStoreSearchBlob(item: EntradaNotasRouteOverviewRow): string {
 function normalizeStoreStatus(value: string | null | undefined): EntradaNotasStoreStatus {
   const normalized = String(value ?? "").toLowerCase();
   if (normalized === "concluido" || normalized === "conferido") return "concluido";
+  if (normalized === "conferido_parcialmente") return "conferido_parcialmente";
   if (normalized === "em_andamento" || normalized === "em_conferencia" || normalized === "iniciado") return "em_andamento";
   return "pendente";
 }
@@ -830,6 +841,7 @@ function resolveRouteGroupStatus(filiais: EntradaNotasRouteOverviewRow[]): Entra
 
 function routeStatusLabel(status: EntradaNotasRouteStatus | EntradaNotasStoreStatus | string): string {
   if (status === "concluido" || status === "conferido") return "Concluído";
+  if (status === "conferido_parcialmente") return "Conferido Parcialmente";
   if (status === "em_andamento" || status === "em_conferencia") return "Em andamento";
   if (status === "iniciado") return "Iniciado";
   return "Pendente";
@@ -837,6 +849,7 @@ function routeStatusLabel(status: EntradaNotasRouteStatus | EntradaNotasStoreSta
 
 function routeStatusClass(status: EntradaNotasRouteStatus | EntradaNotasStoreStatus | string): "correto" | "andamento" | "falta" {
   if (status === "concluido" || status === "conferido") return "correto";
+  if (status === "conferido_parcialmente") return "andamento";
   if (status === "em_andamento" || status === "em_conferencia" || status === "iniciado") return "andamento";
   return "falta";
 }
@@ -1022,6 +1035,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const groupedItems = useMemo(() => {
     const empty = {
+      nao_conferido: [] as Array<ReturnType<typeof withDivergencia>>,
       falta: [] as Array<ReturnType<typeof withDivergencia>>,
       sobra: [] as Array<ReturnType<typeof withDivergencia>>,
       correto: [] as Array<ReturnType<typeof withDivergencia>>
@@ -1030,13 +1044,15 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
     const mapped = activeVolume.items.map((item) => withDivergencia(item));
     for (const row of mapped) {
-      if (row.divergencia === "falta") empty.falta.push(row);
+      if (row.divergencia === "nao_conferido") empty.nao_conferido.push(row);
+      else if (row.divergencia === "falta") empty.falta.push(row);
       else if (row.divergencia === "sobra") empty.sobra.push(row);
       else empty.correto.push(row);
     }
 
     const sorter = (a: ReturnType<typeof withDivergencia>, b: ReturnType<typeof withDivergencia>) =>
       itemSort(a.item, b.item);
+    empty.nao_conferido.sort(sorter);
     empty.falta.sort(sorter);
     empty.sobra.sort(sorter);
     empty.correto.sort(sorter);
@@ -1060,10 +1076,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const divergenciaTotals = useMemo(() => {
     if (!activeVolume) {
-      return { falta: 0, sobra: 0, correto: 0, ocorrencia: 0, correcao_qtd: 0 };
+      return { nao_conferido: 0, falta: 0, sobra: 0, correto: 0, ocorrencia: 0, correcao_qtd: 0 };
     }
     const correcaoQtd = activeVolume.items.reduce((sum, item) => sum + getItemOcorrenciaTotal(item), 0);
     return {
+      nao_conferido: groupedItems.nao_conferido.length,
       falta: groupedItems.falta.length,
       sobra: groupedItems.sobra.length,
       correto: groupedItems.correto.length,
@@ -1136,16 +1153,6 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       labels.push(label);
     }
     return labels.join(", ");
-  }, [activeVolume?.contributors]);
-
-  const hasMultipleActiveContributors = useMemo(() => {
-    const contributors = activeVolume?.contributors ?? [];
-    const unique = new Set<string>();
-    for (const contributor of contributors) {
-      const key = contributor.user_id || `${contributor.mat}|${contributor.nome}`;
-      if (key) unique.add(key);
-    }
-    return unique.size > 1;
   }, [activeVolume?.contributors]);
 
   const renderCombinedBreakdown = useCallback((item: EntradaNotasLocalItem) => {
@@ -3958,8 +3965,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (!canEditActiveVolume) return;
 
     setFinalizeError(null);
+    const naoConferido = divergenciaTotals.nao_conferido;
     const sobra = divergenciaTotals.sobra;
     const falta = divergenciaTotals.falta;
+    const nextStatus = naoConferido > 0
+      ? "finalizado_parcial"
+      : falta > 0 || sobra > 0
+        ? "finalizado_divergencia"
+        : "finalizado_ok";
+    const finalizedMessage = nextStatus === "finalizado_parcial"
+      ? "Conferência salva como conferida parcialmente. Você já pode iniciar outra conferência."
+      : "Conferência finalizada com sucesso. Você já pode iniciar outra conferência.";
 
     setBusyFinalize(true);
     try {
@@ -4020,7 +4036,6 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
       if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
         const nowIso = new Date().toISOString();
-        const nextStatus = falta > 0 || sobra > 0 ? "finalizado_divergencia" : "finalizado_ok";
         const nextVolume: EntradaNotasLocalVolume = {
           ...activeVolume,
           status: nextStatus,
@@ -4034,7 +4049,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           sync_error: null
         };
         await applyVolumeUpdate(nextVolume, false);
-        setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outra conferência.");
+        setStatusMessage(nextStatus === "finalizado_parcial"
+          ? "Conferência salva localmente como conferida parcialmente. Você já pode iniciar outra conferência."
+          : "Conferência finalizada localmente. Você já pode iniciar outra conferência.");
       } else {
         if (activeVolume.conference_kind === "avulsa") {
           await finalizeAvulsaVolume(activeVolume.remote_conf_id);
@@ -4043,7 +4060,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         }
         await removeLocalVolume(activeVolume.local_key);
         await refreshPendingState();
-        setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outra conferência.");
+        setStatusMessage(finalizedMessage);
       }
       clearConferenceScreen();
     } catch (error) {
@@ -4058,6 +4075,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     applyVolumeUpdate,
     canEditActiveVolume,
     clearConferenceScreen,
+    divergenciaTotals.nao_conferido,
     divergenciaTotals.falta,
     divergenciaTotals.sobra,
     isCombinedRouteMode,
@@ -4213,7 +4231,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (!showRoutesModal || !isOnline || currentCd == null) return;
     const targetRows = routeRows.filter((row) => {
       const status = normalizeStoreStatus(row.status);
-      return status === "concluido" || status === "em_andamento";
+      return status === "concluido" || status === "em_andamento" || status === "conferido_parcialmente";
     });
     for (const row of targetRows) {
       void ensureRouteRowContributors(row);
@@ -4793,6 +4811,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
   const requestCancelConference = useCallback(() => {
     if (!activeVolume || !canEditActiveVolume) return;
+    if (hasAnyItemInformed) {
+      setErrorMessage("Depois do primeiro produto informado, use Finalizar para salvar a conferência.");
+      return;
+    }
     const isCombinedMode = (
       activeVolume.conference_kind === "avulsa"
       && (activeVolume.combined_seq_nf_labels?.length ?? 0) > 0
@@ -4874,8 +4896,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
 
               if (activeVolume.remote_conf_id && !isOnline) {
                 const nowIso = new Date().toISOString();
-                const hasDivergencia = activeVolume.items.some((item) => item.qtd_conferida !== item.qtd_esperada);
-                const nextStatus = hasDivergencia ? "finalizado_divergencia" : "finalizado_ok";
+                const hasPendente = activeVolume.items.some((item) => item.qtd_conferida === 0);
+                const hasDivergencia = activeVolume.items.some((item) => item.qtd_conferida > 0 && item.qtd_conferida !== item.qtd_esperada);
+                const nextStatus = hasPendente
+                  ? "finalizado_parcial"
+                  : hasDivergencia
+                    ? "finalizado_divergencia"
+                    : "finalizado_ok";
                 const nextVolume: EntradaNotasLocalVolume = {
                   ...activeVolume,
                   status: nextStatus,
@@ -4950,6 +4977,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     canEditActiveVolume,
     clearConferenceScreen,
     closeDialog,
+    hasAnyItemInformed,
     isOnline,
     markStorePendingAfterCancel,
     refreshPendingState,
@@ -5189,16 +5217,18 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 </span>
                 {canEditActiveVolume ? (
                   <div className="termo-volume-actions">
-                    <button
-                      className="btn btn-danger termo-cancel-btn"
-                      type="button"
-                      onClick={requestCancelConference}
-                      disabled={busyCancel || busyFinalize}
-                      title="Cancelar conferência"
-                    >
-                      <span aria-hidden="true">{closeIcon()}</span>
-                      {busyCancel ? "Cancelando..." : "Cancelar"}
-                    </button>
+                    {!hasAnyItemInformed ? (
+                      <button
+                        className="btn btn-danger termo-cancel-btn"
+                        type="button"
+                        onClick={requestCancelConference}
+                        disabled={busyCancel || busyFinalize}
+                        title="Cancelar conferência"
+                      >
+                        <span aria-hidden="true">{closeIcon()}</span>
+                        {busyCancel ? "Cancelando..." : "Cancelar"}
+                      </button>
+                    ) : null}
                     {hasAnyItemInformed ? (
                       <button
                         className="btn btn-primary termo-finalize-btn"
@@ -5314,6 +5344,51 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             </form>
 
             <div className="termo-list-block">
+              <h4>Não conferido ({groupedItems.nao_conferido.length})</h4>
+              {groupedItems.nao_conferido.length === 0 ? (
+                <div className="coleta-empty">Sem itens pendentes de conferência.</div>
+              ) : (
+                groupedItems.nao_conferido.map(({ item }) => {
+                  const itemKey = item.item_key ?? String(item.coddv);
+                  const isLastAddedItem = activeLastAddedItemKey === itemKey;
+                  return (
+                  <article key={`nao-conferido-${itemKey}`} className={`termo-item-card${expandedItemKey === itemKey ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
+                    <button type="button" className="termo-item-line" onClick={() => setExpandedItemKey((current) => current === itemKey ? null : itemKey)}>
+                      <div className="termo-item-main">
+                        <strong>{item.descricao}</strong>
+                        <p>Código: {item.coddv}</p>
+                        {item.seq_entrada != null && item.nf != null ? (
+                          <p>Seq/NF: {item.seq_entrada}/{item.nf}</p>
+                        ) : isCombinedRouteMode ? (
+                          <p>Conferência conjunta: {combinedSeqNfLabels.length} Seq/NF</p>
+                        ) : null}
+                        <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida} | Pendente: {Math.max(item.qtd_esperada - item.qtd_conferida, 0)} | Correção: {getItemOcorrenciaTotal(item)}</p>
+                      </div>
+                      <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
+                        <span className="termo-divergencia falta">Não conferido</span>
+                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedItemKey === itemKey)}</span>
+                      </div>
+                    </button>
+                    {expandedItemKey === itemKey ? (
+                      <div className="termo-item-detail">
+                        <p>Última alteração: {formatDateTime(item.updated_at)}</p>
+                        {renderCombinedBreakdown(item)}
+                        <p className="termo-inline-note">Produto ainda sem nenhuma unidade informada.</p>
+                      </div>
+                    ) : null}
+                  </article>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="termo-list-block">
               <h4>Falta ({groupedItems.falta.length})</h4>
               {groupedItems.falta.length === 0 ? (
                 <div className="coleta-empty">Sem itens com falta.</div>
@@ -5385,7 +5460,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             )}
                           </div>
                         ) : null}
-                        {hasMultipleActiveContributors && item.qtd_conferida > 0 && (item.locked_nome || item.locked_mat) ? (
+                        {shouldShowLockedItemOwner(item) ? (
                           <p className="entrada-notas-item-owner">
                             Conferido por: {formatLockedItemOwner(item)}
                           </p>
@@ -5476,7 +5551,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             )}
                           </div>
                         ) : null}
-                        {hasMultipleActiveContributors && item.qtd_conferida > 0 && (item.locked_nome || item.locked_mat) ? (
+                        {shouldShowLockedItemOwner(item) ? (
                           <p className="entrada-notas-item-owner">
                             Conferido por: {formatLockedItemOwner(item)}
                           </p>
@@ -5566,7 +5641,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             )}
                           </div>
                         ) : null}
-                        {hasMultipleActiveContributors && item.qtd_conferida > 0 && (item.locked_nome || item.locked_mat) ? (
+                        {shouldShowLockedItemOwner(item) ? (
                           <p className="entrada-notas-item-owner">
                             Conferido por: {formatLockedItemOwner(item)}
                           </p>
@@ -5647,7 +5722,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                             )}
                           </div>
                         ) : null}
-                        {hasMultipleActiveContributors && item.qtd_conferida > 0 && (item.locked_nome || item.locked_mat) ? (
+                        {shouldShowLockedItemOwner(item) ? (
                           <p className="entrada-notas-item-owner">
                             Conferido por: {formatLockedItemOwner(item)}
                           </p>
@@ -5834,6 +5909,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                       {lojaStatus === "em_andamento" && contributorNames ? (
                                         <p>Em andamento por: {contributorNames}</p>
                                       ) : null}
+                                      {lojaStatus === "conferido_parcialmente" && contributorNames ? (
+                                        <p>Conferido parcialmente por: {contributorNames}</p>
+                                      ) : null}
                                       {lojaStatus === "concluido" && contributorNames ? (
                                         <p>Concluído por: {contributorNames}</p>
                                       ) : null}
@@ -5856,6 +5934,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                       ) : null}
                                       {lojaStatus === "em_andamento" && row.status_at ? (
                                         <p>Iniciado em: {formatDateTime(row.status_at)}</p>
+                                      ) : null}
+                                      {lojaStatus === "conferido_parcialmente" && row.status_at ? (
+                                        <p>Conferido parcialmente em: {formatDateTime(row.status_at)}</p>
                                       ) : null}
                                       {lojaStatus === "concluido" && row.status_at ? (
                                         <p>Concluído em: {formatDateTime(row.status_at)}</p>
@@ -5978,11 +6059,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-finalizar-title" onClick={() => setShowFinalizeModal(false)}>
               <div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="termo-finalizar-title">Finalizar conferência</h3>
-                <p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto} | Ocorrências {divergenciaTotals.ocorrencia} | Correção {divergenciaTotals.correcao_qtd}</p>
-                {divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? (
+                <p>Resumo: Não conferido {divergenciaTotals.nao_conferido} | Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto} | Ocorrências {divergenciaTotals.ocorrencia} | Correção {divergenciaTotals.correcao_qtd}</p>
+                {divergenciaTotals.nao_conferido > 0 || divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? (
                   <div className="termo-item-detail">
-                    <p>Itens com divergência:</p>
+                    <p>Itens pendentes ou com divergência:</p>
                     <div className="termo-routes-list termo-finalize-list">
+                      {groupedItems.nao_conferido.map(({ item }) => (
+                        <p key={`fim-nao-conferido-${item.item_key ?? item.coddv}`}>
+                          {item.seq_entrada != null && item.nf != null ? `Seq ${item.seq_entrada}/NF ${item.nf} - ` : ""}
+                          {item.coddv} - {item.descricao || "Item sem descrição"}: Não conferido
+                        </p>
+                      ))}
                       {groupedItems.falta.map(({ item, qtd_falta }) => (
                         <p key={`fim-falta-${item.item_key ?? item.coddv}`}>
                           {item.seq_entrada != null && item.nf != null ? `Seq ${item.seq_entrada}/NF ${item.nf} - ` : ""}
