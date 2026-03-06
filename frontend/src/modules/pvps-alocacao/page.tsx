@@ -625,6 +625,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => pvpsRows.find((row) => keyOfPvps(row) === activePvpsKey) ?? null,
     [pvpsRows, activePvpsKey]
   );
+  const [pvpsPopupRow, setPvpsPopupRow] = useState<PvpsManifestRow | null>(null);
+  const editorPvpsRow = useMemo(
+    () => pvpsPopupRow ?? activePvps,
+    [pvpsPopupRow, activePvps]
+  );
   const [activePvpsMode, setActivePvpsMode] = useState<"sep" | "pul">("sep");
   const [activePulEnd, setActivePulEnd] = useState<string | null>(null);
   const [feedPulBySepKey, setFeedPulBySepKey] = useState<Record<string, PvpsPulItemRow[]>>({});
@@ -636,8 +641,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     [pulItems, activePulEnd]
   );
   const activePvpsEnderecoAuditado = useMemo(
-    () => (activePvpsMode === "pul" ? (activePulItem?.end_pul ?? activePvps?.end_sep ?? "") : (activePvps?.end_sep ?? "")),
-    [activePvpsMode, activePulItem, activePvps]
+    () => (activePvpsMode === "pul" ? (activePulItem?.end_pul ?? editorPvpsRow?.end_sep ?? "") : (editorPvpsRow?.end_sep ?? "")),
+    [activePvpsMode, activePulItem, editorPvpsRow]
   );
   const activePvpsZonaAuditada = useMemo(
     () => zoneFromEndereco(activePvpsEnderecoAuditado),
@@ -1216,6 +1221,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   useEffect(() => {
     setFeedPulBySepKey({});
+    setPvpsPopupRow(null);
     setActivePvpsMode("sep");
     setActivePulEnd(null);
     setPvpsCompletedPulByAuditId({});
@@ -1320,52 +1326,64 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [isOnline, activeCd, pendingCount]);
 
   useEffect(() => {
-    if (!activePvps) {
+    const currentPvps = editorPvpsRow;
+    if (!currentPvps) {
       setPulItems([]);
       setPulInputs({});
       setPulEndSits({});
       setShowSepOccurrence(false);
       setShowPulOccurrence(false);
+      setPulBusy(false);
       return;
     }
 
-    setEndSit(activePvps.end_sit ?? "");
-    setValSep(activePvps.val_sep?.replace("/", "") ?? "");
+    setEndSit(currentPvps.end_sit ?? "");
+    setValSep(currentPvps.val_sep?.replace("/", "") ?? "");
     setShowSepOccurrence(false);
 
-    if (activeCd != null && (activePvps.val_sep || activePvps.end_sit)) {
+    if (activeCd != null && (currentPvps.val_sep || currentPvps.end_sit)) {
       void upsertOfflineSepCache({
         user_id: profile.user_id,
         cd: activeCd,
-        coddv: activePvps.coddv,
-        end_sep: activePvps.end_sep,
-        end_sit: activePvps.end_sit ?? null,
-        val_sep: normalizeMmaa(activePvps.val_sep)
+        coddv: currentPvps.coddv,
+        end_sep: currentPvps.end_sep,
+        end_sit: currentPvps.end_sit ?? null,
+        val_sep: normalizeMmaa(currentPvps.val_sep)
       }).catch(() => {
         // Cache offline é best-effort; não deve interromper o fluxo principal.
       });
     }
 
-    if (activePvps.status === "pendente_sep") {
+    if (currentPvps.status === "pendente_sep") {
       setPulItems([]);
       setPulInputs({});
       setPulEndSits({});
+      setPulBusy(false);
       return;
     }
 
-    const activeKey = keyOfPvps(activePvps);
-
-    if (!isOnline && preferOfflineMode) {
-      const cachedItems = feedPulBySepKey[activeKey] ?? [];
-      setPulItems(cachedItems);
+    const activeKey = keyOfPvps(currentPvps);
+    const applyPulState = (items: PvpsPulItemRow[]) => {
+      setPulItems(items);
       const mapped: Record<string, string> = {};
       const mappedEndSit: Record<string, PvpsEndSit | ""> = {};
-      for (const item of cachedItems) {
+      for (const item of items) {
         mapped[item.end_pul] = item.val_pul?.replace("/", "") ?? "";
         mappedEndSit[item.end_pul] = item.end_sit ?? "";
       }
       setPulInputs(mapped);
       setPulEndSits(mappedEndSit);
+    };
+    const cachedItems = feedPulBySepKey[activeKey] ?? [];
+    if (hasUsablePulCacheForRow(currentPvps, cachedItems)) {
+      applyPulState(cachedItems);
+      setPulBusy(false);
+      return;
+    }
+
+    if (!isOnline && preferOfflineMode) {
+      applyPulState(cachedItems);
+      setPulBusy(false);
       return;
     }
 
@@ -1376,21 +1394,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     let cancelled = false;
     setPulBusy(true);
-    void fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd)
+    void fetchPvpsPulItems(currentPvps.coddv, currentPvps.end_sep, activeCd)
       .then((items) => {
         if (cancelled) return;
-        if (hasUsablePulCacheForRow(activePvps, items)) {
+        if (hasUsablePulCacheForRow(currentPvps, items)) {
           setFeedPulBySepKey((current) => ({ ...current, [activeKey]: items }));
         }
-        setPulItems(items);
-        const mapped: Record<string, string> = {};
-        const mappedEndSit: Record<string, PvpsEndSit | ""> = {};
-        for (const item of items) {
-          mapped[item.end_pul] = item.val_pul?.replace("/", "") ?? "";
-          mappedEndSit[item.end_pul] = item.end_sit ?? "";
-        }
-        setPulInputs(mapped);
-        setPulEndSits(mappedEndSit);
+        applyPulState(items);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -1403,7 +1413,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return () => {
       cancelled = true;
     };
-  }, [activePvps, activeCd, isOnline, preferOfflineMode, profile.user_id]);
+  }, [editorPvpsRow, activeCd, isOnline, preferOfflineMode, profile.user_id, feedPulBySepKey]);
 
   useEffect(() => {
     if (activePvpsMode !== "pul") return;
@@ -1878,6 +1888,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   useEffect(() => {
     if (tab === "pvps") {
+      if (showPvpsPopup) return;
       const visibleKeys = new Set(pvpsFeedItems.map((item) => keyOfPvps(item.row)));
       if (activePvpsKey && !visibleKeys.has(activePvpsKey)) {
         setActivePvpsKey(null);
@@ -1889,7 +1900,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (activeAlocQueue && !visibleAlocRows.some((row) => row.queue_id === activeAlocQueue)) {
       setActiveAlocQueue(null);
     }
-  }, [tab, pvpsFeedItems, visibleAlocRows, activePvpsKey, activeAlocQueue]);
+  }, [tab, pvpsFeedItems, visibleAlocRows, activePvpsKey, activeAlocQueue, showPvpsPopup]);
 
   const nextQueueItems = useMemo(() => {
     if (tab === "pvps") {
@@ -1941,6 +1952,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }
     }
     setEditingPvpsCompleted(null);
+    setPvpsPopupRow({ ...row });
     setActivePvpsMode("sep");
     setActivePulEnd(null);
     setActivePvpsKey(keyOfPvps(row));
@@ -1952,6 +1964,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
     setEditingPvpsCompleted(null);
+    setPvpsPopupRow({ ...row });
     setActivePvpsMode("pul");
     setActivePulEnd(endPul);
     setActivePvpsKey(keyOfPvps(row));
@@ -1972,6 +1985,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
+    setPvpsPopupRow(null);
     setActivePvpsMode("sep");
     setActivePulEnd(null);
     setShowPvpsPopup(false);
@@ -2055,6 +2069,22 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         qtd_est_disp: 0,
         priority_score: 9999
       }, ...current];
+    });
+    setPvpsPopupRow({
+      cd: row.cd,
+      zona: row.zona,
+      coddv: row.coddv,
+      descricao: row.descricao,
+      end_sep: row.end_sep,
+      pul_total: row.pul_total,
+      pul_auditados: row.pul_auditados,
+      status: row.status,
+      end_sit: row.end_sit,
+      val_sep: row.val_sep,
+      audit_id: row.audit_id,
+      dat_ult_compra: "",
+      qtd_est_disp: 0,
+      priority_score: 9999
     });
     setActivePvpsKey(key);
     setShowPvpsPopup(true);
@@ -2163,7 +2193,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   async function handleSubmitSep(event: FormEvent): Promise<void> {
     event.preventDefault();
-    if (!activePvps) return;
+    const currentPvps = editorPvpsRow;
+    if (!currentPvps) return;
     if (activeCd == null) {
       setErrorMessage("CD ativo obrigatório para auditoria PVPS.");
       return;
@@ -2175,7 +2206,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setErrorMessage("Validade do Produto obrigatória (MMAA) quando não houver ocorrência.");
       return;
     }
-    const currentKey = keyOfPvps(activePvps);
+    const currentKey = keyOfPvps(currentPvps);
     const currentFeedKey = `sep:${currentKey}`;
     const isEditingCompleted = Boolean(editingPvpsCompleted);
     if (!isOnline) {
@@ -2191,16 +2222,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         await saveOfflineSepEvent({
           user_id: profile.user_id,
           cd: activeCd,
-          coddv: activePvps.coddv,
-          end_sep: activePvps.end_sep,
+          coddv: currentPvps.coddv,
+          end_sep: currentPvps.end_sep,
           end_sit: endSit || null,
           val_sep: hasOcorrencia ? null : normalizedValSep
         });
         await upsertOfflineSepCache({
           user_id: profile.user_id,
           cd: activeCd,
-          coddv: activePvps.coddv,
-          end_sep: activePvps.end_sep,
+          coddv: currentPvps.coddv,
+          end_sep: currentPvps.end_sep,
           end_sit: endSit || null,
           val_sep: hasOcorrencia ? null : normalizedValSep
         });
@@ -2211,7 +2242,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           openNextPvpsSepFrom(currentFeedKey);
         } else {
           const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
-          rememberSepConcludedAt(activePvps.coddv, activePvps.end_sep);
+          rememberSepConcludedAt(currentPvps.coddv, currentPvps.end_sep);
           setPvpsRows((current) => current.map((row) => (
             keyOfPvps(row) === currentKey
               ? { ...row, status: "pendente_pul", val_sep: localVal, end_sit: null }
@@ -2232,14 +2263,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     try {
       const result = await submitPvpsSep({
         p_cd: activeCd,
-        coddv: activePvps.coddv,
-        end_sep: activePvps.end_sep,
+        coddv: currentPvps.coddv,
+        end_sep: currentPvps.end_sep,
         end_sit: endSit || null,
         val_sep: hasOcorrencia ? null : normalizedValSep
       });
       const normalizedResultValSep = normalizeMmaa(result.val_sep ?? normalizedValSep);
       if (!(result.end_sit === "vazio" || result.end_sit === "obstruido")) {
-        rememberSepConcludedAt(activePvps.coddv, activePvps.end_sep);
+        rememberSepConcludedAt(currentPvps.coddv, currentPvps.end_sep);
       }
       if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
         setStatusMessage("Separação com ocorrência. Item removido do feed e não será enviado ao frontend.");
@@ -2249,8 +2280,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       await upsertOfflineSepCache({
         user_id: profile.user_id,
         cd: activeCd,
-        coddv: activePvps.coddv,
-        end_sep: activePvps.end_sep,
+        coddv: currentPvps.coddv,
+        end_sep: currentPvps.end_sep,
         end_sit: result.end_sit,
         val_sep: normalizedResultValSep
       });
@@ -2278,7 +2309,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
           let pulItemsByRow: PvpsPulItemRow[] = [];
           try {
-            pulItemsByRow = await fetchPvpsPulItems(activePvps.coddv, activePvps.end_sep, activeCd);
+            pulItemsByRow = await fetchPvpsPulItems(currentPvps.coddv, currentPvps.end_sep, activeCd);
             if (hasUsablePulCacheForRow({
               status: result.status,
               pul_total: result.pul_total,
@@ -2308,7 +2339,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   async function handleSubmitPul(endPul: string): Promise<void> {
-    if (!activePvps) return;
+    const currentPvps = editorPvpsRow;
+    if (!currentPvps) return;
     if (activeCd == null) {
       setErrorMessage("CD ativo obrigatório para auditoria PVPS.");
       return;
@@ -2320,7 +2352,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setErrorMessage("Validade do Produto obrigatória (MMAA).");
       return;
     }
-    const currentKey = keyOfPvps(activePvps);
+    const currentKey = keyOfPvps(currentPvps);
     const currentFeedKey = `pul:${currentKey}:${endPul}`;
     const valPul = hasPulOcorrencia ? null : normalizeMmaaText(value);
 
@@ -2366,15 +2398,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setErrorMessage("Base offline indisponível. Conecte-se e baixe a base antes de auditar sem rede.");
         return;
       }
-      let hasSep = await hasOfflineSepCache(profile.user_id, activeCd, activePvps.coddv, activePvps.end_sep);
-      if (!hasSep && (activePvps.val_sep || activePvps.end_sit)) {
+      let hasSep = await hasOfflineSepCache(profile.user_id, activeCd, currentPvps.coddv, currentPvps.end_sep);
+      if (!hasSep && (currentPvps.val_sep || currentPvps.end_sit)) {
         await upsertOfflineSepCache({
           user_id: profile.user_id,
           cd: activeCd,
-          coddv: activePvps.coddv,
-          end_sep: activePvps.end_sep,
-          end_sit: activePvps.end_sit ?? null,
-          val_sep: normalizeMmaa(activePvps.val_sep)
+          coddv: currentPvps.coddv,
+          end_sep: currentPvps.end_sep,
+          end_sit: currentPvps.end_sit ?? null,
+          val_sep: normalizeMmaa(currentPvps.val_sep)
         });
         hasSep = true;
       }
@@ -2386,12 +2418,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         await saveOfflinePulEvent({
           user_id: profile.user_id,
           cd: activeCd,
-          coddv: activePvps.coddv,
-          end_sep: activePvps.end_sep,
+          coddv: currentPvps.coddv,
+          end_sep: currentPvps.end_sep,
           end_pul: endPul,
           end_sit: hasPulOcorrencia ? pulEndSit : null,
           val_pul: hasPulOcorrencia ? null : value.trim(),
-          audit_id: activePvps.audit_id
+          audit_id: currentPvps.audit_id
         });
         await refreshPendingState();
         applyLocalPulSave();
@@ -2413,10 +2445,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setStatusMessage(null);
     const isEditingCompleted = Boolean(editingPvpsCompleted);
     try {
-      let auditId = activePvps.audit_id;
+      let auditId = currentPvps.audit_id;
       if (!auditId) {
         const rows = await fetchPvpsManifest({ p_cd: activeCd, zona: null });
-        auditId = rows.find((row) => row.coddv === activePvps.coddv && row.end_sep === activePvps.end_sep)?.audit_id ?? null;
+        auditId = rows.find((row) => row.coddv === currentPvps.coddv && row.end_sep === currentPvps.end_sep)?.audit_id ?? null;
       }
       if (!auditId) {
         setErrorMessage("AUDIT_ID_PVPS_NAO_DISPONIVEL. Sincronize a Separação antes de salvar Pulmão online.");
@@ -3297,7 +3329,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         </article>
       </section>
 
-      {showPvpsPopup && activePvps && typeof document !== "undefined"
+      {showPvpsPopup && editorPvpsRow && typeof document !== "undefined"
         ? createPortal(
           <div
             className="confirm-overlay pvps-popup-overlay"
@@ -3336,7 +3368,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <div className="pvps-editor-summary">
                   <div className="pvps-editor-summary-address">
                     <strong>{activePvpsEnderecoAuditado}</strong>
-                    <span>{activePvps.coddv} - {activePvps.descricao}</span>
+                    <span>{editorPvpsRow.coddv} - {editorPvpsRow.descricao}</span>
                   </div>
                   <div className="pvps-editor-summary-chips">
                     <span className="pvps-editor-chip">Zona {activePvpsZonaAuditada}</span>
@@ -3434,12 +3466,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       <div className="pvps-editor-info-grid">
                         <div className="pvps-editor-info-card">
                           <small>Validade da Separacao</small>
-                          <strong>{activePvps.val_sep ?? "-"}</strong>
+                          <strong>{editorPvpsRow.val_sep ?? "-"}</strong>
                         </div>
-                        {activePvps.end_sit ? (
+                        {editorPvpsRow.end_sit ? (
                           <div className="pvps-editor-info-card">
                             <small>Ocorrencia da linha</small>
-                            <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong>
+                            <strong>{formatOcorrenciaLabel(editorPvpsRow.end_sit)}</strong>
                           </div>
                         ) : null}
                       </div>
