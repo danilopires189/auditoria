@@ -67,6 +67,7 @@ interface PvpsAlocacaoPageProps {
 type ModuleTab = "pvps" | "alocacao";
 type FeedView = "pendentes" | "concluidos";
 type AdminRulesView = "active" | "history";
+type PendingAddressSortDirection = "asc" | "desc";
 
 interface AdminRuleDraft {
   modulo: PvpsModulo;
@@ -311,6 +312,15 @@ function compareEndereco(a: string | null | undefined, b: string | null | undefi
   return ENDERECO_COLLATOR.compare((a ?? "").trim().toUpperCase(), (b ?? "").trim().toUpperCase());
 }
 
+function compareEnderecoWithDirection(
+  a: string | null | undefined,
+  b: string | null | undefined,
+  direction: PendingAddressSortDirection
+): number {
+  const result = compareEndereco(a, b);
+  return direction === "desc" ? -result : result;
+}
+
 function dateSortValue(value: string | null | undefined): number {
   const parsed = new Date(value ?? "").getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
@@ -442,6 +452,30 @@ function closeIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M18 6L6 18" />
       <path d="M6 6l12 12" />
+    </svg>
+  );
+}
+
+function pendingSortIcon(direction: PendingAddressSortDirection) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {direction === "asc" ? (
+        <>
+          <path d="M8 17V7" />
+          <path d="M5 10l3-3 3 3" />
+          <path d="M13 8h6" />
+          <path d="M13 12h4" />
+          <path d="M13 16h2" />
+        </>
+      ) : (
+        <>
+          <path d="M8 7v10" />
+          <path d="M5 14l3 3 3-3" />
+          <path d="M13 8h2" />
+          <path d="M13 12h4" />
+          <path d="M13 16h6" />
+        </>
+      )}
     </svg>
   );
 }
@@ -594,6 +628,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   });
   const [feedView, setFeedView] = useState<FeedView>("pendentes");
   const [selectedZones, setSelectedZones] = useState<string[]>([]);
+  const [pendingAddressSortDirection, setPendingAddressSortDirection] = useState<PendingAddressSortDirection>("asc");
   const [showZoneFilterPopup, setShowZoneFilterPopup] = useState(false);
   const [zoneSearch, setZoneSearch] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1431,6 +1466,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [activeAlocQueue]);
 
   const zoneFilterSet = useMemo(() => new Set(selectedZones), [selectedZones]);
+  const effectivePendingAddressSortDirection = selectedZones.length > 0 ? pendingAddressSortDirection : "asc";
 
   const sortedPvpsAllRows = useMemo(
     () => [...pvpsRows].sort((a, b) => {
@@ -1665,10 +1701,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (byPriority !== 0) return byPriority;
         const byZone = a.zone.localeCompare(b.zone);
         if (byZone !== 0) return byZone;
+        const byEndereco = compareEnderecoWithDirection(a.endereco, b.endereco, effectivePendingAddressSortDirection);
+        if (byEndereco !== 0) return byEndereco;
         if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
-        return compareEndereco(a.endereco, b.endereco);
+        return a.feedKey.localeCompare(b.feedKey);
       });
-  }, [pvpsFeedItemsAll, pvpsActiveCoddvSet, selectedZones, zoneFilterSet]);
+  }, [pvpsFeedItemsAll, pvpsActiveCoddvSet, selectedZones, zoneFilterSet, effectivePendingAddressSortDirection]);
 
   const visibleAlocRows = useMemo(() => {
     const coddvOrder = new Map<number, number>();
@@ -1685,11 +1723,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (byPriority !== 0) return byPriority;
         const byZone = a.zona.localeCompare(b.zona);
         if (byZone !== 0) return byZone;
-        const byEndereco = compareEndereco(a.endereco, b.endereco);
+        const byEndereco = compareEnderecoWithDirection(a.endereco, b.endereco, effectivePendingAddressSortDirection);
         if (byEndereco !== 0) return byEndereco;
         return (coddvOrder.get(a.coddv) ?? 999) - (coddvOrder.get(b.coddv) ?? 999);
       });
-  }, [sortedAlocAllRows, alocActiveCoddvSet, selectedZones, zoneFilterSet, alocActiveCoddvList]);
+  }, [sortedAlocAllRows, alocActiveCoddvSet, selectedZones, zoneFilterSet, alocActiveCoddvList, effectivePendingAddressSortDirection]);
 
   const pvpsCompletedRowsForView = useMemo(() => {
     const byRowKey = new Set<string>();
@@ -1827,6 +1865,33 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => selectedZones.slice().sort((a, b) => a.localeCompare(b)).join(","),
     [selectedZones]
   );
+  const showPendingZoneSortToggle = feedView === "pendentes" && selectedZones.length > 0;
+
+  function togglePendingAddressSortDirection(): void {
+    setPendingAddressSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+  }
+
+  function renderZoneHeader(zone: string) {
+    if (!showPendingZoneSortToggle) {
+      return <div className="pvps-zone-divider">Zona {zone}</div>;
+    }
+
+    const nextDirectionLabel = pendingAddressSortDirection === "asc" ? "decrescente" : "crescente";
+    return (
+      <div className="pvps-zone-divider-row">
+        <div className="pvps-zone-divider">Zona {zone}</div>
+        <button
+          className="btn btn-muted pvps-zone-sort-btn"
+          type="button"
+          onClick={togglePendingAddressSortDirection}
+          title={`Ordenar endereços em ${nextDirectionLabel}`}
+          aria-label={`Ordenar endereços em ${nextDirectionLabel}`}
+        >
+          {pendingSortIcon(pendingAddressSortDirection)}
+        </button>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const scopeKey = `${activeCd ?? "no-cd"}|${todayBrt}|${zoneScopeKey}`;
@@ -3056,7 +3121,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const row = item.row;
                   return (
                     <div key={itemKey} className="pvps-zone-group">
-                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {item.zone}</div> : null}
+                      {showZoneHeader ? renderZoneHeader(item.zone) : null}
                       <div className={`pvps-row${active ? " is-active" : ""}`}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
@@ -3125,7 +3190,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
-                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
+                      {showZoneHeader ? renderZoneHeader(row.zona) : null}
                       <div className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
