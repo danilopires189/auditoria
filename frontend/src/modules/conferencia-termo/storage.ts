@@ -3,17 +3,19 @@ import type {
   TermoManifestBarrasRow,
   TermoManifestItemRow,
   TermoManifestMeta,
+  TermoManifestStoreSummaryRow,
   TermoPendingSummary,
   TermoPreferences,
   TermoRouteOverviewRow
 } from "./types";
 
 const DB_NAME = "auditoria-termo-v1";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORE_MANIFEST_ITEMS = "manifest_items";
 const STORE_MANIFEST_BARRAS = "manifest_barras";
 const STORE_MANIFEST_META = "manifest_meta";
+const STORE_MANIFEST_STORE_SUMMARY = "manifest_store_summary";
 const STORE_ROUTE_OVERVIEW = "route_overview";
 const STORE_VOLUMES = "volumes";
 const STORE_PREFS = "prefs";
@@ -25,6 +27,8 @@ const INDEX_BARRAS_BY_USER_CD = "by_user_cd";
 const INDEX_BARRAS_BY_USER = "by_user";
 const INDEX_META_BY_USER_CD = "by_user_cd";
 const INDEX_META_BY_USER = "by_user";
+const INDEX_STORE_SUMMARY_BY_USER_CD = "by_user_cd";
+const INDEX_STORE_SUMMARY_BY_USER = "by_user";
 const INDEX_ROUTES_BY_USER_CD = "by_user_cd";
 const INDEX_ROUTES_BY_USER = "by_user";
 const INDEX_VOLUMES_BY_USER = "by_user";
@@ -48,6 +52,12 @@ interface ManifestMetaStoreRow extends TermoManifestMeta {
   key: string;
   user_id: string;
   cached_at: string;
+}
+
+interface ManifestStoreSummaryStoreRow extends TermoManifestStoreSummaryRow {
+  key: string;
+  user_id: string;
+  cd: number;
 }
 
 interface RouteOverviewStoreRow {
@@ -119,12 +129,80 @@ function manifestItemKey(userId: string, cd: number, idEtiqueta: string, coddv: 
   return `manifest_item:${userId}:${cd}:${idEtiqueta}:${coddv}`;
 }
 
+function manifestStoreSummaryKey(userId: string, cd: number, rota: string, filial: number | null): string {
+  return `manifest_store_summary:${userId}:${cd}:${rota}:${filial == null ? "na" : String(filial)}`;
+}
+
 function manifestBarrasKey(userId: string, cd: number, barras: string): string {
   return `manifest_barras:${userId}:${cd}:${barras}`;
 }
 
 export function buildTermoVolumeKey(userId: string, cd: number, confDate: string, idEtiqueta: string): string {
   return `volume:${userId}:${cd}:${confDate}:${idEtiqueta}`;
+}
+
+function normalizeManifestStoreRota(value: string | null | undefined): string {
+  return (String(value ?? "SEM ROTA").trim() || "SEM ROTA");
+}
+
+function normalizeManifestStoreFilial(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.trunc(value)
+    : null;
+}
+
+function buildManifestStoreKey(rota: string | null | undefined, filial: number | null | undefined): string {
+  const normalizedRota = normalizeManifestStoreRota(rota);
+  const normalizedFilial = normalizeManifestStoreFilial(filial);
+  return `${normalizedRota}::${normalizedFilial == null ? "na" : String(normalizedFilial)}`;
+}
+
+function compareEtiquetas(a: string, b: string): number {
+  return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
+}
+
+function sortManifestStoreSummaries(rows: TermoManifestStoreSummaryRow[]): TermoManifestStoreSummaryRow[] {
+  return [...rows].sort((a, b) => {
+    const byRota = a.rota.localeCompare(b.rota, "pt-BR", { numeric: true, sensitivity: "base" });
+    if (byRota !== 0) return byRota;
+    const aFilial = a.filial ?? Number.MAX_SAFE_INTEGER;
+    const bFilial = b.filial ?? Number.MAX_SAFE_INTEGER;
+    if (aFilial !== bFilial) return aFilial - bFilial;
+    return compareEtiquetas(a.primary_etiqueta, b.primary_etiqueta);
+  });
+}
+
+function buildManifestStoreSummaries(
+  rows: Array<Pick<TermoManifestItemRow, "id_etiqueta" | "rota" | "filial">>
+): TermoManifestStoreSummaryRow[] {
+  const grouped = new Map<string, TermoManifestStoreSummaryRow>();
+
+  for (const row of rows) {
+    const idEtiqueta = String(row.id_etiqueta ?? "").trim();
+    if (!idEtiqueta) continue;
+
+    const rota = normalizeManifestStoreRota(row.rota);
+    const filial = normalizeManifestStoreFilial(row.filial);
+    const key = buildManifestStoreKey(rota, filial);
+    const current = grouped.get(key);
+
+    if (!current) {
+      grouped.set(key, {
+        rota,
+        filial,
+        primary_etiqueta: idEtiqueta,
+        coddv_total: 1
+      });
+      continue;
+    }
+
+    current.coddv_total += 1;
+    if (compareEtiquetas(idEtiqueta, current.primary_etiqueta) < 0) {
+      current.primary_etiqueta = idEtiqueta;
+    }
+  }
+
+  return sortManifestStoreSummaries(Array.from(grouped.values()));
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -155,6 +233,12 @@ async function getDb(): Promise<IDBDatabase> {
         const store = db.createObjectStore(STORE_MANIFEST_META, { keyPath: "key" });
         store.createIndex(INDEX_META_BY_USER, "user_id", { unique: false });
         store.createIndex(INDEX_META_BY_USER_CD, ["user_id", "cd"], { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(STORE_MANIFEST_STORE_SUMMARY)) {
+        const store = db.createObjectStore(STORE_MANIFEST_STORE_SUMMARY, { keyPath: "key" });
+        store.createIndex(INDEX_STORE_SUMMARY_BY_USER, "user_id", { unique: false });
+        store.createIndex(INDEX_STORE_SUMMARY_BY_USER_CD, ["user_id", "cd"], { unique: false });
       }
 
       if (!db.objectStoreNames.contains(STORE_ROUTE_OVERVIEW)) {
@@ -286,6 +370,9 @@ export async function saveManifestSnapshot(params: {
 }): Promise<void> {
   await clearByUserCd(STORE_MANIFEST_ITEMS, INDEX_ITEMS_BY_USER_CD, params.user_id, params.cd);
   await clearByUserCd(STORE_MANIFEST_BARRAS, INDEX_BARRAS_BY_USER_CD, params.user_id, params.cd);
+  await clearByUserCd(STORE_MANIFEST_STORE_SUMMARY, INDEX_STORE_SUMMARY_BY_USER_CD, params.user_id, params.cd);
+
+  const manifestStoreSummaries = buildManifestStoreSummaries(params.items);
 
   {
     const db = await getDb();
@@ -344,8 +431,12 @@ export async function saveManifestSnapshot(params: {
 
   {
     const db = await getDb();
-    const transaction = db.transaction([STORE_MANIFEST_META, STORE_ROUTE_OVERVIEW], "readwrite");
+    const transaction = db.transaction(
+      [STORE_MANIFEST_META, STORE_MANIFEST_STORE_SUMMARY, STORE_ROUTE_OVERVIEW],
+      "readwrite"
+    );
     const metaStore = transaction.objectStore(STORE_MANIFEST_META);
+    const summaryStore = transaction.objectStore(STORE_MANIFEST_STORE_SUMMARY);
     const routesStore = transaction.objectStore(STORE_ROUTE_OVERVIEW);
     const nowIso = new Date().toISOString();
 
@@ -361,6 +452,19 @@ export async function saveManifestSnapshot(params: {
       cached_at: nowIso
     };
     metaStore.put(metaPayload);
+
+    for (const row of manifestStoreSummaries) {
+      const payload: ManifestStoreSummaryStoreRow = {
+        key: manifestStoreSummaryKey(params.user_id, params.cd, row.rota, row.filial),
+        user_id: params.user_id,
+        cd: params.cd,
+        rota: row.rota,
+        filial: row.filial,
+        primary_etiqueta: row.primary_etiqueta,
+        coddv_total: row.coddv_total
+      };
+      summaryStore.put(payload);
+    }
 
     const routePayload: RouteOverviewStoreRow = {
       key: routeOverviewKey(params.user_id, params.cd),
@@ -436,54 +540,76 @@ export async function listManifestItemsByCd(
     });
 }
 
+async function saveManifestStoreSummaries(
+  userId: string,
+  cd: number,
+  rows: TermoManifestStoreSummaryRow[]
+): Promise<void> {
+  await clearByUserCd(STORE_MANIFEST_STORE_SUMMARY, INDEX_STORE_SUMMARY_BY_USER_CD, userId, cd);
+
+  const db = await getDb();
+  const transaction = db.transaction(STORE_MANIFEST_STORE_SUMMARY, "readwrite");
+  const store = transaction.objectStore(STORE_MANIFEST_STORE_SUMMARY);
+
+  for (const row of rows) {
+    const payload: ManifestStoreSummaryStoreRow = {
+      key: manifestStoreSummaryKey(userId, cd, row.rota, row.filial),
+      user_id: userId,
+      cd,
+      rota: row.rota,
+      filial: row.filial,
+      primary_etiqueta: row.primary_etiqueta,
+      coddv_total: row.coddv_total
+    };
+    store.put(payload);
+  }
+
+  await transactionDone(transaction);
+}
+
+export async function listManifestStoreSummaries(
+  userId: string,
+  cd: number
+): Promise<TermoManifestStoreSummaryRow[]> {
+  const db = await getDb();
+
+  {
+    const transaction = db.transaction(STORE_MANIFEST_STORE_SUMMARY, "readonly");
+    const store = transaction.objectStore(STORE_MANIFEST_STORE_SUMMARY);
+    const index = store.index(INDEX_STORE_SUMMARY_BY_USER_CD);
+    const rows = (await requestToPromise(
+      index.getAll(IDBKeyRange.only([userId, cd]))
+    )) as ManifestStoreSummaryStoreRow[];
+    await transactionDone(transaction);
+
+    if (rows.length > 0) {
+      return sortManifestStoreSummaries(rows.map((row) => ({
+        rota: row.rota,
+        filial: row.filial,
+        primary_etiqueta: row.primary_etiqueta,
+        coddv_total: row.coddv_total
+      })));
+    }
+  }
+
+  const manifestItems = await listManifestItemsByCd(userId, cd);
+  if (manifestItems.length === 0) return [];
+
+  const summaries = buildManifestStoreSummaries(manifestItems);
+  await saveManifestStoreSummaries(userId, cd, summaries);
+  return summaries;
+}
+
 export async function getManifestPrimaryEtiquetaByStore(
   userId: string,
   cd: number
 ): Promise<Array<{ rota: string; filial: number | null; id_etiqueta: string }>> {
-  const db = await getDb();
-  const transaction = db.transaction(STORE_MANIFEST_ITEMS, "readonly");
-  const store = transaction.objectStore(STORE_MANIFEST_ITEMS);
-  const index = store.index(INDEX_ITEMS_BY_USER_CD);
-  const rows = (await requestToPromise(
-    index.getAll(IDBKeyRange.only([userId, cd]))
-  )) as ManifestItemStoreRow[];
-  await transactionDone(transaction);
-
-  const grouped = new Map<string, { rota: string; filial: number | null; etiquetas: Set<string> }>();
-  for (const row of rows) {
-    const idEtiqueta = String(row.id_etiqueta ?? "").trim();
-    if (!idEtiqueta) continue;
-    const rota = (String(row.rota ?? "SEM ROTA").trim() || "SEM ROTA");
-    const filial = typeof row.filial === "number" && Number.isFinite(row.filial)
-      ? Math.trunc(row.filial)
-      : null;
-    const key = `${rota}::${filial == null ? "na" : String(filial)}`;
-    const current = grouped.get(key);
-    if (current) {
-      current.etiquetas.add(idEtiqueta);
-      continue;
-    }
-    grouped.set(key, {
-      rota,
-      filial,
-      etiquetas: new Set([idEtiqueta])
-    });
-  }
-
-  const result: Array<{ rota: string; filial: number | null; id_etiqueta: string }> = [];
-  for (const entry of grouped.values()) {
-    const firstEtiqueta = Array.from(entry.etiquetas).sort((a, b) => (
-      a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" })
-    ))[0];
-    if (!firstEtiqueta) continue;
-    result.push({
-      rota: entry.rota,
-      filial: entry.filial,
-      id_etiqueta: firstEtiqueta
-    });
-  }
-
-  return result;
+  const rows = await listManifestStoreSummaries(userId, cd);
+  return rows.map((row) => ({
+    rota: row.rota,
+    filial: row.filial,
+    id_etiqueta: row.primary_etiqueta
+  }));
 }
 
 export async function findManifestBarras(
@@ -644,6 +770,7 @@ export async function clearUserTermoSessionCache(userId: string): Promise<void> 
   await clearByUser(STORE_MANIFEST_ITEMS, INDEX_ITEMS_BY_USER, userId);
   await clearByUser(STORE_MANIFEST_BARRAS, INDEX_BARRAS_BY_USER, userId);
   await clearByUser(STORE_MANIFEST_META, INDEX_META_BY_USER, userId);
+  await clearByUser(STORE_MANIFEST_STORE_SUMMARY, INDEX_STORE_SUMMARY_BY_USER, userId);
   await clearByUser(STORE_ROUTE_OVERVIEW, INDEX_ROUTES_BY_USER, userId);
   await clearByUser(STORE_VOLUMES, INDEX_VOLUMES_BY_USER, userId);
 

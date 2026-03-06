@@ -37,6 +37,13 @@ export interface TermoManifestItemRow {
   qtd_esperada: number;
 }
 
+export interface TermoManifestStoreSummaryRow {
+  rota: string;
+  filial: number | null;
+  primary_etiqueta: string;
+  coddv_total: number;
+}
+
 export interface TermoManifestBarrasRow {
   barras: string;
   coddv: number;
