@@ -27,6 +27,7 @@ import ZeradosPage from "./modules/zerados/page";
 import HomePage from "./pages/HomePage";
 import type { DashboardModuleKey } from "./modules/types";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
+import type { HomeModulesViewMode } from "./types/ui";
 import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
@@ -53,6 +54,7 @@ import { clearUserControleValidadeCache } from "./modules/controle-validade/stor
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
 const DEFAULT_GLOBAL_CD = 2;
+const HOME_MODULES_VIEW_STORAGE_KEY = "auditoria.home.modules_view.v1";
 const SESSION_DEVICE_STORAGE_KEY = "auditoria.session_device_id.v1";
 const SESSION_ACTIVITY_STORAGE_PREFIX = "auditoria.last_activity.v1:";
 const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
@@ -436,6 +438,10 @@ function parseInteger(value: unknown): number | null {
   return null;
 }
 
+function parseHomeModulesViewMode(value: unknown): HomeModulesViewMode | null {
+  return value === "list" || value === "grid" ? value : null;
+}
+
 function readCachedProfileContext(userId: string): ProfileContext | null {
   if (typeof window === "undefined") return null;
   try {
@@ -451,7 +457,8 @@ function readCachedProfileContext(userId: string): ProfileContext | null {
       role: parseRole(parsed.role),
       cargo: typeof parsed.cargo === "string" ? parsed.cargo : null,
       cd_default: parseInteger(parsed.cd_default),
-      cd_nome: typeof parsed.cd_nome === "string" ? parsed.cd_nome : null
+      cd_nome: typeof parsed.cd_nome === "string" ? parsed.cd_nome : null,
+      home_menu_view: parseHomeModulesViewMode(parsed.home_menu_view)
     };
   } catch {
     return null;
@@ -485,7 +492,8 @@ function mergeProfileContext(primary: ProfileContext, fallback: ProfileContext |
     role: primary.role || fallback.role,
     cargo: hasText(primary.cargo) ? primary.cargo : (hasText(fallback.cargo) ? fallback.cargo : null),
     cd_default: mergedCdDefault,
-    cd_nome: mergedCdNome
+    cd_nome: mergedCdNome,
+    home_menu_view: primary.home_menu_view ?? fallback.home_menu_view ?? null
   };
 }
 
@@ -811,6 +819,18 @@ async function rpcListAvailableCds(): Promise<CdOption[]> {
     .sort((a, b) => a.cd - b.cd);
 }
 
+async function rpcSetHomeMenuView(mode: HomeModulesViewMode): Promise<HomeModulesViewMode> {
+  const { data, error } = await supabase!.rpc("rpc_set_home_menu_view", {
+    p_home_menu_view: mode
+  });
+  if (error) throw error;
+  const resolvedMode = parseHomeModulesViewMode(data);
+  if (!resolvedMode) {
+    throw new Error("Preferência de visual inválida retornada pelo servidor.");
+  }
+  return resolvedMode;
+}
+
 type SessionGuardStatus = "OK" | "REPLACED" | "IDLE_TIMEOUT";
 
 async function rpcSessionGuardPing(params: {
@@ -909,7 +929,8 @@ function fallbackProfileFromSession(session: Session): ProfileContext {
     role: roleByMeta,
     cargo: cargoByMeta || null,
     cd_default: cdDefaultByMeta,
-    cd_nome: cdNomeByMeta || null
+    cd_nome: cdNomeByMeta || null,
+    home_menu_view: null
   };
 }
 
@@ -950,7 +971,8 @@ async function rpcCurrentProfileContext(session: Session): Promise<ProfileContex
 
   return {
     ...(legacyRow as Omit<ProfileContext, "cargo">),
-    cargo: null
+    cargo: null,
+    home_menu_view: parseHomeModulesViewMode((legacyRow as Record<string, unknown>).home_menu_view)
   };
 }
 
@@ -1012,7 +1034,9 @@ export default function App() {
   const [globalCdLoading, setGlobalCdLoading] = useState(false);
   const [showGlobalCdSwitcher, setShowGlobalCdSwitcher] = useState(false);
   const [pendingGlobalCdSelection, setPendingGlobalCdSelection] = useState<number | null>(null);
+  const [homeModulesViewMode, setHomeModulesViewMode] = useState<HomeModulesViewMode>("list");
   const [profileSyncRetryCount, setProfileSyncRetryCount] = useState(0);
+  const migratedHomeModulesViewRef = useRef<string | null>(null);
 
   const [registerMat, setRegisterMat] = useState("");
   const [registerDtNasc, setRegisterDtNasc] = useState("");
@@ -1707,6 +1731,41 @@ export default function App() {
 
   useEffect(() => {
     if (!session) {
+      setHomeModulesViewMode("list");
+      migratedHomeModulesViewRef.current = null;
+      return;
+    }
+
+    setHomeModulesViewMode(effectiveProfile?.home_menu_view ?? "list");
+  }, [effectiveProfile?.home_menu_view, session]);
+
+  useEffect(() => {
+    if (!session || !effectiveProfile || effectiveProfile.home_menu_view != null) return;
+    if (typeof window === "undefined") return;
+    if (migratedHomeModulesViewRef.current === session.user.id) return;
+
+    let legacyMode: HomeModulesViewMode | null = null;
+    try {
+      legacyMode = parseHomeModulesViewMode(window.localStorage.getItem(HOME_MODULES_VIEW_STORAGE_KEY));
+    } catch {
+      legacyMode = null;
+    }
+    if (!legacyMode) {
+      migratedHomeModulesViewRef.current = session.user.id;
+      return;
+    }
+
+    migratedHomeModulesViewRef.current = session.user.id;
+    setHomeModulesViewMode(legacyMode);
+    setProfile((current) => (current ? { ...current, home_menu_view: legacyMode } : current));
+
+    void rpcSetHomeMenuView(legacyMode).catch(() => {
+      // Keep the local migration best-effort to avoid blocking login flow.
+    });
+  }, [effectiveProfile, session]);
+
+  useEffect(() => {
+    if (!session) {
       setGlobalCdOptions([]);
       setGlobalCdSelection(null);
       setGlobalCdLoading(false);
@@ -1777,6 +1836,44 @@ export default function App() {
       cd_nome: selectedCdName
     };
   }, [effectiveProfile, globalCdOptions, globalCdSelection, isGlobalProfile]);
+
+  const handleHomeModulesViewModeChange = useCallback(async (nextMode: HomeModulesViewMode) => {
+    if (!session) return;
+
+    const previousMode = homeModulesViewMode;
+    setHomeModulesViewMode(nextMode);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(HOME_MODULES_VIEW_STORAGE_KEY, nextMode);
+      } catch {
+        // Ignore storage failures and keep server sync as the source of truth.
+      }
+    }
+
+    if (profile) {
+      const nextProfile = { ...profile, home_menu_view: nextMode };
+      setProfile(nextProfile);
+      writeCachedProfileContext(nextProfile);
+    } else {
+      setProfile((current) => (current ? { ...current, home_menu_view: nextMode } : current));
+    }
+
+    try {
+      const savedMode = await rpcSetHomeMenuView(nextMode);
+      setHomeModulesViewMode(savedMode);
+      if (profile) {
+        writeCachedProfileContext({ ...profile, home_menu_view: savedMode });
+      }
+      setProfile((current) => (current ? { ...current, home_menu_view: savedMode } : current));
+    } catch (error) {
+      setHomeModulesViewMode(previousMode);
+      if (profile) {
+        writeCachedProfileContext({ ...profile, home_menu_view: previousMode });
+      }
+      setProfile((current) => (current ? { ...current, home_menu_view: previousMode } : current));
+      setErrorMessage(asErrorMessage(error));
+    }
+  }, [homeModulesViewMode, profile, session]);
 
   const coletaProfile = useMemo<ColetaModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
@@ -1996,6 +2093,8 @@ export default function App() {
                 hiddenModuleKeys={authBranding.hiddenModuleKeys}
                 isOnline={isOnline}
                 onRequestLogout={openLogoutConfirm}
+                modulesViewMode={homeModulesViewMode}
+                onToggleModulesViewMode={handleHomeModulesViewModeChange}
                 showCdSwitcher={isGlobalProfile && globalCdOptions.length > 0}
                 onRequestCdSwitcher={() => {
                   setPendingGlobalCdSelection(globalCdSelection);

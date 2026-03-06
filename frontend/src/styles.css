@@ -766,6 +766,7 @@ small {
 .topbar-meta {
   grid-area: meta;
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   width: auto;
@@ -851,6 +852,14 @@ small {
   background: rgba(255, 255, 255, 0.2);
 }
 
+.topbar-view-toggle {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  flex: 0 0 auto;
+}
+
 .status-pill {
   padding: 3px 7px;
   border-radius: 999px;
@@ -893,6 +902,11 @@ small {
   .topbar-meta>span {
     font-size: 0.74rem;
     padding: 3px 7px;
+  }
+
+  .topbar-view-toggle {
+    width: 34px;
+    height: 34px;
   }
 
   .btn-logout {
