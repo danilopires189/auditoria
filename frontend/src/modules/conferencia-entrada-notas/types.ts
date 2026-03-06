@@ -2,9 +2,10 @@ export type EntradaNotasConfStatus =
   | "em_conferencia"
   | "finalizado_ok"
   | "finalizado_divergencia"
+  | "finalizado_parcial"
   | "finalizado_falta";
 
-export type EntradaNotasDivergenciaTipo = "falta" | "sobra" | "correto";
+export type EntradaNotasDivergenciaTipo = "nao_conferido" | "falta" | "sobra" | "correto";
 
 export interface EntradaNotasModuleProfile {
   user_id: string;
@@ -65,7 +66,7 @@ export interface EntradaNotasRouteOverviewRow {
   itens_divergentes: number;
   valor_total: number;
   valor_conferido: number;
-  status: "pendente" | "em_andamento" | "concluido";
+  status: "pendente" | "em_andamento" | "concluido" | "conferido_parcialmente";
   colaborador_nome: string | null;
   colaborador_mat: string | null;
   status_at: string | null;

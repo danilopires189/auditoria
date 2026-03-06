@@ -76,7 +76,12 @@ function parseDecimal(value: unknown, fallback = 0): number {
 
 function normalizeConferenceStatus(value: unknown): EntradaNotasVolumeRow["status"] {
   const statusRaw = String(value ?? "em_conferencia");
-  if (statusRaw === "finalizado_ok" || statusRaw === "finalizado_falta" || statusRaw === "finalizado_divergencia") {
+  if (
+    statusRaw === "finalizado_ok"
+    || statusRaw === "finalizado_falta"
+    || statusRaw === "finalizado_divergencia"
+    || statusRaw === "finalizado_parcial"
+  ) {
     return statusRaw;
   }
   return "em_conferencia";
@@ -85,6 +90,7 @@ function normalizeConferenceStatus(value: unknown): EntradaNotasVolumeRow["statu
 function normalizeRouteStatus(value: unknown): EntradaNotasRouteOverviewRow["status"] {
   const statusRaw = String(value ?? "pendente").toLowerCase();
   if (statusRaw === "concluido" || statusRaw === "conferido") return "concluido";
+  if (statusRaw === "conferido_parcialmente") return "conferido_parcialmente";
   if (statusRaw === "em_andamento" || statusRaw === "em_conferencia") return "em_andamento";
   return "pendente";
 }
@@ -229,7 +235,10 @@ function mapVolume(raw: Record<string, unknown>): EntradaNotasVolumeRow {
 
 function mapItem(raw: Record<string, unknown>): EntradaNotasItemRow {
   const tipoRaw = String(raw.divergencia_tipo ?? "correto").toLowerCase();
-  const divergencia_tipo = tipoRaw === "falta" || tipoRaw === "sobra" ? tipoRaw : "correto";
+  const divergencia_tipo =
+    tipoRaw === "nao_conferido" || tipoRaw === "falta" || tipoRaw === "sobra"
+      ? tipoRaw
+      : "correto";
 
   return {
     item_id: String(raw.item_id ?? ""),
