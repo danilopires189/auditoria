@@ -13,6 +13,7 @@ import {
   enqueueValidarEtiquetaPulmaoAudit,
   flushPendingValidarEtiquetaPulmaoAudits,
   normalizeLookupError,
+  resolveCodigoInternoForValidacao,
   resolveProdutoForValidacao
 } from "./sync";
 import type {
@@ -61,6 +62,8 @@ const NOT_FOUND_CHIME_DURATION_MS = 420;
 const AUDIT_FLUSH_INTERVAL_MS = 15000;
 const STATUS_MESSAGE_AUTO_HIDE_MS = 2800;
 const DIGITS_PATTERN = /^\d+$/;
+const INTERNAL_CODE_MAX_LENGTH = 7;
+const BARCODE_MIN_LENGTH = 8;
 let sharedAudioContext: AudioContext | null = null;
 
 function createScannerInputState(): ScannerInputState {
@@ -121,11 +124,14 @@ function detectCodigoInternoInputFormatError(value: string): string | null {
   return null;
 }
 
-function isProdutoNaoEncontradoMessage(message: string): boolean {
-  const normalized = String(message ?? "").toUpperCase();
-  return normalized.includes("PRODUTO NÃO ENCONTRADO")
-    || normalized.includes("PRODUTO NAO ENCONTRADO")
-    || normalized.includes("PRODUTO_NAO_ENCONTRADO");
+function looksLikeBarcode(value: string): boolean {
+  return DIGITS_PATTERN.test(value) && value.length >= BARCODE_MIN_LENGTH;
+}
+
+function looksLikeInternalCode(value: string, expectedCode: number | null = null): boolean {
+  if (!DIGITS_PATTERN.test(value) || value.length <= 0) return false;
+  if (expectedCode != null && String(expectedCode) === value) return true;
+  return value.length <= INTERNAL_CODE_MAX_LENGTH;
 }
 
 function getSharedAudioContext(): AudioContext | null {
@@ -408,9 +414,9 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
   }, []);
 
   const clearBarcodeStep = useCallback(() => {
-    setCurrentProduct(null);
     setProdutoInput("");
     setProdutoValidationState("idle");
+    setStatusMessage("Leia o código de barras novamente.");
     focusProduto();
   }, [focusProduto]);
 
@@ -624,25 +630,68 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
   const commitCodigoInternoInput = useCallback(async (rawValue: string) => {
     const value = normalizeBarcodeInput(rawValue);
     if (!value) return;
+    if (looksLikeBarcode(value)) {
+      setCodigoInternoValidationState("invalid");
+      setCodigoInternoInput("");
+      setErrorMessage("Código interno inválido. Parece código de barras.");
+      setStatusMessage("Leia novamente o código interno.");
+      playNotFoundChime();
+      focusProduto();
+      return;
+    }
     const parsedCodigoInterno = Number.parseInt(value, 10);
     if (!Number.isFinite(parsedCodigoInterno) || parsedCodigoInterno <= 0) {
       setCodigoInternoValidationState("invalid");
+      setCodigoInternoInput("");
       setErrorMessage("Código interno inválido.");
+      setStatusMessage("Leia novamente o código interno.");
+      playNotFoundChime();
+      focusProduto();
+      return;
+    }
+
+    if (currentCd == null || currentCd <= 0) {
+      setCodigoInternoValidationState("invalid");
+      setCodigoInternoInput("");
+      setErrorMessage("CD não definido para este usuário.");
+      setStatusMessage("Leia novamente o código interno.");
       playNotFoundChime();
       focusProduto();
       return;
     }
 
     setErrorMessage(null);
-    setStatusMessage("Código interno capturado. Leia o código de barras.");
-    setCodigoInternoValidationState("valid");
-    setProdutoValidationState("idle");
-    setCodigoInternoAtual(parsedCodigoInterno);
-    setCodigoInternoInput("");
-    setProdutoInput("");
-    setCurrentProduct(null);
-    focusProduto();
-  }, [focusProduto]);
+    setStatusMessage(null);
+    setCodigoInternoValidationState("validating");
+
+    try {
+      const resolved = await resolveCodigoInternoForValidacao({
+        cd: currentCd,
+        rawInput: value,
+        isOnline,
+        preferOfflineMode
+      });
+
+      setCodigoInternoValidationState("valid");
+      setProdutoValidationState("idle");
+      setCodigoInternoAtual(parsedCodigoInterno);
+      setCodigoInternoInput("");
+      setProdutoInput("");
+      setCurrentProduct(resolved);
+      setStatusMessage("Código interno localizado. Leia o código de barras.");
+      focusProduto();
+    } catch (error) {
+      const normalizedError = normalizeLookupError(error);
+      setCodigoInternoValidationState("invalid");
+      setCodigoInternoInput("");
+      setCodigoInternoAtual(null);
+      setCurrentProduct(null);
+      setErrorMessage(normalizedError);
+      setStatusMessage("Código interno não localizado. Leia novamente.");
+      playNotFoundChime();
+      focusProduto();
+    }
+  }, [currentCd, focusProduto, isOnline, preferOfflineMode]);
 
   const commitProdutoInput = useCallback(async (rawValue: string) => {
     const value = normalizeBarcodeInput(rawValue);
@@ -650,6 +699,15 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
     if (currentCd == null || currentCd <= 0) {
       setErrorMessage("CD não definido para este usuário.");
       setProdutoValidationState("invalid");
+      focusProduto();
+      return;
+    }
+    if (looksLikeInternalCode(value, codigoInternoAtual)) {
+      setProdutoValidationState("invalid");
+      setProdutoInput("");
+      setErrorMessage("Código de barras inválido. Parece código interno.");
+      setStatusMessage("Leia novamente o código de barras.");
+      playNotFoundChime();
       focusProduto();
       return;
     }
@@ -673,12 +731,16 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
         preferOfflineMode
       });
 
-      setCurrentProduct(resolved);
       setProdutoValidationState("valid");
       setProdutoInput("");
       setStatusMessage(null);
 
       if (resolved.coddv === codigoInternoAtual) {
+        setCurrentProduct((current) => current ? {
+          ...current,
+          barras: resolved.barras || current.barras,
+          barras_lista: Array.from(new Set([...current.barras_lista, ...resolved.barras_lista].filter(Boolean)))
+        } : resolved);
         queueValidationAudit({
           codigoInterno: codigoInternoAtual,
           barras: pickMainBarcode(resolved) || value,
@@ -718,10 +780,10 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
       });
     } catch (error) {
       const normalizedError = normalizeLookupError(error);
-      setCurrentProduct(null);
       setProdutoValidationState("invalid");
       setProdutoInput("");
       setErrorMessage(normalizedError);
+      setStatusMessage("Código de barras inválido ou não localizado. Leia novamente.");
       queueValidationAudit({
         codigoInterno: codigoInternoAtual,
         barras: value,
@@ -774,12 +836,21 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
     state.burstChars = 0;
 
     if (target === "codigoInterno") {
+      if (looksLikeBarcode(normalized)) {
+        setCodigoInternoValidationState("invalid");
+        setCodigoInternoInput("");
+        setErrorMessage("Código interno inválido. Parece código de barras.");
+        setStatusMessage("Leia novamente o código interno.");
+        playNotFoundChime();
+        focusProduto();
+        return;
+      }
       const formatError = detectCodigoInternoInputFormatError(normalized);
       if (formatError) {
         setCodigoInternoValidationState("invalid");
         setCodigoInternoInput("");
         setErrorMessage(formatError);
-        setStatusMessage(null);
+        setStatusMessage("Leia novamente o código interno.");
         playNotFoundChime();
         focusProduto();
         return;
@@ -790,12 +861,21 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
       return;
     }
 
+    if (looksLikeInternalCode(normalized, codigoInternoAtual)) {
+      setProdutoValidationState("invalid");
+      setProdutoInput("");
+      setErrorMessage("Código de barras inválido. Parece código interno.");
+      setStatusMessage("Leia novamente o código de barras.");
+      playNotFoundChime();
+      focusProduto();
+      return;
+    }
     const formatError = detectProdutoInputFormatError(normalized);
     if (formatError) {
       setProdutoValidationState("invalid");
       setProdutoInput("");
       setErrorMessage(formatError);
-      setStatusMessage(null);
+      setStatusMessage("Leia novamente o código de barras.");
       playNotFoundChime();
       focusProduto();
       return;
@@ -803,7 +883,7 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
 
     setProdutoInput(normalized);
     await commitProdutoInput(normalized);
-  }, [clearScannerInputTimer, commitCodigoInternoInput, commitProdutoInput, focusProduto]);
+  }, [clearScannerInputTimer, codigoInternoAtual, commitCodigoInternoInput, commitProdutoInput, focusProduto]);
 
   const scheduleScannerInputAutoSubmit = useCallback((target: ScannerInputTarget, value: string) => {
     if (typeof window === "undefined") return;

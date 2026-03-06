@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-import { getDbBarrasByBarcode, upsertDbBarrasCacheRow } from "../../shared/db-barras/storage";
+import { getDbBarrasByBarcode, getDbBarrasByCoddv, upsertDbBarrasCacheRow } from "../../shared/db-barras/storage";
 import { normalizeBarcode } from "../../shared/db-barras/sync";
 import {
   enqueueValidarEtiquetaPulmaoAudit as enqueueAuditPending,
@@ -14,6 +14,10 @@ import type {
 
 interface ParsedBarcodeInput {
   barras: string;
+}
+
+interface ParsedInternalCodeInput {
+  coddv: number;
 }
 
 function parseInteger(value: unknown, fallback = 0): number {
@@ -60,6 +64,12 @@ function parseBarcodeInput(rawInput: string): ParsedBarcodeInput | null {
   return { barras };
 }
 
+function parseInternalCodeInput(rawInput: string): ParsedInternalCodeInput | null {
+  const coddv = parseInteger(rawInput, 0);
+  if (coddv <= 0) return null;
+  return { coddv };
+}
+
 function mapLookupRow(cd: number, raw: Record<string, unknown>): ValidarEtiquetaPulmaoLookupResult {
   const barrasPrincipal = normalizeBarcode(String(raw.barras ?? ""));
   const barrasLista = parseBarcodeList(raw.barras_lista);
@@ -90,6 +100,25 @@ async function lookupProdutoOnlineByParsed(cd: number, parsedInput: ParsedBarcod
   });
 }
 
+async function lookupProdutoOnlineByCoddv(cd: number, parsedInput: ParsedInternalCodeInput): Promise<ValidarEtiquetaPulmaoLookupResult> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_busca_produto_lookup", {
+    p_cd: cd,
+    p_barras: null,
+    p_coddv: parsedInput.coddv
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Produto não encontrado.");
+
+  const barras = normalizeBarcode(String(first.barras ?? ""));
+  return mapLookupRow(cd, {
+    ...first,
+    barras_lista: barras ? [barras] : []
+  });
+}
+
 async function lookupProdutoOfflineByParsed(cd: number, parsedInput: ParsedBarcodeInput): Promise<ValidarEtiquetaPulmaoLookupResult | null> {
   const barcodeRow = await getDbBarrasByBarcode(parsedInput.barras);
   if (!barcodeRow || barcodeRow.coddv <= 0) return null;
@@ -102,6 +131,24 @@ async function lookupProdutoOfflineByParsed(cd: number, parsedInput: ParsedBarco
     barras_lista: Array.from(
       new Set(
         [parsedInput.barras, normalizeBarcode(String(barcodeRow.barras ?? ""))]
+          .filter(Boolean)
+      )
+    )
+  };
+}
+
+async function lookupProdutoOfflineByCoddv(cd: number, parsedInput: ParsedInternalCodeInput): Promise<ValidarEtiquetaPulmaoLookupResult | null> {
+  const barcodeRow = await getDbBarrasByCoddv(parsedInput.coddv);
+  if (!barcodeRow || barcodeRow.coddv <= 0) return null;
+
+  return {
+    cd,
+    coddv: barcodeRow.coddv,
+    descricao: barcodeRow.descricao?.trim() || `CODDV ${barcodeRow.coddv}`,
+    barras: normalizeBarcode(String(barcodeRow.barras ?? "")),
+    barras_lista: Array.from(
+      new Set(
+        [normalizeBarcode(String(barcodeRow.barras ?? ""))]
           .filter(Boolean)
       )
     )
@@ -186,6 +233,52 @@ export async function resolveProdutoForValidacao(params: {
 
   if (!offlineResult && !shouldTryOfflineFirst) {
     offlineResult = await lookupProdutoOfflineByParsed(params.cd, parsedInput);
+  }
+
+  if (offlineResult) return offlineResult;
+
+  if (!params.isOnline) {
+    throw new Error("Sem internet para validação online e sem base local disponível.");
+  }
+
+  if (onlineError) throw (onlineError instanceof Error ? onlineError : new Error(toErrorMessage(onlineError)));
+  throw new Error("Produto não encontrado.");
+}
+
+export async function resolveCodigoInternoForValidacao(params: {
+  cd: number;
+  rawInput: string;
+  isOnline: boolean;
+  preferOfflineMode: boolean;
+}): Promise<ValidarEtiquetaPulmaoLookupResult> {
+  const parsedInput = parseInternalCodeInput(params.rawInput);
+  if (!parsedInput) {
+    throw new Error("Informe código interno.");
+  }
+
+  let offlineResult: ValidarEtiquetaPulmaoLookupResult | null = null;
+  let onlineError: unknown = null;
+  const shouldTryOfflineFirst = params.preferOfflineMode || !params.isOnline;
+
+  if (shouldTryOfflineFirst) {
+    offlineResult = await lookupProdutoOfflineByCoddv(params.cd, parsedInput);
+  }
+
+  if (params.isOnline && (!shouldTryOfflineFirst || !offlineResult)) {
+    try {
+      const online = await lookupProdutoOnlineByCoddv(params.cd, parsedInput);
+      await warmupCachesFromOnline(online).catch(() => undefined);
+      return online;
+    } catch (error) {
+      onlineError = error;
+      if (offlineResult && containsNotFoundError(error)) {
+        return offlineResult;
+      }
+    }
+  }
+
+  if (!offlineResult && !shouldTryOfflineFirst) {
+    offlineResult = await lookupProdutoOfflineByCoddv(params.cd, parsedInput);
   }
 
   if (offlineResult) return offlineResult;
