@@ -623,6 +623,31 @@ small {
   transform: translateY(0);
 }
 
+.btn-view-toggle {
+  color: rgba(247, 251, 255, 0.9);
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(235, 244, 255, 0.28);
+  background: linear-gradient(140deg, rgba(110, 145, 196, 0.34), rgba(84, 121, 176, 0.4));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 4px 9px rgba(17, 40, 77, 0.14);
+  backdrop-filter: blur(1px);
+  display: grid;
+  place-items: center;
+}
+
+.btn-view-toggle:hover:not(:disabled) {
+  color: #f7fbff;
+  background: linear-gradient(140deg, rgba(122, 158, 211, 0.48), rgba(90, 129, 187, 0.52));
+  border-color: rgba(241, 247, 255, 0.42);
+  transform: translateY(-1px);
+}
+
+.btn-view-toggle:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 .logout-icon {
   display: grid;
   place-items: center;
@@ -1224,6 +1249,11 @@ small {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
+}
+
+.modules-grid.is-icon-view {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .module-topbar {
@@ -1981,6 +2011,21 @@ small {
 .atividade-extra-pending-badge-icon svg {
   width: 14px;
   height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.view-toggle-icon {
+  display: grid;
+  place-items: center;
+}
+
+.view-toggle-icon svg {
+  width: 19px;
+  height: 19px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -3471,6 +3516,16 @@ small {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 
+.module-card.is-icon-view {
+  min-height: 148px;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+  gap: 12px;
+  padding: 18px 14px 14px;
+  text-align: center;
+}
+
 .module-card::after {
   content: "";
   position: absolute;
@@ -3480,6 +3535,16 @@ small {
   width: 3px;
   border-radius: 0 999px 999px 0;
   background: var(--tone);
+}
+
+.module-card.is-icon-view::after {
+  left: 14px;
+  right: 14px;
+  top: auto;
+  bottom: 0;
+  width: auto;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
 }
 
 .module-card:hover {
@@ -3516,6 +3581,14 @@ small {
   background: color-mix(in srgb, var(--tone) 11%, #ffffff);
 }
 
+.module-card.is-icon-view .module-icon {
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 12%, #ffffff), #ffffff 72%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 10px 20px color-mix(in srgb, var(--tone) 14%, transparent);
+}
+
 .module-icon svg {
   width: 19px;
   height: 19px;
@@ -3533,12 +3606,24 @@ small {
   line-height: 1.24;
 }
 
+.module-card.is-icon-view .module-title {
+  font-size: 0.82rem;
+  line-height: 1.28;
+}
+
 .module-header-main {
   min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.module-card.is-icon-view .module-header-main {
+  width: 100%;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 8px;
 }
 
 .module-available-pill {
@@ -3607,6 +3692,11 @@ small {
   line-height: 1.1;
 }
 
+.module-card.is-icon-view .module-available-pill,
+.module-card.is-icon-view .module-test-pill {
+  white-space: normal;
+}
+
 .produtividade-shell {
   max-width: min(1320px, 100%);
 }
@@ -3644,6 +3734,12 @@ small {
   stroke-width: 1.9;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.module-card.is-icon-view .module-icon svg {
+  width: 31px;
+  height: 31px;
+  stroke-width: 1.8;
 }
 
 .produtividade-period-card {
@@ -4101,6 +4197,10 @@ small {
     grid-template-columns: 1fr;
   }
 
+  .modules-grid.is-icon-view {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .module-card {
     min-height: 72px;
   }
@@ -4248,6 +4348,10 @@ small {
 @media (min-width: 1180px) {
   .modules-grid {
     grid-template-columns: 1fr;
+  }
+
+  .modules-grid.is-icon-view {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
