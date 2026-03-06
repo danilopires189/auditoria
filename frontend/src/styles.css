@@ -7433,6 +7433,45 @@ small {
   border-top: none;
 }
 
+.pvps-zone-divider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.pvps-zone-sort-btn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid #c8d8f1;
+  background: #f7faff;
+  color: #3b6db5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  box-shadow: 0 2px 6px rgba(46, 99, 188, 0.12);
+}
+
+.pvps-zone-sort-btn:hover {
+  background: #edf4ff;
+  color: #1f4f98;
+}
+
+.pvps-zone-sort-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Editor */
 .pvps-editor {
   border: 1px solid var(--line);
