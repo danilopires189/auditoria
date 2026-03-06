@@ -3263,25 +3263,49 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
-                            <small>Tipo Separação | {row.end_sep} | {formatDateTime(row.dt_hr)} | Auditor {row.auditor_nome} ({row.auditor_id})</small>
-                            <small>Pulmão auditados: {row.pul_auditados}/{row.pul_total}</small>
+                            <div className="pvps-completed-section">
+                              <div className="pvps-completed-section-head">
+                                <strong>Separação</strong>
+                              </div>
+                              <div className="pvps-completed-meta-grid">
+                                <small><span>Endereço</span><strong>{row.end_sep}</strong></small>
+                                <small><span>Auditor</span><strong>{row.auditor_nome}</strong></small>
+                                <small><span>Data</span><strong>{formatDateTime(row.dt_hr)}</strong></small>
+                                <small><span>Status</span><strong>{statusInfo.label}</strong></small>
+                              </div>
+                            </div>
                             {row.pul_auditados > 0 ? (
-                              <div className="pvps-pul-completed-group">
-                                <small className="pvps-pul-completed-title">Pulmões auditados</small>
+                              <div className="pvps-completed-section pvps-pul-completed-group">
+                                <div className="pvps-completed-section-head">
+                                  <strong>Pulmões auditados</strong>
+                                  <span>{row.pul_auditados}/{row.pul_total}</span>
+                                </div>
                                 {pulItemsLoading ? <small>Carregando endereços de Pulmão...</small> : null}
-                                {!pulItemsLoading ? [...pulItemsCompleted].sort((a, b) => a.end_pul.localeCompare(b.end_pul)).map((item) => (
-                                  <small key={`${row.audit_id}:${item.end_pul}`} className="pvps-pul-completed-item">
-                                    Tipo Pulmão | {item.end_pul} | {formatDateTime(item.dt_hr ?? row.dt_hr)} | Validade {item.val_pul ?? "-"}{item.end_sit ? ` | Ocorrência ${formatOcorrenciaLabel(item.end_sit)}` : ""}{` | Auditor ${item.auditor_nome ?? row.auditor_nome}`}
-                                  </small>
-                                )) : null}
+                                {!pulItemsLoading ? (
+                                  <div className="pvps-pul-completed-list">
+                                    {[...pulItemsCompleted].sort((a, b) => a.end_pul.localeCompare(b.end_pul)).map((item) => (
+                                      <div key={`${row.audit_id}:${item.end_pul}`} className="pvps-pul-completed-item">
+                                        <div className="pvps-pul-completed-item-head">
+                                          <strong>{item.end_pul}</strong>
+                                          <span>{formatDateTime(item.dt_hr ?? row.dt_hr)}</span>
+                                        </div>
+                                        <div className="pvps-pul-completed-item-meta">
+                                          <small>Validade: <strong>{item.val_pul ?? "-"}</strong></small>
+                                          {item.end_sit ? <small>Ocorrência: <strong>{formatOcorrenciaLabel(item.end_sit)}</strong></small> : null}
+                                          <small>Auditor: <strong>{item.auditor_nome ?? row.auditor_nome}</strong></small>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                             {row.pul_has_lower ? (
-                              <small>
+                              <small className="pvps-completed-note">
                                 Pulmão com validade menor: {row.pul_lower_end ?? "-"} ({row.pul_lower_val ?? "-"})
                               </small>
                             ) : null}
-                            <small>{isSyntheticSepPending ? "Separação concluída no dia com Pulmão pendente." : `Concluído em: ${formatDateTime(row.dt_hr)}`}</small>
+                            <small className="pvps-completed-note">{isSyntheticSepPending ? "Separação concluída no dia com Pulmão pendente." : `Concluído em: ${formatDateTime(row.dt_hr)}`}</small>
                           </div>
                         ) : null}
                       </div>

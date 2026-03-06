@@ -7006,21 +7006,73 @@ small {
 /* Row Details (expanded) */
 .pvps-row-details {
   border-top: 1px solid #e8eef7;
-  padding-top: 8px;
+  padding-top: 10px;
   display: grid;
-  gap: 3px;
+  gap: 10px;
   animation: pvps-fade-in 200ms ease both;
+}
+
+.pvps-completed-section {
+  border: 1px solid #e4ebf6;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fcfdff 0%, #f7faff 100%);
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.pvps-completed-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pvps-completed-section-head strong {
+  color: #1f457d;
+  font-size: 0.9rem;
+}
+
+.pvps-completed-section-head span {
+  color: #45648f;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: #eef4ff;
+  border: 1px solid #d6e2f8;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.pvps-completed-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.pvps-completed-meta-grid small {
+  display: grid;
+  gap: 4px;
+  color: #5c6f90;
+  font-size: 0.79rem;
+}
+
+.pvps-completed-meta-grid small span {
+  color: #6e7f9d;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.pvps-completed-meta-grid small strong {
+  color: #233b63;
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 /* Completed Pulmão group */
 .pvps-pul-completed-group {
-  margin-top: 6px;
-  border: 1px solid #e2e9f5;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fbfdff 0%, #f6f9fe 100%);
-  padding: 10px 12px;
-  display: grid;
-  gap: 4px;
+  margin-top: 0;
 }
 
 .pvps-pul-completed-title {
@@ -7029,9 +7081,59 @@ small {
   font-size: 0.84rem;
 }
 
+.pvps-pul-completed-list {
+  display: grid;
+  gap: 8px;
+}
+
 .pvps-pul-completed-item {
+  border: 1px solid #dde7f6;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
   color: #4d5f7f;
-  font-size: 0.83rem;
+}
+
+.pvps-pul-completed-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pvps-pul-completed-item-head strong {
+  color: #24436f;
+  font-size: 0.87rem;
+}
+
+.pvps-pul-completed-item-head span {
+  color: #6b7f9e;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.pvps-pul-completed-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.pvps-pul-completed-item-meta small {
+  color: #5c6f90;
+  font-size: 0.79rem;
+}
+
+.pvps-pul-completed-item-meta strong {
+  color: #27446f;
+}
+
+.pvps-completed-note {
+  color: #5b6e8f;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 /* Zone Groups & Dividers */
