@@ -474,6 +474,15 @@ function writeCachedProfileContext(context: ProfileContext): void {
   }
 }
 
+function clearCachedProfileContext(userId: string): void {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    window.localStorage.removeItem(profileCacheKey(userId));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 function mergeProfileContext(primary: ProfileContext, fallback: ProfileContext | null): ProfileContext {
   if (!fallback) return primary;
   const keepPrimaryCd = primary.cd_default != null || (primary.role === "admin" && primary.cd_default == null);
@@ -1077,7 +1086,10 @@ export default function App() {
     setShowResetPasswordConfirm(false);
   };
 
-  const refreshProfile = useCallback(async (activeSession: Session | null) => {
+  const refreshProfile = useCallback(async (
+    activeSession: Session | null,
+    options?: { ignoreCache?: boolean; replaceCurrentProfile?: boolean }
+  ) => {
     const runId = refreshProfileRunIdRef.current + 1;
     refreshProfileRunIdRef.current = runId;
 
@@ -1090,12 +1102,14 @@ export default function App() {
     const commitProfile = (next: ProfileContext) => {
       if (!isCurrentRun()) return;
       setProfile((current) => {
-        if (!current || current.user_id !== next.user_id) return next;
+        if (options?.replaceCurrentProfile || !current || current.user_id !== next.user_id) return next;
         return mergeProfileContext(next, current);
       });
     };
 
-    const cachedContext = readCachedProfileContext(activeSession.user.id);
+    const cachedContext = options?.ignoreCache
+      ? null
+      : readCachedProfileContext(activeSession.user.id);
 
     try {
       await withTimeout(
@@ -1169,9 +1183,10 @@ export default function App() {
 
     void bootstrapSession();
 
-    const { data: listener } = supabase!.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase!.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
-      void refreshProfile(nextSession);
+      const ignoreCache = event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED";
+      void refreshProfile(nextSession, { ignoreCache, replaceCurrentProfile: ignoreCache });
     });
 
     return () => {
@@ -1305,7 +1320,10 @@ export default function App() {
     setBusy(true);
     try {
       const activeSession = await loginWithMatAndPassword(loginMat, loginPassword);
-      void refreshProfile(activeSession);
+      clearCachedProfileContext(activeSession.user.id);
+      setSession(activeSession);
+      setProfile(null);
+      await refreshProfile(activeSession, { ignoreCache: true, replaceCurrentProfile: true });
       setSuccessMessage("Login realizado com sucesso.");
       setLoginPassword("");
       navigate("/inicio", { replace: true });
@@ -1398,7 +1416,12 @@ export default function App() {
       if (completeError) throw completeError;
 
       const { data: sessionData } = await supabase!.auth.getSession();
-      await refreshProfile(sessionData.session);
+      if (sessionData.session) {
+        clearCachedProfileContext(sessionData.session.user.id);
+        setSession(sessionData.session);
+      }
+      setProfile(null);
+      await refreshProfile(sessionData.session, { ignoreCache: true, replaceCurrentProfile: true });
       setSuccessMessage("Cadastro concluído com sucesso. Você já está logado.");
       setAuthMode("login");
       setRegisterMat("");
@@ -1532,6 +1555,7 @@ export default function App() {
         if (typeof window !== "undefined") {
           window.localStorage.removeItem(globalCdSelectionKey(currentUserId));
         }
+        clearCachedProfileContext(currentUserId);
         clearLastActivityAt(currentUserId);
         try {
           await clearUserColetaSessionCache(currentUserId);
