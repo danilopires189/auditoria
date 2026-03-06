@@ -6421,12 +6421,14 @@ small {
   justify-items: center;
   overflow: auto;
   padding-top: max(8vh, calc(env(safe-area-inset-top, 0px) + 14px));
+  padding-right: calc(env(safe-area-inset-right, 0px) + 18px);
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  padding-left: calc(env(safe-area-inset-left, 0px) + 18px);
 }
 
 .pvps-popup-card {
-  width: min(700px, calc(100vw - 36px));
-  max-height: calc(100dvh - 28px);
+  width: min(680px, calc(100vw - 56px));
+  max-height: calc(100dvh - 36px);
   min-height: clamp(320px, 48dvh, 500px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
@@ -6537,11 +6539,26 @@ small {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  border: 1px solid #2e63bc;
+  background: linear-gradient(135deg, #2e63bc, #4b86ea);
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(46, 99, 188, 0.22);
 }
 
 .pvps-editor-close-icon svg {
   width: 16px;
   height: 16px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+}
+
+.pvps-editor-close-icon:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2858aa, #3f76d4);
+  color: #ffffff;
+}
+
+.pvps-editor-close-icon:disabled {
+  opacity: 0.6;
 }
 
 .pvps-editor-summary {
@@ -7422,8 +7439,8 @@ small {
 
   .pvps-popup-card {
     width: 100%;
-    max-width: calc(100vw - 24px);
-    max-height: calc(100dvh - 18px);
+    max-width: calc(100vw - 34px);
+    max-height: calc(100dvh - 24px);
     min-height: min(72dvh, 560px);
     border-radius: 20px 20px 0 0;
   }
@@ -7440,8 +7457,8 @@ small {
     align-content: end;
     padding-top: max(6vh, calc(env(safe-area-inset-top, 0px) + 8px));
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
-    padding-left: 12px;
-    padding-right: 12px;
+    padding-left: 17px;
+    padding-right: 17px;
   }
 
   .pvps-row {

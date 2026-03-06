@@ -3449,13 +3449,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
                       {activePulItem ? (
                         <div className="pvps-editor-form">
-                          <div className="pvps-editor-info-grid">
-                            <div className="pvps-editor-info-card">
-                              <small>Andar</small>
-                              <strong>{formatAndar(activePulItem.nivel)}</strong>
-                            </div>
-                          </div>
-
                           <label>
                             Validade do Pulmão
                             <div className="pvps-validity-row">
@@ -3597,7 +3590,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   <div className="pvps-editor-summary-chips">
                     <span className="pvps-editor-chip">Zona {activeAloc.zona}</span>
                     <span className="pvps-editor-chip">Andar {formatAndar(activeAloc.nivel)}</span>
-                    <span className="pvps-editor-chip">Sistema {activeAloc.val_sist}</span>
                   </div>
                 </div>
 
