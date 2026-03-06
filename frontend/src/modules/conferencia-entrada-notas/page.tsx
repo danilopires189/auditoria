@@ -153,6 +153,15 @@ type BarcodeOpenSelection = {
   options: EntradaNotasBarcodeSeqNfOption[];
 };
 
+type BarcodeConcludedRouteSummary = {
+  seq_entrada: number;
+  nf: number;
+  descricao: string;
+  colaborador_nome: string | null;
+  colaborador_mat: string | null;
+  status_at: string | null;
+};
+
 type LastAddedItemMarker = {
   volumeKey: string;
   itemKey: string;
@@ -744,6 +753,9 @@ function chevronIcon(open: boolean) {
 }
 
 function normalizeRpcErrorMessage(value: string): string {
+  if (value.startsWith("PRODUTO_JA_CONFERIDO|")) {
+    return value.slice("PRODUTO_JA_CONFERIDO|".length);
+  }
   if (value.includes("SEQ_NF_INVALIDO") || value.includes("SEQ_OU_NF_OBRIGATORIO")) {
     return "Seq/NF inválido. Use o formato 123/456.";
   }
@@ -790,6 +802,28 @@ function normalizeSearchText(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("pt-BR")
     .trim();
+}
+
+function buildRouteSeqNfKey(seqEntrada: number, nf: number): string {
+  return `${seqEntrada}/${nf}`;
+}
+
+function buildProdutoJaConferidoMessage(entries: BarcodeConcludedRouteSummary[]): string {
+  const ordered = [...entries].sort((a, b) => (
+    a.seq_entrada !== b.seq_entrada
+      ? a.seq_entrada - b.seq_entrada
+      : a.nf - b.nf
+  ));
+  const details = ordered.slice(0, 3).map((entry) => {
+    const actor = entry.colaborador_nome?.trim() || entry.colaborador_mat?.trim() || "usuário não identificado";
+    const when = formatDateTime(entry.status_at);
+    return `Seq/NF ${entry.seq_entrada}/${entry.nf} conferida por ${actor} em ${when}`;
+  });
+  const remaining = ordered.length - details.length;
+  if (remaining > 0) {
+    details.push(`mais ${remaining} ${remaining === 1 ? "Seq/NF concluída" : "Seq/NF concluídas"}`);
+  }
+  return `PRODUTO_JA_CONFERIDO|Produto já conferido neste CD. ${details.join(". ")}.`;
 }
 
 function buildRouteSearchBlob(group: {
@@ -967,6 +1001,13 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
+  const routeRowBySeqNfKey = useMemo(() => {
+    const map = new Map<string, EntradaNotasRouteOverviewRow>();
+    for (const row of routeRows) {
+      map.set(buildRouteSeqNfKey(row.seq_entrada, row.nf), row);
+    }
+    return map;
+  }, [routeRows]);
   const canEditActiveVolume = Boolean(
     activeVolume
     && !activeVolume.is_read_only
@@ -2878,6 +2919,45 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
   }, [isOnline, preferOfflineMode]);
 
+  const buildConcludedBarcodeSummariesFromManifest = useCallback(async (
+    rawBarras: string
+  ): Promise<BarcodeConcludedRouteSummary[]> => {
+    if (currentCd == null) return [];
+    const barras = normalizeBarcode(rawBarras);
+    if (!barras) return [];
+
+    const lookup = await resolveBarcodeProduct(barras);
+    if (!lookup) return [];
+
+    const manifestItems = await listManifestItemsByCd(profile.user_id, currentCd);
+    const grouped = new Map<string, BarcodeConcludedRouteSummary>();
+    for (const row of manifestItems) {
+      if (row.coddv !== lookup.coddv) continue;
+      const seqEntrada = Number.parseInt(String(row.seq_entrada ?? 0), 10);
+      const nf = Number.parseInt(String(row.nf ?? 0), 10);
+      if (!Number.isFinite(seqEntrada) || !Number.isFinite(nf) || seqEntrada <= 0 || nf <= 0) {
+        continue;
+      }
+
+      const key = buildRouteSeqNfKey(seqEntrada, nf);
+      if (grouped.has(key)) continue;
+
+      const routeRow = routeRowBySeqNfKey.get(key);
+      if (normalizeStoreStatus(routeRow?.status) !== "concluido") continue;
+
+      grouped.set(key, {
+        seq_entrada: seqEntrada,
+        nf,
+        descricao: row.descricao?.trim() || lookup.descricao?.trim() || `Produto ${lookup.coddv}`,
+        colaborador_nome: routeRow?.colaborador_nome?.trim() || null,
+        colaborador_mat: routeRow?.colaborador_mat?.trim() || null,
+        status_at: routeRow?.status_at ?? null
+      });
+    }
+
+    return [...grouped.values()];
+  }, [currentCd, profile.user_id, resolveBarcodeProduct, routeRowBySeqNfKey]);
+
   const lookupSeqNfOptionsByBarcodeOffline = useCallback(async (
     rawBarras: string
   ): Promise<EntradaNotasBarcodeSeqNfOption[]> => {
@@ -2901,6 +2981,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     const grouped = new Map<string, EntradaNotasBarcodeSeqNfOption>();
+    const concludedSummaries = new Map<string, BarcodeConcludedRouteSummary>();
     for (const row of filtered) {
       const seqEntrada = Number.parseInt(String(row.seq_entrada ?? 0), 10);
       const nf = Number.parseInt(String(row.nf ?? 0), 10);
@@ -2911,6 +2992,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       const key = `${seqEntrada}/${nf}`;
       const qtdEsperada = Math.max(Number.parseInt(String(row.qtd_esperada ?? 0), 10) || 0, 0);
       const current = grouped.get(key);
+      const routeRow = routeRowBySeqNfKey.get(key);
+      if (normalizeStoreStatus(routeRow?.status) === "concluido" && !concludedSummaries.has(key)) {
+        concludedSummaries.set(key, {
+          seq_entrada: seqEntrada,
+          nf,
+          descricao: row.descricao?.trim() || lookup.descricao?.trim() || `Produto ${lookup.coddv}`,
+          colaborador_nome: routeRow?.colaborador_nome?.trim() || null,
+          colaborador_mat: routeRow?.colaborador_mat?.trim() || null,
+          status_at: routeRow?.status_at ?? null
+        });
+      }
       if (!current) {
         grouped.set(key, {
           coddv: lookup.coddv,
@@ -2952,6 +3044,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       .filter((option) => option.qtd_pendente > 0);
 
     if (!editableOptions.length) {
+      if (concludedSummaries.size > 0 && concludedSummaries.size === grouped.size) {
+        throw new Error(buildProdutoJaConferidoMessage([...concludedSummaries.values()]));
+      }
       throw new Error("SEM_SEQ_NF_DISPONIVEL");
     }
 
@@ -2960,7 +3055,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         ? a.seq_entrada - b.seq_entrada
         : a.nf - b.nf
     ));
-  }, [currentCd, profile.user_id, profile.mat, resolveBarcodeProduct, routeRows]);
+  }, [currentCd, profile.user_id, profile.mat, resolveBarcodeProduct, routeRowBySeqNfKey]);
 
   const resolveOpenOptionsByBarcode = useCallback(async (
     rawBarras: string
@@ -2985,11 +3080,16 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               : a.nf - b.nf
           ));
         }
+        const concludedSummaries = await buildConcludedBarcodeSummariesFromManifest(barras);
+        if (concludedSummaries.length > 0) {
+          throw new Error(buildProdutoJaConferidoMessage(concludedSummaries));
+        }
         throw new Error("SEM_SEQ_NF_DISPONIVEL");
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error ?? "");
         const isBusinessError = (
-          message.includes("BARRAS_OBRIGATORIA")
+          message.startsWith("PRODUTO_JA_CONFERIDO|")
+          || message.includes("BARRAS_OBRIGATORIA")
           || message.includes("BARRAS_NAO_ENCONTRADA")
           || message.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")
           || message.includes("SEM_SEQ_NF_DISPONIVEL")
@@ -3001,7 +3101,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     return lookupSeqNfOptionsByBarcodeOffline(barras);
-  }, [currentCd, isOnline, lookupSeqNfOptionsByBarcodeOffline]);
+  }, [buildConcludedBarcodeSummariesFromManifest, currentCd, isOnline, lookupSeqNfOptionsByBarcodeOffline]);
 
   const openConferenceFromInput = useCallback(async (rawInput: string) => {
     const value = String(rawInput ?? "").trim();
