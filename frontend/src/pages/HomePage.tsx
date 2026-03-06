@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import pmImage from "../../assets/pm.png";
 import { DASHBOARD_MODULES } from "../modules/registry";
 import type { DashboardModuleKey } from "../modules/types";
-import type { DisplayContext } from "../types/ui";
+import type { DisplayContext, HomeModulesViewMode } from "../types/ui";
 import { LogoutIcon, ModuleIcon, ViewGridIcon, ViewListIcon } from "../ui/icons";
 
 const AVAILABLE_MODULE_KEYS = new Set([
@@ -23,16 +22,14 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "validar-etiqueta-pulmao"
 ]);
 
-const HOME_MODULES_VIEW_STORAGE_KEY = "auditoria.home.modules_view.v1";
-
-type HomeModulesViewMode = "list" | "grid";
-
 interface HomePageProps {
   displayContext: DisplayContext;
   appHeading: string;
   hiddenModuleKeys?: DashboardModuleKey[];
   isOnline: boolean;
   onRequestLogout: () => void;
+  modulesViewMode: HomeModulesViewMode;
+  onToggleModulesViewMode: (nextMode: HomeModulesViewMode) => void;
   showCdSwitcher?: boolean;
   onRequestCdSwitcher?: () => void;
 }
@@ -53,28 +50,12 @@ export default function HomePage({
   hiddenModuleKeys = [],
   isOnline,
   onRequestLogout,
+  modulesViewMode,
+  onToggleModulesViewMode,
   showCdSwitcher = false,
   onRequestCdSwitcher
 }: HomePageProps) {
   const hiddenModuleSet = new Set(hiddenModuleKeys);
-  const [modulesViewMode, setModulesViewMode] = useState<HomeModulesViewMode>(() => {
-    if (typeof window === "undefined") return "list";
-    try {
-      return window.localStorage.getItem(HOME_MODULES_VIEW_STORAGE_KEY) === "grid" ? "grid" : "list";
-    } catch {
-      return "list";
-    }
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(HOME_MODULES_VIEW_STORAGE_KEY, modulesViewMode);
-    } catch {
-      // Ignore storage failures and keep the current session state.
-    }
-  }, [modulesViewMode]);
-
   const nextViewMode = modulesViewMode === "list" ? "grid" : "list";
   const viewToggleLabel = nextViewMode === "grid" ? "Mudar visual para ícones" : "Mudar visual para lista";
 
@@ -106,17 +87,6 @@ export default function HomePage({
               <LogoutIcon />
             </span>
           </button>
-          <button
-            className="btn btn-view-toggle"
-            onClick={() => setModulesViewMode(nextViewMode)}
-            type="button"
-            aria-label={viewToggleLabel}
-            title={viewToggleLabel}
-          >
-            <span className="view-toggle-icon" aria-hidden="true">
-              {modulesViewMode === "list" ? <ViewGridIcon /> : <ViewListIcon />}
-            </span>
-          </button>
         </div>
         <div className="topbar-meta">
           <span className="topbar-meta-cd">
@@ -134,6 +104,17 @@ export default function HomePage({
             ) : null}
           </span>
           <span>Perfil: {displayContext.roleLabel}</span>
+          <button
+            className="btn btn-view-toggle topbar-view-toggle"
+            onClick={() => onToggleModulesViewMode(nextViewMode)}
+            type="button"
+            aria-label={viewToggleLabel}
+            title={viewToggleLabel}
+          >
+            <span className="view-toggle-icon" aria-hidden="true">
+              {modulesViewMode === "list" ? <ViewGridIcon /> : <ViewListIcon />}
+            </span>
+          </button>
         </div>
       </header>
 

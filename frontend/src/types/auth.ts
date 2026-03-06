@@ -18,4 +18,5 @@ export interface ProfileContext {
   cargo: string | null;
   cd_default: number | null;
   cd_nome: string | null;
+  home_menu_view: "list" | "grid" | null;
 }
