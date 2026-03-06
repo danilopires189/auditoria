@@ -25,10 +25,9 @@ import {
   buildTermoVolumeKey,
   cleanupExpiredTermoVolumes,
   getLocalVolume,
-  listManifestItemsByCd,
   getManifestItemsByEtiqueta,
-  getManifestPrimaryEtiquetaByStore,
   getManifestMetaLocal,
+  listManifestStoreSummaries,
   getPendingSummary,
   getRouteOverviewLocal,
   getTermoPreferences,
@@ -62,6 +61,7 @@ import type {
   TermoLocalItem,
   TermoLocalVolume,
   TermoManifestItemRow,
+  TermoManifestStoreSummaryRow,
   TermoRouteOverviewRow,
   TermoVolumeRow,
   TermoModuleProfile
@@ -540,6 +540,33 @@ function buildStoreProgressKey(rota: string | null | undefined, filial: number |
   return `${normalizedRota}::${normalizedFilial}`;
 }
 
+function buildManifestStoreState(summaries: TermoManifestStoreSummaryRow[]): {
+  totalCoddv: number;
+  coddvByStore: Record<string, number>;
+  startEtiquetaByStore: Record<string, string>;
+} {
+  const coddvByStore: Record<string, number> = {};
+  const startEtiquetaByStore: Record<string, string> = {};
+  let totalCoddv = 0;
+
+  for (const summary of summaries) {
+    const progressKey = buildStoreProgressKey(summary.rota, summary.filial);
+    const routeKey = buildRouteStoreKey(summary.rota, summary.filial);
+    const coddvTotal = Math.max(Number(summary.coddv_total) || 0, 0);
+    totalCoddv += coddvTotal;
+    coddvByStore[progressKey] = coddvTotal;
+    if (summary.primary_etiqueta) {
+      startEtiquetaByStore[routeKey] = summary.primary_etiqueta;
+    }
+  }
+
+  return {
+    totalCoddv,
+    coddvByStore,
+    startEtiquetaByStore
+  };
+}
+
 function formatPercent(value: number): string {
   const normalized = Math.max(0, Math.min(value, 100));
   const rounded = Math.round(normalized * 10) / 10;
@@ -665,7 +692,6 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const [routeSearchInput, setRouteSearchInput] = useState("");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [routeStartEtiquetaByStore, setRouteStartEtiquetaByStore] = useState<Record<string, string>>({});
-  const [busyRouteStartTargets, setBusyRouteStartTargets] = useState(false);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeMotivo, setFinalizeMotivo] = useState("");
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
@@ -875,6 +901,13 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     setPendingErrors(pending.errors_count);
   }, [profile.user_id]);
 
+  const applyManifestStoreSummaries = useCallback((summaries: TermoManifestStoreSummaryRow[]) => {
+    const nextState = buildManifestStoreState(summaries);
+    setBaseCoddvTotal(nextState.totalCoddv);
+    setBaseCoddvByStore(nextState.coddvByStore);
+    setRouteStartEtiquetaByStore(nextState.startEtiquetaByStore);
+  }, []);
+
   const persistPreferences = useCallback(async (next: {
     prefer_offline_mode?: boolean;
     multiplo_padrao?: number;
@@ -1027,8 +1060,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         if (localBarrasMeta.row_count <= 0) {
           throw new Error("Sem base local de barras. Conecte-se e ative o modo offline para sincronizar.");
         }
-        const localRoutes = await getRouteOverviewLocal(profile.user_id, currentCd);
+        const [localRoutes, localSummaries] = await Promise.all([
+          getRouteOverviewLocal(profile.user_id, currentCd),
+          listManifestStoreSummaries(profile.user_id, currentCd)
+        ]);
         setRouteRows(localRoutes);
+        applyManifestStoreSummaries(localSummaries);
         setManifestReady(true);
         setManifestInfo(
           buildManifestInfoLine({
@@ -1074,11 +1111,13 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         });
 
         setRouteRows(bundle.routes);
+        applyManifestStoreSummaries(await listManifestStoreSummaries(profile.user_id, currentCd));
         termoRowCount = bundle.meta.row_count;
       } else {
         const routes = await fetchRouteOverview(currentCd);
         await saveRouteOverviewLocal(profile.user_id, currentCd, routes);
         setRouteRows(routes);
+        applyManifestStoreSummaries(await listManifestStoreSummaries(profile.user_id, currentCd));
       }
 
       let barrasTotal = localBarrasMeta.row_count;
@@ -1118,7 +1157,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       setBusyManifest(false);
       setProgressMessage(null);
     }
-  }, [currentCd, isOnline, profile.user_id]);
+  }, [applyManifestStoreSummaries, currentCd, isOnline, profile.user_id]);
 
   const applyVolumeUpdate = useCallback(async (nextVolume: TermoLocalVolume, focusInput = true) => {
     await saveLocalVolume(nextVolume);
@@ -1894,48 +1933,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     }
   }, [currentCd, isOnline, profile.user_id]);
 
-  const syncRouteStartTargets = useCallback(async (rows: TermoRouteOverviewRow[]) => {
-    if (currentCd == null) {
-      setRouteStartEtiquetaByStore({});
-      return;
-    }
-
-    let manifestTargets = await getManifestPrimaryEtiquetaByStore(profile.user_id, currentCd);
-    if (manifestTargets.length === 0 && isOnline) {
-      try {
-        await prepareOfflineManifest(false, true);
-        manifestTargets = await getManifestPrimaryEtiquetaByStore(profile.user_id, currentCd);
-      } catch {
-        // Mantém fallback silencioso sem travar a abertura do modal.
-      }
-    }
-
-    const manifestMap = new Map<string, string>();
-    for (const target of manifestTargets) {
-      manifestMap.set(buildRouteStoreKey(target.rota, target.filial), target.id_etiqueta);
-    }
-
-    const nextMap: Record<string, string> = {};
-    for (const row of rows) {
-      const etiqueta = manifestMap.get(buildRouteStoreKey(row.rota, row.filial));
-      if (!etiqueta) continue;
-      nextMap[buildRouteStoreKey(row.rota, row.filial)] = etiqueta;
-    }
-    setRouteStartEtiquetaByStore(nextMap);
-  }, [currentCd, isOnline, prepareOfflineManifest, profile.user_id]);
-
   const openRoutesModal = useCallback(async () => {
     setRouteSearchInput("");
     setExpandedRoute(null);
     setShowRoutesModal(true);
-    setBusyRouteStartTargets(true);
-    try {
-      const rows = await syncRouteOverview();
-      await syncRouteStartTargets(rows);
-    } finally {
-      setBusyRouteStartTargets(false);
-    }
-  }, [syncRouteOverview, syncRouteStartTargets]);
+    await syncRouteOverview();
+  }, [syncRouteOverview]);
 
   const markStorePendingAfterCancel = useCallback(async (volume: TermoLocalVolume) => {
     if (volume.filial == null) return;
@@ -2022,59 +2025,37 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   }, [currentCd, persistPreferences]);
 
   useEffect(() => {
-    let cancelled = false;
-
     if (currentCd == null) {
       setBaseCoddvTotal(0);
       setBaseCoddvByStore({});
+      setRouteStartEtiquetaByStore({});
       return () => {
-        cancelled = true;
+        // Sem limpeza adicional.
       };
     }
-
-    const loadProgressBase = async () => {
-      try {
-        const manifestItems = isOnline
-          ? (await fetchManifestBundle(currentCd, undefined, { includeBarras: false })).items
-          : await listManifestItemsByCd(profile.user_id, currentCd);
-        if (cancelled) return;
-
-        const byStore: Record<string, number> = {};
-        for (const item of manifestItems) {
-          const key = buildStoreProgressKey(item.rota, item.filial);
-          byStore[key] = (byStore[key] ?? 0) + 1;
-        }
-
-        setBaseCoddvTotal(manifestItems.length);
-        setBaseCoddvByStore(byStore);
-      } catch {
-        if (cancelled) return;
-        setBaseCoddvTotal(0);
-        setBaseCoddvByStore({});
-      }
-    };
-
-    void loadProgressBase();
-
     return () => {
-      cancelled = true;
+      // Sem limpeza adicional.
     };
-  }, [currentCd, isOnline, profile.user_id]);
+  }, [currentCd]);
 
   useEffect(() => {
     if (currentCd == null) {
       setManifestReady(false);
       setManifestInfo("");
       setRouteRows([]);
+      setBaseCoddvTotal(0);
+      setBaseCoddvByStore({});
+      setRouteStartEtiquetaByStore({});
       setActiveVolume(null);
       return;
     }
 
     let cancelled = false;
     const loadLocalContext = async () => {
-      const [localMeta, localRoutes, volumes, barrasMeta] = await Promise.all([
+      const [localMeta, localRoutes, manifestSummaries, volumes, barrasMeta] = await Promise.all([
         getManifestMetaLocal(profile.user_id, currentCd),
         getRouteOverviewLocal(profile.user_id, currentCd),
+        listManifestStoreSummaries(profile.user_id, currentCd),
         listUserLocalVolumes(profile.user_id),
         getDbBarrasMeta()
       ]);
@@ -2091,6 +2072,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         })
       );
       setRouteRows(localRoutes);
+      applyManifestStoreSummaries(manifestSummaries);
 
       const latestOpen = volumes.find((row) => row.status === "em_conferencia" && !row.is_read_only) ?? null;
       if (latestOpen) {
@@ -2119,6 +2101,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         setEtiquetaInput("");
       }
 
+      if (isOnline && (!localMeta || localMeta.row_count <= 0 || manifestSummaries.length === 0)) {
+        void prepareOfflineManifest(false, true).catch(() => {
+          // Mantém o carregamento inicial responsivo mesmo se a atualização falhar.
+        });
+      }
+
       if (!isOnline) return;
 
       try {
@@ -2141,7 +2129,15 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     return () => {
       cancelled = true;
     };
-  }, [currentCd, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
+  }, [
+    applyManifestStoreSummaries,
+    currentCd,
+    isGlobalAdmin,
+    isOnline,
+    prepareOfflineManifest,
+    profile.user_id,
+    resumeRemoteActiveVolume
+  ]);
 
   useEffect(() => {
     void refreshPendingState();
@@ -3285,13 +3281,11 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                                           setEtiquetaInput(startEtiqueta);
                                           void openVolumeFromEtiqueta(startEtiqueta);
                                         }}
-                                        disabled={!startEtiqueta || busyOpenVolume || busyRouteStartTargets}
+                                        disabled={!startEtiqueta || busyOpenVolume}
                                       >
-                                        {busyRouteStartTargets
-                                          ? "Preparando..."
-                                          : lojaStatus === "pendente"
-                                            ? "Iniciar conferência"
-                                            : "Retomar conferência"}
+                                        {lojaStatus === "pendente"
+                                          ? "Iniciar conferência"
+                                          : "Retomar conferência"}
                                       </button>
                                       {lojaStatus === "em_andamento" && colaboradorNome ? (
                                         <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
