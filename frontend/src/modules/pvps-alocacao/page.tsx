@@ -1322,17 +1322,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     const vv = window.visualViewport;
     const updateViewportMetrics = () => {
-      const layoutHeight = window.innerHeight;
       if (!vv) {
         setEditorPopupKeyboardInset(0);
-        setEditorPopupViewportHeight(layoutHeight);
+        setEditorPopupViewportHeight(null);
         return;
       }
 
+      const layoutHeight = window.innerHeight;
       const visibleHeight = Math.max(280, Math.round(vv.height));
-      const inset = Math.max(0, Math.round(layoutHeight - (vv.height + vv.offsetTop)));
+      const rawInset = Math.max(0, Math.round(layoutHeight - (vv.height + vv.offsetTop)));
+      const inset = rawInset >= 120 ? rawInset : 0;
       setEditorPopupKeyboardInset(inset);
-      setEditorPopupViewportHeight(visibleHeight);
+      setEditorPopupViewportHeight(inset > 0 ? visibleHeight : null);
     };
 
     const keepFocusVisible = (event: Event) => {
@@ -1350,13 +1351,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     updateViewportMetrics();
     vv?.addEventListener("resize", updateViewportMetrics);
-    vv?.addEventListener("scroll", updateViewportMetrics);
     window.addEventListener("orientationchange", updateViewportMetrics);
     document.addEventListener("focusin", keepFocusVisible);
 
     return () => {
       vv?.removeEventListener("resize", updateViewportMetrics);
-      vv?.removeEventListener("scroll", updateViewportMetrics);
       window.removeEventListener("orientationchange", updateViewportMetrics);
       document.removeEventListener("focusin", keepFocusVisible);
     };
@@ -1475,6 +1474,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setActivePulEnd(next?.end_pul ?? null);
     setShowPulOccurrence(false);
   }, [activePvpsMode, pulItems, activePulEnd]);
+
+  useEffect(() => {
+    if (!showPvpsPopup || pvpsPopupMotion !== "next") return;
+    const timer = window.setTimeout(() => {
+      setPvpsPopupMotion("default");
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [showPvpsPopup, pvpsPopupMotion, activePvpsKey, activePulEnd]);
 
   useEffect(() => {
     setShowAlocOccurrence(false);
@@ -3393,7 +3400,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             }}
           >
             <div
-              key={`pvps:${activePvpsMode}:${activePvpsKey ?? "none"}:${activePulEnd ?? "none"}`}
               className={`confirm-dialog surface-enter pvps-popup-card${pvpsPopupMotion === "next" ? " pvps-popup-card-next" : ""}`}
               style={editorPopupCardStyle}
               onClick={(event) => event.stopPropagation()}
