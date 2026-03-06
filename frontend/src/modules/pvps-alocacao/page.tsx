@@ -3317,19 +3317,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="pvps-editor-popup">
                 <div className="pvps-editor-popup-header">
                   <div className="pvps-editor-popup-heading">
-                    <small>{editingPvpsCompleted ? "Edicao de concluido" : "Pendencia PVPS"}</small>
                     <h3 id="pvps-inform-title">{activePvpsMode === "pul" ? "Auditar Pulmao" : "Auditar Separacao"}</h3>
                   </div>
                   <button
-                    className="btn btn-muted pvps-editor-close-btn"
+                    className="btn btn-muted pvps-editor-close-icon"
                     type="button"
                     disabled={busy}
+                    aria-label="Fechar"
                     onClick={() => {
                       setEditingPvpsCompleted(null);
                       closePvpsPopup();
                     }}
                   >
-                    Fechar
+                    {closeIcon()}
                   </button>
                 </div>
 
@@ -3348,22 +3348,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <div className="pvps-editor-panel">
                   {activePvpsMode === "sep" ? (
                     <>
-                      <div className="pvps-editor-info-grid">
-                        <div className="pvps-editor-info-card">
-                          <small>Endereco da Separacao</small>
-                          <strong>{activePvps.end_sep}</strong>
-                        </div>
-                        <div className="pvps-editor-info-card">
-                          <small>Status atual</small>
-                          <strong>{pvpsStatusLabel(activePvps.status)}</strong>
-                        </div>
-                        {editingPvpsCompleted ? (
+                      {editingPvpsCompleted ? (
+                        <div className="pvps-editor-info-grid">
                           <div className="pvps-editor-info-card">
                             <small>Ultima auditoria</small>
                             <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong>
                           </div>
-                        ) : null}
-                      </div>
+                        </div>
+                      ) : null}
 
                       <form className="form-grid pvps-editor-form" onSubmit={(event) => void handleSubmitSep(event)}>
                         <label>
@@ -3441,10 +3433,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     <>
                       <div className="pvps-editor-info-grid">
                         <div className="pvps-editor-info-card">
-                          <small>Endereco da Separacao</small>
-                          <strong>{activePvps.end_sep}</strong>
-                        </div>
-                        <div className="pvps-editor-info-card">
                           <small>Validade da Separacao</small>
                           <strong>{activePvps.val_sep ?? "-"}</strong>
                         </div>
@@ -3463,16 +3451,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <div className="pvps-editor-form">
                           <div className="pvps-editor-info-grid">
                             <div className="pvps-editor-info-card">
-                              <small>Endereco do Pulmao</small>
-                              <strong>{activePulItem.end_pul}</strong>
-                            </div>
-                            <div className="pvps-editor-info-card">
                               <small>Andar</small>
                               <strong>{formatAndar(activePulItem.nivel)}</strong>
-                            </div>
-                            <div className="pvps-editor-info-card">
-                              <small>Status</small>
-                              <strong>{activePulItem.auditado ? "Auditado" : "Pendente"}</strong>
                             </div>
                           </div>
 
@@ -3591,13 +3571,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="pvps-editor-popup">
                 <div className="pvps-editor-popup-header">
                   <div className="pvps-editor-popup-heading">
-                    <small>{editingAlocCompleted ? "Edicao de concluido" : "Pendencia de alocacao"}</small>
                     <h3 id="aloc-inform-title">Auditar Alocação</h3>
                   </div>
                   <button
-                    className="btn btn-muted pvps-editor-close-btn"
+                    className="btn btn-muted pvps-editor-close-icon"
                     type="button"
                     disabled={busy}
+                    aria-label="Fechar"
                     onClick={() => {
                       setEditingAlocCompleted(null);
                       setAlocResult(null);
@@ -3605,7 +3585,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       setShowAlocPopup(false);
                     }}
                   >
-                    Fechar
+                    {closeIcon()}
                   </button>
                 </div>
 
@@ -3623,10 +3603,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
                 <div className="pvps-editor-panel">
                   <div className="pvps-editor-info-grid">
-                    <div className="pvps-editor-info-card">
-                      <small>Endereco</small>
-                      <strong>{activeAloc.endereco}</strong>
-                    </div>
                     <div className="pvps-editor-info-card">
                       <small>Validade do sistema</small>
                       <strong>{activeAloc.val_sist}</strong>
