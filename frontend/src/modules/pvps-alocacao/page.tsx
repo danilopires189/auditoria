@@ -3263,7 +3263,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
-                            <small>Tipo SEP | {row.end_sep} | {formatDateTime(row.dt_hr)}</small>
+                            <small>Tipo SEP | {row.end_sep} | {formatDateTime(row.dt_hr)} | Auditor {row.auditor_nome} ({row.auditor_id})</small>
                             <small>Pulmão auditados: {row.pul_auditados}/{row.pul_total}</small>
                             {row.pul_auditados > 0 ? (
                               <div className="pvps-pul-completed-group">
@@ -3281,7 +3281,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 Pulmão com validade menor: {row.pul_lower_end ?? "-"} ({row.pul_lower_val ?? "-"})
                               </small>
                             ) : null}
-                            <small>Auditor: {row.auditor_nome}</small>
                             <small>{isSyntheticSepPending ? "SEP concluído no dia com PUL pendente." : `Concluído em: ${formatDateTime(row.dt_hr)}`}</small>
                           </div>
                         ) : null}
