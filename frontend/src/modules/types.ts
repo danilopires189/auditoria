@@ -22,6 +22,7 @@ export type DashboardModuleKey =
   | "atividade-extra"
   | "busca-produto"
   | "validar-enderecamento"
+  | "validar-etiqueta-pulmao"
   | "coleta-mercadoria"
   | "check-list"
   | "conferencia-termo"
