@@ -324,7 +324,7 @@ export async function submitPvpsSep(params: {
   });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-  if (!first) throw new Error("Falha ao salvar etapa SEP.");
+  if (!first) throw new Error("Falha ao salvar etapa de Separação.");
 
   return {
     audit_id: parseString(first.audit_id),
@@ -714,7 +714,7 @@ export async function submitPvpsPul(params: {
   });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-  if (!first) throw new Error("Falha ao salvar etapa PUL.");
+  if (!first) throw new Error("Falha ao salvar etapa de Pulmão.");
 
   return {
     audit_id: parseString(first.audit_id),
