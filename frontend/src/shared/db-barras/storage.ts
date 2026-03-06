@@ -125,6 +125,37 @@ export async function getDbBarrasByBarcode(barras: string): Promise<DbBarrasCach
   return (result as DbBarrasCacheRow | undefined) ?? null;
 }
 
+export async function getDbBarrasByCoddv(coddv: number): Promise<DbBarrasCacheRow | null> {
+  const normalized = normalizeNonNegativeInteger(coddv);
+  if (normalized <= 0) return null;
+
+  const db = await getDb();
+  const transaction = db.transaction(STORE_DB_BARRAS, "readonly");
+  const store = transaction.objectStore(STORE_DB_BARRAS);
+
+  const result = await new Promise<DbBarrasCacheRow | null>((resolve, reject) => {
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(null);
+        return;
+      }
+
+      const row = cursor.value as DbBarrasCacheRow | undefined;
+      if (row?.coddv === normalized) {
+        resolve(row);
+        return;
+      }
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error ?? new Error("Falha ao buscar coddv no cache db_barras"));
+  });
+
+  await transactionDone(transaction);
+  return result;
+}
+
 export async function upsertDbBarrasCacheRow(row: DbBarrasCacheRow): Promise<void> {
   const db = await getDb();
   const transaction = db.transaction(STORE_DB_BARRAS, "readwrite");
