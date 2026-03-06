@@ -6427,19 +6427,15 @@ small {
 .pvps-popup-card {
   width: min(760px, calc(100vw - 16px));
   max-height: calc(100dvh - 16px);
-  min-height: clamp(340px, 56dvh, 520px);
+  min-height: clamp(380px, 60dvh, 560px);
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  scroll-padding-bottom: 120px;
-  gap: 10px;
-  padding: 18px 16px;
-  border-radius: 20px;
-  box-shadow: 0 -4px 32px rgba(4, 12, 28, 0.18), 0 2px 10px rgba(4, 12, 28, 0.08);
-  animation: pvps-popup-fade-in 180ms ease both;
-}
-
-.pvps-popup-card-next {
-  animation: pvps-popup-swap 180ms ease both;
+  overscroll-behavior: contain;
+  gap: 0;
+  padding: 0;
+  border-radius: 24px;
+  box-shadow: 0 20px 44px rgba(4, 12, 28, 0.22), 0 4px 14px rgba(4, 12, 28, 0.08);
+  animation: none;
 }
 
 .pvps-popup-card>p {
@@ -6505,6 +6501,144 @@ small {
   min-height: 48px;
   font-size: 0.95rem;
   border-radius: 12px;
+}
+
+.pvps-editor-popup {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.pvps-editor-popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pvps-editor-popup-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.pvps-editor-popup-heading small {
+  color: #6880a6;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pvps-editor-popup-heading h3 {
+  margin: 0;
+  color: #112742;
+  font-size: 1.16rem;
+}
+
+.pvps-editor-close-btn {
+  min-height: 42px;
+  min-width: 88px;
+}
+
+.pvps-editor-summary {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d8e3f5;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f9fbff 0%, #f1f6ff 100%);
+}
+
+.pvps-editor-summary-address {
+  display: grid;
+  gap: 6px;
+}
+
+.pvps-editor-summary-address strong {
+  color: #163666;
+  font-size: 1.55rem;
+  line-height: 1.08;
+  font-weight: 800;
+  word-break: break-word;
+}
+
+.pvps-editor-summary-address span {
+  color: #5a7094;
+  font-size: 0.92rem;
+}
+
+.pvps-editor-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pvps-editor-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #cfe0f8;
+  background: #ffffff;
+  color: #295083;
+  font-size: 0.79rem;
+  font-weight: 700;
+}
+
+.pvps-editor-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.pvps-editor-form {
+  display: grid;
+  gap: 14px;
+}
+
+.pvps-editor-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.pvps-editor-info-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #e1e9f6;
+  border-radius: 14px;
+  background: #fbfcff;
+}
+
+.pvps-editor-info-card small {
+  color: #6f83a4;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pvps-editor-info-card strong {
+  color: #1f3d67;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.pvps-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pvps-editor-actions .btn {
+  min-width: 120px;
+}
+
+.pvps-editor-muted {
+  margin: 0;
+  color: #5a7195;
+  font-size: 0.9rem;
 }
 
 .pvps-zone-popup-card {
@@ -7285,9 +7419,8 @@ small {
     width: 100%;
     max-width: calc(100vw - 8px);
     max-height: calc(100dvh - 8px);
-    min-height: min(72dvh, 520px);
+    min-height: min(76dvh, 620px);
     border-radius: 20px 20px 0 0;
-    padding: 20px 16px calc(16px + env(safe-area-inset-bottom, 0px));
   }
 
   .pvps-zone-popup-card {
@@ -7316,6 +7449,35 @@ small {
 
   .pvps-audit-address strong {
     font-size: 1.46rem;
+  }
+
+  .pvps-editor-popup {
+    padding: 16px 14px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pvps-editor-popup-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pvps-editor-close-btn {
+    width: 100%;
+  }
+
+  .pvps-editor-summary-address strong {
+    font-size: 1.36rem;
+  }
+
+  .pvps-editor-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pvps-editor-actions {
+    flex-direction: column;
+  }
+
+  .pvps-editor-actions .btn {
+    width: 100%;
   }
 
   .pvps-row-head {

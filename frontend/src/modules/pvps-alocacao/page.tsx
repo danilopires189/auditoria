@@ -687,10 +687,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [historyRuleRows, setHistoryRuleRows] = useState<PvpsAdminRuleHistoryRow[]>([]);
   const [showPvpsPopup, setShowPvpsPopup] = useState(false);
   const [showAlocPopup, setShowAlocPopup] = useState(false);
-  const [pvpsPopupMotion, setPvpsPopupMotion] = useState<"default" | "next">("default");
-  const [alocPopupMotion, setAlocPopupMotion] = useState<"default" | "next">("default");
-  const [editorPopupKeyboardInset, setEditorPopupKeyboardInset] = useState(0);
-  const [editorPopupViewportHeight, setEditorPopupViewportHeight] = useState<number | null>(null);
   const [expandedPvps, setExpandedPvps] = useState<Record<string, boolean>>({});
   const [expandedAloc, setExpandedAloc] = useState<Record<string, boolean>>({});
   const [expandedPvpsCompleted, setExpandedPvpsCompleted] = useState<Record<string, boolean>>({});
@@ -932,7 +928,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (!localData.alocRows.some((row) => row.queue_id === activeAlocQueue)) {
           setActiveAlocQueue(localData.alocRows[0]?.queue_id ?? null);
           if (!localData.alocRows[0]) {
-            setAlocPopupMotion("default");
             setShowAlocPopup(false);
           }
         }
@@ -975,7 +970,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (!rows.some((row) => row.queue_id === activeAlocQueue)) {
           setActiveAlocQueue(rows[0]?.queue_id ?? null);
           if (!rows[0]) {
-            setAlocPopupMotion("default");
             setShowAlocPopup(false);
           }
         }
@@ -1307,52 +1301,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [isOnline, tab, activeCd, todayBrt, feedView, showPvpsPopup, showAlocPopup, preferOfflineMode]);
 
   useEffect(() => {
-    if (!(showPvpsPopup || showAlocPopup) || typeof window === "undefined") {
-      setEditorPopupKeyboardInset(0);
-      setEditorPopupViewportHeight(null);
-      return;
-    }
-
-    if (showPvpsPopup) {
-      setEditorPopupKeyboardInset(0);
-      setEditorPopupViewportHeight(null);
-      return;
-    }
-
-    const isMobileViewport = window.matchMedia("(max-width: 980px)").matches;
-    if (!isMobileViewport) {
-      setEditorPopupKeyboardInset(0);
-      setEditorPopupViewportHeight(null);
-      return;
-    }
-
-    const vv = window.visualViewport;
-    const updateViewportMetrics = () => {
-      if (!vv) {
-        setEditorPopupKeyboardInset(0);
-        setEditorPopupViewportHeight(null);
-        return;
-      }
-
-      const layoutHeight = window.innerHeight;
-      const visibleHeight = Math.max(280, Math.round(vv.height));
-      const rawInset = Math.max(0, Math.round(layoutHeight - (vv.height + vv.offsetTop)));
-      const inset = rawInset >= 120 ? rawInset : 0;
-      setEditorPopupKeyboardInset(inset);
-      setEditorPopupViewportHeight(inset > 0 ? visibleHeight : null);
-    };
-
-    updateViewportMetrics();
-    vv?.addEventListener("resize", updateViewportMetrics);
-    window.addEventListener("orientationchange", updateViewportMetrics);
-
-    return () => {
-      vv?.removeEventListener("resize", updateViewportMetrics);
-      window.removeEventListener("orientationchange", updateViewportMetrics);
-    };
-  }, [showAlocPopup, showPvpsPopup]);
-
-  useEffect(() => {
     void refreshPendingState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCd]);
@@ -1465,14 +1413,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setActivePulEnd(next?.end_pul ?? null);
     setShowPulOccurrence(false);
   }, [activePvpsMode, pulItems, activePulEnd]);
-
-  useEffect(() => {
-    if (!showPvpsPopup || pvpsPopupMotion !== "next") return;
-    const timer = window.setTimeout(() => {
-      setPvpsPopupMotion("default");
-    }, 320);
-    return () => window.clearTimeout(timer);
-  }, [showPvpsPopup, pvpsPopupMotion, activePvpsKey, activePulEnd]);
 
   useEffect(() => {
     setShowAlocOccurrence(false);
@@ -1975,8 +1915,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [tab, pvpsQueueProducts, pvpsEligibleCoddv, alocQueueProducts, alocEligibleCoddv]);
 
   async function openPvpsPopup(row: PvpsManifestRow, options?: { motion?: "default" | "next" }): Promise<void> {
-    const motion = options?.motion ?? "default";
-    setPvpsPopupMotion(motion);
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
@@ -1998,7 +1936,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const pendingPulItems = (pulItemsByRow ?? []).filter((item) => !item.auditado);
       const firstPendingPul = pendingPulItems[0];
       if (firstPendingPul) {
-        openPvpsPulPopup(row, firstPendingPul.end_pul, { motion });
+        openPvpsPulPopup(row, firstPendingPul.end_pul, options);
         return;
       }
     }
@@ -2010,7 +1948,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openPvpsPulPopup(row: PvpsManifestRow, endPul: string, options?: { motion?: "default" | "next" }): void {
-    setPvpsPopupMotion(options?.motion ?? "default");
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
@@ -2022,7 +1959,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openAlocPopup(row: AlocacaoManifestRow): void {
-    setAlocPopupMotion("default");
     setEditingAlocCompleted(null);
     setShowAlocOccurrence(false);
     setActiveAlocQueue(row.queue_id);
@@ -2033,7 +1969,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function closePvpsPopup(): void {
-    setPvpsPopupMotion("default");
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
@@ -2085,7 +2020,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openPvpsCompletedEdit(row: PvpsCompletedRow): void {
     if (!canEditAudit(row.auditor_id)) return;
-    setPvpsPopupMotion("default");
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
     setEditingPvpsCompleted(row);
@@ -2128,7 +2062,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openAlocCompletedEdit(row: AlocacaoCompletedRow): void {
     if (!canEditAudit(row.auditor_id)) return;
-    setAlocPopupMotion("default");
     setShowAlocOccurrence(false);
     setEditingAlocCompleted(row);
     setAlocEndSit(row.end_sit ?? "");
@@ -2175,12 +2108,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       closePvpsPopup();
       return;
     }
-    setPvpsPopupMotion("next");
     if (next.kind === "pul") {
-      openPvpsPulPopup(next.row, next.endPul, { motion: "next" });
+      openPvpsPulPopup(next.row, next.endPul);
       return;
     }
-    void openPvpsPopup(next.row, { motion: "next" });
+    void openPvpsPopup(next.row);
   }
 
   function openNextPvpsSepFrom(currentFeedKey: string): void {
@@ -2197,8 +2129,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       closePvpsPopup();
       return;
     }
-    setPvpsPopupMotion("next");
-    void openPvpsPopup(next.row, { motion: "next" });
+    void openPvpsPopup(next.row);
   }
 
   function openNextAlocacaoFrom(currentQueueId: string, currentZone?: string | null): void {
@@ -2218,7 +2149,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       next = visibleAlocRows.find((row) => row.queue_id !== currentQueueId);
     }
     if (next) {
-      setAlocPopupMotion("next");
       setEditingAlocCompleted(null);
       setShowAlocOccurrence(false);
       setAlocEndSit("");
@@ -2227,7 +2157,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setActiveAlocQueue(next.queue_id);
       setShowAlocPopup(true);
     } else {
-      setAlocPopupMotion("default");
       setShowAlocPopup(false);
     }
   }
@@ -2631,7 +2560,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setAlocValConf("");
       if (isEditingCompleted) {
         await loadCurrent();
-        setAlocPopupMotion("default");
         setShowAlocPopup(false);
       } else {
         setAlocResult(null);
@@ -2786,13 +2714,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       previous.includes(zone) ? previous.filter((z) => z !== zone) : [...previous, zone]
     ));
   }
-
-  const editorPopupOverlayStyle = editorPopupKeyboardInset > 0
-    ? { paddingBottom: `${editorPopupKeyboardInset + 10}px` }
-    : undefined;
-  const editorPopupCardStyle = editorPopupKeyboardInset > 0 && editorPopupViewportHeight != null
-    ? { maxHeight: `${Math.max(280, editorPopupViewportHeight - 12)}px` }
-    : undefined;
 
   return (
     <>
@@ -3390,176 +3311,258 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             }}
           >
             <div
-              className={`confirm-dialog pvps-popup-card${pvpsPopupMotion === "next" ? " pvps-popup-card-next" : ""}`}
+              className="confirm-dialog pvps-popup-card"
               onClick={(event) => event.stopPropagation()}
             >
-              <h3 id="pvps-inform-title">
-                {editingPvpsCompleted
-                  ? "PVPS - Edição concluída"
-                  : activePvpsMode === "pul"
-                    ? "PVPS - Pulmão"
-                    : "PVPS - Separação"}
-              </h3>
-              <p className="pvps-audit-address"><strong>{activePvpsEnderecoAuditado}</strong></p>
-              <p>{activePvps.coddv} - {activePvps.descricao}</p>
-              <p>Zona: <strong>{activePvpsZonaAuditada}</strong></p>
-              {editingPvpsCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong></p> : null}
+              <div className="pvps-editor-popup">
+                <div className="pvps-editor-popup-header">
+                  <div className="pvps-editor-popup-heading">
+                    <small>{editingPvpsCompleted ? "Edicao de concluido" : "Pendencia PVPS"}</small>
+                    <h3 id="pvps-inform-title">{activePvpsMode === "pul" ? "Auditar Pulmao" : "Auditar Separacao"}</h3>
+                  </div>
+                  <button
+                    className="btn btn-muted pvps-editor-close-btn"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setEditingPvpsCompleted(null);
+                      closePvpsPopup();
+                    }}
+                  >
+                    Fechar
+                  </button>
+                </div>
 
-              {activePvpsMode === "sep" ? (
-                <form className="form-grid" onSubmit={(event) => void handleSubmitSep(event)}>
-                  <label>
-                    Validade do Produto
-                    <div className="pvps-validity-row">
-                      <button
-                        type="button"
-                        className={`pvps-occurrence-toggle${showSepOccurrence || endSit ? " is-open" : ""}`}
-                        onClick={() => {
-                          if (!showSepOccurrence) {
-                            setShowSepOccurrence(true);
-                            if (!endSit) { setEndSit("vazio"); setValSep(""); }
-                          } else {
-                            setShowSepOccurrence(false);
-                          }
-                        }}
-                        title="Registrar ocorrência"
-                        aria-label="Registrar ocorrência"
-                      >
-                        ⚠️
-                      </button>
-                      {endSit !== "vazio" && endSit !== "obstruido" ? (
-                        <input
-                          value={valSep}
-                          onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                          placeholder="MMAA"
-                          maxLength={4}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          required
-                        />
-                      ) : !showSepOccurrence ? (
-                        <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(endSit as PvpsEndSit)}</span>
-                      ) : null}
-                    </div>
-                    {showSepOccurrence ? (
-                      <select
-                        className="pvps-occurrence-select-minimal"
-                        value={endSit}
-                        aria-label="Ocorrência do endereço"
-                        onChange={(event) => {
-                          const next = event.target.value;
-                          const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                          setEndSit(parsed);
-                          if (parsed) setValSep("");
-                          if (!parsed) setShowSepOccurrence(false);
-                        }}
-                      >
-                        <option value="">— sem ocorrência</option>
-                        <option value="vazio">Vazio</option>
-                        <option value="obstruido">Obstruído</option>
-                      </select>
-                    ) : null}
-                  </label>
-                  <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
-                </form>
-              ) : null}
+                <div className="pvps-editor-summary">
+                  <div className="pvps-editor-summary-address">
+                    <strong>{activePvpsEnderecoAuditado}</strong>
+                    <span>{activePvps.coddv} - {activePvps.descricao}</span>
+                  </div>
+                  <div className="pvps-editor-summary-chips">
+                    <span className="pvps-editor-chip">Zona {activePvpsZonaAuditada}</span>
+                    <span className="pvps-editor-chip">{activePvpsMode === "pul" ? "Pulmao" : "Separacao"}</span>
+                    {activePvpsMode === "pul" && activePulItem ? <span className="pvps-editor-chip">Andar {formatAndar(activePulItem.nivel)}</span> : null}
+                  </div>
+                </div>
 
-              {activePvpsMode === "pul" ? (
-                <div className="pvps-pul-box">
-                  <p>Endereço separação: <strong>{activePvps.end_sep}</strong></p>
-                  <p>Validade Separação: <strong>{activePvps.val_sep ?? "-"}</strong></p>
-                  {activePvps.end_sit ? <p>Ocorrência linha: <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong></p> : null}
-                  {activePulItem ? <p>Andar Pulmão: <strong>{formatAndar(activePulItem.nivel)}</strong></p> : null}
-                  {pulBusy ? <p>Carregando endereços de Pulmão...</p> : null}
-                  {!pulBusy && !activePulItem ? <p>Endereço de Pulmão não encontrado no feed atual.</p> : null}
-                  {activePulItem ? (
-                    <div className="pvps-pul-row">
-                      <div>
-                        <small>{activePulItem.auditado ? "Auditado" : "Pendente"}</small>
-                      </div>
-                      <label>
-                        Validade do Pulmão
-                        <div className="pvps-validity-row">
-                          <button
-                            type="button"
-                            className={`pvps-occurrence-toggle${showPulOccurrence || pulEndSits[activePulItem.end_pul] ? " is-open" : ""}`}
-                            onClick={() => {
-                              if (!showPulOccurrence) {
-                                setShowPulOccurrence(true);
-                                if (!pulEndSits[activePulItem.end_pul]) {
-                                  setPulEndSits((prev) => ({ ...prev, [activePulItem.end_pul]: "vazio" }));
-                                  setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: "" }));
-                                }
-                              } else {
-                                setShowPulOccurrence(false);
-                              }
-                            }}
-                            title="Registrar ocorrência"
-                            aria-label="Registrar ocorrência"
-                          >
-                            ⚠️
-                          </button>
-                          {(pulEndSits[activePulItem.end_pul] ?? "") !== "vazio" && (pulEndSits[activePulItem.end_pul] ?? "") !== "obstruido" ? (
-                            <input
-                              value={pulInputs[activePulItem.end_pul] ?? ""}
-                              onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
-                              placeholder="MMAA"
-                              maxLength={4}
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                            />
-                          ) : !showPulOccurrence ? (
-                            <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(pulEndSits[activePulItem.end_pul] as PvpsEndSit)}</span>
-                          ) : null}
+                <div className="pvps-editor-panel">
+                  {activePvpsMode === "sep" ? (
+                    <>
+                      <div className="pvps-editor-info-grid">
+                        <div className="pvps-editor-info-card">
+                          <small>Endereco da Separacao</small>
+                          <strong>{activePvps.end_sep}</strong>
                         </div>
-                        {showPulOccurrence ? (
-                          <select
-                            className="pvps-occurrence-select-minimal"
-                            value={pulEndSits[activePulItem.end_pul] ?? ""}
-                            aria-label="Ocorrência do endereço"
-                            onChange={(event) => {
-                              const next = event.target.value;
-                              const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                              setPulEndSits((prev) => ({ ...prev, [activePulItem.end_pul]: parsed }));
-                              if (parsed) {
-                                setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: "" }));
-                              }
-                              if (!parsed) setShowPulOccurrence(false);
+                        <div className="pvps-editor-info-card">
+                          <small>Status atual</small>
+                          <strong>{pvpsStatusLabel(activePvps.status)}</strong>
+                        </div>
+                        {editingPvpsCompleted ? (
+                          <div className="pvps-editor-info-card">
+                            <small>Ultima auditoria</small>
+                            <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <form className="form-grid pvps-editor-form" onSubmit={(event) => void handleSubmitSep(event)}>
+                        <label>
+                          Validade do produto
+                          <div className="pvps-validity-row">
+                            <button
+                              type="button"
+                              className={`pvps-occurrence-toggle${showSepOccurrence || endSit ? " is-open" : ""}`}
+                              onClick={() => {
+                                if (!showSepOccurrence) {
+                                  setShowSepOccurrence(true);
+                                  if (!endSit) { setEndSit("vazio"); setValSep(""); }
+                                } else {
+                                  setShowSepOccurrence(false);
+                                }
+                              }}
+                              title="Registrar ocorrência"
+                              aria-label="Registrar ocorrência"
+                            >
+                              ⚠️
+                            </button>
+                            {endSit !== "vazio" && endSit !== "obstruido" ? (
+                              <input
+                                value={valSep}
+                                onChange={(event) => setValSep(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                placeholder="MMAA"
+                                maxLength={4}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                required
+                              />
+                            ) : !showSepOccurrence ? (
+                              <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(endSit as PvpsEndSit)}</span>
+                            ) : null}
+                          </div>
+                          {showSepOccurrence ? (
+                            <select
+                              className="pvps-occurrence-select-minimal"
+                              value={endSit}
+                              aria-label="Ocorrência do endereço"
+                              onChange={(event) => {
+                                const next = event.target.value;
+                                const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                                setEndSit(parsed);
+                                if (parsed) setValSep("");
+                                if (!parsed) setShowSepOccurrence(false);
+                              }}
+                            >
+                              <option value="">Sem ocorrência</option>
+                              <option value="vazio">Vazio</option>
+                              <option value="obstruido">Obstruído</option>
+                            </select>
+                          ) : null}
+                        </label>
+
+                        <div className="pvps-editor-actions">
+                          <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
+                          <button
+                            className="btn btn-muted"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setEditingPvpsCompleted(null);
+                              closePvpsPopup();
                             }}
                           >
-                            <option value="">— sem ocorrência</option>
-                            <option value="vazio">Vazio</option>
-                            <option value="obstruido">Obstruído</option>
-                          </select>
-                        ) : null}
-                      </label>
-                      <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
-                        Salvar
-                      </button>
-                    </div>
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    </>
                   ) : null}
-                  {pulFeedback ? (
-                    <div className={`pvps-pul-feedback pvps-result-chip ${pulFeedback.tone === "ok" ? "ok" : pulFeedback.tone === "bad" ? "bad" : "warn"}`}>
-                      <span>{pulFeedback.text}</span>
-                      <button
-                        className="btn btn-primary pvps-icon-btn pvps-pul-next-btn"
-                        type="button"
-                        onClick={handlePulGoNext}
-                        title="Ir para o próximo"
-                      >
-                        {nextIcon()}
-                      </button>
-                    </div>
+
+                  {activePvpsMode === "pul" ? (
+                    <>
+                      <div className="pvps-editor-info-grid">
+                        <div className="pvps-editor-info-card">
+                          <small>Endereco da Separacao</small>
+                          <strong>{activePvps.end_sep}</strong>
+                        </div>
+                        <div className="pvps-editor-info-card">
+                          <small>Validade da Separacao</small>
+                          <strong>{activePvps.val_sep ?? "-"}</strong>
+                        </div>
+                        {activePvps.end_sit ? (
+                          <div className="pvps-editor-info-card">
+                            <small>Ocorrencia da linha</small>
+                            <strong>{formatOcorrenciaLabel(activePvps.end_sit)}</strong>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {pulBusy ? <p className="pvps-editor-muted">Carregando endereços de Pulmão...</p> : null}
+                      {!pulBusy && !activePulItem ? <p className="pvps-editor-muted">Endereço de Pulmão não encontrado no feed atual.</p> : null}
+
+                      {activePulItem ? (
+                        <div className="pvps-editor-form">
+                          <div className="pvps-editor-info-grid">
+                            <div className="pvps-editor-info-card">
+                              <small>Endereco do Pulmao</small>
+                              <strong>{activePulItem.end_pul}</strong>
+                            </div>
+                            <div className="pvps-editor-info-card">
+                              <small>Andar</small>
+                              <strong>{formatAndar(activePulItem.nivel)}</strong>
+                            </div>
+                            <div className="pvps-editor-info-card">
+                              <small>Status</small>
+                              <strong>{activePulItem.auditado ? "Auditado" : "Pendente"}</strong>
+                            </div>
+                          </div>
+
+                          <label>
+                            Validade do Pulmão
+                            <div className="pvps-validity-row">
+                              <button
+                                type="button"
+                                className={`pvps-occurrence-toggle${showPulOccurrence || pulEndSits[activePulItem.end_pul] ? " is-open" : ""}`}
+                                onClick={() => {
+                                  if (!showPulOccurrence) {
+                                    setShowPulOccurrence(true);
+                                    if (!pulEndSits[activePulItem.end_pul]) {
+                                      setPulEndSits((prev) => ({ ...prev, [activePulItem.end_pul]: "vazio" }));
+                                      setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: "" }));
+                                    }
+                                  } else {
+                                    setShowPulOccurrence(false);
+                                  }
+                                }}
+                                title="Registrar ocorrência"
+                                aria-label="Registrar ocorrência"
+                              >
+                                ⚠️
+                              </button>
+                              {(pulEndSits[activePulItem.end_pul] ?? "") !== "vazio" && (pulEndSits[activePulItem.end_pul] ?? "") !== "obstruido" ? (
+                                <input
+                                  value={pulInputs[activePulItem.end_pul] ?? ""}
+                                  onChange={(event) => setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: event.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                                  placeholder="MMAA"
+                                  maxLength={4}
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                />
+                              ) : !showPulOccurrence ? (
+                                <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(pulEndSits[activePulItem.end_pul] as PvpsEndSit)}</span>
+                              ) : null}
+                            </div>
+                            {showPulOccurrence ? (
+                              <select
+                                className="pvps-occurrence-select-minimal"
+                                value={pulEndSits[activePulItem.end_pul] ?? ""}
+                                aria-label="Ocorrência do endereço"
+                                onChange={(event) => {
+                                  const next = event.target.value;
+                                  const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                                  setPulEndSits((prev) => ({ ...prev, [activePulItem.end_pul]: parsed }));
+                                  if (parsed) {
+                                    setPulInputs((prev) => ({ ...prev, [activePulItem.end_pul]: "" }));
+                                  }
+                                  if (!parsed) setShowPulOccurrence(false);
+                                }}
+                              >
+                                <option value="">Sem ocorrência</option>
+                                <option value="vazio">Vazio</option>
+                                <option value="obstruido">Obstruído</option>
+                              </select>
+                            ) : null}
+                          </label>
+
+                          <div className="pvps-editor-actions">
+                            <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
+                              Salvar
+                            </button>
+                            <button
+                              className="btn btn-muted"
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                setEditingPvpsCompleted(null);
+                                closePvpsPopup();
+                              }}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {pulFeedback ? (
+                        <div className={`pvps-result-chip ${pulFeedback.tone === "ok" ? "ok" : pulFeedback.tone === "bad" ? "bad" : "warn"}`}>
+                          <div>{pulFeedback.text}</div>
+                          <div className="pvps-editor-actions">
+                            <button className="btn btn-primary" type="button" onClick={handlePulGoNext}>Próximo</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
-              ) : null}
-
-              <div className="confirm-actions">
-                <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
-                  setEditingPvpsCompleted(null);
-                  closePvpsPopup();
-                }}>
-                  Fechar
-                </button>
               </div>
             </div>
           </div>,
@@ -3570,7 +3573,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ? createPortal(
           <div
             className="confirm-overlay pvps-popup-overlay"
-            style={editorPopupOverlayStyle}
             role="dialog"
             aria-modal="true"
             aria-labelledby="aloc-inform-title"
@@ -3579,102 +3581,148 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               setEditingAlocCompleted(null);
               setAlocResult(null);
               setShowAlocOccurrence(false);
-              setAlocPopupMotion("default");
               setShowAlocPopup(false);
             }}
           >
             <div
-              key={`aloc:${activeAlocQueue ?? "none"}`}
-              className={`confirm-dialog surface-enter pvps-popup-card${alocPopupMotion === "next" ? " pvps-popup-card-next" : ""}`}
-              style={editorPopupCardStyle}
+              className="confirm-dialog pvps-popup-card"
               onClick={(event) => event.stopPropagation()}
             >
-              <h3 id="aloc-inform-title">{editingAlocCompleted ? "Alocação - Edição concluída" : "Alocação"}</h3>
-              <p className="pvps-audit-address"><strong>{activeAloc.endereco}</strong></p>
-              <p>{activeAloc.coddv} - {activeAloc.descricao}</p>
-              <p>Zona: <strong>{activeAloc.zona}</strong> | Andar: <strong>{formatAndar(activeAloc.nivel)}</strong></p>
-              {editingAlocCompleted ? <p>Última auditoria: <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong></p> : null}
+              <div className="pvps-editor-popup">
+                <div className="pvps-editor-popup-header">
+                  <div className="pvps-editor-popup-heading">
+                    <small>{editingAlocCompleted ? "Edicao de concluido" : "Pendencia de alocacao"}</small>
+                    <h3 id="aloc-inform-title">Auditar Alocação</h3>
+                  </div>
+                  <button
+                    className="btn btn-muted pvps-editor-close-btn"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setEditingAlocCompleted(null);
+                      setAlocResult(null);
+                      setShowAlocOccurrence(false);
+                      setShowAlocPopup(false);
+                    }}
+                  >
+                    Fechar
+                  </button>
+                </div>
 
-              <form className="form-grid" onSubmit={(event) => void handleSubmitAlocacao(event)}>
-                <label>
-                  Validade do Produto
-                  <div className="pvps-validity-row">
-                    <button
-                      type="button"
-                      className={`pvps-occurrence-toggle${showAlocOccurrence || alocEndSit ? " is-open" : ""}`}
-                      onClick={() => {
-                        if (!showAlocOccurrence) {
-                          setShowAlocOccurrence(true);
-                          if (!alocEndSit) { setAlocEndSit("vazio"); setAlocValConf(""); }
-                        } else {
-                          setShowAlocOccurrence(false);
-                        }
-                      }}
-                      title="Registrar ocorrência"
-                      aria-label="Registrar ocorrência"
-                    >
-                      ⚠️
-                    </button>
-                    {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
-                      <input
-                        value={alocValConf}
-                        onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                        placeholder="MMAA"
-                        maxLength={4}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        required
-                        autoFocus
-                      />
-                    ) : !showAlocOccurrence ? (
-                      <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(alocEndSit as PvpsEndSit)}</span>
+                <div className="pvps-editor-summary">
+                  <div className="pvps-editor-summary-address">
+                    <strong>{activeAloc.endereco}</strong>
+                    <span>{activeAloc.coddv} - {activeAloc.descricao}</span>
+                  </div>
+                  <div className="pvps-editor-summary-chips">
+                    <span className="pvps-editor-chip">Zona {activeAloc.zona}</span>
+                    <span className="pvps-editor-chip">Andar {formatAndar(activeAloc.nivel)}</span>
+                    <span className="pvps-editor-chip">Sistema {activeAloc.val_sist}</span>
+                  </div>
+                </div>
+
+                <div className="pvps-editor-panel">
+                  <div className="pvps-editor-info-grid">
+                    <div className="pvps-editor-info-card">
+                      <small>Endereco</small>
+                      <strong>{activeAloc.endereco}</strong>
+                    </div>
+                    <div className="pvps-editor-info-card">
+                      <small>Validade do sistema</small>
+                      <strong>{activeAloc.val_sist}</strong>
+                    </div>
+                    {editingAlocCompleted ? (
+                      <div className="pvps-editor-info-card">
+                        <small>Ultima auditoria</small>
+                        <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong>
+                      </div>
                     ) : null}
                   </div>
-                  {showAlocOccurrence ? (
-                    <select
-                      className="pvps-occurrence-select-minimal"
-                      value={alocEndSit}
-                      aria-label="Ocorrência do endereço"
-                      onChange={(event) => {
-                        const next = event.target.value;
-                        const parsed = next === "vazio" || next === "obstruido" ? next : "";
-                        setAlocEndSit(parsed);
-                        if (parsed) setAlocValConf("");
-                        if (!parsed) setShowAlocOccurrence(false);
-                      }}
-                    >
-                      <option value="">— sem ocorrência</option>
-                      <option value="vazio">Vazio</option>
-                      <option value="obstruido">Obstruído</option>
-                    </select>
-                  ) : null}
-                </label>
-                <button className="btn btn-primary" type="submit" disabled={busy}>
-                  Salvar
-                </button>
-              </form>
 
-              {alocResult ? (
-                <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "warn" : "bad"}`}>
-                  <div>Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}</div>
-                  {alocResult.aud_sit === "ocorrencia" ? null : (
-                    <>
-                      <div>Sistema: {alocResult.val_sist}</div>
-                      <div>Informada: {alocResult.val_conf ?? "-"}</div>
-                    </>
-                  )}
+                  <form className="form-grid pvps-editor-form" onSubmit={(event) => void handleSubmitAlocacao(event)}>
+                    <label>
+                      Validade do produto
+                      <div className="pvps-validity-row">
+                        <button
+                          type="button"
+                          className={`pvps-occurrence-toggle${showAlocOccurrence || alocEndSit ? " is-open" : ""}`}
+                          onClick={() => {
+                            if (!showAlocOccurrence) {
+                              setShowAlocOccurrence(true);
+                              if (!alocEndSit) { setAlocEndSit("vazio"); setAlocValConf(""); }
+                            } else {
+                              setShowAlocOccurrence(false);
+                            }
+                          }}
+                          title="Registrar ocorrência"
+                          aria-label="Registrar ocorrência"
+                        >
+                          ⚠️
+                        </button>
+                        {alocEndSit !== "vazio" && alocEndSit !== "obstruido" ? (
+                          <input
+                            value={alocValConf}
+                            onChange={(event) => setAlocValConf(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                            placeholder="MMAA"
+                            maxLength={4}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            required
+                          />
+                        ) : !showAlocOccurrence ? (
+                          <span className="pvps-occurrence-badge">{formatOcorrenciaLabel(alocEndSit as PvpsEndSit)}</span>
+                        ) : null}
+                      </div>
+                      {showAlocOccurrence ? (
+                        <select
+                          className="pvps-occurrence-select-minimal"
+                          value={alocEndSit}
+                          aria-label="Ocorrência do endereço"
+                          onChange={(event) => {
+                            const next = event.target.value;
+                            const parsed = next === "vazio" || next === "obstruido" ? next : "";
+                            setAlocEndSit(parsed);
+                            if (parsed) setAlocValConf("");
+                            if (!parsed) setShowAlocOccurrence(false);
+                          }}
+                        >
+                          <option value="">Sem ocorrência</option>
+                          <option value="vazio">Vazio</option>
+                          <option value="obstruido">Obstruído</option>
+                        </select>
+                      ) : null}
+                    </label>
+
+                    <div className="pvps-editor-actions">
+                      <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
+                      <button
+                        className="btn btn-muted"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setEditingAlocCompleted(null);
+                          setAlocResult(null);
+                          setShowAlocOccurrence(false);
+                          setShowAlocPopup(false);
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+
+                  {alocResult ? (
+                    <div className={`pvps-result-chip ${alocResult.aud_sit === "conforme" ? "ok" : alocResult.aud_sit === "ocorrencia" ? "warn" : "bad"}`}>
+                      <div>Resultado: {alocResult.aud_sit === "conforme" ? "Conforme" : alocResult.aud_sit === "ocorrencia" ? "Ocorrência" : "Não conforme"}</div>
+                      {alocResult.aud_sit === "ocorrencia" ? null : (
+                        <>
+                          <div>Sistema: {alocResult.val_sist}</div>
+                          <div>Informada: {alocResult.val_conf ?? "-"}</div>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-              <div className="confirm-actions">
-                <button className="btn btn-muted" type="button" disabled={busy} onClick={() => {
-                  setEditingAlocCompleted(null);
-                  setAlocResult(null);
-                  setShowAlocOccurrence(false);
-                  setAlocPopupMotion("default");
-                  setShowAlocPopup(false);
-                }}>
-                  Fechar
-                </button>
               </div>
             </div>
           </div>,
