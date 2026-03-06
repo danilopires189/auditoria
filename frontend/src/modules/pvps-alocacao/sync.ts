@@ -187,7 +187,9 @@ function mapPvpsPul(raw: Record<string, unknown>): PvpsPulItemRow {
     nivel: parseNullableString(raw.nivel),
     val_pul: parseNullableString(raw.val_pul),
     end_sit: parseEndSit(raw.end_sit),
-    auditado: parseBoolean(raw.auditado)
+    auditado: parseBoolean(raw.auditado),
+    dt_hr: parseNullableString(raw.dt_hr),
+    auditor_nome: parseNullableString(raw.auditor_nome)
   };
 }
 
