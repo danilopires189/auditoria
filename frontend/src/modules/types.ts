@@ -8,6 +8,7 @@ export type ModuleIconName =
   | "volume"
   | "direct"
   | "notes"
+  | "qr"
   | "return"
   | "ship"
   | "goal"

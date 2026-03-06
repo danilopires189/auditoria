@@ -17,7 +17,7 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "produtividade", path: "/modulos/produtividade", title: "Produtividade", icon: "productivity", tone: "amber" },
   { key: "registro-embarque", path: "/modulos/registro-embarque", title: "Registro de Embarque", icon: "ship", tone: "teal" },
   { key: "validar-enderecamento", path: "/modulos/validar-enderecamento", title: "Validar Endereçamento", icon: "notes", tone: "blue" },
-  { key: "validar-etiqueta-pulmao", path: "/modulos/validar-etiqueta-pulmao", title: "Validar Etiqueta Pulmão", icon: "notes", tone: "blue" }
+  { key: "validar-etiqueta-pulmao", path: "/modulos/validar-etiqueta-pulmao", title: "Validar Etiqueta Pulmão", icon: "qr", tone: "blue" }
 ];
 
 export const MODULE_BY_KEY: Record<DashboardModuleKey, DashboardModule> = DASHBOARD_MODULES.reduce(
