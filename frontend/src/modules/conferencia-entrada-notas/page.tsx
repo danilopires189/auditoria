@@ -1738,6 +1738,32 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setStatusMessage("Conferência aberta em modo leitura.");
   }, []);
 
+  const reopenPartialVolume = useCallback(async (
+    etiqueta: string,
+    selectedCd: number,
+    successMessage: string
+  ) => {
+    const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd);
+    const [reopenedItems, reopenedContributors] = await Promise.all([
+      fetchVolumeItems(reopenedVolume.conf_id),
+      fetchSeqNfContributors(reopenedVolume)
+    ]);
+    const reopenedLocalVolume = createLocalVolumeFromRemote(
+      profile,
+      reopenedVolume,
+      reopenedItems,
+      reopenedContributors
+    );
+    await saveLocalVolume(reopenedLocalVolume);
+    setActiveVolume(reopenedLocalVolume);
+    setEtiquetaInput(reopenedLocalVolume.nr_volume);
+    setExpandedItemKey(null);
+    setEditingItemKey(null);
+    setEditQtdInput("0");
+    setStatusMessage(successMessage);
+    focusBarras();
+  }, [fetchSeqNfContributors, focusBarras, profile]);
+
   const promptPartialReopen = useCallback(async (
     etiqueta: string,
     selectedCd: number,
@@ -1787,25 +1813,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             setStatusMessage(null);
             setErrorMessage(null);
             try {
-              const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd);
-              const [reopenedItems, reopenedContributors] = await Promise.all([
-                fetchVolumeItems(reopenedVolume.conf_id),
-                fetchSeqNfContributors(reopenedVolume)
-              ]);
-              const reopenedLocalVolume = createLocalVolumeFromRemote(
-                profile,
-                reopenedVolume,
-                reopenedItems,
-                reopenedContributors
+              await reopenPartialVolume(
+                etiqueta,
+                selectedCd,
+                "Conferência reaberta. Você pode editar todos os itens novamente."
               );
-              await saveLocalVolume(reopenedLocalVolume);
-              setActiveVolume(reopenedLocalVolume);
-              setEtiquetaInput(reopenedLocalVolume.nr_volume);
-              setExpandedItemKey(null);
-              setEditingItemKey(null);
-              setEditQtdInput("0");
-              setStatusMessage("Conferência reaberta. Você pode editar todos os itens novamente.");
-              focusBarras();
             } catch (reopenError) {
               const reopenMessage = reopenError instanceof Error
                 ? reopenError.message
@@ -1845,25 +1857,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           setStatusMessage(null);
           setErrorMessage(null);
           try {
-            const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd);
-            const [reopenedItems, reopenedContributors] = await Promise.all([
-              fetchVolumeItems(reopenedVolume.conf_id),
-              fetchSeqNfContributors(reopenedVolume)
-            ]);
-            const reopenedLocalVolume = createLocalVolumeFromRemote(
-              profile,
-              reopenedVolume,
-              reopenedItems,
-              reopenedContributors
+            await reopenPartialVolume(
+              etiqueta,
+              selectedCd,
+              "Conferência retomada. Itens já conferidos por outro usuário permanecem bloqueados."
             );
-            await saveLocalVolume(reopenedLocalVolume);
-            setActiveVolume(reopenedLocalVolume);
-            setEtiquetaInput(reopenedLocalVolume.nr_volume);
-            setExpandedItemKey(null);
-            setEditingItemKey(null);
-            setEditQtdInput("0");
-            setStatusMessage("Conferência retomada. Itens já conferidos por outro usuário permanecem bloqueados.");
-            focusBarras();
           } catch (reopenError) {
             const reopenMessage = reopenError instanceof Error
               ? reopenError.message
@@ -1880,10 +1878,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, [
     closeDialog,
     fetchSeqNfVolumeSnapshot,
-    fetchSeqNfContributors,
-    focusBarras,
     openReadOnlyVolume,
     profile,
+    reopenPartialVolume,
     showDialog
   ]);
 
@@ -2227,6 +2224,16 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return;
     }
 
+    const matchedRouteRow = routeRows.find((row) => buildSeqNfLabelKey(row.seq_entrada, row.nf) === etiqueta);
+    if (isOnline && normalizeStoreStatus(matchedRouteRow?.status) === "conferido_parcialmente") {
+      try {
+        const reopenPrompted = await promptPartialReopen(etiqueta, selectedCd);
+        if (reopenPrompted) return;
+      } catch {
+        // Se a validação da retomada parcial falhar, segue para a abertura padrão.
+      }
+    }
+
     setBusyOpenVolume(true);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -2445,6 +2452,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     profile,
     promptPartialReopen,
     openReadOnlyVolume,
+    routeRows,
     resumeRemoteActiveVolume,
     showDialog,
     fetchSeqNfVolumeSnapshot,
@@ -5900,7 +5908,24 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                           onClick={() => {
                                             setRouteBatchQueue((current) => (current.length > 0 ? [] : current));
                                             setShowRoutesModal(false);
-                                            void openVolumeFromEtiqueta(`${row.seq_entrada ?? ""}/${row.nf ?? ""}`);
+                                            const seqNfLabel = `${row.seq_entrada ?? ""}/${row.nf ?? ""}`;
+                                            if (lojaStatus === "conferido_parcialmente" && currentCd != null) {
+                                              void (async () => {
+                                                try {
+                                                  const reopenPrompted = await promptPartialReopen(seqNfLabel, currentCd);
+                                                  if (!reopenPrompted) {
+                                                    await openVolumeFromEtiqueta(seqNfLabel);
+                                                  }
+                                                } catch (error) {
+                                                  const message = error instanceof Error
+                                                    ? error.message
+                                                    : "Falha ao retomar conferência parcial.";
+                                                  setErrorMessage(normalizeRpcErrorMessage(message));
+                                                }
+                                              })();
+                                              return;
+                                            }
+                                            void openVolumeFromEtiqueta(seqNfLabel);
                                           }}
                                         >
                                           {lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
