@@ -87,10 +87,12 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
     case "worker":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 10V8a5 5 0 0 1 10 0v2" />
-          <path d="M6 10h12v3a6 6 0 0 1-12 0z" />
-          <path d="M4 20a8 8 0 0 1 16 0" />
-          <path d="M9 6h6" />
+          <path d="M8 9V8a4 4 0 0 1 8 0v1" />
+          <path d="M7 10h10" />
+          <path d="M9 10v2a3 3 0 0 0 6 0v-2" />
+          <path d="M10 6h4" />
+          <path d="M8.5 15.5a5.5 5.5 0 0 0 7 0" />
+          <path d="M5 20a7 7 0 0 1 14 0" />
         </svg>
       );
     case "location":

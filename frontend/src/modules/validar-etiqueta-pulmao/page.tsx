@@ -502,10 +502,6 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
       setErrorMessage("Sem internet para sincronizar a base offline.");
       return;
     }
-    if (currentCd == null || currentCd <= 0) {
-      setErrorMessage("CD não definido para este usuário.");
-      return;
-    }
 
     setBusySync(true);
     setErrorMessage(null);
