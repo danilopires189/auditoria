@@ -18,7 +18,8 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "zerados",
   "produtividade",
   "busca-produto",
-  "validar-enderecamento"
+  "validar-enderecamento",
+  "validar-etiqueta-pulmao"
 ]);
 
 interface HomePageProps {

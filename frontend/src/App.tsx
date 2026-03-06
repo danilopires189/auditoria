@@ -11,6 +11,7 @@ import ControleValidadePage from "./modules/controle-validade/page";
 import AtividadeExtraPage from "./modules/atividade-extra/page";
 import BuscaProdutoPage from "./modules/busca-produto/page";
 import ValidarEnderecamentoPage from "./modules/validar-enderecamento/page";
+import ValidarEtiquetaPulmaoPage from "./modules/validar-etiqueta-pulmao/page";
 import CheckListPage from "./modules/check-list/page";
 import ColetaMercadoriaPage from "./modules/coleta-mercadoria/page";
 import ConferenciaEntradaNotasPage from "./modules/conferencia-entrada-notas/page";
@@ -31,6 +32,7 @@ import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
 import type { ValidarEnderecamentoModuleProfile } from "./modules/validar-enderecamento/types";
+import type { ValidarEtiquetaPulmaoModuleProfile } from "./modules/validar-etiqueta-pulmao/types";
 import type { PedidoDiretoModuleProfile } from "./modules/conferencia-pedido-direto/types";
 import { clearUserPedidoDiretoSessionCache } from "./modules/conferencia-pedido-direto/storage";
 import type { EntradaNotasModuleProfile } from "./modules/conferencia-entrada-notas/types";
@@ -1836,6 +1838,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const validarEtiquetaPulmaoProfile = useMemo<ValidarEtiquetaPulmaoModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const termoProfile = useMemo<TermoModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2037,6 +2051,16 @@ export default function App() {
             element={
               validarEnderecamentoProfile ? (
                 <ValidarEnderecamentoPage isOnline={isOnline} profile={validarEnderecamentoProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/validar-etiqueta-pulmao"
+            element={
+              validarEtiquetaPulmaoProfile ? (
+                <ValidarEtiquetaPulmaoPage isOnline={isOnline} profile={validarEtiquetaPulmaoProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )
