@@ -756,6 +756,12 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.startsWith("PRODUTO_JA_CONFERIDO|")) {
     return value.slice("PRODUTO_JA_CONFERIDO|".length);
   }
+  if (value.includes("Produto ja conferido neste CD.")) {
+    return value.slice(value.indexOf("Produto ja conferido neste CD."));
+  }
+  if (value.includes("Produto já conferido neste CD.")) {
+    return value.slice(value.indexOf("Produto já conferido neste CD."));
+  }
   if (value.includes("SEQ_NF_INVALIDO") || value.includes("SEQ_OU_NF_OBRIGATORIO")) {
     return "Seq/NF inválido. Use o formato 123/456.";
   }
@@ -3089,6 +3095,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         const message = error instanceof Error ? error.message : String(error ?? "");
         const isBusinessError = (
           message.startsWith("PRODUTO_JA_CONFERIDO|")
+          || message.includes("Produto ja conferido neste CD.")
+          || message.includes("Produto já conferido neste CD.")
           || message.includes("BARRAS_OBRIGATORIA")
           || message.includes("BARRAS_NAO_ENCONTRADA")
           || message.includes("PRODUTO_NAO_PERTENCE_A_NENHUM_RECEBIMENTO")
