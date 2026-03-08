@@ -9126,21 +9126,22 @@ small {
 }
 
 .indicadores-chart-shell {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: start;
   gap: 6px;
-  min-height: 372px;
+  min-height: 0;
+  height: 100%;
   min-width: 0;
   width: 100%;
 }
 
 .indicadores-chart-scroll {
-  margin-top: auto;
+  align-self: end;
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: scroll;
   overflow-y: hidden;
   padding-bottom: 0;
   scrollbar-gutter: stable;
@@ -9239,16 +9240,22 @@ small {
 
 .indicadores-zone-chart {
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 12px;
+  min-height: 0;
+  height: 100%;
 }
 
 .indicadores-zone-scroll {
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  overflow-x: auto;
+  overflow-x: scroll;
+  overflow-y: hidden;
   padding: 6px 2px 4px;
-  min-height: 240px;
+  min-height: 0;
+  height: 100%;
+  scrollbar-gutter: stable;
 }
 
 .indicadores-zone-column {
