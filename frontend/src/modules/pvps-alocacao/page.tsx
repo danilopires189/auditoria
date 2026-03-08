@@ -599,6 +599,16 @@ function reportIcon() {
   );
 }
 
+function floorLevelIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3 13.25h10" />
+      <path d="M4.75 9.5h6.5" />
+      <path d="M6.5 5.75h3" />
+    </svg>
+  );
+}
+
 type HistoryStatusTone = "ok" | "bad" | "warn" | "wait";
 type PulFeedbackTone = "ok" | "bad" | "warn";
 
@@ -3366,7 +3376,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                               <span className="pvps-row-address-text">{item.endereco}</span>
                               {feedAndar ? (
                                 <span className="pvps-row-floor-indicator" title={`Andar ${feedAndar}`}>
-                                  <span aria-hidden="true">🏢</span>
+                                  {floorLevelIcon()}
                                   {feedAndar}
                                 </span>
                               ) : null}
@@ -3436,13 +3446,22 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const open = Boolean(expandedAloc[row.queue_id]);
                   const previous = index > 0 ? visibleAlocRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
+                  const feedAndar = resolveFeedAndar(row.nivel, row.endereco);
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-alocacao-${feedView}-${tab}`, row.zona) : null}
                       <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={row.queue_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
-                            <strong>{row.endereco}</strong>
+                            <strong className="pvps-row-address-line">
+                              <span className="pvps-row-address-text">{row.endereco}</span>
+                              {feedAndar ? (
+                                <span className="pvps-row-floor-indicator" title={`Andar ${feedAndar}`}>
+                                  {floorLevelIcon()}
+                                  {feedAndar}
+                                </span>
+                              ) : null}
+                            </strong>
                             <span>{row.coddv} - {row.descricao}</span>
                           </div>
                           <div className="pvps-row-actions">
