@@ -1219,8 +1219,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         let worksheet;
         if (modulo === "alocacao") {
           const headers = [
-            "DATA",
-            "HORA",
             "CD",
             "MODULO",
             "CODDV",
@@ -1233,7 +1231,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             "VAL_CONF",
             "SIT_AUD",
             "AUDITOR_NOM",
-            "AUTITOR_MAT",
+            "AUDITOR_MAT",
             "DATA",
             "HORA"
           ];
@@ -1243,8 +1241,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             const hora = dtHr ? formatTime(dtHr) : "";
             const valColeta = reportValue(row, "val_conf", "val_coleta", "validade_coleta", "validade_informada", "val_informada");
             return [
-              data,
-              hora,
               reportValue(row, "cd"),
               reportValue(row, "modulo").toUpperCase(),
               reportValue(row, "coddv"),
