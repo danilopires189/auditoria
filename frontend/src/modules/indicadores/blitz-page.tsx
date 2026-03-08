@@ -177,6 +177,9 @@ function AnimatedDayRow({ rowKey, className, children }: AnimatedDayRowProps) {
 
     const listRoot = node.closest(".indicadores-day-list-body");
     const root = listRoot instanceof Element ? listRoot : null;
+    const fallbackTimer = window.setTimeout(() => {
+      setVisible(true);
+    }, 420);
 
     const observer = new window.IntersectionObserver(
       (entries) => {
@@ -193,7 +196,10 @@ function AnimatedDayRow({ rowKey, className, children }: AnimatedDayRowProps) {
     );
 
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      observer.disconnect();
+    };
   }, [rowKey, visible]);
 
   return (
