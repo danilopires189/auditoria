@@ -9488,6 +9488,12 @@ small {
   }
 
   .indicadores-mobile-reveal-item {
+    opacity: 1;
+    transform: none;
+    will-change: auto;
+  }
+
+  .indicadores-mobile-reveal-item:not(.is-visible) {
     opacity: 0;
     transform: translateY(18px) scale(0.985);
     will-change: opacity, transform;
