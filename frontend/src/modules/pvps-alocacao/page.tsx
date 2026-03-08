@@ -337,10 +337,17 @@ function formatTime(value: string): string {
 }
 
 function reportValue(row: PvpsAuditoriasReportRow, ...keys: string[]): string {
+  const rowEntries = Object.entries(row);
   for (const key of keys) {
-    const value = row[key];
-    if (value == null) continue;
-    const normalized = String(value).trim();
+    const directValue = row[key];
+    if (directValue != null) {
+      const normalized = String(directValue).trim();
+      if (normalized) return normalized;
+    }
+    const normalizedKey = key.trim().toLowerCase();
+    const matchedEntry = rowEntries.find(([entryKey]) => entryKey.trim().toLowerCase() === normalizedKey);
+    if (!matchedEntry) continue;
+    const normalized = String(matchedEntry[1] ?? "").trim();
     if (normalized) return normalized;
   }
   return "";
