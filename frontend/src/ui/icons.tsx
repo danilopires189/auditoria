@@ -2,6 +2,16 @@ import type { ModuleIconName } from "../modules/types";
 
 export function ModuleIcon({ name }: { name: ModuleIconName }) {
   switch (name) {
+    case "chart":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 20h16" />
+          <path d="M7 20v-7" />
+          <path d="M12 20V9" />
+          <path d="M17 20v-4" />
+          <path d="M6 11l5-4 4 2 3-3" />
+        </svg>
+      );
     case "calendar":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
