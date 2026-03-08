@@ -679,6 +679,13 @@ small {
   gap: 10px;
 }
 
+.app-shell-module > .module-topbar,
+.app-shell-module > .modules-shell {
+  width: min(1640px, 100%);
+  max-width: 100%;
+  justify-self: center;
+}
+
 .app-shell-module-indicadores {
   padding-left: max(env(safe-area-inset-left, 0px), 0px);
   padding-right: max(env(safe-area-inset-right, 0px), 0px);
@@ -689,13 +696,6 @@ small {
   width: 100%;
   max-width: none;
   justify-self: stretch;
-}
-
-.app-shell-module > .module-topbar,
-.app-shell-module > .modules-shell {
-  width: min(1640px, 100%);
-  max-width: 100%;
-  justify-self: center;
 }
 
 .app-topbar {
