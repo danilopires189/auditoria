@@ -9467,6 +9467,22 @@ small {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .indicadores-panel-conferencia {
+    order: 1;
+  }
+
+  .indicadores-panel-zonas {
+    order: 2;
+  }
+
+  .indicadores-panel-divergencias {
+    order: 3;
+  }
+
+  .indicadores-mobile-reveal {
+    animation: pvps-card-appear 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
   .indicadores-day-list-head {
     display: none;
   }
@@ -9500,5 +9516,11 @@ small {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 820px) and (prefers-reduced-motion: reduce) {
+  .indicadores-mobile-reveal {
+    animation: none;
   }
 }
