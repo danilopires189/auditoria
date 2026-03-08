@@ -3338,6 +3338,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                               </div>
                               <div className="pvps-completed-meta-grid">
                                 <small><span>Endereço</span><strong>{row.end_sep}</strong></small>
+                                <small><span>Validade informada</span><strong>{row.val_sep ?? "-"}</strong></small>
                                 <small><span>Auditor</span><strong>{row.auditor_nome}</strong></small>
                                 <small><span>Data</span><strong>{formatDateTime(row.dt_hr)}</strong></small>
                                 <small><span>Status</span><strong>{statusInfo.label}</strong></small>
