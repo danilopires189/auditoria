@@ -2113,11 +2113,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function toggleExpandedPvps(key: string): void {
-    setExpandedPvps((prev) => ({ ...prev, [key]: !prev[key] }));
+    setExpandedPvps((prev) => (prev[key] ? {} : { [key]: true }));
   }
 
   function toggleExpandedAloc(key: string): void {
-    setExpandedAloc((prev) => ({ ...prev, [key]: !prev[key] }));
+    setExpandedAloc((prev) => (prev[key] ? {} : { [key]: true }));
   }
 
   async function loadPvpsCompletedPulItems(row: PvpsCompletedRow): Promise<void> {
@@ -2139,14 +2139,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   function toggleExpandedPvpsCompleted(row: PvpsCompletedRow): void {
     const key = row.audit_id;
     const willOpen = !expandedPvpsCompleted[key];
-    setExpandedPvpsCompleted((prev) => ({ ...prev, [key]: !prev[key] }));
+    setExpandedPvpsCompleted((prev) => (prev[key] ? {} : { [key]: true }));
     if (willOpen && row.pul_auditados > 0 && !pvpsCompletedPulByAuditId[key] && !pvpsCompletedPulLoading[key]) {
       void loadPvpsCompletedPulItems(row);
     }
   }
 
   function toggleExpandedAlocCompleted(key: string): void {
-    setExpandedAlocCompleted((prev) => ({ ...prev, [key]: !prev[key] }));
+    setExpandedAlocCompleted((prev) => (prev[key] ? {} : { [key]: true }));
   }
 
   function openPvpsCompletedEdit(row: PvpsCompletedRow): void {
@@ -3164,9 +3164,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   : null}
                 {pvpsFeedItems.map((item, index) => {
                   const itemKey = item.feedKey;
-                  const active = item.kind === "pul"
-                    ? (activePvpsMode === "pul" && keyOfPvps(item.row) === activePvpsKey && activePulEnd === item.endPul)
-                    : (activePvpsMode === "sep" && keyOfPvps(item.row) === activePvpsKey);
                   const open = Boolean(expandedPvps[itemKey]);
                   const previous = index > 0 ? pvpsFeedItems[index - 1] : null;
                   const showZoneHeader = !previous || previous.zone !== item.zone;
@@ -3174,7 +3171,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={itemKey} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-pvps-${feedView}-${tab}`, item.zone) : null}
-                      <AnimatedFeedReveal className={`pvps-row${active ? " is-active" : ""}`} cardKey={itemKey}>
+                      <AnimatedFeedReveal className="pvps-row" cardKey={itemKey}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{item.endereco}</strong>
@@ -3243,7 +3240,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-alocacao-${feedView}-${tab}`, row.zona) : null}
-                      <AnimatedFeedReveal className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`} cardKey={row.queue_id}>
+                      <AnimatedFeedReveal className="pvps-row" cardKey={row.queue_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
