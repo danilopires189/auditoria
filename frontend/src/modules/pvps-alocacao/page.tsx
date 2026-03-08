@@ -1684,6 +1684,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       .sort((a, b) => {
         const byPriority = a.row.priority_score - b.row.priority_score;
         if (byPriority !== 0) return byPriority;
+        const byDate = dateSortValue(b.row.dat_ult_compra) - dateSortValue(a.row.dat_ult_compra);
+        if (byDate !== 0) return byDate;
+        const byCoddv = a.row.coddv - b.row.coddv;
+        if (byCoddv !== 0) return byCoddv;
         const byZone = a.zone.localeCompare(b.zone);
         if (byZone !== 0) return byZone;
         const byEndereco = compareEnderecoWithDirection(a.endereco, b.endereco, effectivePendingAddressSortDirection);
