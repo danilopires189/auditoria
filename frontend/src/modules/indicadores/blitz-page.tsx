@@ -151,21 +151,23 @@ function statusClassName(status: IndicadoresBlitzDayDetailRow["status"]): string
 function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
   const safeRows = Math.max(rows.length, 1);
   const horizontalPadding = 28;
-  const slotWidth = 34;
-  const chartWidth = Math.max(760, horizontalPadding * 2 + safeRows * slotWidth);
-  const chartHeight = 244;
-  const plotHeight = 162;
+  const slotWidth = 46;
+  const chartWidth = Math.max(980, horizontalPadding * 2 + safeRows * slotWidth);
+  const chartHeight = 320;
+  const plotTop = 32;
+  const plotBottom = 242;
+  const plotHeight = plotBottom - plotTop;
   const availablePlotWidth = Math.max(chartWidth - horizontalPadding * 2, safeRows * slotWidth);
   const stepX = safeRows > 1 ? availablePlotWidth / (safeRows - 1) : availablePlotWidth;
-  const barWidth = Math.min(18, Math.max(12, stepX * 0.42));
+  const barWidth = Math.min(24, Math.max(16, stepX * 0.48));
   const maxConferido = Math.max(1, ...rows.map((row) => row.conferido_total));
   const maxPercent = Math.max(1, ...rows.map((row) => row.percentual_oficial));
 
   const linePoints = rows
     .map((row, index) => {
       const x = horizontalPadding + index * stepX;
-      const y = 28 + (1 - row.percentual_oficial / maxPercent) * plotHeight;
-      return `${x},${Number.isFinite(y) ? y : 28 + plotHeight}`;
+      const y = plotTop + (1 - row.percentual_oficial / maxPercent) * plotHeight;
+      return `${x},${Number.isFinite(y) ? y : plotBottom}`;
     })
     .join(" ");
 
@@ -173,21 +175,21 @@ function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
     <div className="indicadores-chart-shell">
       <div className="indicadores-chart-scroll">
         <svg className="indicadores-chart-svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Conferência diária do mês Blitz">
-          <line x1="18" y1="190" x2={chartWidth - 16} y2="190" className="indicadores-chart-axis" />
-          <line x1="18" y1="28" x2="18" y2="190" className="indicadores-chart-axis" />
+          <line x1="18" y1={plotBottom} x2={chartWidth - 16} y2={plotBottom} className="indicadores-chart-axis" />
+          <line x1="18" y1={plotTop} x2="18" y2={plotBottom} className="indicadores-chart-axis" />
           {rows.map((row, index) => {
             const centerX = horizontalPadding + index * stepX;
             const x = centerX - barWidth / 2;
             const barHeight = (row.conferido_total / maxConferido) * plotHeight;
-            const y = 190 - barHeight;
+            const y = plotBottom - barHeight;
             return (
               <g key={row.date_ref}>
                 <rect x={x} y={y} width={barWidth} height={barHeight} rx="5" className="indicadores-chart-bar" />
-                <text x={centerX} y="206" textAnchor="middle" className="indicadores-chart-label">
+                <text x={centerX} y="270" textAnchor="middle" className="indicadores-chart-label">
                   {row.date_ref.slice(8, 10)}
                 </text>
                 {row.conferido_total > 0 ? (
-                  <text x={centerX} y={Math.max(y - 6, 18)} textAnchor="middle" className="indicadores-chart-value">
+                  <text x={centerX} y={Math.max(y - 10, 20)} textAnchor="middle" className="indicadores-chart-value">
                     {formatInteger(row.conferido_total)}
                   </text>
                 ) : null}
@@ -197,12 +199,12 @@ function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
           {rows.length > 1 ? <polyline points={linePoints} className="indicadores-chart-line" /> : null}
           {rows.map((row, index) => {
             const cx = horizontalPadding + index * stepX;
-            const cy = 28 + (1 - row.percentual_oficial / maxPercent) * plotHeight;
+            const cy = plotTop + (1 - row.percentual_oficial / maxPercent) * plotHeight;
             return (
               <g key={`${row.date_ref}:point`}>
-                <circle cx={cx} cy={Number.isFinite(cy) ? cy : 28 + plotHeight} r="4" className="indicadores-chart-point" />
+                <circle cx={cx} cy={Number.isFinite(cy) ? cy : plotBottom} r="5" className="indicadores-chart-point" />
                 {row.percentual_oficial > 0 ? (
-                  <text x={cx} y={Math.max(cy - 10, 16)} textAnchor="middle" className="indicadores-chart-percent">
+                  <text x={cx} y={Math.max(cy - 12, 18)} textAnchor="middle" className="indicadores-chart-percent">
                     {formatPercent(row.percentual_oficial)}
                   </text>
                 ) : null}
