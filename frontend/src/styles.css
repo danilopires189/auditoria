@@ -9122,7 +9122,7 @@ small {
   grid-template-rows: auto auto;
   align-content: start;
   gap: 6px;
-  min-height: 346px;
+  min-height: 372px;
 }
 
 .indicadores-chart-scroll {
@@ -9134,7 +9134,7 @@ small {
 
 .indicadores-chart-svg {
   width: 100%;
-  min-width: 1480px;
+  min-width: 1220px;
   height: auto;
   display: block;
 }
@@ -9152,7 +9152,7 @@ small {
 .indicadores-chart-line {
   fill: none;
   stroke: #d62739;
-  stroke-width: 4;
+  stroke-width: 3.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -9160,13 +9160,13 @@ small {
 .indicadores-chart-point {
   fill: #d62739;
   stroke: #fff;
-  stroke-width: 3.5;
+  stroke-width: 3;
 }
 
 .indicadores-chart-label,
 .indicadores-chart-value,
 .indicadores-chart-percent {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   fill: #294d80;
 }
