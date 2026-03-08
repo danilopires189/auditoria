@@ -1606,7 +1606,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const head = section.modulo === "pvps"
         ? [[
           "Data/Hora",
-          "CD",
           "Zona",
           "CODDV",
           "Descrição",
@@ -1619,7 +1618,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ]]
         : [[
           "Data/Hora",
-          "CD",
           "Zona",
           "CODDV",
           "Descrição",
@@ -1633,7 +1631,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const body = section.modulo === "pvps"
         ? section.nonConformeRows.map((row) => [
           row.dataHora,
-          row.cd,
           row.zona,
           row.coddv,
           row.descricao,
@@ -1646,7 +1643,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ])
         : section.nonConformeRows.map((row) => [
           row.dataHora,
-          row.cd,
           row.zona,
           row.coddv,
           row.descricao,
@@ -1685,30 +1681,28 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         },
         columnStyles: section.modulo === "pvps"
           ? {
-            0: { cellWidth: 62 },
-            1: { cellWidth: 28 },
-            2: { cellWidth: 36 },
-            3: { cellWidth: 42 },
-            4: { cellWidth: 138 },
-            5: { cellWidth: 82 },
-            6: { cellWidth: 82 },
-            7: { cellWidth: 54 },
-            8: { cellWidth: 54 },
-            9: { cellWidth: 112 },
-            10: { cellWidth: 52 }
+            0: { cellWidth: 68 },
+            1: { cellWidth: 42 },
+            2: { cellWidth: 48 },
+            3: { cellWidth: 154, overflow: "linebreak" },
+            4: { cellWidth: 92 },
+            5: { cellWidth: 92 },
+            6: { cellWidth: 58 },
+            7: { cellWidth: 58 },
+            8: { cellWidth: 126, overflow: "linebreak" },
+            9: { cellWidth: 58 }
           }
           : {
-            0: { cellWidth: 62 },
-            1: { cellWidth: 28 },
-            2: { cellWidth: 36 },
-            3: { cellWidth: 42 },
-            4: { cellWidth: 172 },
-            5: { cellWidth: 102 },
-            6: { cellWidth: 34 },
-            7: { cellWidth: 58 },
-            8: { cellWidth: 58 },
-            9: { cellWidth: 112 },
-            10: { cellWidth: 52 }
+            0: { cellWidth: 68 },
+            1: { cellWidth: 42 },
+            2: { cellWidth: 48 },
+            3: { cellWidth: 188, overflow: "linebreak" },
+            4: { cellWidth: 116 },
+            5: { cellWidth: 36 },
+            6: { cellWidth: 62 },
+            7: { cellWidth: 62 },
+            8: { cellWidth: 126, overflow: "linebreak" },
+            9: { cellWidth: 58 }
           }
       });
     };
