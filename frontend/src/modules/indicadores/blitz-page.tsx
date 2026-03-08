@@ -391,7 +391,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
 
   return (
     <>
-      <header className="module-topbar module-topbar-fixed">
+      <header className="module-topbar module-topbar-fixed indicadores-topbar">
         <div className="module-topbar-line1">
           <Link
             to="/modulos/indicadores"

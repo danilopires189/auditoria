@@ -24,7 +24,7 @@ function toDisplayName(value: string): string {
 export default function IndicadoresPage({ isOnline, profile }: IndicadoresPageProps) {
   return (
     <>
-      <header className="module-topbar module-topbar-fixed">
+      <header className="module-topbar module-topbar-fixed indicadores-topbar">
         <div className="module-topbar-line1">
           <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
             <span className="module-back-icon" aria-hidden="true">

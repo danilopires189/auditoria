@@ -8829,9 +8829,15 @@ small {
 }
 
 .indicadores-shell {
-  width: min(1640px, 100%);
+  width: 100%;
   max-width: 100%;
   justify-self: center;
+}
+
+.indicadores-topbar {
+  width: 100%;
+  max-width: 100%;
+  justify-self: stretch;
 }
 
 .indicadores-screen {
