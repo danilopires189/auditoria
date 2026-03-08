@@ -6241,6 +6241,18 @@ small {
   }
 }
 
+@keyframes pvps-details-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes pvps-pulse-border {
 
   0%,
@@ -7319,7 +7331,8 @@ small {
   padding-top: 10px;
   display: grid;
   gap: 10px;
-  animation: pvps-fade-in 200ms ease both;
+  transform-origin: top center;
+  animation: pvps-details-appear 220ms ease both;
 }
 
 .pvps-completed-section {
