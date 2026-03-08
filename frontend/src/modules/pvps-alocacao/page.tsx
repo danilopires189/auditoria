@@ -340,6 +340,11 @@ function brtDayKey(now = new Date()): string {
   }).format(now);
 }
 
+function brtMonthStartKey(now = new Date()): string {
+  const dayKey = brtDayKey(now);
+  return `${dayKey.slice(0, 8)}01`;
+}
+
 function formatAndar(value: string | null): string {
   const normalized = (value ?? "").trim();
   if (!normalized) return "-";
@@ -695,7 +700,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return window.matchMedia("(min-width: 980px)").matches;
   });
   const [showAuditoriasReportModal, setShowAuditoriasReportModal] = useState(false);
-  const [reportDtIni, setReportDtIni] = useState<string>(() => brtDayKey());
+  const [reportDtIni, setReportDtIni] = useState<string>(() => brtMonthStartKey());
   const [reportDtFim, setReportDtFim] = useState<string>(() => brtDayKey());
   const [reportCdMode, setReportCdMode] = useState<"active_cd" | "all_cds">("active_cd");
   const [reportCount, setReportCount] = useState<number | null>(null);
@@ -1140,7 +1145,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     setReportBusyExport(true);
     try {
-      const rows = await fetchVwAuditoriasReportRows(filters, 50000);
+      const rows = await fetchVwAuditoriasReportRows(filters);
       if (rows.length === 0) {
         setReportCount(0);
         setReportMessage("Nenhuma auditoria disponível para exportação.");
@@ -1346,7 +1351,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   useEffect(() => {
     if (!showAuditoriasReportModal) return;
-    setReportDtIni(todayBrt);
+    setReportDtIni(brtMonthStartKey());
     setReportDtFim(todayBrt);
     setReportCdMode("active_cd");
     setReportCount(null);

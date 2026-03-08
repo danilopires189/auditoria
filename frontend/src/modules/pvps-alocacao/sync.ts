@@ -872,23 +872,45 @@ export async function countVwAuditoriasReportRows(filters: PvpsAuditoriasReportF
 }
 
 export async function fetchVwAuditoriasReportRows(
-  filters: PvpsAuditoriasReportFilters,
-  limit = 20000
+  filters: PvpsAuditoriasReportFilters
 ): Promise<PvpsAuditoriasReportRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
+  let pageSize = 5000;
+  let retriedWithSmallerPage = false;
+  const rows: PvpsAuditoriasReportRow[] = [];
+  let offset = 0;
 
-  const { data, error } = await supabase.rpc("rpc_vw_auditorias_report_rows", {
-    p_dt_ini: filters.dtIni,
-    p_dt_fim: filters.dtFim,
-    p_cd: filters.cd,
-    p_limit: Math.max(1, Math.min(limit, 50000))
-  });
+  for (;;) {
+    const { data, error } = await supabase.rpc("rpc_vw_auditorias_report_rows", {
+      p_dt_ini: filters.dtIni,
+      p_dt_fim: filters.dtFim,
+      p_cd: filters.cd,
+      p_offset: offset,
+      p_limit: pageSize
+    });
 
-  if (error) throw new Error(toErrorMessage(error));
-  if (!Array.isArray(data)) return [];
+    if (error) {
+      if (isStatementTimeout(error) && !retriedWithSmallerPage && pageSize > 1000) {
+        retriedWithSmallerPage = true;
+        pageSize = 1000;
+        rows.length = 0;
+        offset = 0;
+        continue;
+      }
+      throw new Error(toErrorMessage(error));
+    }
 
-  return data.map((item) => {
-    const raw = item as Record<string, unknown>;
-    return parseReportPayload(raw.payload);
-  });
+    const page = Array.isArray(data)
+      ? data.map((item) => {
+        const raw = item as Record<string, unknown>;
+        return parseReportPayload(raw.payload);
+      })
+      : [];
+
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return rows;
 }
