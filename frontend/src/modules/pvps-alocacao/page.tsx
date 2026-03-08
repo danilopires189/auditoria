@@ -1185,6 +1185,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
       const XLSX = await import("xlsx");
       const suffix = filters.cd == null ? "todos-cds" : `cd-${filters.cd}`;
+      const periodSuffix = `${filters.dtIni}-a-${filters.dtFim}`;
       const buildExportRows = (sourceRows: PvpsAuditoriasReportRow[]) => sourceRows.map((row) => {
         const output: Record<string, string | number | boolean> = {};
         for (const key of orderedKeys) {
@@ -1208,7 +1209,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         });
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Auditorias");
-        const fileName = `relatorio-vw-auditorias-${modulo}-${filters.dtIni}-${filters.dtFim}-${suffix}.xlsx`;
+        const fileName = `relatorio-${modulo}-${periodSuffix}-${suffix}.xlsx`;
         XLSX.writeFile(workbook, fileName, { compression: true });
         return exportRows.length;
       };
