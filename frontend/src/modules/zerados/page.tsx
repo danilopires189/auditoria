@@ -9,6 +9,7 @@ import {
   normalizeBarcode,
   refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
+import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
 import type { DbBarrasCacheRow } from "../../shared/db-barras/types";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
@@ -1456,74 +1457,36 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const send = useCallback(async (eventType: InventarioEventType, payload: Record<string, unknown>): Promise<SendEventResult> => {
     if (cd == null) return "discarded";
-    if (!isOnline || preferOffline) {
-      const id = (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `inv-${Date.now()}`;
-      const p: InventarioPendingEvent = {
-        event_id: `pending:${id}`,
-        client_event_id: id,
-        user_id: profile.user_id,
-        cd,
-        cycle_date: CYCLE_DATE,
-        event_type: eventType,
-        payload,
-        status: "pending",
-        attempt_count: 0,
-        error_message: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      await queuePendingEvent(p);
-      setRemoteState((prev) => {
-        const next = optimistic(prev, payload, profile);
-        void saveRemoteStateCache({ user_id: profile.user_id, cd, cycle_date: CYCLE_DATE, state: next });
-        return next;
-      });
-      await refreshPending();
+    const id = (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `inv-${Date.now()}`;
+    const p: InventarioPendingEvent = {
+      event_id: `pending:${id}`,
+      client_event_id: id,
+      user_id: profile.user_id,
+      cd,
+      cycle_date: CYCLE_DATE,
+      event_type: eventType,
+      payload,
+      status: "pending",
+      attempt_count: 0,
+      error_message: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    await queuePendingEvent(p);
+    setRemoteState((prev) => {
+      const next = optimistic(prev, payload, profile);
+      void saveRemoteStateCache({ user_id: profile.user_id, cd, cycle_date: CYCLE_DATE, state: next });
+      return next;
+    });
+    await refreshPending();
+    if (shouldTriggerQueuedBackgroundSync(isOnline)) {
+      requestAutoSync(150);
+      setMsg("Evento salvo. Sincronizando em segundo plano.");
+    } else {
       setMsg("Evento salvo offline.");
-      return "queued";
     }
-
-    try {
-      const result = await applyInventarioEvent({
-        event_type: eventType,
-        payload,
-        client_event_id: (typeof crypto !== "undefined" && "randomUUID" in crypto) ? crypto.randomUUID() : `inv-${Date.now()}`
-      });
-      if (isDiscardConflict(result.info)) {
-        setMsg("Endereço já concluído por outro usuário e descartado.");
-        try {
-          await pull();
-        } catch {
-          scheduleBackgroundPull();
-        }
-        void refreshPending();
-        return "discarded";
-      }
-
-      setRemoteState((prev) => {
-        const next = optimistic(prev, payload, profile);
-        void saveRemoteStateCache({ user_id: profile.user_id, cd, cycle_date: CYCLE_DATE, state: next });
-        return next;
-      });
-      void refreshPending();
-      scheduleBackgroundPull();
-      setMsg("Evento aplicado.");
-      return "applied";
-    } catch (error) {
-      const raw = error instanceof Error ? error.message : String(error ?? "");
-      if (isDiscardConflict(raw)) {
-        setMsg("Endereço já concluído por outro usuário e descartado.");
-        try {
-          await pull();
-        } catch {
-          scheduleBackgroundPull();
-        }
-        void refreshPending();
-        return "discarded";
-      }
-      throw error;
-    }
-  }, [cd, isOnline, preferOffline, profile, pull, refreshPending, scheduleBackgroundPull]);
+    return "queued";
+  }, [cd, isOnline, profile, refreshPending, requestAutoSync]);
 
   useEffect(() => {
     let canceled = false;
