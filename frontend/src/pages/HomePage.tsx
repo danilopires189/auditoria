@@ -9,6 +9,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "controle-validade",
   "coleta-mercadoria",
   "pvps-alocacao",
+  "indicadores",
   "atividade-extra",
   "conferencia-termo",
   "conferencia-volume-avulso",
@@ -26,6 +27,7 @@ interface HomePageProps {
   displayContext: DisplayContext;
   appHeading: string;
   hiddenModuleKeys?: DashboardModuleKey[];
+  allowedModuleKeys?: DashboardModuleKey[] | null;
   isOnline: boolean;
   onRequestLogout: () => void;
   modulesViewMode: HomeModulesViewMode;
@@ -48,6 +50,7 @@ export default function HomePage({
   displayContext,
   appHeading,
   hiddenModuleKeys = [],
+  allowedModuleKeys = null,
   isOnline,
   onRequestLogout,
   modulesViewMode,
@@ -56,6 +59,7 @@ export default function HomePage({
   onRequestCdSwitcher
 }: HomePageProps) {
   const hiddenModuleSet = new Set(hiddenModuleKeys);
+  const allowedModuleSet = allowedModuleKeys ? new Set(allowedModuleKeys) : null;
   const nextViewMode = modulesViewMode === "list" ? "grid" : "list";
   const viewToggleLabel = nextViewMode === "grid" ? "Mudar visual para ícones" : "Mudar visual para lista";
 
@@ -124,7 +128,7 @@ export default function HomePage({
           <p>Selecione um módulo para iniciar.</p>
         </div>
         <div className={`modules-grid ${modulesViewMode === "grid" ? "is-icon-view" : "is-list-view"}`}>
-          {DASHBOARD_MODULES.filter((moduleDef) => !hiddenModuleSet.has(moduleDef.key)).map((moduleDef) => (
+          {DASHBOARD_MODULES.filter((moduleDef) => !hiddenModuleSet.has(moduleDef.key) && (!allowedModuleSet || allowedModuleSet.has(moduleDef.key))).map((moduleDef) => (
             <Link
               key={moduleDef.key}
               to={moduleDef.path}
