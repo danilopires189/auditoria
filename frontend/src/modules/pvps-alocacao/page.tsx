@@ -390,23 +390,9 @@ function formatAndar(value: string | null): string {
   return normalized;
 }
 
-function inferAndarFromEndereco(value: string | null | undefined): string | null {
-  const normalized = (value ?? "").trim().toUpperCase();
-  if (!normalized) return null;
-  const parts = normalized.split(".").map((part) => part.trim()).filter(Boolean);
-  if (parts.length < 3) return null;
-  const candidate = parts[2];
-  if (!candidate) return null;
-  const numeric = candidate.replace(/\D/g, "");
-  if (!numeric) return candidate;
-  const parsed = Number.parseInt(numeric, 10);
-  return Number.isFinite(parsed) ? String(parsed) : candidate;
-}
-
-function resolveFeedAndar(nivel: string | null, endereco: string): string | null {
+function resolveFeedAndar(nivel: string | null): string | null {
   const formattedNivel = formatAndar(nivel);
-  if (formattedNivel !== "-") return formattedNivel;
-  return inferAndarFromEndereco(endereco);
+  return formattedNivel === "-" ? null : formattedNivel;
 }
 
 function zoneFromEndereco(value: string | null | undefined): string {
@@ -3365,7 +3351,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const previous = index > 0 ? pvpsFeedItems[index - 1] : null;
                   const showZoneHeader = !previous || previous.zone !== item.zone;
                   const row = item.row;
-                  const feedAndar = item.kind === "pul" ? resolveFeedAndar(item.nivel, item.endereco) : null;
+                  const feedAndar = item.kind === "pul" ? resolveFeedAndar(item.nivel) : null;
                   return (
                     <div key={itemKey} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-pvps-${feedView}-${tab}`, item.zone) : null}
@@ -3446,7 +3432,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const open = Boolean(expandedAloc[row.queue_id]);
                   const previous = index > 0 ? visibleAlocRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
-                  const feedAndar = resolveFeedAndar(row.nivel, row.endereco);
+                  const feedAndar = resolveFeedAndar(row.nivel);
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-alocacao-${feedView}-${tab}`, row.zona) : null}
