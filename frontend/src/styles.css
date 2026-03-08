@@ -7241,6 +7241,24 @@ small {
   min-width: 0;
 }
 
+.pvps-row-address-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pvps-row-floor-indicator {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #6f809c;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
 .pvps-row strong {
   font-size: 1rem;
   color: #0f2237;
@@ -7753,6 +7771,14 @@ small {
   .pvps-row-head {
     align-items: center;
     gap: 8px;
+  }
+
+  .pvps-row-address-line {
+    gap: 8px;
+  }
+
+  .pvps-row-floor-indicator {
+    font-size: 0.72rem;
   }
 
   .pvps-toolbar-btn {
