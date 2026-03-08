@@ -253,8 +253,12 @@ export async function loadOfflineSnapshot(userId: string, cd: number): Promise<P
   return {
     user_id: userId,
     cd: normalizedCd,
-    pvps_rows: Array.isArray(pvps.rows) ? pvps.rows : [],
-    aloc_rows: Array.isArray(aloc.rows) ? aloc.rows : [],
+    pvps_rows: Array.isArray(pvps.rows)
+      ? pvps.rows.map((row) => ({ ...row, is_window_active: row?.is_window_active ?? true }))
+      : [],
+    aloc_rows: Array.isArray(aloc.rows)
+      ? aloc.rows.map((row) => ({ ...row, is_window_active: row?.is_window_active ?? true }))
+      : [],
     pul_by_sep_key: pul.rows ?? {},
     cached_at: pvps.cached_at ?? aloc.cached_at ?? pul.cached_at ?? new Date().toISOString()
   };

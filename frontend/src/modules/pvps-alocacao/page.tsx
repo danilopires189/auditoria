@@ -109,7 +109,6 @@ type PvpsFeedItem =
   };
 
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
-const FEED_ACTIVE_CODDV_LIMIT = 50;
 const FEED_NEXT_PREVIEW_LIMIT = 5;
 const ADMIN_HISTORY_VIEW_LIMIT = 20;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
@@ -1516,21 +1515,24 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const sortedPvpsAllRows = useMemo(
     () => [...pvpsRows].sort((a, b) => {
+      if (a.is_window_active !== b.is_window_active) return a.is_window_active ? -1 : 1;
       const byPriority = a.priority_score - b.priority_score;
       if (byPriority !== 0) return byPriority;
+      const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
+      if (byDate !== 0) return byDate;
       const byZone = a.zona.localeCompare(b.zona);
       if (byZone !== 0) return byZone;
       const byEndereco = compareEndereco(a.end_sep, b.end_sep);
       if (byEndereco !== 0) return byEndereco;
       const byCoddv = a.coddv - b.coddv;
-      if (byCoddv !== 0) return byCoddv;
-      return dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
+      return byCoddv;
     }),
     [pvpsRows]
   );
 
   const sortedAlocAllRows = useMemo(
     () => [...alocRows].sort((a, b) => {
+      if (a.is_window_active !== b.is_window_active) return a.is_window_active ? -1 : 1;
       const byPriority = a.priority_score - b.priority_score;
       if (byPriority !== 0) return byPriority;
       const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
@@ -1610,7 +1612,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [sortedPvpsAllRows, feedPulBySepKey]);
 
   const pvpsQueueProducts = useMemo(() => {
-    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number; minPriority: number }>();
+    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number; minPriority: number; is_window_active: boolean }>();
     for (const row of sortedPvpsAllRows) {
       const ts = dateSortValue(row.dat_ult_compra);
       const current = byCoddv.get(row.coddv);
@@ -1620,7 +1622,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           descricao: row.descricao,
           dat_ult_compra: row.dat_ult_compra,
           maxTs: ts,
-          minPriority: row.priority_score
+          minPriority: row.priority_score,
+          is_window_active: row.is_window_active
         });
         continue;
       }
@@ -1631,14 +1634,18 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         descricao: ts >= current.maxTs ? row.descricao : current.descricao,
         dat_ult_compra: ts >= current.maxTs ? row.dat_ult_compra : current.dat_ult_compra,
         maxTs: nextMaxTs,
-        minPriority: nextMinPriority
+        minPriority: nextMinPriority,
+        is_window_active: current.is_window_active || row.is_window_active
       });
     }
-    return Array.from(byCoddv.values()).sort((a, b) => (a.minPriority - b.minPriority) || (b.maxTs - a.maxTs) || (a.coddv - b.coddv));
+    return Array.from(byCoddv.values()).sort((a, b) => {
+      if (a.is_window_active !== b.is_window_active) return a.is_window_active ? -1 : 1;
+      return (a.minPriority - b.minPriority) || (b.maxTs - a.maxTs) || (a.coddv - b.coddv);
+    });
   }, [sortedPvpsAllRows]);
 
   const alocQueueProducts = useMemo(() => {
-    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number; minPriority: number }>();
+    const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number; minPriority: number; is_window_active: boolean }>();
     for (const row of sortedAlocAllRows) {
       const ts = dateSortValue(row.dat_ult_compra);
       const current = byCoddv.get(row.coddv);
@@ -1648,7 +1655,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           descricao: row.descricao,
           dat_ult_compra: row.dat_ult_compra,
           maxTs: ts,
-          minPriority: row.priority_score
+          minPriority: row.priority_score,
+          is_window_active: row.is_window_active
         });
         continue;
       }
@@ -1659,88 +1667,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         descricao: ts >= current.maxTs ? row.descricao : current.descricao,
         dat_ult_compra: ts >= current.maxTs ? row.dat_ult_compra : current.dat_ult_compra,
         maxTs: nextMaxTs,
-        minPriority: nextMinPriority
+        minPriority: nextMinPriority,
+        is_window_active: current.is_window_active || row.is_window_active
       });
     }
-    return Array.from(byCoddv.values()).sort((a, b) => (a.minPriority - b.minPriority) || (b.maxTs - a.maxTs) || (a.coddv - b.coddv));
+    return Array.from(byCoddv.values()).sort((a, b) => {
+      if (a.is_window_active !== b.is_window_active) return a.is_window_active ? -1 : 1;
+      return (a.minPriority - b.minPriority) || (b.maxTs - a.maxTs) || (a.coddv - b.coddv);
+    });
   }, [sortedAlocAllRows]);
-
-  const pvpsEligibleCoddv = useMemo(() => {
-    if (!selectedZones.length) return new Set(pvpsQueueProducts.map((item) => item.coddv));
-    const eligible = new Set<number>();
-    for (const item of pvpsFeedItemsAll) {
-      if (zoneFilterSet.has(item.zone)) {
-        eligible.add(item.row.coddv);
-      }
-    }
-    return eligible;
-  }, [selectedZones, pvpsQueueProducts, pvpsFeedItemsAll, zoneFilterSet]);
-
-  const alocEligibleCoddv = useMemo(() => {
-    if (!selectedZones.length) return new Set(alocQueueProducts.map((item) => item.coddv));
-    const eligible = new Set<number>();
-    for (const row of sortedAlocAllRows) {
-      if (zoneFilterSet.has(row.zona)) {
-        eligible.add(row.coddv);
-      }
-    }
-    return eligible;
-  }, [selectedZones, alocQueueProducts, sortedAlocAllRows, zoneFilterSet]);
-
-  const pvpsActiveCoddvList = useMemo(() => {
-    const pendingSepCoddv = new Set<number>();
-    const pendingPulCoddv = new Set<number>();
-    for (const row of sortedPvpsAllRows) {
-      if (!pvpsEligibleCoddv.has(row.coddv)) continue;
-      if (row.status === "pendente_sep") {
-        pendingSepCoddv.add(row.coddv);
-      }
-      if (row.status === "pendente_pul" && pvpsEligibleCoddv.has(row.coddv)) {
-        pendingPulCoddv.add(row.coddv);
-      }
-    }
-
-    const list: number[] = [];
-    const seen = new Set<number>();
-
-    // PUL pending: keep all corresponding products visible until conclusion.
-    for (const item of pvpsQueueProducts) {
-      if (!pendingPulCoddv.has(item.coddv)) continue;
-      if (seen.has(item.coddv)) continue;
-      seen.add(item.coddv);
-      list.push(item.coddv);
-    }
-
-    // SEP pending: apply the 50-products cap.
-    let sepCount = 0;
-    for (const item of pvpsQueueProducts) {
-      if (!pendingSepCoddv.has(item.coddv)) continue;
-      if (seen.has(item.coddv)) continue;
-      seen.add(item.coddv);
-      list.push(item.coddv);
-      sepCount += 1;
-      if (sepCount >= FEED_ACTIVE_CODDV_LIMIT) break;
-    }
-
-    return list;
-  }, [pvpsQueueProducts, pvpsEligibleCoddv, sortedPvpsAllRows]);
-
-  const alocActiveCoddvList = useMemo(() => {
-    const list: number[] = [];
-    for (const item of alocQueueProducts) {
-      if (!alocEligibleCoddv.has(item.coddv)) continue;
-      list.push(item.coddv);
-      if (list.length >= FEED_ACTIVE_CODDV_LIMIT) break;
-    }
-    return list;
-  }, [alocQueueProducts, alocEligibleCoddv]);
-
-  const pvpsActiveCoddvSet = useMemo(() => new Set(pvpsActiveCoddvList), [pvpsActiveCoddvList]);
-  const alocActiveCoddvSet = useMemo(() => new Set(alocActiveCoddvList), [alocActiveCoddvList]);
 
   const pvpsFeedItems = useMemo<PvpsFeedItem[]>(() => {
     return pvpsFeedItemsAll
-      .filter((item) => pvpsActiveCoddvSet.has(item.row.coddv))
+      .filter((item) => item.row.is_window_active)
       .filter((item) => !selectedZones.length || zoneFilterSet.has(item.zone))
       .sort((a, b) => {
         const byPriority = a.row.priority_score - b.row.priority_score;
@@ -1752,28 +1691,28 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
         return a.feedKey.localeCompare(b.feedKey);
       });
-  }, [pvpsFeedItemsAll, pvpsActiveCoddvSet, selectedZones, zoneFilterSet, effectivePendingAddressSortDirection]);
+  }, [pvpsFeedItemsAll, selectedZones, zoneFilterSet, effectivePendingAddressSortDirection]);
 
   const visibleAlocRows = useMemo(() => {
-    const coddvOrder = new Map<number, number>();
-    alocActiveCoddvList.forEach((coddv, index) => coddvOrder.set(coddv, index));
     const deduped = new Map<string, AlocacaoManifestRow>();
     for (const row of sortedAlocAllRows) {
       if (!deduped.has(row.queue_id)) deduped.set(row.queue_id, row);
     }
     return Array.from(deduped.values())
-      .filter((row) => alocActiveCoddvSet.has(row.coddv))
+      .filter((row) => row.is_window_active)
       .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
       .sort((a, b) => {
         const byPriority = a.priority_score - b.priority_score;
         if (byPriority !== 0) return byPriority;
+        const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
+        if (byDate !== 0) return byDate;
         const byZone = a.zona.localeCompare(b.zona);
         if (byZone !== 0) return byZone;
         const byEndereco = compareEnderecoWithDirection(a.endereco, b.endereco, effectivePendingAddressSortDirection);
         if (byEndereco !== 0) return byEndereco;
-        return (coddvOrder.get(a.coddv) ?? 999) - (coddvOrder.get(b.coddv) ?? 999);
+        return a.coddv - b.coddv;
       });
-  }, [sortedAlocAllRows, alocActiveCoddvSet, selectedZones, zoneFilterSet, alocActiveCoddvList, effectivePendingAddressSortDirection]);
+  }, [sortedAlocAllRows, selectedZones, zoneFilterSet, effectivePendingAddressSortDirection]);
 
   const pvpsCompletedRowsForView = useMemo(() => {
     const byRowKey = new Set<string>();
@@ -1821,7 +1760,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         return Array.from(
           new Set(
             pvpsFeedItemsAll
-              .filter((item) => pvpsActiveCoddvSet.has(item.row.coddv))
+              .filter((item) => item.row.is_window_active)
               .map((item) => item.zone)
           )
         ).sort((a, b) => a.localeCompare(b));
@@ -1829,7 +1768,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       return Array.from(
         new Set(
           sortedAlocAllRows
-            .filter((row) => alocActiveCoddvSet.has(row.coddv))
+            .filter((row) => row.is_window_active)
             .map((row) => row.zona)
         )
       ).sort((a, b) => a.localeCompare(b));
@@ -1842,9 +1781,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     feedView,
     tab,
     pvpsFeedItemsAll,
-    pvpsActiveCoddvSet,
     sortedAlocAllRows,
-    alocActiveCoddvSet,
     pvpsCompletedRowsForView,
     alocCompletedRows
   ]);
@@ -1876,13 +1813,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [alocCompletedRows, selectedZones, zoneFilterSet]);
 
   const filteredPvpsPendingRows = useMemo(() => {
-    if (!selectedZones.length) return sortedPvpsAllRows;
-    return sortedPvpsAllRows.filter((row) => zoneFilterSet.has(row.zona));
+    const activeRows = sortedPvpsAllRows.filter((row) => row.is_window_active);
+    if (!selectedZones.length) return activeRows;
+    return activeRows.filter((row) => zoneFilterSet.has(row.zona));
   }, [sortedPvpsAllRows, selectedZones, zoneFilterSet]);
 
   const filteredAlocPendingRows = useMemo(() => {
-    if (!selectedZones.length) return sortedAlocAllRows;
-    return sortedAlocAllRows.filter((row) => zoneFilterSet.has(row.zona));
+    const activeRows = sortedAlocAllRows.filter((row) => row.is_window_active);
+    if (!selectedZones.length) return activeRows;
+    return activeRows.filter((row) => zoneFilterSet.has(row.zona));
   }, [sortedAlocAllRows, selectedZones, zoneFilterSet]);
 
   const sortedPvpsCompletedRows = useMemo(
@@ -2022,8 +1961,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const nextQueueItems = useMemo(() => {
     if (tab === "pvps") {
       return pvpsQueueProducts
-        .filter((item) => pvpsEligibleCoddv.has(item.coddv))
-        .slice(FEED_ACTIVE_CODDV_LIMIT, FEED_ACTIVE_CODDV_LIMIT + FEED_NEXT_PREVIEW_LIMIT)
+        .filter((item) => !item.is_window_active)
+        .slice(0, FEED_NEXT_PREVIEW_LIMIT)
         .map((item) => ({
           key: `pvps-next:${item.coddv}`,
           coddv: item.coddv,
@@ -2032,15 +1971,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         }));
     }
     return alocQueueProducts
-      .filter((item) => alocEligibleCoddv.has(item.coddv))
-      .slice(FEED_ACTIVE_CODDV_LIMIT, FEED_ACTIVE_CODDV_LIMIT + FEED_NEXT_PREVIEW_LIMIT)
+      .filter((item) => !item.is_window_active)
+      .slice(0, FEED_NEXT_PREVIEW_LIMIT)
       .map((item) => ({
         key: `aloc-next:${item.coddv}`,
         coddv: item.coddv,
         descricao: item.descricao,
         dat_ult_compra: item.dat_ult_compra
       }));
-  }, [tab, pvpsQueueProducts, pvpsEligibleCoddv, alocQueueProducts, alocEligibleCoddv]);
+  }, [tab, pvpsQueueProducts, alocQueueProducts]);
 
   async function openPvpsPopup(row: PvpsManifestRow, options?: { motion?: "default" | "next" }): Promise<void> {
     setPulFeedback(null);
@@ -2184,7 +2123,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         audit_id: row.audit_id,
         dat_ult_compra: "",
         qtd_est_disp: 0,
-        priority_score: 9999
+        priority_score: 9999,
+        is_window_active: true
       }, ...current];
     });
     setPvpsPopupRow({
@@ -2201,7 +2141,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       audit_id: row.audit_id,
       dat_ult_compra: "",
       qtd_est_disp: 0,
-      priority_score: 9999
+      priority_score: 9999,
+      is_window_active: true
     });
     setActivePvpsKey(key);
     setShowPvpsPopup(true);
@@ -2228,7 +2169,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         val_sist: row.val_sist,
         dat_ult_compra: "",
         qtd_est_disp: 0,
-        priority_score: 9999
+        priority_score: 9999,
+        is_window_active: true
       }, ...current];
     });
     setActiveAlocQueue(row.queue_id);

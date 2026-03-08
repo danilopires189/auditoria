@@ -177,7 +177,8 @@ function mapPvpsManifest(raw: Record<string, unknown>): PvpsManifestRow {
     audit_id: parseNullableString(raw.audit_id),
     dat_ult_compra: parseString(raw.dat_ult_compra),
     qtd_est_disp: Math.max(parseInteger(raw.qtd_est_disp), 0),
-    priority_score: Math.max(parseInteger(raw.priority_score, 9999), 1)
+    priority_score: Math.max(parseInteger(raw.priority_score, 9999), 1),
+    is_window_active: parseBoolean(raw.is_window_active)
   };
 }
 
@@ -205,7 +206,8 @@ function mapAlocacaoManifest(raw: Record<string, unknown>): AlocacaoManifestRow 
     val_sist: parseString(raw.val_sist),
     dat_ult_compra: parseString(raw.dat_ult_compra),
     qtd_est_disp: Math.max(parseInteger(raw.qtd_est_disp), 0),
-    priority_score: Math.max(parseInteger(raw.priority_score, 9999), 1)
+    priority_score: Math.max(parseInteger(raw.priority_score, 9999), 1),
+    is_window_active: parseBoolean(raw.is_window_active)
   };
 }
 
