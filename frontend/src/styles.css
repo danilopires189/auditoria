@@ -9073,6 +9073,10 @@ small {
 .indicadores-panel-side {
   grid-row: span 2;
   min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
 }
 
 .indicadores-panel-head {
@@ -9271,17 +9275,21 @@ small {
 
 .indicadores-day-list {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 10px;
   min-width: 0;
+  min-height: 0;
 }
 
 .indicadores-day-list-body {
   display: grid;
   gap: 10px;
-  max-height: 520px;
+  min-height: 0;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
+  align-content: start;
 }
 
 .indicadores-day-list-body::-webkit-scrollbar {
