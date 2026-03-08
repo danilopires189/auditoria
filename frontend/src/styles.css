@@ -7237,6 +7237,7 @@ small {
 
 .pvps-row-main {
   display: grid;
+  flex: 1 1 auto;
   gap: 3px;
   min-width: 0;
 }
@@ -7251,6 +7252,7 @@ small {
 }
 
 .pvps-row-address-text {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

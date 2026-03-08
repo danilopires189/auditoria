@@ -390,6 +390,25 @@ function formatAndar(value: string | null): string {
   return normalized;
 }
 
+function inferAndarFromEndereco(value: string | null | undefined): string | null {
+  const normalized = (value ?? "").trim().toUpperCase();
+  if (!normalized) return null;
+  const parts = normalized.split(".").map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 3) return null;
+  const candidate = parts[2];
+  if (!candidate) return null;
+  const numeric = candidate.replace(/\D/g, "");
+  if (!numeric) return candidate;
+  const parsed = Number.parseInt(numeric, 10);
+  return Number.isFinite(parsed) ? String(parsed) : candidate;
+}
+
+function resolveFeedAndar(nivel: string | null, endereco: string): string | null {
+  const formattedNivel = formatAndar(nivel);
+  if (formattedNivel !== "-") return formattedNivel;
+  return inferAndarFromEndereco(endereco);
+}
+
 function zoneFromEndereco(value: string | null | undefined): string {
   const normalized = (value ?? "").trim().toUpperCase();
   if (!normalized) return "SEM ZONA";
@@ -3336,6 +3355,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const previous = index > 0 ? pvpsFeedItems[index - 1] : null;
                   const showZoneHeader = !previous || previous.zone !== item.zone;
                   const row = item.row;
+                  const feedAndar = row.status === "pendente_pul" ? resolveFeedAndar(item.nivel, item.endereco) : null;
                   return (
                     <div key={itemKey} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-pvps-${feedView}-${tab}`, item.zone) : null}
@@ -3344,10 +3364,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-row-main">
                             <strong className="pvps-row-address-line">
                               <span className="pvps-row-address-text">{item.endereco}</span>
-                              {item.kind === "pul" && formatAndar(item.nivel) !== "-" ? (
-                                <span className="pvps-row-floor-indicator" title={`Andar ${formatAndar(item.nivel)}`}>
+                              {feedAndar ? (
+                                <span className="pvps-row-floor-indicator" title={`Andar ${feedAndar}`}>
                                   <span aria-hidden="true">🏢</span>
-                                  {formatAndar(item.nivel)}
+                                  {feedAndar}
                                 </span>
                               ) : null}
                             </strong>
