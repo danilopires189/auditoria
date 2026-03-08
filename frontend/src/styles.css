@@ -7247,6 +7247,14 @@ small {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  width: 100%;
+}
+
+.pvps-row-address-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pvps-row-floor-indicator {
@@ -7256,7 +7264,9 @@ small {
   gap: 4px;
   color: #6f809c;
   font-size: 0.76rem;
+  font-weight: 600;
   white-space: nowrap;
+  opacity: 0.82;
 }
 
 .pvps-row strong {
