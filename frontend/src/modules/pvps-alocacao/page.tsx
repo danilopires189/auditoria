@@ -1612,7 +1612,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       ];
       const metaBlockCenterY = metaStartY + ((metaLines.length - 1) * metaLineHeight) / 2;
       if (logoDataUrl) {
-        doc.addImage(logoDataUrl, "PNG", marginX, metaBlockCenterY - (logoHeight / 2), logoWidth, logoHeight);
+        doc.addImage(logoDataUrl, "PNG", marginX, metaBlockCenterY - (logoHeight / 2) - 6, logoWidth, logoHeight);
       }
 
       doc.setFont("helvetica", "bold");
