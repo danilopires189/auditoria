@@ -9119,11 +9119,14 @@ small {
 
 .indicadores-chart-shell {
   display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
   gap: 6px;
   min-height: 346px;
 }
 
 .indicadores-chart-scroll {
+  align-self: start;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 0;
