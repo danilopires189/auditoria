@@ -9472,41 +9472,33 @@ small {
   }
 
   .indicadores-day-row {
-    grid-template-columns: 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+    padding: 10px;
   }
 
   .indicadores-day-row > span {
-    display: block;
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    min-width: 0;
+  }
+
+  .indicadores-day-row > span:nth-child(1) {
+    grid-column: 1 / -1;
+    display: grid;
+    align-items: start;
+    min-height: auto;
   }
 
   .indicadores-day-row > span::before {
-    display: block;
-    color: #6882a3;
-    font-size: 0.7rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    margin-bottom: 3px;
+    display: none;
+    content: none;
   }
 
-  .indicadores-day-row > span:nth-child(1)::before {
-    content: "Descrição";
-  }
-
-  .indicadores-day-row > span:nth-child(2)::before {
-    content: "Zona";
-  }
-
-  .indicadores-day-row > span:nth-child(3)::before {
-    content: "Status";
-  }
-
-  .indicadores-day-row > span:nth-child(4)::before {
-    content: "Filial";
-  }
-
-  .indicadores-day-row > span:nth-child(5)::before {
-    content: "Quantidade";
+  .indicadores-day-description small {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
