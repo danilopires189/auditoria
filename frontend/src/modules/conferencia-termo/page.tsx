@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatCountLabel } from "../../shared/inflection";
+import { shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
   getDbBarrasByBarcode,
@@ -1596,7 +1597,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     setBarcodeValidationState("validating");
 
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         const lookup = await resolveBarcodeProduct(barras);
         if (!lookup) {
           showDialog({
@@ -1728,7 +1729,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     const qtd = parsePositiveInteger(editQtdInput, 0);
 
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         await updateItemQtyLocal(coddv, qtd);
         if (isOnline) void runPendingSync(true);
       } else {
@@ -1788,7 +1789,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       onConfirm: () => {
         void (async () => {
           try {
-            if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+            if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
               await updateItemQtyLocal(coddv, 0);
               if (isOnline) void runPendingSync(true);
             } else {
@@ -1856,7 +1857,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     setBusyFinalize(true);
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         const nowIso = new Date().toISOString();
         const nextStatus = falta > 0 ? "finalizado_falta" : "finalizado_ok";
         const nextVolume: TermoLocalVolume = {

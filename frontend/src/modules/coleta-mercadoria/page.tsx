@@ -11,6 +11,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
   getDbBarrasByBarcode,
@@ -953,7 +954,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       };
       await upsertColetaRow(nextRow);
       await refreshLocalState();
-      if (isOnline && !preferOfflineMode) {
+      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
         void runSync(true);
       }
     },
@@ -1009,7 +1010,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       }
 
       await refreshLocalState();
-      if (isOnline && !preferOfflineMode) {
+      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
         void runSync(true);
       }
     },
@@ -1308,7 +1309,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
 
       // Fallback online quando necessário (inclusive durante carga offline em andamento).
       if (!product) {
-        if (isOnline && !preferOfflineMode) {
+        if (shouldTriggerQueuedBackgroundSync(isOnline)) {
           product = await fetchDbBarrasByBarcodeOnline(barras);
           if (product) {
             writeCachedProduct(product);
@@ -1379,7 +1380,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
       setValidadeInput("");
       setExpandedRowId(row.local_id);
 
-      if (isOnline && !preferOfflineMode) {
+      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
         const nowMs = Date.now();
         if (nowMs - lastQuickSyncAtRef.current >= QUICK_SYNC_THROTTLE_MS) {
           lastQuickSyncAtRef.current = nowMs;

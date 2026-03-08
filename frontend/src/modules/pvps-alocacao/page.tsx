@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatCountLabel } from "../../shared/inflection";
+import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
@@ -2522,22 +2523,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const currentKey = keyOfPvps(currentPvps);
     const currentFeedKey = `sep:${currentKey}`;
     const isEditingCompleted = Boolean(editingPvpsCompleted);
-    if (!isOnline) {
-      if (!preferOfflineMode) {
-        setErrorMessage("Sem internet no momento. Ative 'Trabalhar offline' para usar a base local.");
-        return;
-      }
-      if (!manifestReady) {
-        setErrorMessage("Base offline indisponível. Conecte-se e baixe a base antes de auditar sem rede.");
-        return;
-      }
+    const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
+
+    if (!isEditingCompleted) {
+      setBusy(true);
+      setErrorMessage(null);
+      setStatusMessage(null);
       try {
         await saveOfflineSepEvent({
           user_id: profile.user_id,
           cd: activeCd,
           coddv: currentPvps.coddv,
           end_sep: currentPvps.end_sep,
-          end_sit: endSit || null,
+          end_sit: hasOcorrencia ? endSit : null,
           val_sep: hasOcorrencia ? null : normalizedValSep
         });
         await upsertOfflineSepCache({
@@ -2545,14 +2543,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           cd: activeCd,
           coddv: currentPvps.coddv,
           end_sep: currentPvps.end_sep,
-          end_sit: endSit || null,
+          end_sit: hasOcorrencia ? endSit : null,
           val_sep: hasOcorrencia ? null : normalizedValSep
         });
         await refreshPendingState();
         if (hasOcorrencia) {
           setPvpsRows((current) => current.filter((row) => keyOfPvps(row) !== currentKey));
-          setStatusMessage("Separação com ocorrência salva offline. Item retirado localmente e será sincronizado ao reconectar.");
-          openNextPvpsSepFrom(currentFeedKey);
+          setStatusMessage(`Separação com ocorrência salva na fila. Item retirado localmente e será sincronizado ${syncTail}`);
         } else {
           const localVal = `${normalizedValSep.slice(0, 2)}/${normalizedValSep.slice(2)}`;
           rememberSepConcludedAt(currentPvps.coddv, currentPvps.end_sep);
@@ -2561,12 +2558,22 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               ? { ...row, status: "pendente_pul", val_sep: localVal, end_sit: null }
               : row
           )));
-          setStatusMessage("Separação salva offline. Pulmão ficará pendente para auditoria separada.");
-          openNextPvpsSepFrom(currentFeedKey);
+          setStatusMessage(`Separação salva na fila. Pulmão ficará pendente para auditoria separada e será sincronizado ${syncTail}`);
+        }
+        openNextPvpsSepFrom(currentFeedKey);
+        if (shouldTriggerQueuedBackgroundSync(isOnline)) {
+          void runPendingSync({ manual: false });
         }
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Separação offline.");
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Separação na fila local.");
+      } finally {
+        setBusy(false);
       }
+      return;
+    }
+
+    if (!isOnline) {
+      setErrorMessage("Edição de concluído requer conexão com o servidor.");
       return;
     }
 
@@ -2598,47 +2605,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         end_sit: result.end_sit,
         val_sep: normalizedResultValSep
       });
-      if (isEditingCompleted) {
-        await loadCurrent();
-        setEditingPvpsCompleted(null);
-        closePvpsPopup();
-      } else {
-        if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
-          await loadCurrent();
-          openNextPvpsSepFrom(currentFeedKey);
-        } else {
-          setPvpsRows((current) => current.map((row) => (
-            keyOfPvps(row) === currentKey
-              ? {
-                  ...row,
-                  status: result.status,
-                  end_sit: result.end_sit,
-                  val_sep: normalizedResultValSep,
-                  pul_total: result.pul_total,
-                  pul_auditados: result.pul_auditados
-                }
-              : row
-          )));
-
-          let pulItemsByRow: PvpsPulItemRow[] = [];
-          try {
-            pulItemsByRow = await fetchPvpsPulItems(currentPvps.coddv, currentPvps.end_sep, activeCd);
-            if (hasUsablePulCacheForRow({
-              status: result.status,
-              pul_total: result.pul_total,
-              pul_auditados: result.pul_auditados
-            }, pulItemsByRow)) {
-              setFeedPulBySepKey((current) => ({ ...current, [currentKey]: pulItemsByRow }));
-            }
-          } catch {
-            pulItemsByRow = [];
-          }
-
-          openNextPvpsSepFrom(currentFeedKey);
-
-          void loadCurrent({ silent: true });
-        }
-      }
+      await loadCurrent();
+      setEditingPvpsCompleted(null);
+      closePvpsPopup();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao salvar etapa de Separação.";
       setErrorMessage(message);
@@ -2668,6 +2637,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const currentKey = keyOfPvps(currentPvps);
     const currentFeedKey = `pul:${currentKey}:${endPul}`;
     const valPul = hasPulOcorrencia ? null : normalizeMmaaText(value);
+    const isEditingCompleted = Boolean(editingPvpsCompleted);
+    const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
 
     const applyLocalPulSave = (params?: {
       status?: PvpsManifestRow["status"];
@@ -2702,15 +2673,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setPulEndSits((prev) => ({ ...prev, [endPul]: "" }));
     };
 
-    if (!isOnline) {
-      if (!preferOfflineMode) {
-        setErrorMessage("Sem internet no momento. Ative 'Trabalhar offline' para usar a base local.");
-        return;
-      }
-      if (!manifestReady) {
-        setErrorMessage("Base offline indisponível. Conecte-se e baixe a base antes de auditar sem rede.");
-        return;
-      }
+    if (!isEditingCompleted) {
       let hasSep = await hasOfflineSepCache(profile.user_id, activeCd, currentPvps.coddv, currentPvps.end_sep);
       if (!hasSep && (currentPvps.val_sep || currentPvps.end_sit)) {
         await upsertOfflineSepCache({
@@ -2727,6 +2690,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setErrorMessage("Para informar Pulmão offline, salve primeiro a linha de Separação no mesmo endereço.");
         return;
       }
+      setBusy(true);
+      setErrorMessage(null);
+      setStatusMessage(null);
       try {
         await saveOfflinePulEvent({
           user_id: profile.user_id,
@@ -2740,23 +2706,32 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         });
         await refreshPendingState();
         applyLocalPulSave();
-        const feedbackText = hasPulOcorrencia
-          ? "Pulmão com ocorrência salvo (offline). Avançando para o próximo."
-          : "Pulmão salvo (offline). Avançando para o próximo.";
         setPulFeedback(null);
-        setStatusMessage(feedbackText);
+        setStatusMessage(
+          hasPulOcorrencia
+            ? `Pulmão com ocorrência salvo na fila. Avançando e sincronizando ${syncTail}`
+            : `Pulmão salvo na fila. Avançando e sincronizando ${syncTail}`
+        );
         openNextPvpsFrom(currentFeedKey, zoneFromEndereco(endPul));
-        void loadCurrent({ silent: true });
+        if (shouldTriggerQueuedBackgroundSync(isOnline)) {
+          void runPendingSync({ manual: false });
+        }
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Pulmão offline.");
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar Pulmão na fila local.");
+      } finally {
+        setBusy(false);
       }
+      return;
+    }
+
+    if (!isOnline) {
+      setErrorMessage("Edição de concluído requer conexão com o servidor.");
       return;
     }
 
     setBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
-    const isEditingCompleted = Boolean(editingPvpsCompleted);
     try {
       let auditId = currentPvps.audit_id;
       if (!auditId) {
@@ -2791,13 +2766,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }
       setPulFeedback(null);
       setStatusMessage(feedbackText);
-      if (isEditingCompleted) {
-        setEditingPvpsCompleted(null);
-        closePvpsPopup();
-      } else {
-        openNextPvpsFrom(currentFeedKey, zoneFromEndereco(endPul));
-        void loadCurrent({ silent: true });
-      }
+      setEditingPvpsCompleted(null);
+      closePvpsPopup();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao salvar etapa de Pulmão.";
       setErrorMessage(message);
@@ -2826,24 +2796,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const isEditingCompleted = Boolean(editingAlocCompleted);
     const hasOcorrencia = alocEndSit === "vazio" || alocEndSit === "obstruido";
     const normalizedValConf = alocValConf.trim();
+    const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
     if (!hasOcorrencia && normalizedValConf.length !== 4) {
       setErrorMessage("Validade do Produto obrigatória (MMAA) quando não houver ocorrência.");
       return;
     }
 
-    if (!isOnline) {
-      if (isEditingCompleted) {
-        setErrorMessage("Edição de concluído requer conexão com o servidor.");
-        return;
-      }
-      if (!preferOfflineMode) {
-        setErrorMessage("Sem internet no momento. Ative 'Trabalhar offline' para usar a base local.");
-        return;
-      }
-      if (!manifestReady) {
-        setErrorMessage("Base offline indisponível. Conecte-se e baixe a base antes de auditar sem rede.");
-        return;
-      }
+    if (!isEditingCompleted) {
+      setBusy(true);
+      setErrorMessage(null);
+      setStatusMessage(null);
       try {
         await saveOfflineAlocacaoEvent({
           user_id: profile.user_id,
@@ -2856,19 +2818,29 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         });
         await refreshPendingState();
         setAlocRows((current) => current.filter((row) => row.queue_id !== currentQueueId));
-        const feedbackText = hasOcorrencia
-          ? "Alocação com ocorrência salva offline. Avançando para o próximo."
-          : "Alocação salva offline. Avançando para o próximo.";
-        setStatusMessage(feedbackText);
+        setStatusMessage(
+          hasOcorrencia
+            ? `Alocação com ocorrência salva na fila. Avançando e sincronizando ${syncTail}`
+            : `Alocação salva na fila. Avançando e sincronizando ${syncTail}`
+        );
         setAlocResult(null);
         setShowAlocOccurrence(false);
         setAlocEndSit("");
         setAlocValConf("");
         openNextAlocacaoFrom(currentQueueId, currentZone);
-        void loadCurrent({ silent: true });
+        if (shouldTriggerQueuedBackgroundSync(isOnline)) {
+          void runPendingSync({ manual: false });
+        }
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar alocação offline.");
+        setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar alocação na fila local.");
+      } finally {
+        setBusy(false);
       }
+      return;
+    }
+
+    if (!isOnline) {
+      setErrorMessage("Edição de concluído requer conexão com o servidor.");
       return;
     }
 
