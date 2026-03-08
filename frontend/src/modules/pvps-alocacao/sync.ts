@@ -864,7 +864,8 @@ export async function countVwAuditoriasReportRows(filters: PvpsAuditoriasReportF
   const { data, error } = await supabase.rpc("rpc_vw_auditorias_report_count", {
     p_dt_ini: filters.dtIni,
     p_dt_fim: filters.dtFim,
-    p_cd: filters.cd
+    p_cd: filters.cd,
+    p_modulo: filters.modulo
   });
 
   if (error) throw new Error(toErrorMessage(error));
@@ -886,6 +887,7 @@ export async function fetchVwAuditoriasReportRows(
       p_dt_ini: filters.dtIni,
       p_dt_fim: filters.dtFim,
       p_cd: filters.cd,
+      p_modulo: filters.modulo,
       p_offset: offset,
       p_limit: pageSize
     });
