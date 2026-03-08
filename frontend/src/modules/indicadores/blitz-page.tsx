@@ -57,6 +57,13 @@ function toDisplayName(value: string): string {
     .join(" ");
 }
 
+function resolveCdDisplayName(profile: IndicadoresModuleProfile, activeCd: number | null): string {
+  const rawLabel = typeof profile.cd_nome === "string" ? profile.cd_nome.trim().replace(/\s+/g, " ") : "";
+  if (rawLabel) return rawLabel;
+  if (activeCd != null) return `CD ${String(activeCd).padStart(2, "0")}`;
+  return "CD não definido";
+}
+
 function asErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -264,6 +271,7 @@ function ZoneChart({ rows }: { rows: IndicadoresBlitzZoneTotalRow[] }) {
 export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresBlitzPageProps) {
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
+  const displayCdName = useMemo(() => resolveCdDisplayName(profile, activeCd), [activeCd, profile]);
 
   const [monthOptions, setMonthOptions] = useState<IndicadoresBlitzMonthOption[]>([]);
   const [selectedMonthStart, setSelectedMonthStart] = useState<string>("");
@@ -446,7 +454,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                 <div>
                   <h2>Dashboard Blitz</h2>
                   <span className="module-status">
-                    CD ativo do usuário · mês {selectedMonthLabel} · atualizado em {formatDateTime(summary?.updated_at ?? null)}
+                    {displayCdName} · mês {selectedMonthLabel} · atualizado em {formatDateTime(summary?.updated_at ?? null)}
                   </span>
                 </div>
               </div>
