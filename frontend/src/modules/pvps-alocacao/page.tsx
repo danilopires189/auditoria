@@ -1230,7 +1230,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             "NIVEL",
             "END_SITUACAO",
             "VAL_SISTEMA",
-            "VAL_COLETA",
+            "VAL_CONF",
             "SIT_AUD",
             "AUDITOR_NOM",
             "AUTITOR_MAT",
