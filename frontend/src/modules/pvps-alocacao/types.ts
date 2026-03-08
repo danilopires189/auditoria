@@ -36,6 +36,13 @@ export interface PvpsPulItemRow {
   auditor_nome?: string | null;
 }
 
+export interface PvpsReportPulItemRow {
+  audit_id: string;
+  end_pul: string;
+  val_pul: string | null;
+  end_sit: PvpsEndSit | null;
+}
+
 export interface PvpsSepSubmitResult {
   audit_id: string;
   status: PvpsStatus;

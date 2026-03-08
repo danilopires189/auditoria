@@ -19,6 +19,7 @@ import type {
   PvpsModulo,
   PvpsManifestRow,
   PvpsPulItemRow,
+  PvpsReportPulItemRow,
   PvpsPulSubmitResult,
   PvpsSepSubmitResult,
   PvpsStatus,
@@ -194,6 +195,15 @@ function mapPvpsPul(raw: Record<string, unknown>): PvpsPulItemRow {
   };
 }
 
+function mapPvpsReportPul(raw: Record<string, unknown>): PvpsReportPulItemRow {
+  return {
+    audit_id: parseString(raw.audit_id),
+    end_pul: parseString(raw.end_pul).toUpperCase(),
+    val_pul: parseNullableString(raw.val_pul),
+    end_sit: parseEndSit(raw.end_sit)
+  };
+}
+
 function mapAlocacaoManifest(raw: Record<string, unknown>): AlocacaoManifestRow {
   return {
     queue_id: parseString(raw.queue_id),
@@ -307,6 +317,18 @@ export async function fetchPvpsPulItems(coddv: number, endSep: string, pCd?: num
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapPvpsPul(row as Record<string, unknown>));
+}
+
+export async function fetchPvpsReportPulItems(auditIds: string[]): Promise<PvpsReportPulItemRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const normalizedIds = Array.from(new Set(auditIds.map((id) => id.trim()).filter((id) => id.length > 0)));
+  if (!normalizedIds.length) return [];
+  const { data, error } = await supabase.rpc("rpc_pvps_report_pul_items", {
+    p_audit_ids: normalizedIds
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapPvpsReportPul(row as Record<string, unknown>));
 }
 
 export async function submitPvpsSep(params: {
