@@ -9168,6 +9168,11 @@ small {
   fill: #294d80;
 }
 
+.indicadores-chart-value,
+.indicadores-chart-percent {
+  font-weight: 900;
+}
+
 .indicadores-chart-percent {
   fill: #b21d2f;
 }

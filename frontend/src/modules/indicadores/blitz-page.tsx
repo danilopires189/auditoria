@@ -153,9 +153,9 @@ function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
   const horizontalPadding = 34;
   const slotWidth = 74;
   const chartWidth = Math.max(1480, horizontalPadding * 2 + safeRows * slotWidth);
-  const chartHeight = 352;
+  const chartHeight = 326;
   const plotTop = 24;
-  const plotBottom = 304;
+  const plotBottom = 286;
   const plotHeight = plotBottom - plotTop;
   const availablePlotWidth = Math.max(chartWidth - horizontalPadding * 2, safeRows * slotWidth);
   const stepX = safeRows > 1 ? availablePlotWidth / (safeRows - 1) : availablePlotWidth;
@@ -185,7 +185,7 @@ function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
             return (
               <g key={row.date_ref}>
                 <rect x={x} y={y} width={barWidth} height={barHeight} rx="7" className="indicadores-chart-bar" />
-                <text x={centerX} y="332" textAnchor="middle" className="indicadores-chart-label">
+                <text x={centerX} y="314" textAnchor="middle" className="indicadores-chart-label">
                   {row.date_ref.slice(8, 10)}
                 </text>
                 {row.conferido_total > 0 ? (
