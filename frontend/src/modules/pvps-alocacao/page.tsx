@@ -84,7 +84,7 @@ interface AdminRuleApplyPreview {
   affected_total: number;
 }
 
-interface AnimatedAddressCardProps {
+interface AnimatedFeedRevealProps {
   cardKey: string;
   className: string;
   children: ReactNode;
@@ -114,7 +114,7 @@ const FEED_NEXT_PREVIEW_LIMIT = 5;
 const ADMIN_HISTORY_VIEW_LIMIT = 20;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
-function AnimatedAddressCard({ cardKey, className, children }: AnimatedAddressCardProps) {
+function AnimatedFeedReveal({ cardKey, className, children }: AnimatedFeedRevealProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
 
@@ -1917,25 +1917,31 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setPendingAddressSortDirection((current) => (current === "asc" ? "desc" : "asc"));
   }
 
-  function renderZoneHeader(zone: string) {
+  function renderZoneHeader(scope: string, zone: string) {
     if (!showPendingZoneSortToggle) {
-      return <div className="pvps-zone-divider">Zona {zone}</div>;
+      return (
+        <AnimatedFeedReveal className="pvps-zone-divider-reveal" cardKey={`${scope}:${zone}`}>
+          <div className="pvps-zone-divider">Zona {zone}</div>
+        </AnimatedFeedReveal>
+      );
     }
 
     const nextDirectionLabel = pendingAddressSortDirection === "asc" ? "decrescente" : "crescente";
     return (
-      <div className="pvps-zone-divider-row">
-        <div className="pvps-zone-divider">Zona {zone}</div>
-        <button
-          className="btn btn-muted pvps-zone-sort-btn"
-          type="button"
-          onClick={togglePendingAddressSortDirection}
-          title={`Ordenar endereços em ${nextDirectionLabel}`}
-          aria-label={`Ordenar endereços em ${nextDirectionLabel}`}
-        >
-          {pendingSortIcon(pendingAddressSortDirection)}
-        </button>
-      </div>
+      <AnimatedFeedReveal className="pvps-zone-divider-reveal" cardKey={`${scope}:${zone}`}>
+        <div className="pvps-zone-divider-row">
+          <div className="pvps-zone-divider">Zona {zone}</div>
+          <button
+            className="btn btn-muted pvps-zone-sort-btn"
+            type="button"
+            onClick={togglePendingAddressSortDirection}
+            title={`Ordenar endereços em ${nextDirectionLabel}`}
+            aria-label={`Ordenar endereços em ${nextDirectionLabel}`}
+          >
+            {pendingSortIcon(pendingAddressSortDirection)}
+          </button>
+        </div>
+      </AnimatedFeedReveal>
     );
   }
 
@@ -3167,8 +3173,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const row = item.row;
                   return (
                     <div key={itemKey} className="pvps-zone-group">
-                      {showZoneHeader ? renderZoneHeader(item.zone) : null}
-                      <AnimatedAddressCard className={`pvps-row${active ? " is-active" : ""}`} cardKey={itemKey}>
+                      {showZoneHeader ? renderZoneHeader(`pending-pvps-${feedView}-${tab}`, item.zone) : null}
+                      <AnimatedFeedReveal className={`pvps-row${active ? " is-active" : ""}`} cardKey={itemKey}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{item.endereco}</strong>
@@ -3211,7 +3217,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
                           </div>
                         ) : null}
-                      </AnimatedAddressCard>
+                      </AnimatedFeedReveal>
                     </div>
                   );
                 })}
@@ -3236,8 +3242,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
-                      {showZoneHeader ? renderZoneHeader(row.zona) : null}
-                      <AnimatedAddressCard className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`} cardKey={row.queue_id}>
+                      {showZoneHeader ? renderZoneHeader(`pending-alocacao-${feedView}-${tab}`, row.zona) : null}
+                      <AnimatedFeedReveal className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`} cardKey={row.queue_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
@@ -3259,7 +3265,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
                           </div>
                         ) : null}
-                      </AnimatedAddressCard>
+                      </AnimatedFeedReveal>
                     </div>
                   );
                 })}
@@ -3304,8 +3310,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const pulItemsLoading = Boolean(pvpsCompletedPulLoading[row.audit_id]);
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
-                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
-                      <AnimatedAddressCard className="pvps-row" cardKey={row.audit_id}>
+                      {showZoneHeader ? (
+                        <AnimatedFeedReveal className="pvps-zone-divider-reveal" cardKey={`completed-pvps-zone:${row.zona}`}>
+                          <div className="pvps-zone-divider">Zona {row.zona}</div>
+                        </AnimatedFeedReveal>
+                      ) : null}
+                      <AnimatedFeedReveal className="pvps-row" cardKey={row.audit_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.end_sep}</strong>
@@ -3370,7 +3380,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <small className="pvps-completed-note">{isSyntheticSepPending ? "Separação concluída no dia com Pulmão pendente." : `Concluído em: ${formatDateTime(row.dt_hr)}`}</small>
                           </div>
                         ) : null}
-                      </AnimatedAddressCard>
+                      </AnimatedFeedReveal>
                     </div>
                   );
                 })}
@@ -3403,8 +3413,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const statusInfo = alocHistoryStatus(row);
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
-                      {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
-                      <AnimatedAddressCard className="pvps-row" cardKey={row.audit_id}>
+                      {showZoneHeader ? (
+                        <AnimatedFeedReveal className="pvps-zone-divider-reveal" cardKey={`completed-aloc-zone:${row.zona}`}>
+                          <div className="pvps-zone-divider">Zona {row.zona}</div>
+                        </AnimatedFeedReveal>
+                      ) : null}
+                      <AnimatedFeedReveal className="pvps-row" cardKey={row.audit_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
@@ -3430,7 +3444,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
                           </div>
                         ) : null}
-                      </AnimatedAddressCard>
+                      </AnimatedFeedReveal>
                     </div>
                   );
                 })}

@@ -7152,6 +7152,10 @@ small {
   animation: pvps-card-appear 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.pvps-zone-divider-reveal {
+  width: 100%;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pvps-card-reveal {
     opacity: 1;
