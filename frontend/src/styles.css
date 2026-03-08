@@ -6945,6 +6945,12 @@ small {
   font-size: 1rem;
 }
 
+.pvps-report-summary-detail {
+  color: #607492;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
 /* Occurrence Select — legacy wrap (kept for fallback) */
 .pvps-occurrence-wrap {
   display: flex;
