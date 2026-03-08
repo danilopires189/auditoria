@@ -1,7 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import logoImage from "../../../assets/logo.png";
+import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatCountLabel } from "../../shared/inflection";
 import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
@@ -99,6 +99,8 @@ type PdfAuditStatus = "conforme" | "nao_conforme" | "ocorrencia" | "pendente_pul
 interface PdfReportSummary {
   enderecosAuditados: number;
   ocorrencias: number;
+  ocorrenciasVazio: number;
+  ocorrenciasObstruido: number;
   conformes: number;
   percentualConformidade: number;
 }
@@ -109,7 +111,6 @@ interface PdfBaseDetailRow {
   zona: string;
   coddv: string;
   descricao: string;
-  situacaoEndereco: string;
   auditor: string;
   matricula: string;
 }
@@ -130,10 +131,12 @@ interface PdfAlocacaoDetailRow extends PdfBaseDetailRow {
 
 interface PdfPvpsAuditRow extends PdfPvpsDetailRow {
   sitAud: PdfAuditStatus;
+  ocorrenciaTipo: PvpsEndSit | null;
 }
 
 interface PdfAlocacaoAuditRow extends PdfAlocacaoDetailRow {
   sitAud: Exclude<PdfAuditStatus, "pendente_pul">;
+  ocorrenciaTipo: PvpsEndSit | null;
 }
 
 type PdfReportSection =
@@ -485,15 +488,19 @@ function monthRangeFromInput(value: string): { dtIni: string; dtFim: string; mon
   };
 }
 
-function summarizePdfRows(rows: Array<{ sitAud: PdfAuditStatus }>): PdfReportSummary {
+function summarizePdfRows(rows: Array<{ sitAud: PdfAuditStatus; ocorrenciaTipo?: PvpsEndSit | null }>): PdfReportSummary {
   const auditedRows = rows.filter((row) => row.sitAud !== "pendente_pul");
   const enderecosAuditados = auditedRows.length;
   const ocorrencias = auditedRows.filter((row) => row.sitAud === "ocorrencia").length;
+  const ocorrenciasVazio = auditedRows.filter((row) => row.sitAud === "ocorrencia" && row.ocorrenciaTipo === "vazio").length;
+  const ocorrenciasObstruido = auditedRows.filter((row) => row.sitAud === "ocorrencia" && row.ocorrenciaTipo === "obstruido").length;
   const conformes = auditedRows.filter((row) => row.sitAud === "conforme").length;
   const percentualConformidade = enderecosAuditados > 0 ? Number(((conformes / enderecosAuditados) * 100).toFixed(1)) : 0;
   return {
     enderecosAuditados,
     ocorrencias,
+    ocorrenciasVazio,
+    ocorrenciasObstruido,
     conformes,
     percentualConformidade
   };
@@ -503,10 +510,15 @@ function reportSummaryLabel(value: number): string {
   return new Intl.NumberFormat("pt-BR").format(value);
 }
 
+function occurrencePercent(value: number, total: number): string {
+  if (total <= 0) return "0,0%";
+  return formatPercent(Number(((value / total) * 100).toFixed(1)));
+}
+
 async function loadReportLogoDataUrl(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   if (!reportLogoDataUrlPromise) {
-    reportLogoDataUrlPromise = fetch(logoImage)
+    reportLogoDataUrlPromise = fetch(pmImage)
       .then(async (response) => {
         if (!response.ok) return null;
         const blob = await response.blob();
@@ -1400,8 +1412,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             ...baseRow,
             enderecoPulmao: "-",
             validadePulmao: "-",
-            situacaoEndereco: sepSituacao ? formatOcorrenciaLabel(sepSituacao) : "-",
-            sitAud: sepSituacao ? "ocorrencia" : "pendente_pul"
+            sitAud: sepSituacao ? "ocorrencia" : "pendente_pul",
+            ocorrenciaTipo: sepSituacao
           });
           continue;
         }
@@ -1414,12 +1426,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             ...baseRow,
             enderecoPulmao: pulItem.end_pul || "-",
             validadePulmao: formatMmaaDigits(pulItem.val_pul) ?? "-",
-            situacaoEndereco: pulSituacao
-              ? formatOcorrenciaLabel(pulSituacao)
-              : (sepSituacao ? formatOcorrenciaLabel(sepSituacao) : "-"),
             sitAud: pulSituacao || sepSituacao
               ? "ocorrencia"
-              : (pulItem.is_lower ? "nao_conforme" : "conforme")
+              : (pulItem.is_lower ? "nao_conforme" : "conforme"),
+            ocorrenciaTipo: pulSituacao ?? sepSituacao
           });
         }
       }
@@ -1462,10 +1472,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               "val_informada"
             )
           ) ?? "-",
-          situacaoEndereco: endSituacao ? formatOcorrenciaLabel(endSituacao) : "-",
           auditor: reportValue(row, "auditor_nome", "auditor_nom") || "-",
           matricula: reportValue(row, "auditor_mat", "autoritor_mat", "autitor_mat") || "-",
-          sitAud
+          sitAud,
+          ocorrenciaTipo: endSituacao
         };
       });
 
@@ -1502,6 +1512,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       format: "a4"
     });
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 36;
     const contentWidth = pageWidth - (marginX * 2);
     const summaryGap = 10;
@@ -1538,16 +1549,23 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
       cursorY = 126;
       const cards = [
-        { label: "Endereços auditados", value: reportSummaryLabel(section.summary.enderecosAuditados) },
-        { label: "Ocorrências", value: reportSummaryLabel(section.summary.ocorrencias) },
-        { label: "Conformes", value: reportSummaryLabel(section.summary.conformes) },
-        { label: "% Conformidade", value: formatPercent(section.summary.percentualConformidade) }
+        { label: "Endereços auditados", value: reportSummaryLabel(section.summary.enderecosAuditados), detail: [] as string[] },
+        {
+          label: "Ocorrências",
+          value: reportSummaryLabel(section.summary.ocorrencias),
+          detail: [
+            `Vazio: ${reportSummaryLabel(section.summary.ocorrenciasVazio)} (${occurrencePercent(section.summary.ocorrenciasVazio, section.summary.enderecosAuditados)})`,
+            `Obstruído: ${reportSummaryLabel(section.summary.ocorrenciasObstruido)} (${occurrencePercent(section.summary.ocorrenciasObstruido, section.summary.enderecosAuditados)})`
+          ]
+        },
+        { label: "Conformes", value: reportSummaryLabel(section.summary.conformes), detail: [] as string[] },
+        { label: "% Conformidade", value: formatPercent(section.summary.percentualConformidade), detail: [] as string[] }
       ];
       cards.forEach((card, index) => {
         const boxX = marginX + (index * (summaryWidth + summaryGap));
         doc.setFillColor(245, 248, 253);
         doc.setDrawColor(209, 221, 241);
-        doc.roundedRect(boxX, cursorY, summaryWidth, 56, 10, 10, "FD");
+        doc.roundedRect(boxX, cursorY, summaryWidth, 76, 10, 10, "FD");
         doc.setFont("helvetica", "bold");
         doc.setFontSize(16);
         doc.setTextColor(28, 58, 106);
@@ -1556,9 +1574,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         doc.setFontSize(9);
         doc.setTextColor(86, 103, 132);
         doc.text(card.label, boxX + 12, cursorY + 42);
+        if (card.detail.length > 0) {
+          doc.setFontSize(7.5);
+          doc.text(card.detail[0], boxX + 12, cursorY + 56);
+          doc.text(card.detail[1], boxX + 12, cursorY + 68);
+        }
       });
 
-      cursorY += 88;
+      cursorY += 108;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(13);
       doc.setTextColor(24, 51, 97);
@@ -1584,7 +1607,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "Endereço Pulmão",
           "Validade Separação",
           "Validade Pulmão",
-          "Situação do Endereço",
           "Auditor",
           "Matrícula"
         ]]
@@ -1598,7 +1620,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "Andar",
           "Validade Sistema",
           "Validade Conferida",
-          "Situação do Endereço",
           "Auditor",
           "Matrícula"
         ]];
@@ -1613,7 +1634,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           row.enderecoPulmao,
           row.validadeSeparacao,
           row.validadePulmao,
-          row.situacaoEndereco,
           row.auditor,
           row.matricula
         ])
@@ -1627,7 +1647,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           row.andar,
           row.validadeSistema,
           row.validadeConferida,
-          row.situacaoEndereco,
           row.auditor,
           row.matricula
         ]);
@@ -1658,6 +1677,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     };
 
     preview.sections.forEach((section, index) => drawSection(section, index));
+    const totalPages = doc.getNumberOfPages();
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+      doc.setPage(pageNumber);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(86, 103, 132);
+      doc.text(`Página ${pageNumber} de ${totalPages}`, pageWidth - marginX, pageHeight - 20, { align: "right" });
+    }
     const moduloSuffix = reportModulo === "ambos" ? "ambos" : reportModulo;
     const cdSuffix = reportCdMode === "all_cds" ? "todos-cds" : `cd-${String(activeCd ?? "").padStart(2, "0")}`;
     doc.save(`relatorio-conformidade-${moduloSuffix}-${preview.month}-${cdSuffix}.pdf`);
@@ -4821,6 +4848,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <div className="pvps-report-summary-item">
                           <small>Ocorrências</small>
                           <strong>{reportSummaryLabel(section.summary.ocorrencias)}</strong>
+                          <span className="pvps-report-summary-detail">
+                            {`Vazio: ${reportSummaryLabel(section.summary.ocorrenciasVazio)} (${occurrencePercent(section.summary.ocorrenciasVazio, section.summary.enderecosAuditados)})`}
+                          </span>
+                          <span className="pvps-report-summary-detail">
+                            {`Obstruído: ${reportSummaryLabel(section.summary.ocorrenciasObstruido)} (${occurrencePercent(section.summary.ocorrenciasObstruido, section.summary.enderecosAuditados)})`}
+                          </span>
                         </div>
                         <div className="pvps-report-summary-item">
                           <small>Conformes</small>
