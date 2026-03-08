@@ -3365,7 +3365,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const previous = index > 0 ? pvpsFeedItems[index - 1] : null;
                   const showZoneHeader = !previous || previous.zone !== item.zone;
                   const row = item.row;
-                  const feedAndar = row.status === "pendente_pul" ? resolveFeedAndar(item.nivel, item.endereco) : null;
+                  const feedAndar = item.kind === "pul" ? resolveFeedAndar(item.nivel, item.endereco) : null;
                   return (
                     <div key={itemKey} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-pvps-${feedView}-${tab}`, item.zone) : null}
