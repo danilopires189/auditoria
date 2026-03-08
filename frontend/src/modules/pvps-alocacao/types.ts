@@ -23,6 +23,7 @@ export interface PvpsManifestRow {
   dat_ult_compra: string;
   qtd_est_disp: number;
   priority_score: number;
+  is_window_active: boolean;
 }
 
 export interface PvpsPulItemRow {
@@ -64,6 +65,7 @@ export interface AlocacaoManifestRow {
   dat_ult_compra: string;
   qtd_est_disp: number;
   priority_score: number;
+  is_window_active: boolean;
 }
 
 export interface AlocacaoSubmitResult {
