@@ -9487,28 +9487,17 @@ small {
     animation: pvps-card-appear 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  .indicadores-mobile-reveal-item {
-    opacity: 1;
-    transform: none;
-    will-change: auto;
-  }
-
-  .indicadores-mobile-reveal-item:not(.is-visible) {
-    opacity: 0;
-    transform: translateY(18px) scale(0.985);
+  .indicadores-mobile-reveal-seq {
+    animation: pvps-card-appear 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
     will-change: opacity, transform;
   }
 
-  .indicadores-mobile-reveal-item.is-visible {
-    animation: pvps-card-appear 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  .indicadores-mobile-reveal-item.indicadores-reveal-delay-1.is-visible { animation-delay: 30ms; }
-  .indicadores-mobile-reveal-item.indicadores-reveal-delay-2.is-visible { animation-delay: 60ms; }
-  .indicadores-mobile-reveal-item.indicadores-reveal-delay-3.is-visible { animation-delay: 90ms; }
-  .indicadores-mobile-reveal-item.indicadores-reveal-delay-4.is-visible { animation-delay: 120ms; }
-  .indicadores-mobile-reveal-item.indicadores-reveal-delay-5.is-visible { animation-delay: 150ms; }
-  .indicadores-mobile-reveal-item.indicadores-reveal-delay-6.is-visible { animation-delay: 180ms; }
+  .indicadores-mobile-reveal-seq.indicadores-reveal-delay-1 { animation-delay: 30ms; }
+  .indicadores-mobile-reveal-seq.indicadores-reveal-delay-2 { animation-delay: 60ms; }
+  .indicadores-mobile-reveal-seq.indicadores-reveal-delay-3 { animation-delay: 90ms; }
+  .indicadores-mobile-reveal-seq.indicadores-reveal-delay-4 { animation-delay: 120ms; }
+  .indicadores-mobile-reveal-seq.indicadores-reveal-delay-5 { animation-delay: 150ms; }
+  .indicadores-mobile-reveal-seq.indicadores-reveal-delay-6 { animation-delay: 180ms; }
 
   .indicadores-zone-divider-row {
     display: flex;
@@ -9573,10 +9562,8 @@ small {
     animation: none;
   }
 
-  .indicadores-mobile-reveal-item {
-    opacity: 1;
-    transform: none;
-    will-change: auto;
+  .indicadores-mobile-reveal-seq {
     animation: none;
+    will-change: auto;
   }
 }
