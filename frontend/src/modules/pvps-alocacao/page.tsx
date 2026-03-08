@@ -679,6 +679,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [lastPendingReviewAt, setLastPendingReviewAt] = useState<Record<ModuleTab, string | null>>({
+    pvps: null,
+    alocacao: null
+  });
 
   const [pvpsRows, setPvpsRows] = useState<PvpsManifestRow[]>([]);
   const [alocRows, setAlocRows] = useState<AlocacaoManifestRow[]>([]);
@@ -1024,6 +1028,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           fetchPvpsManifest({ p_cd: activeCd, zona: null }),
           fetchPvpsCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt })
         ]);
+        setLastPendingReviewAt((current) => ({ ...current, pvps: new Date().toISOString() }));
         if (!silent && feedView === "pendentes") {
           const updates = await hydratePulCacheForRows(rows);
           if (Object.keys(updates).length > 0) {
@@ -1050,6 +1055,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           fetchAlocacaoManifest({ p_cd: activeCd, zona: null }),
           fetchAlocacaoCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt })
         ]);
+        setLastPendingReviewAt((current) => ({ ...current, alocacao: new Date().toISOString() }));
         setAlocRows(rows);
         setAlocCompletedRows(completed);
         if (!rows.some((row) => row.queue_id === activeAlocQueue)) {
@@ -1682,16 +1688,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       .filter((item) => item.row.is_window_active)
       .filter((item) => !selectedZones.length || zoneFilterSet.has(item.zone))
       .sort((a, b) => {
+        const byZone = a.zone.localeCompare(b.zone);
+        if (byZone !== 0) return byZone;
+        const byEndereco = compareEnderecoWithDirection(a.endereco, b.endereco, effectivePendingAddressSortDirection);
+        if (byEndereco !== 0) return byEndereco;
         const byPriority = a.row.priority_score - b.row.priority_score;
         if (byPriority !== 0) return byPriority;
         const byDate = dateSortValue(b.row.dat_ult_compra) - dateSortValue(a.row.dat_ult_compra);
         if (byDate !== 0) return byDate;
         const byCoddv = a.row.coddv - b.row.coddv;
         if (byCoddv !== 0) return byCoddv;
-        const byZone = a.zone.localeCompare(b.zone);
-        if (byZone !== 0) return byZone;
-        const byEndereco = compareEnderecoWithDirection(a.endereco, b.endereco, effectivePendingAddressSortDirection);
-        if (byEndereco !== 0) return byEndereco;
         if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
         return a.feedKey.localeCompare(b.feedKey);
       });
@@ -1706,14 +1712,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       .filter((row) => row.is_window_active)
       .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
       .sort((a, b) => {
-        const byPriority = a.priority_score - b.priority_score;
-        if (byPriority !== 0) return byPriority;
-        const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
-        if (byDate !== 0) return byDate;
         const byZone = a.zona.localeCompare(b.zona);
         if (byZone !== 0) return byZone;
         const byEndereco = compareEnderecoWithDirection(a.endereco, b.endereco, effectivePendingAddressSortDirection);
         if (byEndereco !== 0) return byEndereco;
+        const byPriority = a.priority_score - b.priority_score;
+        if (byPriority !== 0) return byPriority;
+        const byDate = dateSortValue(b.dat_ult_compra) - dateSortValue(a.dat_ult_compra);
+        if (byDate !== 0) return byDate;
         return a.coddv - b.coddv;
       });
   }, [sortedAlocAllRows, selectedZones, zoneFilterSet, effectivePendingAddressSortDirection]);
@@ -1984,6 +1990,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         dat_ult_compra: item.dat_ult_compra
       }));
   }, [tab, pvpsQueueProducts, alocQueueProducts]);
+
+  const pendingReviewLabel = useMemo(() => {
+    const value = lastPendingReviewAt[tab];
+    return value ? formatDateTime(value) : null;
+  }, [lastPendingReviewAt, tab]);
 
   async function openPvpsPopup(row: PvpsManifestRow, options?: { motion?: "default" | "next" }): Promise<void> {
     setPulFeedback(null);
@@ -3173,6 +3184,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     </div>
                   ))}
                 </div>
+                <div className="pvps-review-box">
+                  <small>{pendingReviewLabel ? `Revisão da fila: ${pendingReviewLabel}` : "Revisão da fila ainda não disponível."}</small>
+                </div>
               </div>
             ) : null}
 
@@ -3220,6 +3234,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       <small>Última compra: {formatDate(item.dat_ult_compra)}</small>
                     </div>
                   ))}
+                </div>
+                <div className="pvps-review-box">
+                  <small>{pendingReviewLabel ? `Revisão da fila: ${pendingReviewLabel}` : "Revisão da fila ainda não disponível."}</small>
                 </div>
               </div>
             ) : null}

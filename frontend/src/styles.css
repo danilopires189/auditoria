@@ -6557,6 +6557,18 @@ small {
   color: var(--muted);
 }
 
+.pvps-review-box {
+  border: 1px dashed #ccd9eb;
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: rgba(248, 251, 255, 0.92);
+  color: #587094;
+}
+
+.pvps-review-box small {
+  display: block;
+}
+
 /* Popup / Modal */
 .pvps-popup-overlay {
   align-content: end;
