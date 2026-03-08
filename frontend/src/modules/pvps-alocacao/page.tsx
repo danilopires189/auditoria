@@ -101,6 +101,8 @@ interface PdfReportSummary {
   ocorrencias: number;
   ocorrenciasVazio: number;
   ocorrenciasObstruido: number;
+  baseConformidade: number;
+  naoConformes: number;
   conformes: number;
   percentualConformidade: number;
 }
@@ -494,13 +496,17 @@ function summarizePdfRows(rows: Array<{ sitAud: PdfAuditStatus; ocorrenciaTipo?:
   const ocorrencias = auditedRows.filter((row) => row.sitAud === "ocorrencia").length;
   const ocorrenciasVazio = auditedRows.filter((row) => row.sitAud === "ocorrencia" && row.ocorrenciaTipo === "vazio").length;
   const ocorrenciasObstruido = auditedRows.filter((row) => row.sitAud === "ocorrencia" && row.ocorrenciaTipo === "obstruido").length;
+  const naoConformes = auditedRows.filter((row) => row.sitAud === "nao_conforme").length;
+  const baseConformidade = Math.max(enderecosAuditados - ocorrencias, 0);
   const conformes = auditedRows.filter((row) => row.sitAud === "conforme").length;
-  const percentualConformidade = enderecosAuditados > 0 ? Number(((conformes / enderecosAuditados) * 100).toFixed(1)) : 0;
+  const percentualConformidade = baseConformidade > 0 ? Number(((conformes / baseConformidade) * 100).toFixed(1)) : 0;
   return {
     enderecosAuditados,
     ocorrencias,
     ocorrenciasVazio,
     ocorrenciasObstruido,
+    baseConformidade,
+    naoConformes,
     conformes,
     percentualConformidade
   };
@@ -1523,7 +1529,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const marginX = 36;
     const contentWidth = pageWidth - (marginX * 2);
     const summaryGap = 10;
-    const summaryWidth = (contentWidth - (summaryGap * 3)) / 4;
+    const summaryWidth = (contentWidth - (summaryGap * 4)) / 5;
 
     const drawSection = (section: PdfReportSection, pageIndex: number) => {
       if (pageIndex > 0) {
@@ -1532,13 +1538,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
       let cursorY = 40;
       if (logoDataUrl) {
-        doc.addImage(logoDataUrl, "PNG", marginX, cursorY - 6, 52, 52);
+        doc.addImage(logoDataUrl, "PNG", marginX, cursorY - 2, 58, 58);
       }
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(18);
+      doc.setFontSize(20);
       doc.setTextColor(24, 51, 97);
-      doc.text("Relatório de Conformidade", marginX + 66, cursorY + 10);
+      doc.text("Relatório de Conformidade", marginX + 74, cursorY + 12);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
@@ -1551,12 +1557,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         `Data/Hora: ${formatDateTime(preview.generatedAt)}`
       ];
       metaLines.forEach((line, index) => {
-        doc.text(line, marginX + 66, cursorY + 28 + (index * 14));
+        doc.text(line, marginX + 74, cursorY + 34 + (index * 15));
       });
 
-      cursorY = 126;
+      cursorY = 138;
       const cards = [
-        { label: "Endereços auditados", value: reportSummaryLabel(section.summary.enderecosAuditados), detail: [] as string[] },
+        { label: "Total auditado", value: reportSummaryLabel(section.summary.enderecosAuditados), detail: [] as string[] },
         {
           label: "Ocorrências",
           value: reportSummaryLabel(section.summary.ocorrencias),
@@ -1565,14 +1571,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             `Obstruído: ${reportSummaryLabel(section.summary.ocorrenciasObstruido)} (${occurrencePercent(section.summary.ocorrenciasObstruido, section.summary.enderecosAuditados)})`
           ]
         },
-        { label: "Conformes", value: reportSummaryLabel(section.summary.conformes), detail: [] as string[] },
+        {
+          label: "Base conformidade",
+          value: reportSummaryLabel(section.summary.baseConformidade),
+          detail: ["Total auditado - ocorrências", ""]
+        },
+        { label: "Não conformes", value: reportSummaryLabel(section.summary.naoConformes), detail: [] as string[] },
         { label: "% Conformidade", value: formatPercent(section.summary.percentualConformidade), detail: [] as string[] }
       ];
       cards.forEach((card, index) => {
         const boxX = marginX + (index * (summaryWidth + summaryGap));
         doc.setFillColor(245, 248, 253);
         doc.setDrawColor(209, 221, 241);
-        doc.roundedRect(boxX, cursorY, summaryWidth, 76, 10, 10, "FD");
+        doc.roundedRect(boxX, cursorY, summaryWidth, 84, 10, 10, "FD");
         doc.setFont("helvetica", "bold");
         doc.setFontSize(16);
         doc.setTextColor(28, 58, 106);
@@ -1583,12 +1594,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         doc.text(card.label, boxX + 12, cursorY + 42);
         if (card.detail.length > 0) {
           doc.setFontSize(7.5);
-          doc.text(card.detail[0], boxX + 12, cursorY + 56);
-          doc.text(card.detail[1], boxX + 12, cursorY + 68);
+          doc.text(card.detail[0], boxX + 12, cursorY + 58);
+          if (card.detail[1]) {
+            doc.text(card.detail[1], boxX + 12, cursorY + 70);
+          }
         }
       });
 
-      cursorY += 108;
+      cursorY += 116;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(13);
       doc.setTextColor(24, 51, 97);
@@ -4873,7 +4886,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       </div>
                       <div className="pvps-report-summary-grid">
                         <div className="pvps-report-summary-item">
-                          <small>Auditados</small>
+                          <small>Total auditado</small>
                           <strong>{reportSummaryLabel(section.summary.enderecosAuditados)}</strong>
                         </div>
                         <div className="pvps-report-summary-item">
@@ -4887,8 +4900,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           </span>
                         </div>
                         <div className="pvps-report-summary-item">
-                          <small>Conformes</small>
-                          <strong>{reportSummaryLabel(section.summary.conformes)}</strong>
+                          <small>Base conformidade</small>
+                          <strong>{reportSummaryLabel(section.summary.baseConformidade)}</strong>
+                          <span className="pvps-report-summary-detail">Total auditado - ocorrências</span>
+                        </div>
+                        <div className="pvps-report-summary-item">
+                          <small>Não conformes</small>
+                          <strong>{reportSummaryLabel(section.summary.naoConformes)}</strong>
                         </div>
                         <div className="pvps-report-summary-item">
                           <small>% Conformidade</small>
