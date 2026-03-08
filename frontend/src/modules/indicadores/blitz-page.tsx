@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -28,6 +28,12 @@ interface MetricCardDefinition {
   label: string;
   value: string;
   accent?: "danger" | "warning" | "neutral";
+}
+
+interface AnimatedDayRowProps {
+  rowKey: string;
+  className: string;
+  children: ReactNode;
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
@@ -153,6 +159,43 @@ function statusClassName(status: IndicadoresBlitzDayDetailRow["status"]): string
   if (status === "Falta") return "is-falta";
   if (status === "Sobra") return "is-sobra";
   return "is-fora";
+}
+
+function AnimatedDayRow({ rowKey, className, children }: AnimatedDayRowProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    if (visible) return;
+    if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      {
+        threshold: 0.12,
+        rootMargin: "0px 0px -8% 0px"
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [rowKey, visible]);
+
+  return (
+    <div ref={ref} className={`${className} indicadores-mobile-reveal-item${visible ? " is-visible" : ""}`}>
+      {children}
+    </div>
+  );
 }
 
 function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
@@ -545,8 +588,14 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                   ) : dayDetails.length === 0 ? (
                     <div className="indicadores-empty-box"><p>Nenhuma divergência encontrada para a data selecionada.</p></div>
                   ) : (
-                    dayDetails.map((row, index) => (
-                      <div key={`${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`} className="indicadores-day-row">
+                    dayDetails.map((row, index) => {
+                      const rowKey = `${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`;
+                      return (
+                      <AnimatedDayRow
+                        key={rowKey}
+                        rowKey={rowKey}
+                        className={`indicadores-day-row indicadores-reveal-delay-${Math.min(index + 1, 6)}`}
+                      >
                         <span className="indicadores-day-description">
                           <strong>{row.descricao}</strong>
                           <small>Pedido {formatPlainInteger(row.pedido)} · COD {formatPlainInteger(row.coddv)}</small>
@@ -557,8 +606,9 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                         </span>
                         <span>{formatInteger(row.filial)}</span>
                         <span>{formatInteger(row.quantidade)}</span>
-                      </div>
-                    ))
+                      </AnimatedDayRow>
+                    );
+                    })
                   )}
                 </div>
               </div>
