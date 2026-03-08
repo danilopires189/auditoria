@@ -354,6 +354,15 @@ function reportValue(row: PvpsAuditoriasReportRow, ...keys: string[]): string {
   return "";
 }
 
+function validadeRank(value: string): number | null {
+  const normalized = normalizeMmaa(value);
+  if (!normalized) return null;
+  const month = Number.parseInt(normalized.slice(0, 2), 10);
+  const year = Number.parseInt(normalized.slice(2, 4), 10);
+  if (!Number.isFinite(month) || !Number.isFinite(year)) return null;
+  return year * 100 + month;
+}
+
 function normalizeMmaa(value: string | null | undefined): string | null {
   const digits = (value ?? "").replace(/\D/g, "").slice(0, 4);
   return digits.length === 4 ? digits : null;
@@ -1347,8 +1356,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           const endSep = reportValue(row, "end_sep", "endereco_sep", "endereco");
           const sepSituacao = reportValue(row, "end_sit", "end_situacao");
           const valSep = reportValue(row, "val_sep", "val_conf_sep", "val_auditada");
+          const valSepRank = validadeRank(valSep);
           const pulList = [...(pulByAuditId.get(auditId) ?? [])].sort((a, b) => a.end_pul.localeCompare(b.end_pul));
           if (pulList.length === 0) {
+            const sitAud =
+              sepSituacao === "vazio" || sepSituacao === "obstruido"
+                ? "ocorrencia"
+                : "conforme";
             rowsAoA.push([
               reportValue(row, "cd"),
               reportValue(row, "modulo").toUpperCase(),
@@ -1360,7 +1374,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               sepSituacao,
               valSep,
               "",
-              reportValue(row, "status", "aud_sit", "sit_aud"),
+              sitAud,
               reportValue(row, "auditor_nome", "auditor_nom"),
               reportValue(row, "auditor_mat"),
               data,
@@ -1369,6 +1383,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             continue;
           }
           for (const pulItem of pulList) {
+            const pulSituacao = pulItem.end_sit ?? null;
+            const pulRank = validadeRank(pulItem.val_pul ?? "");
+            const sitAud =
+              pulSituacao === "vazio" || pulSituacao === "obstruido" || sepSituacao === "vazio" || sepSituacao === "obstruido"
+                ? "ocorrencia"
+                : (valSepRank != null && pulRank != null && pulRank < valSepRank ? "nao_conforme" : "conforme");
             rowsAoA.push([
               reportValue(row, "cd"),
               reportValue(row, "modulo").toUpperCase(),
@@ -1380,7 +1400,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               pulItem.end_sit ?? sepSituacao,
               valSep,
               pulItem.val_pul ?? "",
-              reportValue(row, "status", "aud_sit", "sit_aud"),
+              sitAud,
               reportValue(row, "auditor_nome", "auditor_nom"),
               reportValue(row, "auditor_mat"),
               data,
