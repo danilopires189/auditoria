@@ -514,7 +514,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
           </div>
 
           <div className="indicadores-layout-grid">
-            <section className="indicadores-panel indicadores-panel-wide">
+            <section className="indicadores-panel indicadores-panel-wide indicadores-panel-conferencia">
               <div className="indicadores-panel-head">
                 <h3>Conferência do mês</h3>
                 <span>{loadingDashboard ? "Atualizando..." : "Barras de conferido e linha percentual"}</span>
@@ -526,7 +526,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
               )}
             </section>
 
-            <section className="indicadores-panel indicadores-panel-side">
+            <section className="indicadores-panel indicadores-panel-side indicadores-panel-divergencias indicadores-mobile-reveal">
               <div className="indicadores-panel-head">
                 <h3>Divergências do dia</h3>
                 <span>{selectedDay ? formatDate(selectedDay) : "-"}</span>
@@ -564,7 +564,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
               </div>
             </section>
 
-            <section className="indicadores-panel indicadores-panel-wide">
+            <section className="indicadores-panel indicadores-panel-wide indicadores-panel-zonas">
               <div className="indicadores-panel-head">
                 <h3>Total de erros por zona</h3>
                 <span>Exibe zonas com pelo menos 1 erro no mês.</span>
