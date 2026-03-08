@@ -8858,12 +8858,12 @@ small {
 }
 
 .indicadores-screen-logo {
-  width: 48px;
-  height: 48px;
+  width: 96px;
+  height: 96px;
   object-fit: contain;
-  border-radius: 14px;
+  border-radius: 22px;
   background: linear-gradient(145deg, #fff, #e9f1ff);
-  padding: 6px;
+  padding: 12px;
   border: 1px solid #d3def1;
 }
 
@@ -9119,19 +9119,19 @@ small {
 
 .indicadores-chart-shell {
   display: grid;
-  gap: 10px;
-  min-height: 372px;
+  gap: 6px;
+  min-height: 346px;
 }
 
 .indicadores-chart-scroll {
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 4px;
+  padding-bottom: 0;
 }
 
 .indicadores-chart-svg {
   width: 100%;
-  min-width: 1220px;
+  min-width: 1480px;
   height: auto;
   display: block;
 }
@@ -9143,12 +9143,13 @@ small {
 
 .indicadores-chart-bar {
   fill: #205bc4;
+  filter: drop-shadow(0 8px 14px rgba(32, 91, 196, 0.18));
 }
 
 .indicadores-chart-line {
   fill: none;
   stroke: #d62739;
-  stroke-width: 3.5;
+  stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -9156,13 +9157,13 @@ small {
 .indicadores-chart-point {
   fill: #d62739;
   stroke: #fff;
-  stroke-width: 3;
+  stroke-width: 3.5;
 }
 
 .indicadores-chart-label,
 .indicadores-chart-value,
 .indicadores-chart-percent {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   fill: #294d80;
 }
