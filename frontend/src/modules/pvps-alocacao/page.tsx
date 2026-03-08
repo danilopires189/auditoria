@@ -3342,9 +3342,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={itemKey}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
-                            <strong>{item.endereco}</strong>
+                            <div className="pvps-row-address-line">
+                              <strong>{item.endereco}</strong>
+                              {item.kind === "pul" && item.nivel ? (
+                                <small className="pvps-row-floor-indicator" title={`Andar ${formatAndar(item.nivel)}`}>
+                                  <span aria-hidden="true">↕</span>
+                                  {formatAndar(item.nivel)}
+                                </small>
+                              ) : null}
+                            </div>
                             <span>{row.coddv} - {row.descricao}</span>
-                            {item.kind === "pul" ? <small>Pulmão pendente | Andar {formatAndar(item.nivel)}</small> : null}
+                            {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
                           </div>
                           <div className="pvps-row-actions">
                             <button
@@ -3676,7 +3684,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   <div className="pvps-editor-summary-chips">
                     <span className="pvps-editor-chip">Zona {activePvpsZonaAuditada}</span>
                     <span className="pvps-editor-chip">{activePvpsMode === "pul" ? "Pulmao" : "Separacao"}</span>
-                    {activePvpsMode === "pul" && activePulItem ? <span className="pvps-editor-chip">Andar {formatAndar(activePulItem.nivel)}</span> : null}
                   </div>
                 </div>
 
