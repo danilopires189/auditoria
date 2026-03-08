@@ -102,6 +102,11 @@ function formatInteger(value: number): string {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function formatPlainInteger(value: number): string {
+  const numeric = Number.isFinite(value) ? Math.trunc(value) : 0;
+  return String(numeric);
+}
+
 function formatDecimal(value: number, digits = 2): string {
   return new Intl.NumberFormat("pt-BR", {
     minimumFractionDigits: digits,
@@ -519,7 +524,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                       <div key={`${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`} className="indicadores-day-row">
                         <span className="indicadores-day-description">
                           <strong>{row.descricao}</strong>
-                          <small>Pedido {formatInteger(row.pedido)} · COD {formatInteger(row.coddv)}</small>
+                          <small>Pedido {formatPlainInteger(row.pedido)} · COD {formatPlainInteger(row.coddv)}</small>
                         </span>
                         <span>{row.zona}</span>
                         <span>
