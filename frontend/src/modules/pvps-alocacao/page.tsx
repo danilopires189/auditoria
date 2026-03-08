@@ -530,6 +530,71 @@ function occurrencePercent(value: number, total: number): string {
   return formatPercent(Number(((value / total) * 100).toFixed(1)));
 }
 
+function buildPdfColumnStyles(
+  doc: jsPDF,
+  headRow: string[],
+  bodyRows: string[][],
+  contentWidth: number,
+  wrapColumns: number[],
+  minWidths?: Partial<Record<number, number>>,
+  maxWidths?: Partial<Record<number, number>>
+): Record<number, { cellWidth: number; overflow?: "linebreak" | "ellipsize" }> {
+  const fontSize = 6.6;
+  const horizontalPadding = 12;
+  const defaultMinWidth = 40;
+  const wrapSet = new Set(wrapColumns);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(fontSize);
+
+  const measured = headRow.map((header, columnIndex) => {
+    let longest = doc.getTextWidth(String(header ?? ""));
+    for (const row of bodyRows) {
+      const width = doc.getTextWidth(String(row[columnIndex] ?? ""));
+      if (width > longest) longest = width;
+    }
+    const minWidth = Math.max(minWidths?.[columnIndex] ?? defaultMinWidth, longest + horizontalPadding);
+    const maxWidth = maxWidths?.[columnIndex] ?? (wrapSet.has(columnIndex) ? 170 : 90);
+    return Math.min(Math.max(minWidth, defaultMinWidth), maxWidth);
+  });
+
+  const baseMinWidths = headRow.map((_, columnIndex) => minWidths?.[columnIndex] ?? defaultMinWidth);
+  let widths = [...measured];
+  let total = widths.reduce((sum, value) => sum + value, 0);
+
+  if (total > contentWidth) {
+    let shrinkable = widths.reduce((sum, value, index) => sum + Math.max(value - baseMinWidths[index], 0), 0);
+    if (shrinkable > 0) {
+      let overflow = total - contentWidth;
+      widths = widths.map((value, index) => {
+        const available = Math.max(value - baseMinWidths[index], 0);
+        if (available <= 0 || overflow <= 0 || shrinkable <= 0) return value;
+        const reduction = Math.min(available, (available / shrinkable) * overflow);
+        return value - reduction;
+      });
+      total = widths.reduce((sum, value) => sum + value, 0);
+    }
+  }
+
+  if (total < contentWidth) {
+    const growableColumns = headRow.map((_, index) => index).filter((index) => wrapSet.has(index));
+    const perColumnExtra = growableColumns.length > 0 ? (contentWidth - total) / growableColumns.length : 0;
+    widths = widths.map((value, index) => (
+      growableColumns.includes(index) ? value + perColumnExtra : value
+    ));
+  }
+
+  return Object.fromEntries(
+    widths.map((width, index) => [
+      index,
+      {
+        cellWidth: Number(width.toFixed(2)),
+        overflow: wrapSet.has(index) ? "linebreak" : "ellipsize"
+      }
+    ])
+  );
+}
+
 async function loadReportLogoDataUrl(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   if (!reportLogoDataUrlPromise) {
@@ -1534,26 +1599,32 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }
 
       let cursorY = 40;
-      if (logoDataUrl) {
-        doc.addImage(logoDataUrl, "PNG", marginX, cursorY - 2, 58, 58);
-      }
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(19);
-      doc.setTextColor(24, 51, 97);
-      doc.text(`Relatório de Conformidade ${section.title}`, marginX + 74, cursorY + 12);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(70, 92, 126);
+      const logoWidth = 75;
+      const logoHeight = 75;
+      const titleX = marginX + 92;
+      const metaStartY = cursorY + 38;
+      const metaLineHeight = 16;
       const metaLines = [
         `Período: ${preview.monthLabel}`,
         `Depósito: ${preview.cdLabel}`,
         `Gerado por: ${preview.generatedBy}`,
         `Data/Hora: ${formatDateTime(preview.generatedAt)}`
       ];
+      const metaBlockCenterY = metaStartY + ((metaLines.length - 1) * metaLineHeight) / 2;
+      if (logoDataUrl) {
+        doc.addImage(logoDataUrl, "PNG", marginX, metaBlockCenterY - (logoHeight / 2), logoWidth, logoHeight);
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(19);
+      doc.setTextColor(24, 51, 97);
+      doc.text(`Relatório de Conformidade ${section.title}`, titleX, cursorY + 12);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(70, 92, 126);
       metaLines.forEach((line, index) => {
-        doc.text(line, marginX + 74, cursorY + 38 + (index * 16));
+        doc.text(line, titleX, metaStartY + (index * metaLineHeight));
       });
 
       cursorY = 152;
@@ -1658,6 +1729,65 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           row.auditor,
           row.matricula
         ]);
+      const columnStyles = section.modulo === "pvps"
+        ? buildPdfColumnStyles(
+          doc,
+          head[0],
+          body,
+          contentWidth,
+          [2, 7],
+          {
+            0: 72,
+            1: 50,
+            2: 92,
+            3: 82,
+            4: 82,
+            5: 52,
+            6: 52,
+            7: 92,
+            8: 52
+          },
+          {
+            0: 86,
+            1: 58,
+            2: 230,
+            3: 120,
+            4: 120,
+            5: 72,
+            6: 72,
+            7: 180,
+            8: 68
+          }
+        )
+        : buildPdfColumnStyles(
+          doc,
+          head[0],
+          body,
+          contentWidth,
+          [2, 7],
+          {
+            0: 72,
+            1: 50,
+            2: 108,
+            3: 92,
+            4: 34,
+            5: 58,
+            6: 58,
+            7: 92,
+            8: 52
+          },
+          {
+            0: 86,
+            1: 58,
+            2: 260,
+            3: 150,
+            4: 42,
+            5: 76,
+            6: 76,
+            7: 180,
+            8: 68
+          }
+        );
 
       autoTable(doc, {
         startY: cursorY + 8,
@@ -1684,29 +1814,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         alternateRowStyles: {
           fillColor: [248, 250, 253]
         },
-        columnStyles: section.modulo === "pvps"
-          ? {
-            0: { cellWidth: 76 },
-            1: { cellWidth: 54 },
-            2: { cellWidth: 164, overflow: "linebreak" },
-            3: { cellWidth: 98 },
-            4: { cellWidth: 98 },
-            5: { cellWidth: 60 },
-            6: { cellWidth: 60 },
-            7: { cellWidth: 132, overflow: "linebreak" },
-            8: { cellWidth: 58 }
-          }
-          : {
-            0: { cellWidth: 76 },
-            1: { cellWidth: 54 },
-            2: { cellWidth: 196, overflow: "linebreak" },
-            3: { cellWidth: 118 },
-            4: { cellWidth: 36 },
-            5: { cellWidth: 64 },
-            6: { cellWidth: 64 },
-            7: { cellWidth: 138, overflow: "linebreak" },
-            8: { cellWidth: 58 }
-          }
+        columnStyles
       });
     };
 
