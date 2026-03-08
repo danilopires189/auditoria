@@ -62,6 +62,10 @@ export default function HomePage({
   const allowedModuleSet = allowedModuleKeys ? new Set(allowedModuleKeys) : null;
   const nextViewMode = modulesViewMode === "list" ? "grid" : "list";
   const viewToggleLabel = nextViewMode === "grid" ? "Mudar visual para ícones" : "Mudar visual para lista";
+  const moduleCollator = new Intl.Collator("pt-BR", { sensitivity: "base" });
+  const sortedVisibleModules = [...DASHBOARD_MODULES]
+    .filter((moduleDef) => !hiddenModuleSet.has(moduleDef.key) && (!allowedModuleSet || allowedModuleSet.has(moduleDef.key)))
+    .sort((left, right) => moduleCollator.compare(left.title, right.title));
 
   return (
     <>
@@ -128,7 +132,7 @@ export default function HomePage({
           <p>Selecione um módulo para iniciar.</p>
         </div>
         <div className={`modules-grid ${modulesViewMode === "grid" ? "is-icon-view" : "is-list-view"}`}>
-          {DASHBOARD_MODULES.filter((moduleDef) => !hiddenModuleSet.has(moduleDef.key) && (!allowedModuleSet || allowedModuleSet.has(moduleDef.key))).map((moduleDef) => (
+          {sortedVisibleModules.map((moduleDef) => (
             <Link
               key={moduleDef.key}
               to={moduleDef.path}
