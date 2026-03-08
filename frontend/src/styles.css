@@ -9123,13 +9123,19 @@ small {
   justify-content: flex-end;
   gap: 6px;
   min-height: 372px;
+  min-width: 0;
+  width: 100%;
 }
 
 .indicadores-chart-scroll {
   margin-top: auto;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 0;
+  scrollbar-gutter: stable;
 }
 
 .indicadores-chart-svg {
