@@ -396,9 +396,18 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
     return buildCalendarDays(summary.month_start, summary.month_end);
   }, [summary]);
 
+  const selectedDaySeries = useMemo(
+    () => dailySeries.find((row) => row.date_ref === selectedDay) ?? null,
+    [dailySeries, selectedDay]
+  );
+
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
-    const shouldShowErrosHoje = selectedDay === todayIsoBrasilia();
+    const selectedDayErrors =
+      selectedDaySeries && selectedDaySeries.conferido_total > 0
+        ? formatInteger(selectedDaySeries.divergencia_oficial)
+        : " ";
+
     return [
       { label: "Percentual Oficial %", value: formatPercent(summary.percentual_oficial) },
       { label: "Divergências Oficial", value: formatInteger(summary.divergencia_oficial), accent: "danger" },
@@ -406,14 +415,14 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
       { label: "Fora da Política", value: formatInteger(summary.fora_politica_total), accent: "warning" },
       { label: "Avaria Mês", value: formatInteger(summary.avaria_mes) },
       {
-        label: "Erros de Hoje",
-        value: shouldShowErrosHoje && summary.erros_hoje != null ? formatInteger(summary.erros_hoje) : " ",
+        label: "Erros do Dia",
+        value: selectedDayErrors,
         accent: "danger"
       },
       { label: "Média de Conferência", value: formatInteger(summary.media_conferencia_dia) },
       { label: "Conferido Geral", value: formatInteger(summary.conferido_total) }
     ];
-  }, [selectedDay, summary]);
+  }, [selectedDaySeries, summary]);
 
   return (
     <>
