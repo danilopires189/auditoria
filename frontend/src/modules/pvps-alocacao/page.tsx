@@ -1,6 +1,8 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatCountLabel } from "../../shared/inflection";
@@ -1513,12 +1515,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   async function exportPdfReport(preview: PdfReportPreview): Promise<void> {
-    const [{ jsPDF }, autoTableModule, logoDataUrl] = await Promise.all([
-      import("jspdf"),
-      import("jspdf-autotable"),
-      loadReportLogoDataUrl()
-    ]);
-    const autoTable = autoTableModule.default;
+    const logoDataUrl = await loadReportLogoDataUrl();
     const doc = new jsPDF({
       orientation: "landscape",
       unit: "pt",
