@@ -9075,6 +9075,7 @@ small {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  max-height: 760px;
   align-self: stretch;
   grid-template-rows: auto 1fr;
   overflow: hidden;
@@ -9287,6 +9288,7 @@ small {
   gap: 10px;
   min-height: 0;
   height: 100%;
+  max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
@@ -9397,6 +9399,8 @@ small {
 
   .indicadores-panel-side {
     grid-row: auto;
+    height: auto;
+    max-height: 640px;
   }
 }
 
