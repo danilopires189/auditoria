@@ -7190,6 +7190,12 @@ small {
   background: linear-gradient(180deg, #eff5ff 0%, #e4eefc 100%);
 }
 
+.pvps-row.is-open {
+  border-color: #4c7fc5;
+  box-shadow: 0 4px 18px rgba(47, 95, 170, 0.2), inset 0 0 0 2px rgba(47, 95, 170, 0.2);
+  background: linear-gradient(180deg, #eff5ff 0%, #e4eefc 100%);
+}
+
 .pvps-row.is-active .pvps-row-main strong {
   font-size: 1.2rem;
   font-weight: 800;
@@ -7197,9 +7203,17 @@ small {
   letter-spacing: 0.01em;
 }
 
+.pvps-row.is-open .pvps-row-main strong {
+  color: #0b2d62;
+}
+
 .pvps-row.is-active .pvps-row-main span {
   color: #1f416f;
   font-weight: 600;
+}
+
+.pvps-row.is-open .pvps-row-main span {
+  color: #1f416f;
 }
 
 .pvps-row-head {

@@ -3171,7 +3171,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={itemKey} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-pvps-${feedView}-${tab}`, item.zone) : null}
-                      <AnimatedFeedReveal className="pvps-row" cardKey={itemKey}>
+                      <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={itemKey}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{item.endereco}</strong>
@@ -3240,7 +3240,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-alocacao-${feedView}-${tab}`, row.zona) : null}
-                      <AnimatedFeedReveal className="pvps-row" cardKey={row.queue_id}>
+                      <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={row.queue_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
@@ -3312,7 +3312,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-zone-divider">Zona {row.zona}</div>
                         </AnimatedFeedReveal>
                       ) : null}
-                      <AnimatedFeedReveal className="pvps-row" cardKey={row.audit_id}>
+                      <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={row.audit_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.end_sep}</strong>
@@ -3415,7 +3415,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           <div className="pvps-zone-divider">Zona {row.zona}</div>
                         </AnimatedFeedReveal>
                       ) : null}
-                      <AnimatedFeedReveal className="pvps-row" cardKey={row.audit_id}>
+                      <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={row.audit_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
