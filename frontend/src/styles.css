@@ -9050,8 +9050,10 @@ small {
 }
 
 .indicadores-layout-grid {
+  --indicadores-row-height: clamp(360px, 41vh, 430px);
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(620px, 1fr);
+  grid-template-rows: var(--indicadores-row-height) var(--indicadores-row-height);
   gap: 16px;
   align-items: stretch;
 }
@@ -9063,11 +9065,15 @@ small {
   padding: 16px;
   display: grid;
   gap: 14px;
+  min-height: 0;
   box-shadow: 0 18px 38px rgba(17, 61, 125, 0.08);
 }
 
 .indicadores-panel-wide {
   min-width: 0;
+  height: var(--indicadores-row-height);
+  max-height: var(--indicadores-row-height);
+  overflow: hidden;
 }
 
 .indicadores-panel-side {
@@ -9076,6 +9082,8 @@ small {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  height: calc((var(--indicadores-row-height) * 2) + 16px);
+  max-height: calc((var(--indicadores-row-height) * 2) + 16px);
   align-self: stretch;
   overflow: hidden;
 }
@@ -9306,7 +9314,8 @@ small {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 2px;
   scrollbar-gutter: stable;
 }
@@ -9415,10 +9424,19 @@ small {
 
   .indicadores-layout-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .indicadores-panel-wide {
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .indicadores-panel-side {
     grid-row: auto;
+    height: auto;
+    max-height: none;
     align-self: auto;
   }
 }
