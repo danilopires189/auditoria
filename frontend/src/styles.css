@@ -9276,23 +9276,27 @@ small {
 }
 
 .indicadores-day-list {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-width: 0;
   min-height: 0;
+  height: 100%;
 }
 
 .indicadores-day-list-body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   gap: 10px;
   min-height: 0;
-  height: 100%;
-  max-height: 100%;
+  height: auto;
+  max-height: none;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-top: 2px;
+  padding-bottom: 2px;
   padding-right: 4px;
-  align-content: start;
 }
 
 .indicadores-day-list-body::-webkit-scrollbar {
