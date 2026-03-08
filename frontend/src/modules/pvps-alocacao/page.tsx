@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -84,6 +84,12 @@ interface AdminRuleApplyPreview {
   affected_total: number;
 }
 
+interface AnimatedAddressCardProps {
+  cardKey: string;
+  className: string;
+  children: ReactNode;
+}
+
 type PvpsFeedItem =
   | {
     kind: "sep";
@@ -107,6 +113,46 @@ const FEED_ACTIVE_CODDV_LIMIT = 50;
 const FEED_NEXT_PREVIEW_LIMIT = 5;
 const ADMIN_HISTORY_VIEW_LIMIT = 20;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+
+function AnimatedAddressCard({ cardKey, className, children }: AnimatedAddressCardProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    if (visible) return;
+    if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      {
+        threshold: 0.18,
+        rootMargin: "0px 0px -10% 0px"
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [cardKey, visible]);
+
+  return (
+    <div
+      ref={ref}
+      className={`${className} pvps-card-reveal${visible ? " is-visible" : ""}`}
+    >
+      {children}
+    </div>
+  );
+}
 
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
@@ -3122,7 +3168,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={itemKey} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(item.zone) : null}
-                      <div className={`pvps-row${active ? " is-active" : ""}`}>
+                      <AnimatedAddressCard className={`pvps-row${active ? " is-active" : ""}`} cardKey={itemKey}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{item.endereco}</strong>
@@ -3165,7 +3211,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
                           </div>
                         ) : null}
-                      </div>
+                      </AnimatedAddressCard>
                     </div>
                   );
                 })}
@@ -3191,7 +3237,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(row.zona) : null}
-                      <div className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`}>
+                      <AnimatedAddressCard className={`pvps-row${row.queue_id === activeAlocQueue ? " is-active" : ""}`} cardKey={row.queue_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
@@ -3213,7 +3259,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
                           </div>
                         ) : null}
-                      </div>
+                      </AnimatedAddressCard>
                     </div>
                   );
                 })}
@@ -3259,7 +3305,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
                       {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
-                      <div className="pvps-row">
+                      <AnimatedAddressCard className="pvps-row" cardKey={row.audit_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.end_sep}</strong>
@@ -3324,7 +3370,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <small className="pvps-completed-note">{isSyntheticSepPending ? "Separação concluída no dia com Pulmão pendente." : `Concluído em: ${formatDateTime(row.dt_hr)}`}</small>
                           </div>
                         ) : null}
-                      </div>
+                      </AnimatedAddressCard>
                     </div>
                   );
                 })}
@@ -3358,7 +3404,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
                       {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
-                      <div className="pvps-row">
+                      <AnimatedAddressCard className="pvps-row" cardKey={row.audit_id}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
                             <strong>{row.endereco}</strong>
@@ -3384,7 +3430,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
                           </div>
                         ) : null}
-                      </div>
+                      </AnimatedAddressCard>
                     </div>
                   );
                 })}
