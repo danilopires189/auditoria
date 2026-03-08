@@ -10,6 +10,8 @@ import { findModuleByPath } from "./modules/registry";
 import ControleValidadePage from "./modules/controle-validade/page";
 import AtividadeExtraPage from "./modules/atividade-extra/page";
 import BuscaProdutoPage from "./modules/busca-produto/page";
+import IndicadoresPage from "./modules/indicadores/page";
+import IndicadoresBlitzPage from "./modules/indicadores/blitz-page";
 import ValidarEnderecamentoPage from "./modules/validar-enderecamento/page";
 import ValidarEtiquetaPulmaoPage from "./modules/validar-etiqueta-pulmao/page";
 import CheckListPage from "./modules/check-list/page";
@@ -32,6 +34,7 @@ import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
+import type { IndicadoresModuleProfile } from "./modules/indicadores/types";
 import type { ValidarEnderecamentoModuleProfile } from "./modules/validar-enderecamento/types";
 import type { ValidarEtiquetaPulmaoModuleProfile } from "./modules/validar-etiqueta-pulmao/types";
 import type { PedidoDiretoModuleProfile } from "./modules/conferencia-pedido-direto/types";
@@ -80,6 +83,7 @@ interface AuthBranding {
   appLabel: string;
   authCaption: string;
   hiddenModuleKeys: DashboardModuleKey[];
+  allowedModuleKeys?: DashboardModuleKey[] | null;
 }
 
 const DEFAULT_AUTH_BRANDING: AuthBranding = {
@@ -98,6 +102,12 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     appLabel: "Logística CDs",
     authCaption: "Logística CDs",
     hiddenModuleKeys: ["atividade-extra", "produtividade", "meta-mes"]
+  },
+  "indicadorescd.vercel.app": {
+    appLabel: "Indicadores CDs",
+    authCaption: "Indicadores CDs",
+    hiddenModuleKeys: [],
+    allowedModuleKeys: ["indicadores"]
   }
 };
 
@@ -105,6 +115,12 @@ function resolveAuthBranding(hostname: string | undefined): AuthBranding {
   if (!hostname) return DEFAULT_AUTH_BRANDING;
   const normalized = hostname.trim().toLowerCase();
   return AUTH_BRANDING_BY_HOSTNAME[normalized] ?? DEFAULT_AUTH_BRANDING;
+}
+
+function isModuleAccessible(moduleKey: DashboardModuleKey, branding: AuthBranding): boolean {
+  if (branding.hiddenModuleKeys.includes(moduleKey)) return false;
+  if (branding.allowedModuleKeys && !branding.allowedModuleKeys.includes(moduleKey)) return false;
+  return true;
 }
 
 interface CdOption {
@@ -1236,8 +1252,8 @@ export default function App() {
       document.title = `${authBranding.appLabel} - ${authModeLabel}`;
       return;
     }
-    const activeModule = findModuleByPath(location.pathname);
-    document.title = activeModule ? activeModule.title : "Início";
+    const pageModule = findModuleByPath(location.pathname);
+    document.title = pageModule ? pageModule.title : "Início";
   }, [authBranding.appLabel, authMode, location.pathname, session]);
 
   useEffect(() => {
@@ -2067,6 +2083,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const indicadoresProfile = useMemo<IndicadoresModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const displayContext = useMemo(() => {
     if (!session || !effectiveProfileWithCd) return null;
     const merged = effectiveProfileWithCd;
@@ -2089,7 +2117,12 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, isOnline, profileSyncRetryCount, session]);
 
-  const isModuleRoute = useMemo(() => findModuleByPath(location.pathname) != null, [location.pathname]);
+  const activeModule = useMemo(() => findModuleByPath(location.pathname), [location.pathname]);
+  const isModuleRoute = activeModule != null;
+  const currentModuleAllowed = useMemo(
+    () => (activeModule ? isModuleAccessible(activeModule.key, authBranding) : true),
+    [activeModule, authBranding]
+  );
   if (loadingSession) {
     return (
       <div className="page-shell">
@@ -2104,6 +2137,10 @@ export default function App() {
     );
   }
 
+  if (session && displayContext && !currentModuleAllowed) {
+    return <Navigate to="/inicio" replace />;
+  }
+
   if (session && displayContext) {
     return (
       <div className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}`}>
@@ -2115,6 +2152,7 @@ export default function App() {
                 displayContext={displayContext}
                 appHeading={authBranding.authCaption}
                 hiddenModuleKeys={authBranding.hiddenModuleKeys}
+                allowedModuleKeys={authBranding.allowedModuleKeys ?? null}
                 isOnline={isOnline}
                 onRequestLogout={openLogoutConfirm}
                 modulesViewMode={homeModulesViewMode}
@@ -2142,6 +2180,26 @@ export default function App() {
             element={
               pvpsAlocacaoProfile ? (
                 <PvpsAlocacaoPage isOnline={isOnline} profile={pvpsAlocacaoProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/indicadores"
+            element={
+              indicadoresProfile ? (
+                <IndicadoresPage isOnline={isOnline} profile={indicadoresProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/indicadores/blitz"
+            element={
+              indicadoresProfile ? (
+                <IndicadoresBlitzPage isOnline={isOnline} profile={indicadoresProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )

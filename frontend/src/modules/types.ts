@@ -28,6 +28,7 @@ export type DashboardModuleKey =
   | "controle-validade"
   | "pvps-alocacao"
   | "atividade-extra"
+  | "indicadores"
   | "busca-produto"
   | "validar-enderecamento"
   | "validar-etiqueta-pulmao"

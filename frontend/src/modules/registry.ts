@@ -2,6 +2,7 @@ import type { DashboardModule, DashboardModuleKey } from "./types";
 
 export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "atividade-extra", path: "/modulos/atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
+  { key: "indicadores", path: "/modulos/indicadores", title: "Indicadores", icon: "audit", tone: "blue" },
   { key: "pvps-alocacao", path: "/modulos/pvps-alocacao", title: "Auditoria de PVPS e Alocação", icon: "calendar", tone: "blue" },
   { key: "busca-produto", path: "/modulos/busca-produto", title: "Busca por Produto", icon: "search", tone: "blue" },
   { key: "check-list", path: "/modulos/check-list", title: "Check List", icon: "checklist", tone: "blue" },
@@ -33,5 +34,5 @@ export function getModuleByKeyOrThrow(moduleKey: DashboardModuleKey): DashboardM
 }
 
 export function findModuleByPath(pathname: string): DashboardModule | null {
-  return DASHBOARD_MODULES.find((moduleDef) => moduleDef.path === pathname) ?? null;
+  return DASHBOARD_MODULES.find((moduleDef) => pathname === moduleDef.path || pathname.startsWith(`${moduleDef.path}/`)) ?? null;
 }
