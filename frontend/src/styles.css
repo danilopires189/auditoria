@@ -684,6 +684,13 @@ small {
   padding-right: max(env(safe-area-inset-right, 0px), 0px);
 }
 
+.app-shell-module-indicadores > .module-topbar,
+.app-shell-module-indicadores > .modules-shell {
+  width: 100%;
+  max-width: none;
+  justify-self: stretch;
+}
+
 .app-shell-module > .module-topbar,
 .app-shell-module > .modules-shell {
   width: min(1640px, 100%);
@@ -8835,13 +8842,13 @@ small {
 
 .indicadores-shell {
   width: 100%;
-  max-width: 100%;
-  justify-self: center;
+  max-width: none;
+  justify-self: stretch;
 }
 
 .indicadores-topbar {
   width: 100%;
-  max-width: 100%;
+  max-width: none;
   justify-self: stretch;
 }
 
