@@ -306,7 +306,15 @@ function applyPendingEventsToOfflineData(input: {
 }
 
 function formatDate(value: string): string {
-  const parsed = new Date(value);
+  const normalized = value.trim();
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
+  const parsed = dateOnlyMatch
+    ? new Date(
+      Number.parseInt(dateOnlyMatch[1], 10),
+      Number.parseInt(dateOnlyMatch[2], 10) - 1,
+      Number.parseInt(dateOnlyMatch[3], 10)
+    )
+    : new Date(normalized);
   if (Number.isNaN(parsed.getTime())) return value || "-";
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
