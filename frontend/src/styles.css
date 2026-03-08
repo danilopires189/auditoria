@@ -6884,6 +6884,67 @@ small {
   color: #20436f;
 }
 
+.pvps-report-preview-list {
+  display: grid;
+  gap: 10px;
+}
+
+.pvps-report-preview-card {
+  border: 1px solid #d8e3f4;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fcfdff 0%, #f6f9fe 100%);
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.pvps-report-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pvps-report-preview-head strong {
+  color: #1f457d;
+  font-size: 0.96rem;
+}
+
+.pvps-report-preview-head span {
+  color: #46648e;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ecf3ff;
+  border: 1px solid #d5e3fb;
+}
+
+.pvps-report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.pvps-report-summary-item {
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e0e8f5;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.pvps-report-summary-item small {
+  color: #607492;
+  font-size: 0.74rem;
+}
+
+.pvps-report-summary-item strong {
+  color: #1f457d;
+  font-size: 1rem;
+}
+
 /* Occurrence Select — legacy wrap (kept for fallback) */
 .pvps-occurrence-wrap {
   display: flex;
