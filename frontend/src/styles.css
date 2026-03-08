@@ -681,7 +681,7 @@ small {
 
 .app-shell-module > .module-topbar,
 .app-shell-module > .modules-shell {
-  width: min(1380px, 100%);
+  width: min(1640px, 100%);
   max-width: 100%;
   justify-self: center;
 }
@@ -8829,7 +8829,7 @@ small {
 }
 
 .indicadores-shell {
-  width: min(1380px, 100%);
+  width: min(1640px, 100%);
   max-width: 100%;
   justify-self: center;
 }
@@ -9032,7 +9032,7 @@ small {
 
 .indicadores-layout-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(340px, 0.95fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(620px, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -9258,7 +9258,7 @@ small {
 .indicadores-day-list-head,
 .indicadores-day-row {
   display: grid;
-  grid-template-columns: 92px minmax(220px, 1.5fr) 72px 130px 110px 52px;
+  grid-template-columns: 88px minmax(190px, 1.35fr) 72px 118px 108px 48px;
   gap: 10px;
   align-items: center;
 }
