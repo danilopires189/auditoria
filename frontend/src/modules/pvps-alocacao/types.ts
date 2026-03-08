@@ -126,6 +126,7 @@ export interface PvpsAuditoriasReportFilters {
   dtIni: string;
   dtFim: string;
   cd: number | null;
+  modulo: PvpsModulo;
 }
 
 export type PvpsAuditoriasReportCell = string | number | boolean | null;

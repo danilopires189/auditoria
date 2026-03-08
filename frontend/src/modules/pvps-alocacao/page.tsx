@@ -703,6 +703,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [reportDtIni, setReportDtIni] = useState<string>(() => brtMonthStartKey());
   const [reportDtFim, setReportDtFim] = useState<string>(() => brtDayKey());
   const [reportCdMode, setReportCdMode] = useState<"active_cd" | "all_cds">("active_cd");
+  const [reportModulo, setReportModulo] = useState<PvpsModulo>("ambos");
   const [reportCount, setReportCount] = useState<number | null>(null);
   const [reportBusySearch, setReportBusySearch] = useState(false);
   const [reportBusyExport, setReportBusyExport] = useState(false);
@@ -1106,7 +1107,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return {
       dtIni: reportDtIni,
       dtFim: reportDtFim,
-      cd: reportCdMode === "all_cds" ? null : activeCd
+      cd: reportCdMode === "all_cds" ? null : activeCd,
+      modulo: reportModulo
     };
   }
 
@@ -1124,7 +1126,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const count = await countVwAuditoriasReportRows(filters);
       setReportCount(count);
       if (count > 0) {
-        setReportMessage(`Foram encontradas ${count} auditorias no período.`);
+        setReportMessage(`Foram encontradas ${count} auditorias em ${moduloLabel(reportModulo)} no período.`);
       } else {
         setReportMessage("Nenhuma auditoria encontrada no período informado.");
       }
@@ -1181,35 +1183,53 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ...Array.from(keySet).filter((key) => !preferredKeys.includes(key)).sort((a, b) => a.localeCompare(b))
       ];
 
-      const exportRows: Array<Record<string, string | number | boolean>> = rows.map((row) => {
+      const XLSX = await import("xlsx");
+      const suffix = filters.cd == null ? "todos-cds" : `cd-${filters.cd}`;
+      const buildExportRows = (sourceRows: PvpsAuditoriasReportRow[]) => sourceRows.map((row) => {
         const output: Record<string, string | number | boolean> = {};
         for (const key of orderedKeys) {
           output[reportColumnLabel(key)] = reportCellToExcelValue(key, row[key] ?? null);
         }
         return output;
       });
+      const writeWorkbook = (sourceRows: PvpsAuditoriasReportRow[], modulo: "pvps" | "alocacao") => {
+        const exportRows = buildExportRows(sourceRows);
+        if (exportRows.length === 0) return 0;
+        const worksheet = XLSX.utils.json_to_sheet(exportRows);
+        worksheet["!cols"] = orderedKeys.map((key) => {
+          const header = reportColumnLabel(key);
+          let maxLen = header.length;
+          for (let index = 0; index < Math.min(exportRows.length, 300); index += 1) {
+            const value = exportRows[index][header];
+            const length = String(value ?? "").length;
+            if (length > maxLen) maxLen = length;
+          }
+          return { wch: Math.max(10, Math.min(maxLen + 2, 62)) };
+        });
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Auditorias");
+        const fileName = `relatorio-vw-auditorias-${modulo}-${filters.dtIni}-${filters.dtFim}-${suffix}.xlsx`;
+        XLSX.writeFile(workbook, fileName, { compression: true });
+        return exportRows.length;
+      };
 
-      const XLSX = await import("xlsx");
-      const worksheet = XLSX.utils.json_to_sheet(exportRows);
-      worksheet["!cols"] = orderedKeys.map((key) => {
-        const header = reportColumnLabel(key);
-        let maxLen = header.length;
-        for (let index = 0; index < Math.min(exportRows.length, 300); index += 1) {
-          const value = exportRows[index][header];
-          const length = String(value ?? "").length;
-          if (length > maxLen) maxLen = length;
-        }
-        return { wch: Math.max(10, Math.min(maxLen + 2, 62)) };
-      });
+      let exportedCount = 0;
+      if (filters.modulo === "ambos") {
+        const pvpsRowsOnly = rows.filter((row) => String(row.modulo ?? "").toLowerCase() === "pvps");
+        const alocRowsOnly = rows.filter((row) => String(row.modulo ?? "").toLowerCase() === "alocacao");
+        const exportedPvps = writeWorkbook(pvpsRowsOnly, "pvps");
+        const exportedAloc = writeWorkbook(alocRowsOnly, "alocacao");
+        exportedCount = exportedPvps + exportedAloc;
+        setReportCount(exportedCount);
+        setReportMessage(
+          `Relatórios gerados com sucesso. PVPS: ${exportedPvps} linhas | Alocação: ${exportedAloc} linhas.`
+        );
+        return;
+      }
 
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Auditorias");
-      const suffix = filters.cd == null ? "todos-cds" : `cd-${filters.cd}`;
-      const fileName = `relatorio-vw-auditorias-${filters.dtIni}-${filters.dtFim}-${suffix}.xlsx`;
-      XLSX.writeFile(workbook, fileName, { compression: true });
-
-      setReportCount(rows.length);
-      setReportMessage(`Relatório gerado com sucesso (${rows.length} linhas).`);
+      exportedCount = writeWorkbook(rows, filters.modulo);
+      setReportCount(exportedCount);
+      setReportMessage(`Relatório gerado com sucesso (${exportedCount} linhas).`);
     } catch (error) {
       setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório Excel.");
     } finally {
@@ -1354,6 +1374,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setReportDtIni(brtMonthStartKey());
     setReportDtFim(todayBrt);
     setReportCdMode("active_cd");
+    setReportModulo("ambos");
     setReportCount(null);
     setReportMessage(null);
     setReportError(null);
@@ -3942,6 +3963,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   <select value={reportCdMode} onChange={(event) => setReportCdMode(event.target.value as "active_cd" | "all_cds")}>
                     {activeCd != null ? <option value="active_cd">{`CD ${String(activeCd).padStart(2, "0")} (ativo)`}</option> : null}
                     <option value="all_cds">Todos CDs com acesso</option>
+                  </select>
+                </label>
+                <label>
+                  Módulo
+                  <select value={reportModulo} onChange={(event) => setReportModulo(event.target.value as PvpsModulo)}>
+                    <option value="pvps">PVPS</option>
+                    <option value="alocacao">Alocação</option>
+                    <option value="ambos">Ambos (2 arquivos)</option>
                   </select>
                 </label>
               </form>
