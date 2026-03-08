@@ -1,5 +1,6 @@
 export type ModuleIconName =
   | "audit"
+  | "chart"
   | "calendar"
   | "expiry"
   | "extra"
