@@ -2655,3 +2655,33 @@ Traceback (most recent call last):
   File "app\etl\table_specs.py", line 316, in get_table_spec
 
 KeyError: 'Unknown table spec: db_div_blitz'
+2026-03-08 15:33:13.640 | ERROR    | app.cli.app:_exit_with_error:57 - command failed
+Traceback (most recent call last):
+
+  File "main.py", line 22, in <module>
+
+  File "app\cli\app.py", line 389, in run
+
+  File "typer\main.py", line 1135, in __call__
+
+  File "click\core.py", line 1485, in __call__
+
+  File "typer\core.py", line 813, in main
+
+  File "typer\core.py", line 189, in _main
+
+  File "click\core.py", line 1873, in invoke
+
+  File "click\core.py", line 1269, in invoke
+
+  File "click\core.py", line 824, in invoke
+
+  File "typer\main.py", line 1514, in wrapper
+
+> File "app\cli\app.py", line 107, in bootstrap_command
+
+  File "app\sync_service.py", line 58, in bootstrap
+
+  File "app\ddl\migrator.py", line 41, in apply_migrations
+
+FileNotFoundError: SQL migrations directory not found: C:\Users\Samsung\AppData\Local\Temp\_MEI154122\app\ddl\sql
