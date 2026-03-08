@@ -2685,3 +2685,4 @@ Traceback (most recent call last):
   File "app\ddl\migrator.py", line 41, in apply_migrations
 
 FileNotFoundError: SQL migrations directory not found: C:\Users\Samsung\AppData\Local\Temp\_MEI154122\app\ddl\sql
+2026-03-08 15:38:48.813 | WARNING  | app.cli.app:_exit_with_error:53 - command failed: Another sync process is already running (advisory lock in use)
