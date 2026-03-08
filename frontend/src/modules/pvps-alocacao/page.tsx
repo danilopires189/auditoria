@@ -1378,7 +1378,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             const sitAud =
               sepSituacao === "vazio" || sepSituacao === "obstruido"
                 ? "ocorrencia"
-                : "conforme";
+                : "pendente_pul";
             rowsAoA.push([
               reportValue(row, "cd"),
               reportValue(row, "modulo").toUpperCase(),
