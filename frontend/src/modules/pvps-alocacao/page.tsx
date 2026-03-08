@@ -3342,15 +3342,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                       <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={itemKey}>
                         <div className="pvps-row-head">
                           <div className="pvps-row-main">
-                            <div className="pvps-row-address-line">
-                              <strong>{item.endereco}</strong>
-                              {item.kind === "pul" && item.nivel ? (
-                                <small className="pvps-row-floor-indicator" title={`Andar ${formatAndar(item.nivel)}`}>
-                                  <span aria-hidden="true">↕</span>
+                            <strong className="pvps-row-address-line">
+                              <span className="pvps-row-address-text">{item.endereco}</span>
+                              {item.kind === "pul" && formatAndar(item.nivel) !== "-" ? (
+                                <span className="pvps-row-floor-indicator" title={`Andar ${formatAndar(item.nivel)}`}>
+                                  <span aria-hidden="true">🏢</span>
                                   {formatAndar(item.nivel)}
-                                </small>
+                                </span>
                               ) : null}
-                            </div>
+                            </strong>
                             <span>{row.coddv} - {row.descricao}</span>
                             {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
                           </div>
