@@ -84,30 +84,48 @@ interface AuthBranding {
   authCaption: string;
   hiddenModuleKeys: DashboardModuleKey[];
   allowedModuleKeys?: DashboardModuleKey[] | null;
+  defaultRoute?: string | null;
 }
 
 const DEFAULT_AUTH_BRANDING: AuthBranding = {
   appLabel: "Auditoria",
   authCaption: "Prevenção de Perdas CDs",
-  hiddenModuleKeys: []
+  hiddenModuleKeys: [],
+  defaultRoute: null
 };
 
 const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   "prevencaocd.vercel.app": {
     appLabel: "Prevenção CDs",
     authCaption: "Prevenção de Perdas CDs",
-    hiddenModuleKeys: []
+    hiddenModuleKeys: [],
+    defaultRoute: null
+  },
+  "www.prevencaocd.vercel.app": {
+    appLabel: "Prevenção CDs",
+    authCaption: "Prevenção de Perdas CDs",
+    hiddenModuleKeys: [],
+    defaultRoute: null
   },
   "logisticacd.vercel.app": {
     appLabel: "Logística CDs",
     authCaption: "Logística CDs",
-    hiddenModuleKeys: ["atividade-extra", "produtividade", "meta-mes"]
+    hiddenModuleKeys: ["atividade-extra", "produtividade", "meta-mes"],
+    defaultRoute: null
   },
   "indicadorescd.vercel.app": {
     appLabel: "Indicadores CDs",
     authCaption: "Indicadores CDs",
     hiddenModuleKeys: [],
-    allowedModuleKeys: ["indicadores"]
+    allowedModuleKeys: ["indicadores"],
+    defaultRoute: "/modulos/indicadores"
+  },
+  "www.indicadorescd.vercel.app": {
+    appLabel: "Indicadores CDs",
+    authCaption: "Indicadores CDs",
+    hiddenModuleKeys: [],
+    allowedModuleKeys: ["indicadores"],
+    defaultRoute: "/modulos/indicadores"
   }
 };
 
@@ -2119,6 +2137,14 @@ export default function App() {
 
   const activeModule = useMemo(() => findModuleByPath(location.pathname), [location.pathname]);
   const isModuleRoute = activeModule != null;
+  const preferredHomeRoute = useMemo(() => {
+    const candidate = typeof authBranding.defaultRoute === "string" ? authBranding.defaultRoute.trim() : "";
+    if (!candidate) return null;
+    const moduleDef = findModuleByPath(candidate);
+    if (!moduleDef) return null;
+    if (!isModuleAccessible(moduleDef.key, authBranding)) return null;
+    return moduleDef.path;
+  }, [authBranding]);
   const currentModuleAllowed = useMemo(
     () => (activeModule ? isModuleAccessible(activeModule.key, authBranding) : true),
     [activeModule, authBranding]
@@ -2149,23 +2175,27 @@ export default function App() {
         <Routes>
           <Route
             path="/inicio"
-            element={(
-              <HomePage
-                displayContext={displayContext}
-                appHeading={authBranding.authCaption}
-                hiddenModuleKeys={authBranding.hiddenModuleKeys}
-                allowedModuleKeys={authBranding.allowedModuleKeys ?? null}
-                isOnline={isOnline}
-                onRequestLogout={openLogoutConfirm}
-                modulesViewMode={homeModulesViewMode}
-                onToggleModulesViewMode={handleHomeModulesViewModeChange}
-                showCdSwitcher={isGlobalProfile && globalCdOptions.length > 0}
-                onRequestCdSwitcher={() => {
-                  setPendingGlobalCdSelection(globalCdSelection);
-                  setShowGlobalCdSwitcher(true);
-                }}
-              />
-            )}
+            element={
+              preferredHomeRoute ? (
+                <Navigate to={preferredHomeRoute} replace />
+              ) : (
+                <HomePage
+                  displayContext={displayContext}
+                  appHeading={authBranding.authCaption}
+                  hiddenModuleKeys={authBranding.hiddenModuleKeys}
+                  allowedModuleKeys={authBranding.allowedModuleKeys ?? null}
+                  isOnline={isOnline}
+                  onRequestLogout={openLogoutConfirm}
+                  modulesViewMode={homeModulesViewMode}
+                  onToggleModulesViewMode={handleHomeModulesViewModeChange}
+                  showCdSwitcher={isGlobalProfile && globalCdOptions.length > 0}
+                  onRequestCdSwitcher={() => {
+                    setPendingGlobalCdSelection(globalCdSelection);
+                    setShowGlobalCdSwitcher(true);
+                  }}
+                />
+              )
+            }
           />
           <Route
             path="/modulos/controle-validade"
