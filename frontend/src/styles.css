@@ -9074,11 +9074,7 @@ small {
   grid-row: span 2;
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  max-height: 760px;
-  align-self: stretch;
-  grid-template-rows: auto 1fr;
-  overflow: hidden;
+  align-self: start;
 }
 
 .indicadores-panel-head {
@@ -9276,27 +9272,23 @@ small {
 }
 
 .indicadores-day-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto 1fr;
   gap: 10px;
   min-width: 0;
-  min-height: 0;
-  height: 100%;
 }
 
 .indicadores-day-list-body {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
+  display: grid;
   gap: 10px;
-  min-height: 0;
-  height: auto;
-  max-height: none;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  padding-right: 4px;
+  max-height: min(62vh, 760px);
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.indicadores-day-list-body > * {
+  min-width: 0;
 }
 
 .indicadores-day-list-body::-webkit-scrollbar {
@@ -9403,8 +9395,6 @@ small {
 
   .indicadores-panel-side {
     grid-row: auto;
-    height: auto;
-    max-height: 640px;
   }
 }
 
