@@ -2143,7 +2143,9 @@ export default function App() {
 
   if (session && displayContext) {
     return (
-      <div className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}`}>
+      <div
+        className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}${activeModule?.key === "indicadores" ? " app-shell-module-indicadores" : ""}`}
+      >
         <Routes>
           <Route
             path="/inicio"
