@@ -7263,12 +7263,26 @@ small {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   color: #6f809c;
   font-size: 0.76rem;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
   opacity: 0.82;
+  text-align: right;
+}
+
+.pvps-row-floor-indicator svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .pvps-row strong {
