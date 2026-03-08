@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { chooseByJoinedValues, formatCountLabel } from "../../shared/inflection";
+import { shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
   getDbBarrasByBarcode,
@@ -1446,7 +1447,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     setBarcodeValidationState("validating");
 
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         const lookup = await resolveBarcodeProduct(barras);
         if (!lookup) {
           showDialog({
@@ -1578,7 +1579,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     const qtd = parsePositiveInteger(editQtdInput, 0);
 
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         await updateItemQtyLocal(coddv, qtd);
         if (isOnline) void runPendingSync(true);
       } else {
@@ -1638,7 +1639,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       onConfirm: () => {
         void (async () => {
           try {
-            if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+            if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
               await updateItemQtyLocal(coddv, 0);
               if (isOnline) void runPendingSync(true);
             } else {
@@ -1706,7 +1707,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
     setBusyFinalize(true);
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         const nowIso = new Date().toISOString();
         const nextStatus = falta > 0 ? "finalizado_falta" : "finalizado_ok";
         const nextVolume: VolumeAvulsoLocalVolume = {

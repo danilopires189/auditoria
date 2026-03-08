@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatCountLabel } from "../../shared/inflection";
+import { shouldTriggerQueuedBackgroundSync, shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
   getDbBarrasByBarcode,
@@ -3330,7 +3331,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     const chosenItemKey = buildAvulsaItemKey(chosen.seq_entrada, chosen.nf, chosen.coddv);
-    const onlineAvulsa = isOnline && !preferOfflineMode && Boolean(activeVolume.remote_conf_id);
+    const onlineAvulsa = !shouldUseQueuedMutationFlow({
+      isOnline,
+      preferOfflineMode,
+      hasRemoteTarget: Boolean(activeVolume.remote_conf_id)
+    }) && Boolean(activeVolume.remote_conf_id);
 
     if (onlineAvulsa && activeVolume.remote_conf_id) {
       const updated = await applyAvulsaScan(
@@ -3432,7 +3437,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       nf: chosen.nf,
       target_conf_id: chosen.target_conf_id
     });
-    if (isOnline && !preferOfflineMode) void runPendingSync(true);
+    if (shouldTriggerQueuedBackgroundSync(isOnline)) void runPendingSync(true);
     return {
       produtoRegistrado: `${chosen.descricao} (Seq ${chosen.seq_entrada}/NF ${chosen.nf})`,
       barrasRegistrada: barras,
@@ -3485,7 +3490,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       const isAvulsa = activeVolume.conference_kind === "avulsa";
 
       if (!isAvulsa) {
-        if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+        if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
           const lookup = await resolveBarcodeProduct(barras);
           if (!lookup) {
             showDialog({
@@ -3622,7 +3627,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           const nowIso = new Date().toISOString();
           const nextAllocations = (activeVolume.combined_seq_allocations ?? []).map((row) => ({ ...row }));
           const appliedDetails: string[] = [];
-          const shouldWriteRemoteNow = isOnline && !preferOfflineMode;
+          const shouldWriteRemoteNow = !shouldUseQueuedMutationFlow({
+            isOnline,
+            preferOfflineMode,
+            hasRemoteTarget: true
+          });
 
           for (const allocation of allocations) {
             if (remaining <= 0) break;
@@ -3687,7 +3696,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           highlightedItemKey = activeVolume.items.find((item) => item.coddv === lookup.coddv)?.item_key ?? `multi:${lookup.coddv}`;
           registroRemoto = false;
         } else {
-          const onlineAvulsa = isOnline && !preferOfflineMode && Boolean(activeVolume.remote_conf_id);
+          const onlineAvulsa = !shouldUseQueuedMutationFlow({
+            isOnline,
+            preferOfflineMode,
+            hasRemoteTarget: Boolean(activeVolume.remote_conf_id)
+          }) && Boolean(activeVolume.remote_conf_id);
           const candidateOptions = onlineAvulsa && activeVolume.remote_conf_id
             ? await resolveAvulsaTargets(activeVolume.remote_conf_id, barras)
             : await resolveAvulsaTargetsOffline(lookup.coddv, lookup.barras || barras, lookup.descricao ?? "");
@@ -3881,7 +3894,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     const qtd = parsePositiveInteger(editQtdInput, 0);
 
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         await updateItemQtyLocal(itemKey, qtd, item.barras ?? null);
         if (activeVolume.conference_kind === "avulsa" && item.seq_entrada != null && item.nf != null) {
           await enqueueAvulsaEvent({
@@ -3894,7 +3907,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             target_conf_id: item.target_conf_id ?? null
           });
         }
-        if (isOnline && !preferOfflineMode) void runPendingSync(true);
+        if (shouldTriggerQueuedBackgroundSync(isOnline)) void runPendingSync(true);
       } else {
         let targetConfId: string | null = activeVolume.remote_conf_id;
         if (activeVolume.conference_kind === "avulsa") {
@@ -3987,7 +4000,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       onConfirm: () => {
         void (async () => {
           try {
-            if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+            if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
               await updateItemQtyLocal(itemKey, 0, item.barras ?? null);
               if (activeVolume.conference_kind === "avulsa" && item.seq_entrada != null && item.nf != null) {
                 await enqueueAvulsaEvent({
@@ -4000,7 +4013,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   target_conf_id: item.target_conf_id ?? null
                 });
             }
-            if (isOnline && !preferOfflineMode) void runPendingSync(true);
+            if (shouldTriggerQueuedBackgroundSync(isOnline)) void runPendingSync(true);
           } else {
               let targetConfId: string | null = activeVolume.remote_conf_id;
               if (activeVolume.conference_kind === "avulsa") {
@@ -4150,7 +4163,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         return;
       }
 
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         const nowIso = new Date().toISOString();
         const nextVolume: EntradaNotasLocalVolume = {
           ...activeVolume,

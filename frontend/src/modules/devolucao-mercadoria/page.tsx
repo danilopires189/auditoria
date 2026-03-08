@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { chooseByJoinedValues, formatCountLabel } from "../../shared/inflection";
+import { shouldTriggerQueuedBackgroundSync, shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
   getDbBarrasByBarcode,
@@ -1721,7 +1722,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     setStatusMessage(null);
     setErrorMessage(null);
     try {
-      if (isOnline && !preferOfflineMode) {
+      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
         const remoteVolume = await openWithoutNfd(currentCd);
         const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, []);
         await saveLocalVolume(localVolume);
@@ -1911,7 +1912,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     setBarcodeValidationState("validating");
 
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         const lookup = await resolveBarcodeProduct(barras);
         if (!lookup) {
           showDialog({
@@ -2099,7 +2100,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     const nextValidades = normalizeOptionalItemText(editValidadesInput);
 
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         await updateItemQtyLocal(coddv, qtd, null, {
           lotes: nextLotes,
           validades: nextValidades
@@ -2172,7 +2173,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       onConfirm: () => {
         void (async () => {
           try {
-            if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+            if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
               await updateItemQtyLocal(coddv, 0, null, {
                 lotes: null,
                 validades: null
@@ -2272,7 +2273,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
     setBusyFinalize(true);
     try {
-      if (preferOfflineMode || !isOnline || !activeVolume.remote_conf_id) {
+      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
         const nowIso = new Date().toISOString();
         const nextStatus = (falta > 0 || withoutScan) ? "finalizado_falta" : "finalizado_ok";
         const nextVolume: DevolucaoMercadoriaLocalVolume = {
