@@ -1475,7 +1475,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           ? (sepSituacaoRaw as PvpsEndSit)
           : null;
         const baseRow = {
-          dataHora: formatDateTime(reportValue(row, "dt_hr")),
+          dataHora: formatDate(reportValue(row, "dt_hr")),
           cd: reportValue(row, "cd"),
           zona: reportValue(row, "zona"),
           coddv: reportValue(row, "coddv"),
@@ -1533,7 +1533,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           ? "ocorrencia"
           : (audSitRaw === "conforme" ? "conforme" : "nao_conforme");
         return {
-          dataHora: formatDateTime(reportValue(row, "dt_hr")),
+          dataHora: formatDate(reportValue(row, "dt_hr")),
           cd: reportValue(row, "cd"),
           zona: reportValue(row, "zona"),
           coddv: reportValue(row, "coddv"),
@@ -1618,7 +1618,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       doc.setFont("helvetica", "bold");
       doc.setFontSize(19);
       doc.setTextColor(24, 51, 97);
-      doc.text(`Relatório de Conformidade ${section.title}`, titleX, cursorY + 12);
+      doc.text(`Relatório de Conformidade - ${section.title}`, titleX, cursorY + 12);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
@@ -1685,7 +1685,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
       const head = section.modulo === "pvps"
         ? [[
-          "Data/Hora",
+          "Data",
           "CODDV",
           "Descrição",
           "End. Separação",
@@ -1696,7 +1696,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "Matrícula"
         ]]
         : [[
-          "Data/Hora",
+          "Data",
           "CODDV",
           "Descrição",
           "Endereço",
