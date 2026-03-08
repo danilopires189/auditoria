@@ -1539,25 +1539,24 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       }
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(20);
+      doc.setFontSize(19);
       doc.setTextColor(24, 51, 97);
-      doc.text("Relatório de Conformidade", marginX + 74, cursorY + 12);
+      doc.text(`Relatório de Conformidade ${section.title}`, marginX + 74, cursorY + 12);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(70, 92, 126);
       const metaLines = [
-        `Módulo: ${section.title}`,
         `Período: ${preview.monthLabel}`,
         `Depósito: ${preview.cdLabel}`,
         `Gerado por: ${preview.generatedBy}`,
         `Data/Hora: ${formatDateTime(preview.generatedAt)}`
       ];
       metaLines.forEach((line, index) => {
-        doc.text(line, marginX + 74, cursorY + 34 + (index * 15));
+        doc.text(line, marginX + 74, cursorY + 38 + (index * 16));
       });
 
-      cursorY = 138;
+      cursorY = 152;
       const cards = [
         { label: "Total auditado", value: reportSummaryLabel(section.summary.enderecosAuditados), detail: [] as string[] },
         {
@@ -1618,10 +1617,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "Data/Hora",
           "CODDV",
           "Descrição",
-          "Endereço Separação",
-          "Endereço Pulmão",
-          "Validade Separação",
-          "Validade Pulmão",
+          "End. Separação",
+          "End. Pulmão",
+          "Val. Separação",
+          "Val. Pulmão",
           "Auditor",
           "Matrícula"
         ]]
@@ -1631,8 +1630,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "Descrição",
           "Endereço",
           "Andar",
-          "Validade Sistema",
-          "Validade Conferida",
+          "Val. Sistema",
+          "Val. Conferida",
           "Auditor",
           "Matrícula"
         ]];
@@ -1687,26 +1686,26 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         },
         columnStyles: section.modulo === "pvps"
           ? {
-            0: { cellWidth: 74 },
-            1: { cellWidth: 52 },
-            2: { cellWidth: 176, overflow: "linebreak" },
-            3: { cellWidth: 102 },
-            4: { cellWidth: 102 },
-            5: { cellWidth: 62 },
-            6: { cellWidth: 62 },
-            7: { cellWidth: 144, overflow: "linebreak" },
-            8: { cellWidth: 64 }
+            0: { cellWidth: 76 },
+            1: { cellWidth: 54 },
+            2: { cellWidth: 164, overflow: "linebreak" },
+            3: { cellWidth: 98 },
+            4: { cellWidth: 98 },
+            5: { cellWidth: 60 },
+            6: { cellWidth: 60 },
+            7: { cellWidth: 132, overflow: "linebreak" },
+            8: { cellWidth: 58 }
           }
           : {
-            0: { cellWidth: 74 },
-            1: { cellWidth: 52 },
-            2: { cellWidth: 210, overflow: "linebreak" },
-            3: { cellWidth: 130 },
-            4: { cellWidth: 40 },
-            5: { cellWidth: 66 },
-            6: { cellWidth: 66 },
-            7: { cellWidth: 144, overflow: "linebreak" },
-            8: { cellWidth: 64 }
+            0: { cellWidth: 76 },
+            1: { cellWidth: 54 },
+            2: { cellWidth: 196, overflow: "linebreak" },
+            3: { cellWidth: 118 },
+            4: { cellWidth: 36 },
+            5: { cellWidth: 64 },
+            6: { cellWidth: 64 },
+            7: { cellWidth: 138, overflow: "linebreak" },
+            8: { cellWidth: 58 }
           }
       });
     };
