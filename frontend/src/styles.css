@@ -9118,15 +9118,15 @@ small {
 }
 
 .indicadores-chart-shell {
-  display: grid;
-  grid-template-rows: auto auto;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   gap: 6px;
-  min-height: 346px;
+  min-height: 100%;
 }
 
 .indicadores-chart-scroll {
-  align-self: start;
+  margin-top: auto;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 0;
@@ -9166,7 +9166,7 @@ small {
 .indicadores-chart-label,
 .indicadores-chart-value,
 .indicadores-chart-percent {
-  font-size: 14px;
+  font-size: 28px;
   font-weight: 700;
   fill: #294d80;
 }
@@ -9191,13 +9191,13 @@ small {
   align-items: center;
   gap: 7px;
   color: #35547c;
-  font-size: 0.8rem;
+  font-size: 1.6rem;
   font-weight: 700;
 }
 
 .indicadores-chart-legend i {
-  width: 12px;
-  height: 12px;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
   display: inline-block;
 }
