@@ -9321,6 +9321,7 @@ small {
 }
 
 .indicadores-day-list-body > * {
+  flex: 0 0 auto;
   min-width: 0;
 }
 
