@@ -326,6 +326,16 @@ function formatDateTime(value: string): string {
   }).format(parsed);
 }
 
+function formatTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value || "-";
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(parsed);
+}
+
 function normalizeMmaa(value: string | null | undefined): string | null {
   const digits = (value ?? "").replace(/\D/g, "").slice(0, 4);
   return digits.length === 4 ? digits : null;
@@ -1196,17 +1206,73 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const writeWorkbook = (sourceRows: PvpsAuditoriasReportRow[], modulo: "pvps" | "alocacao") => {
         const exportRows = buildExportRows(sourceRows);
         if (exportRows.length === 0) return 0;
-        const worksheet = XLSX.utils.json_to_sheet(exportRows);
-        worksheet["!cols"] = orderedKeys.map((key) => {
-          const header = reportColumnLabel(key);
-          let maxLen = header.length;
-          for (let index = 0; index < Math.min(exportRows.length, 300); index += 1) {
-            const value = exportRows[index][header];
-            const length = String(value ?? "").length;
-            if (length > maxLen) maxLen = length;
-          }
-          return { wch: Math.max(10, Math.min(maxLen + 2, 62)) };
-        });
+        let worksheet;
+        if (modulo === "alocacao") {
+          const headers = [
+            "DATA",
+            "HORA",
+            "CD",
+            "MODULO",
+            "CODDV",
+            "DESCRICAO",
+            "ZONA",
+            "ENDERECO",
+            "NIVEL",
+            "END_SITUACAO",
+            "VAL_SISTEMA",
+            "VAL_COLETA",
+            "SIT_AUD",
+            "AUDITOR_NOM",
+            "AUTITOR_MAT",
+            "DATA",
+            "HORA"
+          ];
+          const rowsAoA = sourceRows.map((row) => {
+            const dtHr = String(row.dt_hr ?? "");
+            const data = dtHr ? formatDate(dtHr) : "";
+            const hora = dtHr ? formatTime(dtHr) : "";
+            return [
+              data,
+              hora,
+              String(row.cd ?? ""),
+              String(row.modulo ?? "").toUpperCase(),
+              String(row.coddv ?? ""),
+              String(row.descricao ?? ""),
+              String(row.zona ?? ""),
+              String(row.endereco ?? ""),
+              String(row.nivel ?? ""),
+              String(row.end_sit ?? ""),
+              String(row.val_sist ?? ""),
+              String(row.val_conf ?? ""),
+              String(row.aud_sit ?? ""),
+              String(row.auditor_nome ?? ""),
+              String(row.auditor_mat ?? ""),
+              data,
+              hora
+            ];
+          });
+          worksheet = XLSX.utils.aoa_to_sheet([headers, ...rowsAoA]);
+          worksheet["!cols"] = headers.map((header, columnIndex) => {
+            let maxLen = header.length;
+            for (let index = 0; index < Math.min(rowsAoA.length, 300); index += 1) {
+              const length = String(rowsAoA[index][columnIndex] ?? "").length;
+              if (length > maxLen) maxLen = length;
+            }
+            return { wch: Math.max(10, Math.min(maxLen + 2, 62)) };
+          });
+        } else {
+          worksheet = XLSX.utils.json_to_sheet(exportRows);
+          worksheet["!cols"] = orderedKeys.map((key) => {
+            const header = reportColumnLabel(key);
+            let maxLen = header.length;
+            for (let index = 0; index < Math.min(exportRows.length, 300); index += 1) {
+              const value = exportRows[index][header];
+              const length = String(value ?? "").length;
+              if (length > maxLen) maxLen = length;
+            }
+            return { wch: Math.max(10, Math.min(maxLen + 2, 62)) };
+          });
+        }
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Auditorias");
         const fileName = `relatorio-${modulo}-${periodSuffix}-${suffix}.xlsx`;
