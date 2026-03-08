@@ -510,6 +510,13 @@ function reportSummaryLabel(value: number): string {
   return new Intl.NumberFormat("pt-BR").format(value);
 }
 
+function friendlyCdLabel(profileCdName: string | null | undefined, cd: number | null): string {
+  const profileLabel = typeof profileCdName === "string" ? profileCdName.trim().replace(/\s+/g, " ") : "";
+  if (profileLabel) return profileLabel;
+  if (cd != null) return `CD ${String(cd).padStart(2, "0")}`;
+  return "Todos CDs";
+}
+
 function occurrencePercent(value: number, total: number): string {
   if (total <= 0) return "0,0%";
   return formatPercent(Number(((value / total) * 100).toFixed(1)));
@@ -1346,7 +1353,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       cd: reportCdMode === "all_cds" ? null : activeCd,
       modulo: reportModulo
     };
-    const cdLabel = filters.cd == null ? "Todos CDs com acesso" : `CD ${String(filters.cd).padStart(2, "0")} (ativo)`;
+    const cdLabel = filters.cd == null ? "Todos CDs" : friendlyCdLabel(profile.cd_nome, filters.cd);
     return {
       cacheKey: `pdf|${reportMonth}|${filters.cd ?? "all"}|${filters.modulo}`,
       filters,
@@ -1539,7 +1546,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const metaLines = [
         `Módulo: ${section.title}`,
         `Período: ${preview.monthLabel}`,
-        `CD: ${preview.cdLabel}`,
+        `Depósito: ${preview.cdLabel}`,
         `Gerado por: ${preview.generatedBy}`,
         `Data/Hora: ${formatDateTime(preview.generatedAt)}`
       ];
@@ -1657,10 +1664,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         head,
         body,
         theme: "grid",
+        tableWidth: contentWidth,
         styles: {
-          fontSize: 7.5,
-          cellPadding: 4,
-          overflow: "linebreak",
+          fontSize: 6.6,
+          cellPadding: 3,
+          overflow: "ellipsize",
+          valign: "middle",
           lineColor: [214, 225, 241],
           lineWidth: 0.4,
           textColor: [31, 45, 69]
@@ -1668,11 +1677,39 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         headStyles: {
           fillColor: [31, 69, 125],
           textColor: [255, 255, 255],
-          fontStyle: "bold"
+          fontStyle: "bold",
+          overflow: "ellipsize"
         },
         alternateRowStyles: {
           fillColor: [248, 250, 253]
-        }
+        },
+        columnStyles: section.modulo === "pvps"
+          ? {
+            0: { cellWidth: 62 },
+            1: { cellWidth: 28 },
+            2: { cellWidth: 36 },
+            3: { cellWidth: 42 },
+            4: { cellWidth: 138 },
+            5: { cellWidth: 82 },
+            6: { cellWidth: 82 },
+            7: { cellWidth: 54 },
+            8: { cellWidth: 54 },
+            9: { cellWidth: 112 },
+            10: { cellWidth: 52 }
+          }
+          : {
+            0: { cellWidth: 62 },
+            1: { cellWidth: 28 },
+            2: { cellWidth: 36 },
+            3: { cellWidth: 42 },
+            4: { cellWidth: 172 },
+            5: { cellWidth: 102 },
+            6: { cellWidth: 34 },
+            7: { cellWidth: 58 },
+            8: { cellWidth: 58 },
+            9: { cellWidth: 112 },
+            10: { cellWidth: 52 }
+          }
       });
     };
 
@@ -4790,8 +4827,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <label>
                   CD
                   <select value={reportCdMode} onChange={(event) => setReportCdMode(event.target.value as "active_cd" | "all_cds")}>
-                    {activeCd != null ? <option value="active_cd">{`CD ${String(activeCd).padStart(2, "0")} (ativo)`}</option> : null}
-                    <option value="all_cds">Todos CDs com acesso</option>
+                    {activeCd != null ? <option value="active_cd">{friendlyCdLabel(profile.cd_nome, activeCd)}</option> : null}
+                    <option value="all_cds">Todos CDs</option>
                   </select>
                 </label>
                 <label>
