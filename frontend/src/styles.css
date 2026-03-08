@@ -9272,14 +9272,16 @@ small {
 .indicadores-day-list {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .indicadores-day-list-head,
 .indicadores-day-row {
   display: grid;
-  grid-template-columns: 88px minmax(190px, 1.35fr) 72px 118px 108px 48px;
+  grid-template-columns: minmax(180px, 1.45fr) 72px 118px 108px 48px;
   gap: 10px;
   align-items: center;
+  min-width: 0;
 }
 
 .indicadores-day-list-head {
@@ -9298,19 +9300,27 @@ small {
   padding: 10px 12px;
   color: #274a77;
   font-size: 0.84rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .indicadores-day-description {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .indicadores-day-description strong {
   color: #102e5f;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .indicadores-day-description small {
   color: #5a759c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .indicadores-status-badge {
@@ -9400,26 +9410,22 @@ small {
   }
 
   .indicadores-day-row > span:nth-child(1)::before {
-    content: "Data";
-  }
-
-  .indicadores-day-row > span:nth-child(2)::before {
     content: "Descrição";
   }
 
-  .indicadores-day-row > span:nth-child(3)::before {
+  .indicadores-day-row > span:nth-child(2)::before {
     content: "Zona";
   }
 
-  .indicadores-day-row > span:nth-child(4)::before {
+  .indicadores-day-row > span:nth-child(3)::before {
     content: "Status";
   }
 
-  .indicadores-day-row > span:nth-child(5)::before {
+  .indicadores-day-row > span:nth-child(4)::before {
     content: "Filial";
   }
 
-  .indicadores-day-row > span:nth-child(6)::before {
+  .indicadores-day-row > span:nth-child(5)::before {
     content: "Quantidade";
   }
 }

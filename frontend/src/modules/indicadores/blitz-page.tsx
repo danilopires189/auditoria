@@ -377,17 +377,22 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
 
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
+    const shouldShowErrosHoje = selectedDay === todayIsoBrasilia();
     return [
       { label: "Percentual Oficial %", value: formatPercent(summary.percentual_oficial) },
       { label: "Divergências Oficial", value: formatInteger(summary.divergencia_oficial), accent: "danger" },
       { label: "Percentual Fora da Política", value: formatPercent(summary.percentual_fora_politica), accent: "warning" },
       { label: "Fora da Política", value: formatInteger(summary.fora_politica_total), accent: "warning" },
       { label: "Avaria Mês", value: formatInteger(summary.avaria_mes) },
-      { label: "Erros de Hoje", value: summary.erros_hoje == null ? " " : formatInteger(summary.erros_hoje), accent: "danger" },
-      { label: "Média de Conferência", value: formatDecimal(summary.media_conferencia_dia, 2) },
+      {
+        label: "Erros de Hoje",
+        value: shouldShowErrosHoje && summary.erros_hoje != null ? formatInteger(summary.erros_hoje) : " ",
+        accent: "danger"
+      },
+      { label: "Média de Conferência", value: formatInteger(summary.media_conferencia_dia) },
       { label: "Conferido Geral", value: formatInteger(summary.conferido_total) }
     ];
-  }, [summary]);
+  }, [selectedDay, summary]);
 
   return (
     <>
@@ -498,7 +503,6 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
               </div>
               <div className="indicadores-day-list">
                 <div className="indicadores-day-list-head">
-                  <span>Data</span>
                   <span>Descrição</span>
                   <span>Zona</span>
                   <span>Status</span>
@@ -512,7 +516,6 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                 ) : (
                   dayDetails.map((row, index) => (
                     <div key={`${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`} className="indicadores-day-row">
-                      <span>{formatDate(row.data_conf)}</span>
                       <span className="indicadores-day-description">
                         <strong>{row.descricao}</strong>
                         <small>Pedido {formatInteger(row.pedido)} · COD {formatInteger(row.coddv)}</small>
@@ -532,7 +535,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
             <section className="indicadores-panel indicadores-panel-wide">
               <div className="indicadores-panel-head">
                 <h3>Total de erros por zona</h3>
-                <span>Exibe apenas zonas com mais de 1 erro no mês.</span>
+                <span>Exibe zonas com pelo menos 1 erro no mês.</span>
               </div>
               {loadingDashboard && zoneTotals.length === 0 ? (
                 <div className="indicadores-empty-box"><p>Carregando zonas...</p></div>
