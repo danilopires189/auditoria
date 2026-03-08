@@ -9118,15 +9118,15 @@ small {
 }
 
 .indicadores-chart-shell {
-  display: grid;
-  grid-template-rows: auto auto;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   gap: 6px;
   min-height: 372px;
 }
 
 .indicadores-chart-scroll {
-  align-self: start;
+  margin-top: auto;
   overflow-x: auto;
   overflow-y: hidden;
   padding-bottom: 0;
