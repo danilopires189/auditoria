@@ -689,6 +689,7 @@ small {
 .app-shell-module-indicadores {
   padding-left: max(env(safe-area-inset-left, 0px), 0px);
   padding-right: max(env(safe-area-inset-right, 0px), 0px);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .app-shell-module-indicadores > .module-topbar,
