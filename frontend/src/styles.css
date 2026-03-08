@@ -6229,6 +6229,18 @@ small {
   }
 }
 
+@keyframes pvps-card-appear {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes pvps-pulse-border {
 
   0%,
@@ -7128,6 +7140,28 @@ small {
   gap: 8px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
   transition: box-shadow 200ms ease, border-color 200ms ease, transform 150ms ease;
+}
+
+.pvps-card-reveal {
+  opacity: 0;
+  transform: translateY(18px) scale(0.985);
+  will-change: opacity, transform;
+}
+
+.pvps-card-reveal.is-visible {
+  animation: pvps-card-appear 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pvps-card-reveal {
+    opacity: 1;
+    transform: none;
+    will-change: auto;
+  }
+
+  .pvps-card-reveal.is-visible {
+    animation: none;
+  }
 }
 
 .pvps-row:active {
