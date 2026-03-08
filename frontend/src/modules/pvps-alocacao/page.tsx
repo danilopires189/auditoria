@@ -15,6 +15,7 @@ import {
   fetchPvpsCompletedItemsDayAll,
   fetchPvpsManifest,
   fetchPvpsPulItems,
+  fetchPvpsReportPulItems,
   fetchVwAuditoriasReportRows,
   previewAdminRuleImpact,
   removeAdminRule,
@@ -1224,7 +1225,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         const exportRows = buildExportRows(sourceRows);
         if (exportRows.length === 0) return 0;
         let worksheet;
-        if (modulo === "alocacao") {
+        if (modulo === "pvps") {
+          throw new Error("PVPS_EXPORT_REQUIRES_ASYNC");
+        } else if (modulo === "alocacao") {
           const headers = [
             "CD",
             "MODULO",
@@ -1302,11 +1305,110 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         return exportRows.length;
       };
 
+      const writePvpsWorkbook = async (sourceRows: PvpsAuditoriasReportRow[]) => {
+        if (sourceRows.length === 0) return 0;
+        const auditIds = sourceRows
+          .map((row) => reportValue(row, "audit_id"))
+          .filter((auditId) => auditId.length > 0);
+        const pulItems = await fetchPvpsReportPulItems(auditIds);
+        const pulByAuditId = new Map<string, Array<{ end_pul: string; val_pul: string | null; end_sit: string | null }>>();
+        for (const item of pulItems) {
+          const current = pulByAuditId.get(item.audit_id) ?? [];
+          current.push({
+            end_pul: item.end_pul,
+            val_pul: item.val_pul,
+            end_sit: item.end_sit
+          });
+          pulByAuditId.set(item.audit_id, current);
+        }
+        const headers = [
+          "CD",
+          "MODULO",
+          "CODDV",
+          "DESCRICAO",
+          "ZONA",
+          "ENDERECO_SEP",
+          "ENDERECO_PUL",
+          "END_SITUACAO",
+          "VAL_CONF_SEP",
+          "VAL_CONF_PUL",
+          "SIT_AUD",
+          "AUDITOR_NOM",
+          "AUDITOR_MAT",
+          "DATA",
+          "HORA"
+        ];
+        const rowsAoA: string[][] = [];
+        for (const row of sourceRows) {
+          const auditId = reportValue(row, "audit_id");
+          const dtHr = reportValue(row, "dt_hr");
+          const data = dtHr ? formatDate(dtHr) : "";
+          const hora = dtHr ? formatTime(dtHr) : "";
+          const endSep = reportValue(row, "end_sep", "endereco_sep", "endereco");
+          const sepSituacao = reportValue(row, "end_sit", "end_situacao");
+          const valSep = reportValue(row, "val_sep", "val_conf_sep", "val_auditada");
+          const pulList = [...(pulByAuditId.get(auditId) ?? [])].sort((a, b) => a.end_pul.localeCompare(b.end_pul));
+          if (pulList.length === 0) {
+            rowsAoA.push([
+              reportValue(row, "cd"),
+              reportValue(row, "modulo").toUpperCase(),
+              reportValue(row, "coddv"),
+              reportValue(row, "descricao"),
+              reportValue(row, "zona"),
+              endSep,
+              "",
+              sepSituacao,
+              valSep,
+              "",
+              reportValue(row, "status", "aud_sit", "sit_aud"),
+              reportValue(row, "auditor_nome", "auditor_nom"),
+              reportValue(row, "auditor_mat"),
+              data,
+              hora
+            ]);
+            continue;
+          }
+          for (const pulItem of pulList) {
+            rowsAoA.push([
+              reportValue(row, "cd"),
+              reportValue(row, "modulo").toUpperCase(),
+              reportValue(row, "coddv"),
+              reportValue(row, "descricao"),
+              reportValue(row, "zona"),
+              endSep,
+              pulItem.end_pul,
+              pulItem.end_sit ?? sepSituacao,
+              valSep,
+              pulItem.val_pul ?? "",
+              reportValue(row, "status", "aud_sit", "sit_aud"),
+              reportValue(row, "auditor_nome", "auditor_nom"),
+              reportValue(row, "auditor_mat"),
+              data,
+              hora
+            ]);
+          }
+        }
+        const worksheetPvps = XLSX.utils.aoa_to_sheet([headers, ...rowsAoA]);
+        worksheetPvps["!cols"] = headers.map((header, columnIndex) => {
+          let maxLen = header.length;
+          for (let index = 0; index < Math.min(rowsAoA.length, 300); index += 1) {
+            const length = String(rowsAoA[index][columnIndex] ?? "").length;
+            if (length > maxLen) maxLen = length;
+          }
+          return { wch: Math.max(10, Math.min(maxLen + 2, 62)) };
+        });
+        const workbookPvps = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbookPvps, worksheetPvps, "Auditorias");
+        const fileName = `relatorio-pvps-${periodSuffix}-${suffix}.xlsx`;
+        XLSX.writeFile(workbookPvps, fileName, { compression: true });
+        return rowsAoA.length;
+      };
+
       let exportedCount = 0;
       if (filters.modulo === "ambos") {
         const pvpsRowsOnly = rows.filter((row) => String(row.modulo ?? "").toLowerCase() === "pvps");
         const alocRowsOnly = rows.filter((row) => String(row.modulo ?? "").toLowerCase() === "alocacao");
-        const exportedPvps = writeWorkbook(pvpsRowsOnly, "pvps");
+        const exportedPvps = await writePvpsWorkbook(pvpsRowsOnly);
         const exportedAloc = writeWorkbook(alocRowsOnly, "alocacao");
         exportedCount = exportedPvps + exportedAloc;
         setReportCount(exportedCount);
@@ -1316,7 +1418,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         return;
       }
 
-      exportedCount = writeWorkbook(rows, filters.modulo);
+      exportedCount = filters.modulo === "pvps"
+        ? await writePvpsWorkbook(rows)
+        : writeWorkbook(rows, filters.modulo);
       setReportCount(exportedCount);
       setReportMessage(`Relatório gerado com sucesso (${exportedCount} linhas).`);
     } catch (error) {
