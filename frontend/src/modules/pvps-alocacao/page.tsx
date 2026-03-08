@@ -1246,7 +1246,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             const dtHr = String(row.dt_hr ?? "");
             const data = dtHr ? formatDate(dtHr) : "";
             const hora = dtHr ? formatTime(dtHr) : "";
-            const valColeta = reportValue(row, "val_conf", "val_coleta", "validade_coleta", "validade_informada", "val_informada");
+            const valColeta = reportValue(
+              row,
+              "val_auditada",
+              "val_conf",
+              "val_coleta",
+              "validade_coleta",
+              "validade_informada",
+              "val_informada"
+            );
             return [
               reportValue(row, "cd"),
               reportValue(row, "modulo").toUpperCase(),
