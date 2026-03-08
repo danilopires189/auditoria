@@ -411,7 +411,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
     return [
       { label: "Percentual Oficial %", value: formatPercent(summary.percentual_oficial) },
       { label: "Divergências Oficial", value: formatInteger(summary.divergencia_oficial), accent: "danger" },
-      { label: "Percentual Fora da Política", value: formatPercent(summary.percentual_fora_politica), accent: "warning" },
+      { label: "Fora da Política %", value: formatPercent(summary.percentual_fora_politica), accent: "warning" },
       { label: "Fora da Política", value: formatInteger(summary.fora_politica_total), accent: "warning" },
       { label: "Avaria Mês", value: formatInteger(summary.avaria_mes) },
       {
