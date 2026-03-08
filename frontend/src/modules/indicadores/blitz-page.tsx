@@ -509,26 +509,28 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                   <span>Filial</span>
                   <span>Qtd</span>
                 </div>
-                {loadingDetails ? (
-                  <div className="indicadores-empty-box"><p>Carregando divergências do dia...</p></div>
-                ) : dayDetails.length === 0 ? (
-                  <div className="indicadores-empty-box"><p>Nenhuma divergência encontrada para a data selecionada.</p></div>
-                ) : (
-                  dayDetails.map((row, index) => (
-                    <div key={`${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`} className="indicadores-day-row">
-                      <span className="indicadores-day-description">
-                        <strong>{row.descricao}</strong>
-                        <small>Pedido {formatInteger(row.pedido)} · COD {formatInteger(row.coddv)}</small>
-                      </span>
-                      <span>{row.zona}</span>
-                      <span>
-                        <i className={`indicadores-status-badge ${statusClassName(row.status)}`}>{row.status}</i>
-                      </span>
-                      <span>{row.filial_nome}</span>
-                      <span>{formatInteger(row.quantidade)}</span>
-                    </div>
-                  ))
-                )}
+                <div className="indicadores-day-list-body">
+                  {loadingDetails ? (
+                    <div className="indicadores-empty-box"><p>Carregando divergências do dia...</p></div>
+                  ) : dayDetails.length === 0 ? (
+                    <div className="indicadores-empty-box"><p>Nenhuma divergência encontrada para a data selecionada.</p></div>
+                  ) : (
+                    dayDetails.map((row, index) => (
+                      <div key={`${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`} className="indicadores-day-row">
+                        <span className="indicadores-day-description">
+                          <strong>{row.descricao}</strong>
+                          <small>Pedido {formatInteger(row.pedido)} · COD {formatInteger(row.coddv)}</small>
+                        </span>
+                        <span>{row.zona}</span>
+                        <span>
+                          <i className={`indicadores-status-badge ${statusClassName(row.status)}`}>{row.status}</i>
+                        </span>
+                        <span>{formatInteger(row.filial)}</span>
+                        <span>{formatInteger(row.quantidade)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </section>
 
