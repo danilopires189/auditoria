@@ -149,16 +149,21 @@ function statusClassName(status: IndicadoresBlitzDayDetailRow["status"]): string
 }
 
 function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
-  const chartWidth = Math.max(rows.length * 36, 760);
+  const safeRows = Math.max(rows.length, 1);
+  const horizontalPadding = 28;
+  const slotWidth = 34;
+  const chartWidth = Math.max(760, horizontalPadding * 2 + safeRows * slotWidth);
   const chartHeight = 244;
   const plotHeight = 162;
-  const barWidth = 16;
+  const availablePlotWidth = Math.max(chartWidth - horizontalPadding * 2, safeRows * slotWidth);
+  const stepX = safeRows > 1 ? availablePlotWidth / (safeRows - 1) : availablePlotWidth;
+  const barWidth = Math.min(18, Math.max(12, stepX * 0.42));
   const maxConferido = Math.max(1, ...rows.map((row) => row.conferido_total));
   const maxPercent = Math.max(1, ...rows.map((row) => row.percentual_oficial));
 
   const linePoints = rows
     .map((row, index) => {
-      const x = 28 + index * 36 + barWidth / 2;
+      const x = horizontalPadding + index * stepX;
       const y = 28 + (1 - row.percentual_oficial / maxPercent) * plotHeight;
       return `${x},${Number.isFinite(y) ? y : 28 + plotHeight}`;
     })
@@ -171,17 +176,18 @@ function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
           <line x1="18" y1="190" x2={chartWidth - 16} y2="190" className="indicadores-chart-axis" />
           <line x1="18" y1="28" x2="18" y2="190" className="indicadores-chart-axis" />
           {rows.map((row, index) => {
-            const x = 28 + index * 36;
+            const centerX = horizontalPadding + index * stepX;
+            const x = centerX - barWidth / 2;
             const barHeight = (row.conferido_total / maxConferido) * plotHeight;
             const y = 190 - barHeight;
             return (
               <g key={row.date_ref}>
                 <rect x={x} y={y} width={barWidth} height={barHeight} rx="5" className="indicadores-chart-bar" />
-                <text x={x + barWidth / 2} y="206" textAnchor="middle" className="indicadores-chart-label">
+                <text x={centerX} y="206" textAnchor="middle" className="indicadores-chart-label">
                   {row.date_ref.slice(8, 10)}
                 </text>
                 {row.conferido_total > 0 ? (
-                  <text x={x + barWidth / 2} y={Math.max(y - 6, 18)} textAnchor="middle" className="indicadores-chart-value">
+                  <text x={centerX} y={Math.max(y - 6, 18)} textAnchor="middle" className="indicadores-chart-value">
                     {formatInteger(row.conferido_total)}
                   </text>
                 ) : null}
@@ -190,7 +196,7 @@ function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
           })}
           {rows.length > 1 ? <polyline points={linePoints} className="indicadores-chart-line" /> : null}
           {rows.map((row, index) => {
-            const cx = 28 + index * 36 + barWidth / 2;
+            const cx = horizontalPadding + index * stepX;
             const cy = 28 + (1 - row.percentual_oficial / maxPercent) * plotHeight;
             return (
               <g key={`${row.date_ref}:point`}>
