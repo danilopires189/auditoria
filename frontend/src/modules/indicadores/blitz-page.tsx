@@ -610,24 +610,32 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                     (() => {
                       const items: ReactNode[] = [];
                       let lastZone = "";
+                      let revealStep = 0;
 
                       sortedDayDetails.forEach((row, index) => {
                         const normalizedZone = row.zona.trim().toUpperCase() || "SEM ZONA";
                         if (normalizedZone !== lastZone) {
+                          revealStep += 1;
+                          const zoneKey = `zone-divider:${normalizedZone}:${index}`;
                           items.push(
-                            <div key={`zone-divider:${normalizedZone}:${index}`} className="indicadores-zone-divider-row">
+                            <AnimatedDayRow
+                              key={zoneKey}
+                              rowKey={zoneKey}
+                              className={`indicadores-zone-divider-row indicadores-reveal-delay-${Math.min(revealStep, 6)}`}
+                            >
                               <span className="indicadores-zone-divider">{normalizedZone}</span>
-                            </div>
+                            </AnimatedDayRow>
                           );
                           lastZone = normalizedZone;
                         }
 
+                        revealStep += 1;
                         const rowKey = `${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`;
                         items.push(
                           <AnimatedDayRow
                             key={rowKey}
                             rowKey={rowKey}
-                            className={`indicadores-day-row indicadores-reveal-delay-${Math.min(index + 1, 6)}`}
+                            className={`indicadores-day-row indicadores-reveal-delay-${Math.min(revealStep, 6)}`}
                           >
                             <span className="indicadores-day-description">
                               <strong>{row.descricao}</strong>
