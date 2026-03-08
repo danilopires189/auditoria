@@ -336,6 +336,16 @@ function formatTime(value: string): string {
   }).format(parsed);
 }
 
+function reportValue(row: PvpsAuditoriasReportRow, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = row[key];
+    if (value == null) continue;
+    const normalized = String(value).trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
 function normalizeMmaa(value: string | null | undefined): string | null {
   const digits = (value ?? "").replace(/\D/g, "").slice(0, 4);
   return digits.length === 4 ? digits : null;
@@ -1231,22 +1241,23 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             const dtHr = String(row.dt_hr ?? "");
             const data = dtHr ? formatDate(dtHr) : "";
             const hora = dtHr ? formatTime(dtHr) : "";
+            const valColeta = reportValue(row, "val_conf", "val_coleta", "validade_coleta", "validade_informada", "val_informada");
             return [
               data,
               hora,
-              String(row.cd ?? ""),
-              String(row.modulo ?? "").toUpperCase(),
-              String(row.coddv ?? ""),
-              String(row.descricao ?? ""),
-              String(row.zona ?? ""),
-              String(row.endereco ?? ""),
-              String(row.nivel ?? ""),
-              String(row.end_sit ?? ""),
-              String(row.val_sist ?? ""),
-              String(row.val_conf ?? ""),
-              String(row.aud_sit ?? ""),
-              String(row.auditor_nome ?? ""),
-              String(row.auditor_mat ?? ""),
+              reportValue(row, "cd"),
+              reportValue(row, "modulo").toUpperCase(),
+              reportValue(row, "coddv"),
+              reportValue(row, "descricao"),
+              reportValue(row, "zona"),
+              reportValue(row, "endereco"),
+              reportValue(row, "nivel"),
+              reportValue(row, "end_sit"),
+              reportValue(row, "val_sist", "val_sistema"),
+              valColeta,
+              reportValue(row, "aud_sit", "sit_aud"),
+              reportValue(row, "auditor_nome", "auditor_nom"),
+              reportValue(row, "auditor_mat", "autoritor_mat", "autitor_mat"),
               data,
               hora
             ];
