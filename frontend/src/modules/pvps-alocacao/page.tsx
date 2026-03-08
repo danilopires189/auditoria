@@ -1080,7 +1080,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const silentRefreshInFlightRef = useRef(false);
   const activeCd = profile.cd_default ?? null;
   const canUseAuditoriasReport = isAdmin && isDesktop;
-  const canExportPreparedReport = reportFormat === "excel" ? reportCount !== 0 : reportPdfPreview != null;
+  const currentPdfPreviewCacheKey = useMemo(() => {
+    if (reportFormat !== "pdf") return null;
+    if (!monthRangeFromInput(reportMonth)) return null;
+    if (reportCdMode === "active_cd" && activeCd == null) return null;
+    return `pdf|${reportMonth}|${reportCdMode === "all_cds" ? "all" : activeCd}|${reportModulo}`;
+  }, [activeCd, reportCdMode, reportFormat, reportModulo, reportMonth]);
+  const canExportPreparedReport = reportFormat === "excel"
+    ? reportCount !== 0
+    : (reportPdfPreview != null && reportPdfPreview.cacheKey === currentPdfPreviewCacheKey);
 
   function rememberSepConcludedAt(coddv: number, endSep: string, dtHr?: string | null): void {
     const rowKey = keyOfPvpsByValues(coddv, endSep);
@@ -1692,8 +1700,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "End. Pulmão",
           "Val. Separação",
           "Val. Pulmão",
-          "Auditor",
-          "Matrícula"
+          "Matrícula",
+          "Auditor"
         ]]
         : [[
           "Data",
@@ -1703,8 +1711,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "Andar",
           "Val. Sistema",
           "Val. Conferida",
-          "Auditor",
-          "Matrícula"
+          "Matrícula",
+          "Auditor"
         ]];
       const body = section.modulo === "pvps"
         ? section.nonConformeRows.map((row) => [
@@ -1715,8 +1723,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           row.enderecoPulmao,
           row.validadeSeparacao,
           row.validadePulmao,
-          row.auditor,
-          row.matricula
+          row.matricula,
+          row.auditor
         ])
         : section.nonConformeRows.map((row) => [
           row.dataHora,
@@ -1726,8 +1734,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           row.andar,
           row.validadeSistema,
           row.validadeConferida,
-          row.auditor,
-          row.matricula
+          row.matricula,
+          row.auditor
         ]);
       const columnStyles = section.modulo === "pvps"
         ? buildPdfColumnStyles(
@@ -1735,7 +1743,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           head[0],
           body,
           contentWidth,
-          [2, 7],
+          [2, 8],
           {
             0: 72,
             1: 50,
@@ -1744,8 +1752,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             4: 82,
             5: 52,
             6: 52,
-            7: 92,
-            8: 52
+            7: 52,
+            8: 92
           },
           {
             0: 86,
@@ -1755,8 +1763,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             4: 120,
             5: 72,
             6: 72,
-            7: 180,
-            8: 68
+            7: 68,
+            8: 180
           }
         )
         : buildPdfColumnStyles(
@@ -1764,7 +1772,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           head[0],
           body,
           contentWidth,
-          [2, 7],
+          [2, 8],
           {
             0: 72,
             1: 50,
@@ -1773,8 +1781,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             4: 34,
             5: 58,
             6: 58,
-            7: 92,
-            8: 52
+            7: 52,
+            8: 92
           },
           {
             0: 86,
@@ -1784,8 +1792,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             4: 42,
             5: 76,
             6: 76,
-            7: 180,
-            8: 68
+            7: 68,
+            8: 180
           }
         );
 
@@ -1891,15 +1899,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (reportFormat === "pdf") {
       const request = resolvePdfReportRequest();
       if (!request) return;
+      if (!reportPdfPreview || reportPdfPreview.cacheKey !== request.cacheKey) {
+        setReportError("Clique em Buscar para preparar o PDF antes de exportar.");
+        return;
+      }
 
       setReportBusyExport(true);
       try {
-        const preview = reportPdfPreview && reportPdfPreview.cacheKey === request.cacheKey
-          ? reportPdfPreview
-          : await preparePdfReportPreview(request);
-        setReportPdfPreview(preview);
-        setReportCount(preview.totalAudited);
-        await exportPdfReport(preview);
+        setReportCount(reportPdfPreview.totalAudited);
+        await exportPdfReport(reportPdfPreview);
         setReportMessage("Relatório PDF gerado com sucesso.");
       } catch (error) {
         setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório PDF.");
