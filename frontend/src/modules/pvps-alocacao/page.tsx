@@ -3556,9 +3556,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 {!pulItemsLoading ? (
                                   <div className="pvps-pul-completed-list">
                                     {[...pulItemsCompleted].sort((a, b) => a.end_pul.localeCompare(b.end_pul)).map((item) => (
-                                      <div key={`${row.audit_id}:${item.end_pul}`} className="pvps-pul-completed-item">
+                                      <div
+                                        key={`${row.audit_id}:${item.end_pul}`}
+                                        className={`pvps-pul-completed-item${item.is_lower || row.pul_lower_end === item.end_pul ? " is-lower" : ""}`}
+                                      >
                                         <div className="pvps-pul-completed-item-head">
                                           <strong>{item.end_pul}</strong>
+                                          {item.is_lower || row.pul_lower_end === item.end_pul ? (
+                                            <span className="pvps-pul-lower-badge">Nao conforme</span>
+                                          ) : null}
                                           <span>{formatDateTime(item.dt_hr ?? row.dt_hr)}</span>
                                         </div>
                                         <div className="pvps-pul-completed-item-meta">

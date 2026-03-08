@@ -34,6 +34,7 @@ export interface PvpsPulItemRow {
   auditado: boolean;
   dt_hr?: string | null;
   auditor_nome?: string | null;
+  is_lower?: boolean;
 }
 
 export interface PvpsReportPulItemRow {
@@ -41,6 +42,7 @@ export interface PvpsReportPulItemRow {
   end_pul: string;
   val_pul: string | null;
   end_sit: PvpsEndSit | null;
+  is_lower: boolean;
 }
 
 export interface PvpsSepSubmitResult {

@@ -200,7 +200,8 @@ function mapPvpsReportPul(raw: Record<string, unknown>): PvpsReportPulItemRow {
     audit_id: parseString(raw.audit_id),
     end_pul: parseString(raw.end_pul).toUpperCase(),
     val_pul: parseNullableString(raw.val_pul),
-    end_sit: parseEndSit(raw.end_sit)
+    end_sit: parseEndSit(raw.end_sit),
+    is_lower: parseBoolean(raw.is_lower)
   };
 }
 

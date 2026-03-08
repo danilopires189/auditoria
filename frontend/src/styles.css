@@ -7445,6 +7445,11 @@ small {
   color: #4d5f7f;
 }
 
+.pvps-pul-completed-item.is-lower {
+  border-color: #efb6b6;
+  background: #fff7f7;
+}
+
 .pvps-pul-completed-item-head {
   display: flex;
   align-items: center;
@@ -7462,6 +7467,16 @@ small {
   color: #6b7f9e;
   font-size: 0.76rem;
   font-weight: 600;
+}
+
+.pvps-pul-lower-badge {
+  border: 1px solid #f0b7b7;
+  border-radius: 999px;
+  background: #fff1f1;
+  color: #b42318;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .pvps-pul-completed-item-meta {
