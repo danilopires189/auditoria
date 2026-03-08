@@ -37,6 +37,7 @@ interface AnimatedDayRowProps {
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
+const ZONA_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -448,6 +449,20 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
     [dailySeries, selectedDay]
   );
 
+  const sortedDayDetails = useMemo(() => {
+    const rows = [...dayDetails];
+    rows.sort((left, right) => {
+      const zoneCmp = ZONA_COLLATOR.compare(left.zona, right.zona);
+      if (zoneCmp !== 0) return zoneCmp;
+      const descCmp = ZONA_COLLATOR.compare(left.descricao, right.descricao);
+      if (descCmp !== 0) return descCmp;
+      if (left.filial !== right.filial) return left.filial - right.filial;
+      if (left.pedido !== right.pedido) return left.pedido - right.pedido;
+      return left.coddv - right.coddv;
+    });
+    return rows;
+  }, [dayDetails]);
+
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
     const selectedDayErrors =
@@ -589,30 +604,47 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                 <div className="indicadores-day-list-body">
                   {loadingDetails ? (
                     <div className="indicadores-empty-box"><p>Carregando divergências do dia...</p></div>
-                  ) : dayDetails.length === 0 ? (
+                  ) : sortedDayDetails.length === 0 ? (
                     <div className="indicadores-empty-box"><p>Nenhuma divergência encontrada para a data selecionada.</p></div>
                   ) : (
-                    dayDetails.map((row, index) => {
-                      const rowKey = `${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`;
-                      return (
-                      <AnimatedDayRow
-                        key={rowKey}
-                        rowKey={rowKey}
-                        className={`indicadores-day-row indicadores-reveal-delay-${Math.min(index + 1, 6)}`}
-                      >
-                        <span className="indicadores-day-description">
-                          <strong>{row.descricao}</strong>
-                          <small>Pedido {formatPlainInteger(row.pedido)} · COD {formatPlainInteger(row.coddv)}</small>
-                        </span>
-                        <span>{row.zona}</span>
-                        <span>
-                          <i className={`indicadores-status-badge ${statusClassName(row.status)}`}>{row.status}</i>
-                        </span>
-                        <span>{formatInteger(row.filial)}</span>
-                        <span>{formatInteger(row.quantidade)}</span>
-                      </AnimatedDayRow>
-                    );
-                    })
+                    (() => {
+                      const items: ReactNode[] = [];
+                      let lastZone = "";
+
+                      sortedDayDetails.forEach((row, index) => {
+                        const normalizedZone = row.zona.trim().toUpperCase() || "SEM ZONA";
+                        if (normalizedZone !== lastZone) {
+                          items.push(
+                            <div key={`zone-divider:${normalizedZone}:${index}`} className="indicadores-zone-divider-row">
+                              <span className="indicadores-zone-divider">{normalizedZone}</span>
+                            </div>
+                          );
+                          lastZone = normalizedZone;
+                        }
+
+                        const rowKey = `${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`;
+                        items.push(
+                          <AnimatedDayRow
+                            key={rowKey}
+                            rowKey={rowKey}
+                            className={`indicadores-day-row indicadores-reveal-delay-${Math.min(index + 1, 6)}`}
+                          >
+                            <span className="indicadores-day-description">
+                              <strong>{row.descricao}</strong>
+                              <small>Pedido {formatPlainInteger(row.pedido)} · COD {formatPlainInteger(row.coddv)}</small>
+                            </span>
+                            <span>{row.zona}</span>
+                            <span>
+                              <i className={`indicadores-status-badge ${statusClassName(row.status)}`}>{row.status}</i>
+                            </span>
+                            <span>{formatInteger(row.filial)}</span>
+                            <span>{formatInteger(row.quantidade)}</span>
+                          </AnimatedDayRow>
+                        );
+                      });
+
+                      return items;
+                    })()
                   )}
                 </div>
               </div>
