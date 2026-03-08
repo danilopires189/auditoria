@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import logoImage from "../../../assets/logo.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatCountLabel } from "../../shared/inflection";
 import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
@@ -92,6 +93,74 @@ interface AnimatedFeedRevealProps {
   children: ReactNode;
 }
 
+type ReportExportFormat = "excel" | "pdf";
+type PdfAuditStatus = "conforme" | "nao_conforme" | "ocorrencia" | "pendente_pul";
+
+interface PdfReportSummary {
+  enderecosAuditados: number;
+  ocorrencias: number;
+  conformes: number;
+  percentualConformidade: number;
+}
+
+interface PdfBaseDetailRow {
+  dataHora: string;
+  cd: string;
+  zona: string;
+  coddv: string;
+  descricao: string;
+  situacaoEndereco: string;
+  auditor: string;
+  matricula: string;
+}
+
+interface PdfPvpsDetailRow extends PdfBaseDetailRow {
+  enderecoSeparacao: string;
+  enderecoPulmao: string;
+  validadeSeparacao: string;
+  validadePulmao: string;
+}
+
+interface PdfAlocacaoDetailRow extends PdfBaseDetailRow {
+  endereco: string;
+  andar: string;
+  validadeSistema: string;
+  validadeConferida: string;
+}
+
+interface PdfPvpsAuditRow extends PdfPvpsDetailRow {
+  sitAud: PdfAuditStatus;
+}
+
+interface PdfAlocacaoAuditRow extends PdfAlocacaoDetailRow {
+  sitAud: Exclude<PdfAuditStatus, "pendente_pul">;
+}
+
+type PdfReportSection =
+  | {
+    modulo: "pvps";
+    title: string;
+    summary: PdfReportSummary;
+    nonConformeRows: PdfPvpsDetailRow[];
+  }
+  | {
+    modulo: "alocacao";
+    title: string;
+    summary: PdfReportSummary;
+    nonConformeRows: PdfAlocacaoDetailRow[];
+  };
+
+interface PdfReportPreview {
+  cacheKey: string;
+  month: string;
+  monthLabel: string;
+  cdLabel: string;
+  generatedAt: string;
+  generatedBy: string;
+  sections: PdfReportSection[];
+  totalAudited: number;
+}
+
 type PvpsFeedItem =
   | {
     kind: "sep";
@@ -114,6 +183,7 @@ const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 const FEED_NEXT_PREVIEW_LIMIT = 5;
 const ADMIN_HISTORY_VIEW_LIMIT = 20;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+let reportLogoDataUrlPromise: Promise<string | null> | null = null;
 
 function AnimatedFeedReveal({ cardKey, className, children }: AnimatedFeedRevealProps) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -389,6 +459,67 @@ function brtDayKey(now = new Date()): string {
 function brtMonthStartKey(now = new Date()): string {
   const dayKey = brtDayKey(now);
   return `${dayKey.slice(0, 8)}01`;
+}
+
+function brtMonthKey(now = new Date()): string {
+  return brtDayKey(now).slice(0, 7);
+}
+
+function monthRangeFromInput(value: string): { dtIni: string; dtFim: string; monthLabel: string } | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(value ?? "").trim());
+  if (!match) return null;
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  const firstDay = `${match[1]}-${match[2]}-01`;
+  const lastDate = new Date(year, month, 0);
+  const lastDay = `${match[1]}-${match[2]}-${String(lastDate.getDate()).padStart(2, "0")}`;
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric"
+  }).format(new Date(year, month - 1, 1));
+  return {
+    dtIni: firstDay,
+    dtFim: lastDay,
+    monthLabel: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
+  };
+}
+
+function summarizePdfRows(rows: Array<{ sitAud: PdfAuditStatus }>): PdfReportSummary {
+  const auditedRows = rows.filter((row) => row.sitAud !== "pendente_pul");
+  const enderecosAuditados = auditedRows.length;
+  const ocorrencias = auditedRows.filter((row) => row.sitAud === "ocorrencia").length;
+  const conformes = auditedRows.filter((row) => row.sitAud === "conforme").length;
+  const percentualConformidade = enderecosAuditados > 0 ? Number(((conformes / enderecosAuditados) * 100).toFixed(1)) : 0;
+  return {
+    enderecosAuditados,
+    ocorrencias,
+    conformes,
+    percentualConformidade
+  };
+}
+
+function reportSummaryLabel(value: number): string {
+  return new Intl.NumberFormat("pt-BR").format(value);
+}
+
+async function loadReportLogoDataUrl(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  if (!reportLogoDataUrlPromise) {
+    reportLogoDataUrlPromise = fetch(logoImage)
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        return await new Promise<string | null>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      })
+      .catch(() => null);
+  }
+  return reportLogoDataUrlPromise;
 }
 
 function formatAndar(value: string | null): string {
@@ -761,8 +892,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return window.matchMedia("(min-width: 980px)").matches;
   });
   const [showAuditoriasReportModal, setShowAuditoriasReportModal] = useState(false);
+  const [reportFormat, setReportFormat] = useState<ReportExportFormat>("excel");
   const [reportDtIni, setReportDtIni] = useState<string>(() => brtMonthStartKey());
   const [reportDtFim, setReportDtFim] = useState<string>(() => brtDayKey());
+  const [reportMonth, setReportMonth] = useState<string>(() => brtMonthKey());
   const [reportCdMode, setReportCdMode] = useState<"active_cd" | "all_cds">("active_cd");
   const [reportModulo, setReportModulo] = useState<PvpsModulo>("ambos");
   const [reportCount, setReportCount] = useState<number | null>(null);
@@ -770,6 +903,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [reportBusyExport, setReportBusyExport] = useState(false);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [reportPdfPreview, setReportPdfPreview] = useState<PdfReportPreview | null>(null);
 
   const [activePvpsKey, setActivePvpsKey] = useState<string | null>(null);
   const activePvps = useMemo(
@@ -854,6 +988,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const silentRefreshInFlightRef = useRef(false);
   const activeCd = profile.cd_default ?? null;
   const canUseAuditoriasReport = isAdmin && isDesktop;
+  const canExportPreparedReport = reportFormat === "excel" ? reportCount !== 0 : reportPdfPreview != null;
 
   function rememberSepConcludedAt(coddv: number, endSep: string, dtHr?: string | null): void {
     const rowKey = keyOfPvpsByValues(coddv, endSep);
@@ -1173,11 +1308,392 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     };
   }
 
+  function resolvePdfReportRequest():
+    | {
+      cacheKey: string;
+      filters: PvpsAuditoriasReportFilters;
+      month: string;
+      monthLabel: string;
+      cdLabel: string;
+    }
+    | null {
+    const monthRange = monthRangeFromInput(reportMonth);
+    if (!monthRange) {
+      setReportError("Informe um mês/ano válido.");
+      return null;
+    }
+
+    if (reportCdMode === "active_cd" && activeCd == null) {
+      setReportError("CD ativo não definido para gerar o relatório.");
+      return null;
+    }
+
+    const filters: PvpsAuditoriasReportFilters = {
+      dtIni: monthRange.dtIni,
+      dtFim: monthRange.dtFim,
+      cd: reportCdMode === "all_cds" ? null : activeCd,
+      modulo: reportModulo
+    };
+    const cdLabel = filters.cd == null ? "Todos CDs com acesso" : `CD ${String(filters.cd).padStart(2, "0")} (ativo)`;
+    return {
+      cacheKey: `pdf|${reportMonth}|${filters.cd ?? "all"}|${filters.modulo}`,
+      filters,
+      month: reportMonth,
+      monthLabel: monthRange.monthLabel,
+      cdLabel
+    };
+  }
+
+  async function preparePdfReportPreview(
+    request: NonNullable<ReturnType<typeof resolvePdfReportRequest>>
+  ): Promise<PdfReportPreview> {
+    const rows = await fetchVwAuditoriasReportRows(request.filters);
+    const pvpsRowsOnly = rows.filter((row) => String(row.modulo ?? "").toLowerCase() === "pvps");
+    const alocRowsOnly = rows.filter((row) => String(row.modulo ?? "").toLowerCase() === "alocacao");
+    const sections: PdfReportSection[] = [];
+
+    if (request.filters.modulo !== "alocacao") {
+      const auditIds = pvpsRowsOnly
+        .map((row) => reportValue(row, "audit_id"))
+        .filter((auditId) => auditId.length > 0);
+      const pulItems = auditIds.length > 0 ? await fetchPvpsReportPulItems(auditIds) : [];
+      const pulByAuditId = new Map<string, Array<{
+        end_pul: string;
+        val_pul: string | null;
+        end_sit: PvpsEndSit | null;
+        is_lower: boolean;
+      }>>();
+
+      for (const item of pulItems) {
+        const current = pulByAuditId.get(item.audit_id) ?? [];
+        current.push({
+          end_pul: item.end_pul,
+          val_pul: item.val_pul,
+          end_sit: item.end_sit,
+          is_lower: item.is_lower
+        });
+        pulByAuditId.set(item.audit_id, current);
+      }
+
+      const normalizedRows: PdfPvpsAuditRow[] = [];
+      for (const row of pvpsRowsOnly) {
+        const auditId = reportValue(row, "audit_id");
+        const sepSituacaoRaw = reportValue(row, "end_sit", "end_situacao").toLowerCase();
+        const sepSituacao = sepSituacaoRaw === "vazio" || sepSituacaoRaw === "obstruido"
+          ? (sepSituacaoRaw as PvpsEndSit)
+          : null;
+        const baseRow = {
+          dataHora: formatDateTime(reportValue(row, "dt_hr")),
+          cd: reportValue(row, "cd"),
+          zona: reportValue(row, "zona"),
+          coddv: reportValue(row, "coddv"),
+          descricao: reportValue(row, "descricao"),
+          enderecoSeparacao: reportValue(row, "end_sep", "endereco_sep", "endereco"),
+          validadeSeparacao: formatMmaaDigits(reportValue(row, "val_sep", "val_conf_sep", "val_auditada")) ?? "-",
+          auditor: reportValue(row, "auditor_nome", "auditor_nom") || "-",
+          matricula: reportValue(row, "auditor_mat", "autoritor_mat", "autitor_mat") || "-"
+        };
+        const pulList = [...(pulByAuditId.get(auditId) ?? [])].sort((a, b) => a.end_pul.localeCompare(b.end_pul));
+
+        if (pulList.length === 0) {
+          normalizedRows.push({
+            ...baseRow,
+            enderecoPulmao: "-",
+            validadePulmao: "-",
+            situacaoEndereco: sepSituacao ? formatOcorrenciaLabel(sepSituacao) : "-",
+            sitAud: sepSituacao ? "ocorrencia" : "pendente_pul"
+          });
+          continue;
+        }
+
+        for (const pulItem of pulList) {
+          const pulSituacao = pulItem.end_sit === "vazio" || pulItem.end_sit === "obstruido"
+            ? pulItem.end_sit
+            : null;
+          normalizedRows.push({
+            ...baseRow,
+            enderecoPulmao: pulItem.end_pul || "-",
+            validadePulmao: formatMmaaDigits(pulItem.val_pul) ?? "-",
+            situacaoEndereco: pulSituacao
+              ? formatOcorrenciaLabel(pulSituacao)
+              : (sepSituacao ? formatOcorrenciaLabel(sepSituacao) : "-"),
+            sitAud: pulSituacao || sepSituacao
+              ? "ocorrencia"
+              : (pulItem.is_lower ? "nao_conforme" : "conforme")
+          });
+        }
+      }
+
+      sections.push({
+        modulo: "pvps",
+        title: "PVPS",
+        summary: summarizePdfRows(normalizedRows),
+        nonConformeRows: normalizedRows.filter((row) => row.sitAud === "nao_conforme")
+      });
+    }
+
+    if (request.filters.modulo !== "pvps") {
+      const normalizedRows: PdfAlocacaoAuditRow[] = alocRowsOnly.map((row) => {
+        const endSituacaoRaw = reportValue(row, "end_sit", "end_situacao").toLowerCase();
+        const endSituacao = endSituacaoRaw === "vazio" || endSituacaoRaw === "obstruido"
+          ? (endSituacaoRaw as PvpsEndSit)
+          : null;
+        const audSitRaw = reportValue(row, "aud_sit", "sit_aud").toLowerCase();
+        const sitAud: PdfAlocacaoAuditRow["sitAud"] = audSitRaw === "ocorrencia"
+          ? "ocorrencia"
+          : (audSitRaw === "conforme" ? "conforme" : "nao_conforme");
+        return {
+          dataHora: formatDateTime(reportValue(row, "dt_hr")),
+          cd: reportValue(row, "cd"),
+          zona: reportValue(row, "zona"),
+          coddv: reportValue(row, "coddv"),
+          descricao: reportValue(row, "descricao"),
+          endereco: reportValue(row, "endereco"),
+          andar: formatAndar(reportValue(row, "nivel") || null),
+          validadeSistema: formatMmaaDigits(reportValue(row, "val_sist", "val_sistema")) ?? "-",
+          validadeConferida: formatMmaaDigits(
+            reportValue(
+              row,
+              "val_conf",
+              "val_auditada",
+              "val_coleta",
+              "validade_coleta",
+              "validade_informada",
+              "val_informada"
+            )
+          ) ?? "-",
+          situacaoEndereco: endSituacao ? formatOcorrenciaLabel(endSituacao) : "-",
+          auditor: reportValue(row, "auditor_nome", "auditor_nom") || "-",
+          matricula: reportValue(row, "auditor_mat", "autoritor_mat", "autitor_mat") || "-",
+          sitAud
+        };
+      });
+
+      sections.push({
+        modulo: "alocacao",
+        title: "Alocação",
+        summary: summarizePdfRows(normalizedRows),
+        nonConformeRows: normalizedRows.filter((row) => row.sitAud === "nao_conforme")
+      });
+    }
+
+    return {
+      cacheKey: request.cacheKey,
+      month: request.month,
+      monthLabel: request.monthLabel,
+      cdLabel: request.cdLabel,
+      generatedAt: new Date().toISOString(),
+      generatedBy: `${displayUserName} (${profile.mat || "-"})`,
+      sections,
+      totalAudited: sections.reduce((total, section) => total + section.summary.enderecosAuditados, 0)
+    };
+  }
+
+  async function exportPdfReport(preview: PdfReportPreview): Promise<void> {
+    const [{ jsPDF }, autoTableModule, logoDataUrl] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+      loadReportLogoDataUrl()
+    ]);
+    const autoTable = autoTableModule.default;
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "pt",
+      format: "a4"
+    });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 36;
+    const contentWidth = pageWidth - (marginX * 2);
+    const summaryGap = 10;
+    const summaryWidth = (contentWidth - (summaryGap * 3)) / 4;
+
+    const drawSection = (section: PdfReportSection, pageIndex: number) => {
+      if (pageIndex > 0) {
+        doc.addPage();
+      }
+
+      let cursorY = 40;
+      if (logoDataUrl) {
+        doc.addImage(logoDataUrl, "PNG", marginX, cursorY - 6, 52, 52);
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.setTextColor(24, 51, 97);
+      doc.text("Relatório de Conformidade", marginX + 66, cursorY + 10);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(70, 92, 126);
+      const metaLines = [
+        `Módulo: ${section.title}`,
+        `Período: ${preview.monthLabel}`,
+        `CD: ${preview.cdLabel}`,
+        `Gerado por: ${preview.generatedBy}`,
+        `Data/Hora: ${formatDateTime(preview.generatedAt)}`
+      ];
+      metaLines.forEach((line, index) => {
+        doc.text(line, marginX + 66, cursorY + 28 + (index * 14));
+      });
+
+      cursorY = 126;
+      const cards = [
+        { label: "Endereços auditados", value: reportSummaryLabel(section.summary.enderecosAuditados) },
+        { label: "Ocorrências", value: reportSummaryLabel(section.summary.ocorrencias) },
+        { label: "Conformes", value: reportSummaryLabel(section.summary.conformes) },
+        { label: "% Conformidade", value: formatPercent(section.summary.percentualConformidade) }
+      ];
+      cards.forEach((card, index) => {
+        const boxX = marginX + (index * (summaryWidth + summaryGap));
+        doc.setFillColor(245, 248, 253);
+        doc.setDrawColor(209, 221, 241);
+        doc.roundedRect(boxX, cursorY, summaryWidth, 56, 10, 10, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.setTextColor(28, 58, 106);
+        doc.text(card.value, boxX + 12, cursorY + 24);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(86, 103, 132);
+        doc.text(card.label, boxX + 12, cursorY + 42);
+      });
+
+      cursorY += 88;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(24, 51, 97);
+      doc.text(`Não conformes (${section.nonConformeRows.length})`, marginX, cursorY);
+      cursorY += 14;
+
+      if (section.nonConformeRows.length === 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(86, 103, 132);
+        doc.text("Nenhum item não conforme encontrado para os filtros selecionados.", marginX, cursorY + 12);
+        return;
+      }
+
+      const head = section.modulo === "pvps"
+        ? [[
+          "Data/Hora",
+          "CD",
+          "Zona",
+          "CODDV",
+          "Descrição",
+          "Endereço Separação",
+          "Endereço Pulmão",
+          "Validade Separação",
+          "Validade Pulmão",
+          "Situação do Endereço",
+          "Auditor",
+          "Matrícula"
+        ]]
+        : [[
+          "Data/Hora",
+          "CD",
+          "Zona",
+          "CODDV",
+          "Descrição",
+          "Endereço",
+          "Andar",
+          "Validade Sistema",
+          "Validade Conferida",
+          "Situação do Endereço",
+          "Auditor",
+          "Matrícula"
+        ]];
+      const body = section.modulo === "pvps"
+        ? section.nonConformeRows.map((row) => [
+          row.dataHora,
+          row.cd,
+          row.zona,
+          row.coddv,
+          row.descricao,
+          row.enderecoSeparacao,
+          row.enderecoPulmao,
+          row.validadeSeparacao,
+          row.validadePulmao,
+          row.situacaoEndereco,
+          row.auditor,
+          row.matricula
+        ])
+        : section.nonConformeRows.map((row) => [
+          row.dataHora,
+          row.cd,
+          row.zona,
+          row.coddv,
+          row.descricao,
+          row.endereco,
+          row.andar,
+          row.validadeSistema,
+          row.validadeConferida,
+          row.situacaoEndereco,
+          row.auditor,
+          row.matricula
+        ]);
+
+      autoTable(doc, {
+        startY: cursorY + 8,
+        margin: { left: marginX, right: marginX },
+        head,
+        body,
+        theme: "grid",
+        styles: {
+          fontSize: 7.5,
+          cellPadding: 4,
+          overflow: "linebreak",
+          lineColor: [214, 225, 241],
+          lineWidth: 0.4,
+          textColor: [31, 45, 69]
+        },
+        headStyles: {
+          fillColor: [31, 69, 125],
+          textColor: [255, 255, 255],
+          fontStyle: "bold"
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 253]
+        }
+      });
+    };
+
+    preview.sections.forEach((section, index) => drawSection(section, index));
+    const moduloSuffix = reportModulo === "ambos" ? "ambos" : reportModulo;
+    const cdSuffix = reportCdMode === "all_cds" ? "todos-cds" : `cd-${String(activeCd ?? "").padStart(2, "0")}`;
+    doc.save(`relatorio-conformidade-${moduloSuffix}-${preview.month}-${cdSuffix}.pdf`);
+  }
+
   async function runAuditoriasReportSearch(): Promise<void> {
     if (!canUseAuditoriasReport) return;
     setReportError(null);
     setReportMessage(null);
     setReportCount(null);
+    setReportPdfPreview(null);
+
+    if (reportFormat === "pdf") {
+      const request = resolvePdfReportRequest();
+      if (!request) return;
+
+      setReportBusySearch(true);
+      try {
+        const preview = await preparePdfReportPreview(request);
+        setReportPdfPreview(preview);
+        setReportCount(preview.totalAudited);
+        const sectionsSummary = preview.sections
+          .map((section) => `${section.title}: ${section.summary.enderecosAuditados} auditados | ${section.nonConformeRows.length} não conformes`)
+          .join(" | ");
+        setReportMessage(
+          preview.totalAudited > 0
+            ? `Prévia mensal preparada. ${sectionsSummary}.`
+            : "Nenhuma auditoria encontrada no mês informado."
+        );
+      } catch (error) {
+        setReportError(error instanceof Error ? error.message : "Falha ao preparar relatório PDF.");
+      } finally {
+        setReportBusySearch(false);
+      }
+      return;
+    }
 
     const filters = resolveReportFilters();
     if (!filters) return;
@@ -1202,6 +1718,27 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (!canUseAuditoriasReport) return;
     setReportError(null);
     setReportMessage(null);
+
+    if (reportFormat === "pdf") {
+      const request = resolvePdfReportRequest();
+      if (!request) return;
+
+      setReportBusyExport(true);
+      try {
+        const preview = reportPdfPreview && reportPdfPreview.cacheKey === request.cacheKey
+          ? reportPdfPreview
+          : await preparePdfReportPreview(request);
+        setReportPdfPreview(preview);
+        setReportCount(preview.totalAudited);
+        await exportPdfReport(preview);
+        setReportMessage("Relatório PDF gerado com sucesso.");
+      } catch (error) {
+        setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório PDF.");
+      } finally {
+        setReportBusyExport(false);
+      }
+      return;
+    }
 
     const filters = resolveReportFilters();
     if (!filters) return;
@@ -1608,14 +2145,25 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   useEffect(() => {
     if (!showAuditoriasReportModal) return;
+    setReportFormat("excel");
     setReportDtIni(brtMonthStartKey());
     setReportDtFim(todayBrt);
+    setReportMonth(brtMonthKey());
     setReportCdMode("active_cd");
     setReportModulo("ambos");
     setReportCount(null);
     setReportMessage(null);
     setReportError(null);
+    setReportPdfPreview(null);
   }, [showAuditoriasReportModal, todayBrt]);
+
+  useEffect(() => {
+    if (!showAuditoriasReportModal) return;
+    setReportCount(null);
+    setReportMessage(null);
+    setReportError(null);
+    setReportPdfPreview(null);
+  }, [showAuditoriasReportModal, reportFormat, reportDtIni, reportDtFim, reportMonth, reportCdMode, reportModulo]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -3186,7 +3734,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     onClick={() => setShowAuditoriasReportModal(true)}
                   >
                     <span className="pvps-btn-icon" aria-hidden="true">{reportIcon()}</span>
-                    <span>Relatório Excel</span>
+                    <span>Relatórios</span>
                   </button>
                 ) : null}
               </div>
@@ -4147,7 +4695,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="pvps-zone-popup-header">
                 <div className="pvps-zone-popup-title">
                   <span className="pvps-zone-popup-icon" aria-hidden="true">{reportIcon()}</span>
-                  <h3 id="pvps-auditorias-report-title">Relatório Excel - vw_auditorias</h3>
+                  <h3 id="pvps-auditorias-report-title">Relatórios de Auditoria</h3>
                 </div>
                 <button
                   className="btn btn-muted pvps-zone-close-btn"
@@ -4161,7 +4709,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               </div>
 
               <p className="pvps-report-note">
-                Selecione o período e o CD para exportar os dados do relatório.
+                {reportFormat === "excel"
+                  ? "Selecione o período e o CD para exportar os dados em Excel."
+                  : "Selecione o mês/ano, o CD e o módulo para gerar o PDF mensal de conformidade."}
               </p>
 
               <form
@@ -4172,23 +4722,44 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 }}
               >
                 <label>
-                  Data inicial
-                  <input
-                    type="date"
-                    value={reportDtIni}
-                    onChange={(event) => setReportDtIni(event.target.value)}
-                    required
-                  />
+                  Formato
+                  <select value={reportFormat} onChange={(event) => setReportFormat(event.target.value as ReportExportFormat)}>
+                    <option value="excel">Excel</option>
+                    <option value="pdf">PDF</option>
+                  </select>
                 </label>
-                <label>
-                  Data final
-                  <input
-                    type="date"
-                    value={reportDtFim}
-                    onChange={(event) => setReportDtFim(event.target.value)}
-                    required
-                  />
-                </label>
+                {reportFormat === "excel" ? (
+                  <>
+                    <label>
+                      Data inicial
+                      <input
+                        type="date"
+                        value={reportDtIni}
+                        onChange={(event) => setReportDtIni(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Data final
+                      <input
+                        type="date"
+                        value={reportDtFim}
+                        onChange={(event) => setReportDtFim(event.target.value)}
+                        required
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <label>
+                    Mês / Ano
+                    <input
+                      type="month"
+                      value={reportMonth}
+                      onChange={(event) => setReportMonth(event.target.value)}
+                      required
+                    />
+                  </label>
+                )}
                 <label>
                   CD
                   <select value={reportCdMode} onChange={(event) => setReportCdMode(event.target.value as "active_cd" | "all_cds")}>
@@ -4220,17 +4791,49 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   type="button"
                   className="btn btn-primary pvps-toolbar-btn"
                   onClick={() => void runAuditoriasReportExport()}
-                  disabled={reportBusyExport || reportBusySearch || reportCount === 0}
+                  disabled={reportBusyExport || reportBusySearch || !canExportPreparedReport}
                 >
                   <span className="pvps-btn-icon" aria-hidden="true">{reportIcon()}</span>
-                  <span>{reportBusyExport ? "Exportando..." : "Exportar Excel"}</span>
+                  <span>{reportBusyExport ? "Exportando..." : `Exportar ${reportFormat === "excel" ? "Excel" : "PDF"}`}</span>
                 </button>
               </div>
 
               {reportCount != null ? (
                 <p className="pvps-report-count">
-                  Registros encontrados: <strong>{reportCount}</strong>
+                  {reportFormat === "excel"
+                    ? <>Registros encontrados: <strong>{reportCount}</strong></>
+                    : <>Endereços auditados no período: <strong>{reportCount}</strong></>}
                 </p>
+              ) : null}
+              {reportFormat === "pdf" && reportPdfPreview ? (
+                <div className="pvps-report-preview-list">
+                  {reportPdfPreview.sections.map((section) => (
+                    <article key={section.modulo} className="pvps-report-preview-card">
+                      <div className="pvps-report-preview-head">
+                        <strong>{section.title}</strong>
+                        <span>{section.nonConformeRows.length} não conformes</span>
+                      </div>
+                      <div className="pvps-report-summary-grid">
+                        <div className="pvps-report-summary-item">
+                          <small>Auditados</small>
+                          <strong>{reportSummaryLabel(section.summary.enderecosAuditados)}</strong>
+                        </div>
+                        <div className="pvps-report-summary-item">
+                          <small>Ocorrências</small>
+                          <strong>{reportSummaryLabel(section.summary.ocorrencias)}</strong>
+                        </div>
+                        <div className="pvps-report-summary-item">
+                          <small>Conformes</small>
+                          <strong>{reportSummaryLabel(section.summary.conformes)}</strong>
+                        </div>
+                        <div className="pvps-report-summary-item">
+                          <small>% Conformidade</small>
+                          <strong>{formatPercent(section.summary.percentualConformidade)}</strong>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
               ) : null}
               {reportError ? <div className="alert error">{reportError}</div> : null}
               {reportMessage ? <div className="alert success">{reportMessage}</div> : null}
