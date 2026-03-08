@@ -1619,7 +1619,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const head = section.modulo === "pvps"
         ? [[
           "Data/Hora",
-          "Zona",
           "CODDV",
           "Descrição",
           "Endereço Separação",
@@ -1631,7 +1630,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ]]
         : [[
           "Data/Hora",
-          "Zona",
           "CODDV",
           "Descrição",
           "Endereço",
@@ -1644,7 +1642,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const body = section.modulo === "pvps"
         ? section.nonConformeRows.map((row) => [
           row.dataHora,
-          row.zona,
           row.coddv,
           row.descricao,
           row.enderecoSeparacao,
@@ -1656,7 +1653,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ])
         : section.nonConformeRows.map((row) => [
           row.dataHora,
-          row.zona,
           row.coddv,
           row.descricao,
           row.endereco,
@@ -1694,28 +1690,26 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         },
         columnStyles: section.modulo === "pvps"
           ? {
-            0: { cellWidth: 68 },
-            1: { cellWidth: 42 },
-            2: { cellWidth: 48 },
-            3: { cellWidth: 154, overflow: "linebreak" },
-            4: { cellWidth: 92 },
-            5: { cellWidth: 92 },
-            6: { cellWidth: 58 },
-            7: { cellWidth: 58 },
-            8: { cellWidth: 126, overflow: "linebreak" },
-            9: { cellWidth: 58 }
+            0: { cellWidth: 74 },
+            1: { cellWidth: 52 },
+            2: { cellWidth: 176, overflow: "linebreak" },
+            3: { cellWidth: 102 },
+            4: { cellWidth: 102 },
+            5: { cellWidth: 62 },
+            6: { cellWidth: 62 },
+            7: { cellWidth: 144, overflow: "linebreak" },
+            8: { cellWidth: 64 }
           }
           : {
-            0: { cellWidth: 68 },
-            1: { cellWidth: 42 },
-            2: { cellWidth: 48 },
-            3: { cellWidth: 188, overflow: "linebreak" },
-            4: { cellWidth: 116 },
-            5: { cellWidth: 36 },
-            6: { cellWidth: 62 },
-            7: { cellWidth: 62 },
-            8: { cellWidth: 126, overflow: "linebreak" },
-            9: { cellWidth: 58 }
+            0: { cellWidth: 74 },
+            1: { cellWidth: 52 },
+            2: { cellWidth: 210, overflow: "linebreak" },
+            3: { cellWidth: 130 },
+            4: { cellWidth: 40 },
+            5: { cellWidth: 66 },
+            6: { cellWidth: 66 },
+            7: { cellWidth: 144, overflow: "linebreak" },
+            8: { cellWidth: 64 }
           }
       });
     };
