@@ -9332,6 +9332,10 @@ small {
   min-width: 0;
 }
 
+.indicadores-zone-divider-row {
+  display: none;
+}
+
 .indicadores-day-list-body::-webkit-scrollbar {
   width: 10px;
 }
@@ -9499,6 +9503,28 @@ small {
   .indicadores-mobile-reveal-item.indicadores-reveal-delay-4.is-visible { animation-delay: 120ms; }
   .indicadores-mobile-reveal-item.indicadores-reveal-delay-5.is-visible { animation-delay: 150ms; }
   .indicadores-mobile-reveal-item.indicadores-reveal-delay-6.is-visible { animation-delay: 180ms; }
+
+  .indicadores-zone-divider-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin-top: 2px;
+  }
+
+  .indicadores-zone-divider {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #fff;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #2e63bc, #3b7de0);
+    padding: 6px 14px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    box-shadow: 0 2px 6px rgba(46, 99, 188, 0.18);
+  }
 
   .indicadores-day-list-head {
     display: none;
