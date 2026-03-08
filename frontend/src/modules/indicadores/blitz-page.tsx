@@ -174,6 +174,9 @@ function AnimatedDayRow({ rowKey, className, children }: AnimatedDayRowProps) {
       return;
     }
 
+    const listRoot = node.closest(".indicadores-day-list-body");
+    const root = listRoot instanceof Element ? listRoot : null;
+
     const observer = new window.IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
@@ -183,6 +186,7 @@ function AnimatedDayRow({ rowKey, className, children }: AnimatedDayRowProps) {
       },
       {
         threshold: 0.12,
+        root,
         rootMargin: "0px 0px -8% 0px"
       }
     );
