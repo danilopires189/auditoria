@@ -1882,7 +1882,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     setBusyFinalize(true);
     try {
-      if (!isOnline || !activeVolume.remote_conf_id) {
+      if (!isOnline) {
         const nowIso = new Date().toISOString();
         const nextStatus = falta > 0 ? "finalizado_falta" : "finalizado_ok";
         const nextVolume: TermoLocalVolume = {
@@ -1901,16 +1901,18 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
         await markStoreConcludedAfterFinalize(nextVolume, falta > 0, nowIso);
         setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outra etiqueta.");
       } else {
+        const remoteConfId = activeVolume.remote_conf_id
+          ?? (await openVolume(activeVolume.id_etiqueta, activeVolume.cd)).conf_id;
         // Always push the latest local quantities before finalize validation.
         await syncSnapshot(
-          activeVolume.remote_conf_id,
+          remoteConfId,
           activeVolume.items.map((item) => ({
             coddv: item.coddv,
             qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
             barras: item.barras ?? null
           }))
         );
-        const finalized = await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
+        const finalized = await finalizeVolume(remoteConfId, falta > 0 ? motivo : null);
         await markStoreConcludedAfterFinalize(
           activeVolume,
           (finalized.status || "").trim().toLowerCase() === "finalizado_falta" || falta > 0,

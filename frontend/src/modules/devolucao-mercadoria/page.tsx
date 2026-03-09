@@ -2274,7 +2274,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
     setBusyFinalize(true);
     try {
-      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
+      if (!isOnline) {
         const nowIso = new Date().toISOString();
         const nextStatus = (falta > 0 || withoutScan) ? "finalizado_falta" : "finalizado_ok";
         const nextVolume: DevolucaoMercadoriaLocalVolume = {
@@ -2297,8 +2297,14 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
         await applyVolumeUpdate(nextVolume, false);
         setStatusMessage("Devolução finalizada localmente. Você já pode iniciar outra conferência.");
       } else {
+        const remoteConfId = activeVolume.remote_conf_id
+          ?? (
+            activeVolume.conference_kind === "sem_nfd"
+              ? (await openWithoutNfd(activeVolume.cd)).conf_id
+              : (await openVolume(activeVolume.ref, activeVolume.cd)).conf_id
+          );
         await syncSnapshot(
-          activeVolume.remote_conf_id,
+          remoteConfId,
           activeVolume.items.map((item) => ({
             coddv: item.coddv,
             qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
@@ -2308,7 +2314,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
             validades: item.validades ?? null
           }))
         );
-        await finalizeVolume(activeVolume.remote_conf_id, (falta > 0 || withoutScan) ? motivo : null, {
+        await finalizeVolume(remoteConfId, (falta > 0 || withoutScan) ? motivo : null, {
           faltaTotalSemBipagem: withoutScan,
           nfo: activeVolume.conference_kind === "sem_nfd" ? nfo : null,
           motivoSemNfd: activeVolume.conference_kind === "sem_nfd" ? motivoSemNfd : null
