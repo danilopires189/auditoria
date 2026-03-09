@@ -1448,7 +1448,6 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     const normalizedLabels = [...new Set(parsedLabels)];
 
     clearDismissedReadOnlyVolume();
-    clearDismissedReadOnlyVolume();
     setBusyOpenVolume(true);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -1650,6 +1649,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       setBusyOpenVolume(false);
     }
   }, [
+    clearDismissedReadOnlyVolume,
     currentCd,
     disableBarcodeSoftKeyboard,
     fetchManifestBundle,
