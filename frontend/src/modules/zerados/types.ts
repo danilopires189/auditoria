@@ -201,6 +201,7 @@ export interface InventarioReportRow {
   contado_final: number | null;
   barras_final: string | null;
   divergencia_final: InventarioResultado | null;
+  valor_divergencia: number | null;
   origem_final: string;
   status_final: string;
 }
