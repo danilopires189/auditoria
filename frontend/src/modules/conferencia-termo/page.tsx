@@ -2903,29 +2903,44 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                 <span className={`coleta-row-status ${activeVolume.sync_error ? "error" : activeVolume.pending_snapshot || activeVolume.pending_finalize || activeVolume.pending_cancel ? "pending" : "synced"}`}>
                   {activeVolume.sync_error ? "Erro de sync" : activeVolume.pending_snapshot || activeVolume.pending_finalize || activeVolume.pending_cancel ? "Pendente sync" : "Sincronizado"}
                 </span>
-                {canEditActiveVolume ? (
+                {canEditActiveVolume || activeVolume.is_read_only ? (
                   <div className="termo-volume-actions">
-                    <button
-                      className="btn btn-danger termo-cancel-btn"
-                      type="button"
-                      onClick={requestCancelConference}
-                      disabled={busyCancel || busyFinalize}
-                      title="Cancelar conferência"
-                    >
-                      <span aria-hidden="true">{closeIcon()}</span>
-                      {busyCancel ? "Cancelando..." : "Cancelar"}
-                    </button>
-                    {hasAnyItemInformed ? (
+                    {activeVolume.is_read_only ? (
                       <button
-                        className="btn btn-primary termo-finalize-btn"
+                        className="btn btn-muted termo-close-btn"
                         type="button"
-                        onClick={requestFinalize}
+                        onClick={clearConferenceScreen}
                         disabled={busyCancel || busyFinalize}
+                        title="Fechar visualização"
                       >
-                        <span aria-hidden="true">{checkIcon()}</span>
-                        Finalizar
+                        <span aria-hidden="true">{closeIcon()}</span>
+                        Fechar
                       </button>
-                    ) : null}
+                    ) : (
+                      <>
+                        <button
+                          className="btn btn-danger termo-cancel-btn"
+                          type="button"
+                          onClick={requestCancelConference}
+                          disabled={busyCancel || busyFinalize}
+                          title="Cancelar conferência"
+                        >
+                          <span aria-hidden="true">{closeIcon()}</span>
+                          {busyCancel ? "Cancelando..." : "Cancelar"}
+                        </button>
+                        {hasAnyItemInformed ? (
+                          <button
+                            className="btn btn-primary termo-finalize-btn"
+                            type="button"
+                            onClick={requestFinalize}
+                            disabled={busyCancel || busyFinalize}
+                          >
+                            <span aria-hidden="true">{checkIcon()}</span>
+                            Finalizar
+                          </button>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 ) : null}
               </div>

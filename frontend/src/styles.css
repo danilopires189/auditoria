@@ -2763,7 +2763,8 @@ small {
 }
 
 .termo-cancel-btn,
-.termo-finalize-btn {
+.termo-finalize-btn,
+.termo-close-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2777,7 +2778,8 @@ small {
 }
 
 .termo-cancel-btn svg,
-.termo-finalize-btn svg {
+.termo-finalize-btn svg,
+.termo-close-btn svg {
   width: 16px;
   height: 16px;
   fill: none;
