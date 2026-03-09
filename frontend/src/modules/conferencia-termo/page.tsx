@@ -1857,7 +1857,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
 
     setBusyFinalize(true);
     try {
-      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
+      if (!isOnline || !activeVolume.remote_conf_id) {
         const nowIso = new Date().toISOString();
         const nextStatus = falta > 0 ? "finalizado_falta" : "finalizado_ok";
         const nextVolume: TermoLocalVolume = {
@@ -1873,6 +1873,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
           sync_error: null
         };
         await applyVolumeUpdate(nextVolume, false);
+        await markStoreConcludedAfterFinalize(nextVolume, falta > 0, nowIso);
         setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outra etiqueta.");
       } else {
         // Always push the latest local quantities before finalize validation.
@@ -1884,7 +1885,12 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
             barras: item.barras ?? null
           }))
         );
-        await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
+        const finalized = await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
+        await markStoreConcludedAfterFinalize(
+          activeVolume,
+          (finalized.status || "").trim().toLowerCase() === "finalizado_falta" || falta > 0,
+          finalized.finalized_at ?? new Date().toISOString()
+        );
         await removeLocalVolume(activeVolume.local_key);
         await refreshPendingState();
         setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outra etiqueta.");
@@ -1906,7 +1912,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     divergenciaTotals.sobra,
     finalizeMotivo,
     isOnline,
-    preferOfflineMode,
+    markStoreConcludedAfterFinalize,
     refreshPendingState,
     handleClosedConferenceError
   ]);
@@ -1940,6 +1946,45 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     setShowRoutesModal(true);
     await syncRouteOverview();
   }, [syncRouteOverview]);
+
+  async function markStoreConcludedAfterFinalize(
+    volume: TermoLocalVolume,
+    hasFalta: boolean,
+    finalizedAt: string
+  ) {
+    if (volume.filial == null) return;
+    if (routeRows.length === 0) return;
+
+    const colaboradorNome = volume.started_nome?.trim() || profile.nome?.trim() || null;
+    const colaboradorMat = volume.started_mat?.trim() || profile.mat?.trim() || null;
+
+    const nextRows = routeRows.map((row) => {
+      if (row.filial !== volume.filial) return row;
+
+      const totalEtiquetas = Math.max(row.total_etiquetas, 0);
+      const currentConferidas = Math.max(row.conferidas, 0);
+      const alreadyConcluded = normalizeStoreStatus(row.status) === "concluido";
+      const nextConferidas = alreadyConcluded
+        ? Math.min(currentConferidas, totalEtiquetas)
+        : Math.min(currentConferidas + 1, totalEtiquetas);
+
+      return {
+        ...row,
+        conferidas: nextConferidas,
+        pendentes: Math.max(totalEtiquetas - nextConferidas, 0),
+        status: "concluido" as const,
+        tem_falta: row.tem_falta || hasFalta,
+        colaborador_nome: colaboradorNome,
+        colaborador_mat: colaboradorMat,
+        status_at: finalizedAt
+      };
+    });
+
+    setRouteRows(nextRows);
+    if (currentCd === volume.cd) {
+      await saveRouteOverviewLocal(profile.user_id, volume.cd, nextRows);
+    }
+  }
 
   const markStorePendingAfterCancel = useCallback(async (volume: TermoLocalVolume) => {
     if (volume.filial == null) return;
