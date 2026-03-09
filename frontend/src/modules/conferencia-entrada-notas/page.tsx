@@ -4192,7 +4192,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         return;
       }
 
-      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
+      if (!isOnline) {
         const nowIso = new Date().toISOString();
         const nextVolume: EntradaNotasLocalVolume = {
           ...activeVolume,
@@ -4211,6 +4211,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           ? "Conferência salva localmente como conferida parcialmente. Você já pode iniciar outra conferência."
           : "Conferência finalizada localmente. Você já pode iniciar outra conferência.");
       } else {
+        const remoteConfId = activeVolume.remote_conf_id
+          ?? (
+            activeVolume.conference_kind === "avulsa"
+              ? (await openAvulsaVolume(activeVolume.cd)).conf_id
+              : (await openVolume(activeVolume.nr_volume, activeVolume.cd)).conf_id
+          );
         const payload = activeVolume.items.map((item) => ({
           coddv: item.coddv,
           qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
@@ -4218,11 +4224,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           ocorrencia_avariado_qtd: Math.max(0, Math.trunc(item.ocorrencia_avariado_qtd ?? 0)),
           ocorrencia_vencido_qtd: Math.max(0, Math.trunc(item.ocorrencia_vencido_qtd ?? 0))
         }));
-        await syncSnapshot(activeVolume.remote_conf_id, payload);
+        await syncSnapshot(remoteConfId, payload);
         if (activeVolume.conference_kind === "avulsa") {
-          await finalizeAvulsaVolume(activeVolume.remote_conf_id);
+          await finalizeAvulsaVolume(remoteConfId);
         } else {
-          await finalizeVolume(activeVolume.remote_conf_id, null);
+          await finalizeVolume(remoteConfId, null);
         }
         await removeLocalVolume(activeVolume.local_key);
         await refreshPendingState();
