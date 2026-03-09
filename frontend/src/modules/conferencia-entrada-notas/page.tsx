@@ -3923,7 +3923,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     const qtd = parsePositiveInteger(editQtdInput, 0);
 
     try {
-      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
+      if (!isOnline || !activeVolume.remote_conf_id) {
         await updateItemQtyLocal(itemKey, qtd, item.barras ?? null);
         if (activeVolume.conference_kind === "avulsa" && item.seq_entrada != null && item.nf != null) {
           await enqueueAvulsaEvent({
@@ -4211,6 +4211,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           ? "Conferência salva localmente como conferida parcialmente. Você já pode iniciar outra conferência."
           : "Conferência finalizada localmente. Você já pode iniciar outra conferência.");
       } else {
+        const payload = activeVolume.items.map((item) => ({
+          coddv: item.coddv,
+          qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
+          barras: item.barras ?? null,
+          ocorrencia_avariado_qtd: Math.max(0, Math.trunc(item.ocorrencia_avariado_qtd ?? 0)),
+          ocorrencia_vencido_qtd: Math.max(0, Math.trunc(item.ocorrencia_vencido_qtd ?? 0))
+        }));
+        await syncSnapshot(activeVolume.remote_conf_id, payload);
         if (activeVolume.conference_kind === "avulsa") {
           await finalizeAvulsaVolume(activeVolume.remote_conf_id);
         } else {

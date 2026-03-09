@@ -54,6 +54,7 @@ import {
   openVolume,
   scanBarcode,
   setItemQtd,
+  syncSnapshot,
   syncPendingVolumeAvulsoVolumes
 } from "./sync";
 import type {
@@ -1484,7 +1485,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     setBarcodeValidationState("validating");
 
     try {
-      if (shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(activeVolume.remote_conf_id) }) || !activeVolume.remote_conf_id) {
+      if (!isOnline || !activeVolume.remote_conf_id) {
         const lookup = await resolveBarcodeProduct(barras);
         if (!lookup) {
           showDialog({
@@ -1762,6 +1763,14 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         await applyVolumeUpdate(nextVolume, false);
         setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outro NR Volume.");
       } else {
+        await syncSnapshot(
+          activeVolume.remote_conf_id,
+          activeVolume.items.map((item) => ({
+            coddv: item.coddv,
+            qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
+            barras: item.barras ?? null
+          }))
+        );
         await finalizeVolume(activeVolume.remote_conf_id, falta > 0 ? motivo : null);
         await removeLocalVolume(activeVolume.local_key);
         await refreshPendingState();
