@@ -5,7 +5,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 
 export const supabaseInitError =
   !supabaseUrl || !supabaseAnonKey
-    ? "Variáveis de ambiente ausentes: configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no projeto (Vercel > Settings > Environment Variables)."
+    ? "Variáveis de ambiente ausentes: configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em frontend/.env para desenvolvimento local ou no Vercel para deploy."
     : null;
 
 export const supabase = supabaseInitError

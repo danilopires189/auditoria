@@ -1031,12 +1031,12 @@ export default function App() {
           <p className="subtitle">
             O frontend não conseguiu inicializar o Supabase.
           </p>
-          <div className="alert error">{supabaseInitError}</div>
-          <div className="form-grid">
-            <small>Defina no Vercel (Production e Preview):</small>
-            <small>
-              <strong>VITE_SUPABASE_URL</strong> = https://gpgqklqhomsaomdnccvu.supabase.co
-            </small>
+            <div className="alert error">{supabaseInitError}</div>
+            <div className="form-grid">
+              <small>Defina em `frontend/.env` no local ou no Vercel (Production e Preview):</small>
+              <small>
+                <strong>VITE_SUPABASE_URL</strong> = https://gpgqklqhomsaomdnccvu.supabase.co
+              </small>
             <small>
               <strong>VITE_SUPABASE_ANON_KEY</strong> = chave publishable/anon do projeto Supabase
             </small>
