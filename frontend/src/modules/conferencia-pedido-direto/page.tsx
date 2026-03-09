@@ -1343,6 +1343,18 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   }, [isOnline, preferOfflineMode]);
 
   const clearConferenceScreen = useCallback(() => {
+    for (const target of ["etiqueta", "barras"] as const) {
+      const state = scannerInputStateRef.current[target];
+      if (typeof window !== "undefined" && state.timerId != null) {
+        window.clearTimeout(state.timerId);
+      }
+      state.timerId = null;
+      state.lastInputAt = 0;
+      state.lastLength = 0;
+      state.burstChars = 0;
+      state.lastSubmittedValue = "";
+      state.lastSubmittedAt = 0;
+    }
     setShowFinalizeModal(false);
     setFinalizeMotivo("");
     setFinalizeError(null);
@@ -2339,12 +2351,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
   const onSubmitEtiqueta = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await commitScannerInput("etiqueta", etiquetaInput);
+    await commitScannerInput("etiqueta", etiquetaRef.current?.value ?? etiquetaInput);
   };
 
   const onSubmitBarras = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await commitScannerInput("barras", barcodeInput);
+    await commitScannerInput("barras", barrasRef.current?.value ?? barcodeInput);
   };
 
   const onEtiquetaInputChange = (event: ReactChangeEvent<HTMLInputElement>) => {
@@ -2384,17 +2396,19 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   };
 
   const onEtiquetaKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Tab" && !shouldHandleScannerTab("etiqueta", etiquetaInput)) return;
+    const currentValue = event.currentTarget.value;
+    if (event.key === "Tab" && !shouldHandleScannerTab("etiqueta", currentValue)) return;
     if (event.key !== "Enter" && event.key !== "Tab") return;
     event.preventDefault();
-    void commitScannerInput("etiqueta", etiquetaInput);
+    void commitScannerInput("etiqueta", currentValue);
   };
 
   const onBarcodeKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Tab" && !shouldHandleScannerTab("barras", barcodeInput)) return;
+    const currentValue = event.currentTarget.value;
+    if (event.key === "Tab" && !shouldHandleScannerTab("barras", currentValue)) return;
     if (event.key !== "Enter" && event.key !== "Tab") return;
     event.preventDefault();
-    void commitScannerInput("barras", barcodeInput);
+    void commitScannerInput("barras", currentValue);
   };
 
   useEffect(() => {
