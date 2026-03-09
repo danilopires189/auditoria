@@ -710,6 +710,24 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
+  const dismissedReadOnlyStorageKey = useMemo(() => `conf-termo-dismissed-read-only:${profile.user_id}`, [profile.user_id]);
+  const buildReadOnlyVolumeSignature = useCallback((volume: TermoLocalVolume) => JSON.stringify({
+    cd: volume.cd,
+    conf_date: volume.conf_date,
+    key: volume.local_key ?? volume.remote_conf_id ?? volume.id_etiqueta
+  }), []);
+  const clearDismissedReadOnlyVolume = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.removeItem(dismissedReadOnlyStorageKey);
+  }, [dismissedReadOnlyStorageKey]);
+  const dismissReadOnlyVolume = useCallback((volume: TermoLocalVolume) => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(dismissedReadOnlyStorageKey, buildReadOnlyVolumeSignature(volume));
+  }, [buildReadOnlyVolumeSignature, dismissedReadOnlyStorageKey]);
+  const isDismissedReadOnlyVolume = useCallback((volume: TermoLocalVolume) => {
+    if (!volume.is_read_only || typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(dismissedReadOnlyStorageKey) === buildReadOnlyVolumeSignature(volume);
+  }, [buildReadOnlyVolumeSignature, dismissedReadOnlyStorageKey]);
   const canEditActiveVolume = Boolean(
     activeVolume
     && !activeVolume.is_read_only
@@ -1207,6 +1225,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       return;
     }
 
+    clearDismissedReadOnlyVolume();
     setBusyOpenVolume(true);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -1343,6 +1362,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     }
   }, [
     activeVolume,
+    clearDismissedReadOnlyVolume,
     closeDialog,
     currentCd,
     focusBarras,
@@ -1402,6 +1422,11 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   }, [isOnline, preferOfflineMode]);
 
   const clearConferenceScreen = useCallback(() => {
+    if (activeVolume?.is_read_only) {
+      dismissReadOnlyVolume(activeVolume);
+    } else {
+      clearDismissedReadOnlyVolume();
+    }
     setShowFinalizeModal(false);
     setFinalizeMotivo("");
     setFinalizeError(null);
@@ -1414,7 +1439,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     window.requestAnimationFrame(() => {
       etiquetaRef.current?.focus();
     });
-  }, []);
+  }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
 
   const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
@@ -2137,6 +2162,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
       const latestToday = volumes.find(
         (row) => row.cd === currentCd
           && row.conf_date === today
+          && !isDismissedReadOnlyVolume(row)
           && (row.status === "em_conferencia" || row.pending_snapshot || row.pending_finalize || row.pending_cancel)
       );
       if (latestToday) {
@@ -2178,6 +2204,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   }, [
     applyManifestStoreSummaries,
     currentCd,
+    isDismissedReadOnlyVolume,
     isGlobalAdmin,
     isOnline,
     prepareOfflineManifest,

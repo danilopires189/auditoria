@@ -655,6 +655,24 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
+  const dismissedReadOnlyStorageKey = useMemo(() => `conf-pedido-direto-dismissed-read-only:${profile.user_id}`, [profile.user_id]);
+  const buildReadOnlyVolumeSignature = useCallback((volume: PedidoDiretoLocalVolume) => JSON.stringify({
+    cd: volume.cd,
+    conf_date: volume.conf_date,
+    key: volume.local_key ?? volume.remote_conf_id ?? volume.id_vol
+  }), []);
+  const clearDismissedReadOnlyVolume = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.removeItem(dismissedReadOnlyStorageKey);
+  }, [dismissedReadOnlyStorageKey]);
+  const dismissReadOnlyVolume = useCallback((volume: PedidoDiretoLocalVolume) => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(dismissedReadOnlyStorageKey, buildReadOnlyVolumeSignature(volume));
+  }, [buildReadOnlyVolumeSignature, dismissedReadOnlyStorageKey]);
+  const isDismissedReadOnlyVolume = useCallback((volume: PedidoDiretoLocalVolume) => {
+    if (!volume.is_read_only || typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(dismissedReadOnlyStorageKey) === buildReadOnlyVolumeSignature(volume);
+  }, [buildReadOnlyVolumeSignature, dismissedReadOnlyStorageKey]);
   const canEditActiveVolume = Boolean(
     activeVolume
     && !activeVolume.is_read_only
@@ -1148,6 +1166,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       return;
     }
 
+    clearDismissedReadOnlyVolume();
     setBusyOpenVolume(true);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -1284,6 +1303,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     }
   }, [
     activeVolume,
+    clearDismissedReadOnlyVolume,
     closeDialog,
     currentCd,
     focusBarras,
@@ -1343,6 +1363,11 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   }, [isOnline, preferOfflineMode]);
 
   const clearConferenceScreen = useCallback(() => {
+    if (activeVolume?.is_read_only) {
+      dismissReadOnlyVolume(activeVolume);
+    } else {
+      clearDismissedReadOnlyVolume();
+    }
     for (const target of ["etiqueta", "barras"] as const) {
       const state = scannerInputStateRef.current[target];
       if (typeof window !== "undefined" && state.timerId != null) {
@@ -1367,7 +1392,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     window.requestAnimationFrame(() => {
       etiquetaRef.current?.focus();
     });
-  }, []);
+  }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
 
   const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
@@ -1975,6 +2000,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       const latestToday = volumes.find(
         (row) => row.cd === currentCd
           && row.conf_date === today
+          && !isDismissedReadOnlyVolume(row)
           && (row.status === "em_conferencia" || row.pending_snapshot || row.pending_finalize || row.pending_cancel)
       );
       if (latestToday) {
@@ -2007,7 +2033,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     return () => {
       cancelled = true;
     };
-  }, [currentCd, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
+  }, [currentCd, isDismissedReadOnlyVolume, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
 
   useEffect(() => {
     void refreshPendingState();
