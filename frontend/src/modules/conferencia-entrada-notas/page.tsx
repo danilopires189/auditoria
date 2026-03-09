@@ -1015,6 +1015,25 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
     return map;
   }, [routeRows]);
+  const dismissedReadOnlyStorageKey = useMemo(() => `conf-entrada-notas-dismissed-read-only:${profile.user_id}`, [profile.user_id]);
+  const buildReadOnlyVolumeSignature = useCallback((volume: EntradaNotasLocalVolume) => JSON.stringify({
+    cd: volume.cd,
+    conf_date: volume.conf_date,
+    conference_kind: volume.conference_kind,
+    key: volume.local_key ?? volume.remote_conf_id ?? volume.nr_volume
+  }), []);
+  const clearDismissedReadOnlyVolume = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.removeItem(dismissedReadOnlyStorageKey);
+  }, [dismissedReadOnlyStorageKey]);
+  const dismissReadOnlyVolume = useCallback((volume: EntradaNotasLocalVolume) => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(dismissedReadOnlyStorageKey, buildReadOnlyVolumeSignature(volume));
+  }, [buildReadOnlyVolumeSignature, dismissedReadOnlyStorageKey]);
+  const isDismissedReadOnlyVolume = useCallback((volume: EntradaNotasLocalVolume) => {
+    if (!volume.is_read_only || typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(dismissedReadOnlyStorageKey) === buildReadOnlyVolumeSignature(volume);
+  }, [buildReadOnlyVolumeSignature, dismissedReadOnlyStorageKey]);
   const canEditActiveVolume = Boolean(
     activeVolume
     && !activeVolume.is_read_only
@@ -1428,6 +1447,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       .map((value) => value.label);
     const normalizedLabels = [...new Set(parsedLabels)];
 
+    clearDismissedReadOnlyVolume();
+    clearDismissedReadOnlyVolume();
     setBusyOpenVolume(true);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -1778,13 +1799,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, [fetchSeqNfContributors, profile]);
 
   const openReadOnlyVolume = useCallback((volume: EntradaNotasLocalVolume) => {
+    clearDismissedReadOnlyVolume();
     setActiveVolume(volume);
     setExpandedItemKey(null);
     setEditingItemKey(null);
     setLastAddedItemMarker(null);
     setEditQtdInput("0");
     setStatusMessage("Conferência aberta em modo leitura.");
-  }, []);
+  }, [clearDismissedReadOnlyVolume]);
 
   const reopenPartialVolume = useCallback(async (
     etiqueta: string,
@@ -2488,6 +2510,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
   }, [
     activeVolume,
+    clearDismissedReadOnlyVolume,
     closeDialog,
     currentCd,
     focusBarras,
@@ -2733,6 +2756,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
   }, [
     activeVolume,
+    clearDismissedReadOnlyVolume,
     closeDialog,
     currentCd,
     focusBarras,
@@ -3252,6 +3276,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, [activeVolume?.items, currentCd, profile.user_id, routeRows]);
 
   const clearConferenceScreen = useCallback(() => {
+    if (activeVolume?.is_read_only) {
+      dismissReadOnlyVolume(activeVolume);
+    } else {
+      clearDismissedReadOnlyVolume();
+    }
     setShowFinalizeModal(false);
     setFinalizeError(null);
     setPendingBarcodeOpenSelection(null);
@@ -3267,7 +3296,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     window.requestAnimationFrame(() => {
       etiquetaRef.current?.focus();
     });
-  }, []);
+  }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
 
   const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
@@ -4446,6 +4475,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         return (
           row.cd === currentCd
           && row.conf_date === today
+          && !isDismissedReadOnlyVolume(row)
           && (row.conference_kind !== "avulsa" || isCombinedLocalConference)
           && (row.status === "em_conferencia" || row.pending_snapshot || row.pending_finalize || row.pending_cancel)
         );
@@ -4494,7 +4524,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     return () => {
       cancelled = true;
     };
-  }, [currentCd, fetchSeqNfVolumeSnapshot, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
+  }, [currentCd, fetchSeqNfVolumeSnapshot, isDismissedReadOnlyVolume, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
 
   useEffect(() => {
     void refreshPendingState();
