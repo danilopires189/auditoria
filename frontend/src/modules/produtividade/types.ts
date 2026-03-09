@@ -65,6 +65,8 @@ export interface ProdutividadeRankingRow {
   pvps_pontos: number;
   vol_pontos: number;
   blitz_pontos: number;
+  zerados_qtd: number;
+  zerados_pontos: number;
   alocacao_qtd: number;
   devolucao_qtd: number;
   conf_termo_qtd: number;

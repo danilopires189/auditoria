@@ -121,6 +121,8 @@ function mapRankingRow(raw: Record<string, unknown>): ProdutividadeRankingRow {
     pvps_pontos: parseNumber(raw.pvps_pontos),
     vol_pontos: parseNumber(raw.vol_pontos),
     blitz_pontos: parseNumber(raw.blitz_pontos),
+    zerados_qtd: parseNumber(raw.zerados_qtd),
+    zerados_pontos: parseNumber(raw.zerados_pontos),
     alocacao_qtd: parseNumber(raw.alocacao_qtd),
     devolucao_qtd: parseNumber(raw.devolucao_qtd),
     conf_termo_qtd: parseNumber(raw.conf_termo_qtd),

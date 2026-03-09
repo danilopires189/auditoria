@@ -223,6 +223,7 @@ function mapReportRow(raw: Record<string, unknown>): InventarioReportRow {
     contado_final: raw.contado_final == null ? null : Math.max(parseInteger(raw.contado_final), 0),
     barras_final: parseNullableString(raw.barras_final),
     divergencia_final: divergenciaFinal ? parseResultado(divergenciaFinal) : null,
+    valor_divergencia: raw.valor_divergencia == null ? null : parseInteger(raw.valor_divergencia),
     origem_final: parseString(raw.origem_final),
     status_final: parseString(raw.status_final)
   };

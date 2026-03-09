@@ -63,6 +63,7 @@ import type {
   InventarioModuleProfile,
   InventarioPendingEvent,
   InventarioPreferences,
+  InventarioReportRow,
   InventarioResultado,
   InventarioReviewRow,
   InventarioStageView,
@@ -452,6 +453,27 @@ function formatDateTime(value: string): string {
   }).format(parsed);
 }
 
+function formatDate(value: string): string {
+  const parsed = Date.parse(`${value}T00:00:00`);
+  if (!Number.isFinite(parsed)) return value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(parsed);
+}
+
+function sumNullable(values: Array<number | null>): number | null {
+  let total = 0;
+  let hasValue = false;
+  for (const value of values) {
+    if (value == null) continue;
+    total += value;
+    hasValue = true;
+  }
+  return hasValue ? total : null;
+}
+
 function labelByCount(count: number, singular: string, plural: string): string {
   return formatCountLabel(count, singular, plural);
 }
@@ -610,7 +632,7 @@ function optimistic(previous: InventarioSyncPullState, payload: Record<string, u
         ...nextReviews[idx],
         status: "resolvido",
         final_qtd: q,
-        final_barras: q > estoque ? String(payload.final_barras ?? "") || null : null,
+        final_barras: q > 0 ? String(payload.final_barras ?? "") || null : null,
         final_resultado: resultOf(estoque, q, false),
         resolved_by: profile.user_id,
         resolved_mat: profile.mat,
@@ -636,7 +658,7 @@ function optimistic(previous: InventarioSyncPullState, payload: Record<string, u
     estoque,
     etapa,
     qtd_contada: qtd,
-    barras: qtd > estoque && payload.discarded !== true ? String(payload.barras ?? "") || null : null,
+    barras: qtd > 0 && payload.discarded !== true ? String(payload.barras ?? "") || null : null,
     resultado: r,
     counted_by: profile.user_id,
     counted_mat: profile.mat,
@@ -2093,7 +2115,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     active
     && (tab === "s1" || tab === "s2")
     && Number.isFinite(qtyParsed)
-    && qtyParsed > active.estoque
+    && qtyParsed > 0
   );
   const normalizedBarras = normalizeBarcode(barras);
   const barrasValidatedForCurrentInput = Boolean(
@@ -2106,7 +2128,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     active
     && tab === "conciliation"
     && Number.isFinite(finalQtyParsed)
-    && finalQtyParsed > active.estoque
+    && finalQtyParsed > 0
   );
   const normalizedFinalBarras = normalizeBarcode(finalBarras);
   const finalBarrasValidatedForCurrentInput = Boolean(
@@ -2406,13 +2428,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         return;
       }
       let b: string | null = null;
-      const needsBarrasValidation = !discarded && qty > active.estoque;
+      const needsBarrasValidation = !discarded && qty > 0;
       if (needsBarrasValidation) {
         const normalized = normalizeBarcode(barras);
         if (!normalized) {
           setValidatedBarras(null);
-          setPopupErr("Sobra detectada. Informe o código de barras ou descarte.");
-          triggerScanErrorAlert("Sobra detectada. Informe o código de barras ou descarte.");
+          setPopupErr("Quantidade informada exige código de barras ou descarte.");
+          triggerScanErrorAlert("Quantidade informada exige código de barras ou descarte.");
           return;
         }
 
@@ -2423,8 +2445,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         b = normalizeBarcode(barrasValueRef.current);
         if (!b) {
           setValidatedBarras(null);
-          setPopupErr("Sobra detectada. Informe o código de barras ou descarte.");
-          triggerScanErrorAlert("Sobra detectada. Informe o código de barras ou descarte.");
+          setPopupErr("Quantidade informada exige código de barras ou descarte.");
+          triggerScanErrorAlert("Quantidade informada exige código de barras ou descarte.");
           return;
         }
       }
@@ -2489,7 +2511,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         return;
       }
       let b: string | null = null;
-      if (qty > active.estoque) {
+      if (qty > 0) {
         const normalized = normalizeBarcode(finalBarras);
         if (!normalized) {
           setPopupErr("Informe código de barras válido do mesmo Código e Dígito (CODDV).");
@@ -2747,8 +2769,21 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setReportCount(total);
     const rowsReport = await fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, limit: 30000 });
     const XLSX = await import("xlsx");
+    const pickFirstBarcode = (rows: InventarioReportRow[]): string | null => {
+      for (const getter of [
+        (row: InventarioReportRow) => row.review_final_barras,
+        (row: InventarioReportRow) => row.barras_segunda,
+        (row: InventarioReportRow) => row.barras_primeira
+      ]) {
+        for (const row of rows) {
+          const candidate = getter(row)?.trim();
+          if (candidate) return candidate;
+        }
+      }
+      return null;
+    };
     const detail = rowsReport.map((r) => ({
-      Data: r.cycle_date,
+      Data: formatDate(r.cycle_date),
       CD: r.cd,
       Zona: r.zona,
       Endereco: r.endereco,
@@ -2760,6 +2795,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       QtdFinal: r.contado_final,
       BarrasFinal: r.barras_final,
       DivergenciaFinal: r.divergencia_final,
+      ValorDivergencia: r.valor_divergencia,
       StatusFinal: r.status_final,
       UsuarioPrimeira: `${r.primeira_nome ?? "-"} (${r.primeira_mat ?? "-"})`,
       UsuarioSegunda: `${r.segunda_nome ?? "-"} (${r.segunda_mat ?? "-"})`,
@@ -2773,9 +2809,40 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       acc.set(z, cur);
       return acc;
     }, new Map<string, { Zona: string; Total: number; Concluidos: number; Pendentes: number }>()).values());
+    const consolidated = Array.from(rowsReport.reduce((acc, row) => {
+      const key = `${row.cycle_date}|${row.cd}|${row.coddv}`;
+      const bucket = acc.get(key) ?? { first: row, rows: [] as InventarioReportRow[] };
+      bucket.rows.push(row);
+      acc.set(key, bucket);
+      return acc;
+    }, new Map<string, { first: InventarioReportRow; rows: InventarioReportRow[] }>()).values()).map(({ first, rows }) => {
+      const statuses = rows.map((row) => row.status_final);
+      const statusFinal = statuses.every((status) => status === "concluido")
+        ? "concluido"
+        : statuses.includes("pendente_revisao")
+          ? "pendente_revisao"
+          : statuses.includes("pendente_segunda")
+            ? "pendente_segunda"
+            : statuses.find((status) => status !== "concluido") ?? "pendente_primeira";
+      return {
+        Data: formatDate(first.cycle_date),
+        CD: first.cd,
+        "Código e Dígito (CODDV)": first.coddv,
+        Descricao: first.descricao,
+        Estoque: rows.reduce((totalEstoque, row) => totalEstoque + row.estoque, 0),
+        QtdPrimeira: sumNullable(rows.map((row) => row.qtd_primeira)),
+        QtdSegunda: sumNullable(rows.map((row) => row.qtd_segunda)),
+        QtdFinal: sumNullable(rows.map((row) => row.contado_final)),
+        BarrasFinal: pickFirstBarcode(rows),
+        DivergenciaFinal: first.divergencia_final,
+        ValorDivergencia: first.valor_divergencia,
+        StatusFinal: statusFinal
+      };
+    });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail), "Detalhe");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Resumo por Zona");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidated), "Consolidado");
     XLSX.writeFile(wb, `inventario-zerados-${dtIni}-${dtFim}-cd${String(cd).padStart(2, "0")}.xlsx`, { compression: true });
   }, [canExport, cd, dtFim, dtIni]);
 
@@ -3285,7 +3352,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             <p className={`inventario-popup-note ${barrasValidatedForCurrentInput ? "ok" : "warn"}`}>
                               {barrasValidatedForCurrentInput
                                 ? "Código de barras validado. Toque em Salvar para concluir."
-                                : "Sobra detectada. Informe barras válido do mesmo Código e Dígito (CODDV) e valide antes de salvar, ou descarte."}
+                                : "Quantidade maior que zero exige barras válido do mesmo Código e Dígito (CODDV) antes de salvar, ou descarte."}
                             </p>
                           ) : null}
                           {requiresBarras ? (
@@ -3396,11 +3463,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         />
                       </label>
                       {requiresFinalBarras ? (
-                        <p className="inventario-popup-note warn">Quantidade final acima do esperado. Informe barras válido do mesmo Código e Dígito (CODDV).</p>
+                        <p className="inventario-popup-note warn">Quantidade final maior que zero exige barras válido do mesmo Código e Dígito (CODDV).</p>
                       ) : null}
                       {requiresFinalBarras ? (
                         <label>
-                          Barras final (obrigatório na sobra)
+                          Barras final (obrigatório quando quantidade maior que zero)
                           <div className="input-icon-wrap with-action inventario-popup-input-action-wrap">
                             <span className={finalBarrasIconClassName} aria-hidden="true">
                               {barcodeIcon()}

@@ -610,6 +610,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                       <div><strong>PVPs:</strong><br />{formatMetric(row.pvps_pontos, "")} pts</div>
                                       <div><strong>Volume:</strong><br />{formatMetric(row.vol_pontos, "")} pts</div>
                                       <div><strong>Blitz:</strong><br />{formatMetric(row.blitz_pontos, "")} pts</div>
+                                      <div><strong>Zerados:</strong><br />{`${formatMetric(row.zerados_pontos, "")} pts | ${formatCountLabel(row.zerados_qtd, "end", "ends")}`}</div>
                                       <div><strong>Ativ Extra:</strong><br />{formatMetric(row.atividade_extra_pontos, "")} pts</div>
                                       <div><strong>Alocação:</strong><br />{formatCountLabel(row.alocacao_qtd, "end", "ends")}</div>
                                       <div><strong>Devolução:</strong><br />{formatCountLabel(row.devolucao_qtd, "nf", "nfs")}</div>
