@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -28,6 +28,13 @@ interface MetricCardDefinition {
   label: string;
   value: string;
   accent?: "danger" | "warning" | "neutral";
+}
+
+interface AnimatedDayRevealProps {
+  itemKey: string;
+  className: string;
+  children: ReactNode;
+  rootRef?: RefObject<HTMLElement | null>;
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
@@ -156,6 +163,47 @@ function statusClassName(status: IndicadoresBlitzDayDetailRow["status"]): string
   return "is-fora";
 }
 
+function AnimatedDayReveal({ itemKey, className, children, rootRef }: AnimatedDayRevealProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    if (visible) return;
+    if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      {
+        root: rootRef?.current ?? null,
+        threshold: 0.18,
+        rootMargin: "0px 0px -8% 0px"
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [itemKey, rootRef, visible]);
+
+  return (
+    <div
+      ref={ref}
+      className={`${className} indicadores-scroll-reveal${visible ? " is-visible" : ""}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
   const safeRows = Math.max(rows.length, 1);
   const horizontalPadding = 36;
@@ -273,6 +321,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const displayCdName = useMemo(() => resolveCdDisplayName(profile, activeCd), [activeCd, profile]);
+  const dayListBodyRef = useRef<HTMLDivElement | null>(null);
 
   const [monthOptions, setMonthOptions] = useState<IndicadoresBlitzMonthOption[]>([]);
   const [selectedMonthStart, setSelectedMonthStart] = useState<string>("");
@@ -541,7 +590,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
               )}
             </section>
 
-            <section className="indicadores-panel indicadores-panel-side indicadores-panel-divergencias indicadores-mobile-reveal">
+            <section className="indicadores-panel indicadores-panel-side indicadores-panel-divergencias">
               <div className="indicadores-panel-head">
                 <h3>Divergências do dia</h3>
                 <span>{selectedDay ? formatDate(selectedDay) : "-"}</span>
@@ -554,7 +603,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                   <span>Filial</span>
                   <span>Qtd</span>
                 </div>
-                <div className="indicadores-day-list-body">
+                <div ref={dayListBodyRef} className="indicadores-day-list-body">
                   {loadingDetails ? (
                     <div className="indicadores-empty-box"><p>Carregando divergências do dia...</p></div>
                   ) : sortedDayDetails.length === 0 ? (
@@ -571,12 +620,14 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                           revealStep += 1;
                           const zoneKey = `zone-divider:${normalizedZone}:${index}`;
                           items.push(
-                            <div
+                            <AnimatedDayReveal
                               key={zoneKey}
-                              className={`indicadores-zone-divider-row indicadores-mobile-reveal-seq indicadores-reveal-delay-${Math.min(revealStep, 6)}`}
+                              itemKey={zoneKey}
+                              rootRef={dayListBodyRef}
+                              className="indicadores-zone-divider-row"
                             >
                               <span className="indicadores-zone-divider">{normalizedZone}</span>
-                            </div>
+                            </AnimatedDayReveal>
                           );
                           lastZone = normalizedZone;
                         }
@@ -584,9 +635,11 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                         revealStep += 1;
                         const rowKey = `${row.data_conf}:${row.filial}:${row.pedido}:${row.coddv}:${row.status}:${index}`;
                         items.push(
-                          <div
+                          <AnimatedDayReveal
                             key={rowKey}
-                            className={`indicadores-day-row indicadores-mobile-reveal-seq indicadores-reveal-delay-${Math.min(revealStep, 6)}`}
+                            itemKey={`${rowKey}:${revealStep}`}
+                            rootRef={dayListBodyRef}
+                            className="indicadores-day-row"
                           >
                             <span className="indicadores-day-description">
                               <strong>{row.descricao}</strong>
@@ -598,7 +651,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                             </span>
                             <span>{formatInteger(row.filial)}</span>
                             <span>{formatInteger(row.quantidade)}</span>
-                          </div>
+                          </AnimatedDayReveal>
                         );
                       });
 
