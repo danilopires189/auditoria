@@ -328,6 +328,15 @@ function createLocalVolumeFromManifest(
   };
 }
 
+function canResumeSameDayPendingDivergence(
+  profile: VolumeAvulsoModuleProfile,
+  volume: VolumeAvulsoLocalVolume
+): boolean {
+  if (volume.status !== "finalizado_falta") return false;
+  if (volume.started_by !== profile.user_id) return false;
+  return volume.items.some((item) => item.qtd_conferida < item.qtd_esperada);
+}
+
 function barcodeIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1188,7 +1197,8 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
         const existingToday = await getLocalVolume(profile.user_id, currentCd, today, etiqueta);
         if (existingToday) {
-          if (existingToday.status !== "em_conferencia") {
+          const canResumeToday = isOnline && canResumeSameDayPendingDivergence(profile, existingToday);
+          if (existingToday.status !== "em_conferencia" && !canResumeToday) {
             showDialog({
               title: "Volume com conferência existente",
               message: "Este volume já possui conferência registrada. Deseja abrir em modo leitura?",
@@ -1205,13 +1215,15 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             });
             return;
           }
-          setActiveVolume(existingToday);
-          etiquetaFinal = existingToday.nr_volume;
-          setExpandedCoddv(null);
-          setEditingCoddv(null);
-          setEditQtdInput("0");
-          setStatusMessage("Volume retomado do cache local.");
-          return;
+          if (existingToday.status === "em_conferencia") {
+            setActiveVolume(existingToday);
+            etiquetaFinal = existingToday.nr_volume;
+            setExpandedCoddv(null);
+            setEditingCoddv(null);
+            setEditQtdInput("0");
+            setStatusMessage("Volume retomado do cache local.");
+            return;
+          }
         }
 
         if (isOnline) {
