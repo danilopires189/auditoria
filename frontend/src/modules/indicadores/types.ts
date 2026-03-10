@@ -54,6 +54,7 @@ export interface IndicadoresBlitzDayDetailRow {
   coddv: number;
   descricao: string;
   zona: string;
+  endereco: string;
   status: IndicadoresBlitzDayStatus;
   quantidade: number;
   vl_div: number;

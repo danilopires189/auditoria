@@ -9621,7 +9621,7 @@ small {
 .indicadores-day-list-head,
 .indicadores-day-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.45fr) 72px 118px 108px 48px;
+  grid-template-columns: minmax(180px, 1.45fr) minmax(180px, 1.2fr) 118px 108px 132px;
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -9664,6 +9664,27 @@ small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.indicadores-day-address {
+  min-width: 0;
+  color: #274a77;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.indicadores-day-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.indicadores-day-inline-label {
+  display: none;
+  color: #5a759c;
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 
 .indicadores-status-badge {
@@ -9795,6 +9816,20 @@ small {
     display: grid;
     align-items: start;
     min-height: auto;
+  }
+
+  .indicadores-day-address {
+    align-items: flex-start;
+    line-height: 1.4;
+  }
+
+  .indicadores-day-field {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .indicadores-day-inline-label {
+    display: inline;
   }
 
   .indicadores-day-row > span::before {
