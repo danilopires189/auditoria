@@ -25,6 +25,7 @@ import {
   fetchAdminRulesActive,
   fetchAdminRulesHistory,
   fetchAlocacaoManifest,
+  fetchPvpsCompletedPulItems,
   fetchPvpsCompletedItemsDayAll,
   fetchPvpsManifest,
   fetchPvpsPulItems,
@@ -3387,9 +3388,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (!isOnline) return;
     setPvpsCompletedPulLoading((prev) => ({ ...prev, [key]: true }));
     try {
-      const items = await fetchPvpsPulItems(row.coddv, row.end_sep, activeCd ?? row.cd);
-      const onlyAudited = items.filter((item) => item.auditado);
-      setPvpsCompletedPulByAuditId((prev) => ({ ...prev, [key]: onlyAudited }));
+      const items = await fetchPvpsCompletedPulItems(row.audit_id, activeCd ?? row.cd);
+      setPvpsCompletedPulByAuditId((prev) => ({ ...prev, [key]: items }));
     } catch {
       setPvpsCompletedPulByAuditId((prev) => ({ ...prev, [key]: [] }));
     } finally {
@@ -4707,6 +4707,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const statusInfo = pvpsHistoryStatus(row);
                   const pulItemsCompleted = pvpsCompletedPulByAuditId[row.audit_id] ?? [];
                   const pulItemsLoading = Boolean(pvpsCompletedPulLoading[row.audit_id]);
+                  const pulCompletedCount = Math.max(row.pul_auditados, pulItemsCompleted.length);
+                  const pulCompletedTotal = Math.max(row.pul_total, pulCompletedCount);
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
                       {showZoneHeader ? (
@@ -4750,7 +4752,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                               <div className="pvps-completed-section pvps-pul-completed-group">
                                 <div className="pvps-completed-section-head">
                                   <strong>Pulmões auditados</strong>
-                                  <span>{row.pul_auditados}/{row.pul_total}</span>
+                                  <span>{pulCompletedCount}/{pulCompletedTotal}</span>
                                 </div>
                                 {pulItemsLoading ? <small>Carregando endereços de Pulmão...</small> : null}
                                 {!pulItemsLoading ? (
