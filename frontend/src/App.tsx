@@ -94,6 +94,14 @@ const DEFAULT_AUTH_BRANDING: AuthBranding = {
   defaultRoute: null
 };
 
+const INDICADORES_AUTH_BRANDING: AuthBranding = {
+  appLabel: "Indicadores CDs",
+  authCaption: "Indicadores CDs",
+  hiddenModuleKeys: [],
+  allowedModuleKeys: ["indicadores"],
+  defaultRoute: null
+};
+
 const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   "prevencaocd.vercel.app": {
     appLabel: "Prevenção CDs",
@@ -113,20 +121,10 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     hiddenModuleKeys: ["atividade-extra", "produtividade", "meta-mes"],
     defaultRoute: null
   },
-  "indicadorescd.vercel.app": {
-    appLabel: "Indicadores CDs",
-    authCaption: "Indicadores CDs",
-    hiddenModuleKeys: [],
-    allowedModuleKeys: ["indicadores"],
-    defaultRoute: "/modulos/indicadores"
-  },
-  "www.indicadorescd.vercel.app": {
-    appLabel: "Indicadores CDs",
-    authCaption: "Indicadores CDs",
-    hiddenModuleKeys: [],
-    allowedModuleKeys: ["indicadores"],
-    defaultRoute: "/modulos/indicadores"
-  }
+  "indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
+  "www.indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
+  "indicadorescd.vercel.app": INDICADORES_AUTH_BRANDING,
+  "www.indicadorescd.vercel.app": INDICADORES_AUTH_BRANDING
 };
 
 function resolveAuthBranding(hostname: string | undefined): AuthBranding {
