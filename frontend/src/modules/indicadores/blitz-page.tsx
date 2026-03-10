@@ -136,8 +136,11 @@ function formatPercent(value: number): string {
 function buildCalendarDays(monthStart: string, monthEnd: string): string[] {
   if (!monthStart || !monthEnd) return [];
   const current = new Date(`${monthStart}T00:00:00`);
-  const limit = new Date(`${monthEnd}T00:00:00`);
+  const today = todayIsoBrasilia();
+  const cappedEnd = today < monthEnd ? today : monthEnd;
+  const limit = new Date(`${cappedEnd}T00:00:00`);
   if (Number.isNaN(current.getTime()) || Number.isNaN(limit.getTime())) return [];
+  if (current > limit) return [];
 
   const days: string[] = [];
   while (current <= limit) {
@@ -154,7 +157,7 @@ function resolveInitialDay(summary: IndicadoresBlitzSummary, previousDay: string
   if (previousDay && allDays.includes(previousDay)) return previousDay;
   if (today >= summary.month_start && today <= summary.month_end && allDays.includes(today)) return today;
   if (summary.available_day_end && allDays.includes(summary.available_day_end)) return summary.available_day_end;
-  return allDays[0] ?? summary.month_start;
+  return allDays[0] ?? "";
 }
 
 function statusClassName(status: IndicadoresBlitzDayDetailRow["status"]): string {
