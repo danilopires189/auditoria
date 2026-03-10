@@ -4468,7 +4468,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
                               </div>
                               <div className="pvps-row-actions">
-                                <span className="pvps-swipe-hint">Deslize</span>
                                 <button
                                   className="btn btn-primary pvps-icon-btn"
                                   type="button"
@@ -4611,7 +4610,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 <span>{row.coddv} - {row.descricao}</span>
                               </div>
                               <div className="pvps-row-actions">
-                                <span className="pvps-swipe-hint">Deslize</span>
                                 <button
                                   className="btn btn-primary pvps-icon-btn"
                                   type="button"
