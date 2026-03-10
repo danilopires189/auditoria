@@ -199,6 +199,7 @@ type PvpsFeedItem =
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 const FEED_NEXT_PREVIEW_LIMIT = 5;
 const ADMIN_HISTORY_VIEW_LIMIT = 20;
+const MIN_PENDING_STOCK = 200;
 const SWIPE_ACTION_WIDTH = 104;
 const SWIPE_OPEN_THRESHOLD = 40;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
@@ -896,6 +897,10 @@ function completionPercent(completed: number, total: number): number {
   if (safeTotal <= 0) return 0;
   const raw = (safeCompleted / safeTotal) * 100;
   return Number(Math.min(100, raw).toFixed(1));
+}
+
+function hasMinPendingStock(row: { qtd_est_disp: number }): boolean {
+  return row.qtd_est_disp >= MIN_PENDING_STOCK;
 }
 
 function formatPercent(value: number): string {
@@ -2608,6 +2613,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const pvpsQueueProducts = useMemo(() => {
     const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number; minPriority: number; is_window_active: boolean }>();
     for (const row of sortedPvpsAllRows) {
+      if (!hasMinPendingStock(row)) continue;
       const ts = dateSortValue(row.dat_ult_compra);
       const current = byCoddv.get(row.coddv);
       if (!current) {
@@ -2641,6 +2647,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const alocQueueProducts = useMemo(() => {
     const byCoddv = new Map<number, { coddv: number; descricao: string; dat_ult_compra: string; maxTs: number; minPriority: number; is_window_active: boolean }>();
     for (const row of sortedAlocAllRows) {
+      if (!hasMinPendingStock(row)) continue;
       const ts = dateSortValue(row.dat_ult_compra);
       const current = byCoddv.get(row.coddv);
       if (!current) {
@@ -2810,17 +2817,20 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return alocCompletedRows.filter((row) => zoneFilterSet.has(row.zona));
   }, [alocCompletedRows, selectedZones, zoneFilterSet]);
 
+  const startedPvpsCoddvs = useMemo(() => new Set(pvpsCompletedRows.map((row) => row.coddv)), [pvpsCompletedRows]);
+  const startedAlocCoddvs = useMemo(() => new Set(alocCompletedRows.map((row) => row.coddv)), [alocCompletedRows]);
+
   const filteredPvpsPendingRows = useMemo(() => {
-    const activeRows = sortedPvpsAllRows.filter((row) => row.is_window_active);
+    const activeRows = sortedPvpsAllRows.filter((row) => row.is_window_active && (hasMinPendingStock(row) || startedPvpsCoddvs.has(row.coddv)));
     if (!selectedZones.length) return activeRows;
     return activeRows.filter((row) => zoneFilterSet.has(row.zona));
-  }, [sortedPvpsAllRows, selectedZones, zoneFilterSet]);
+  }, [sortedPvpsAllRows, selectedZones, zoneFilterSet, startedPvpsCoddvs]);
 
   const filteredAlocPendingRows = useMemo(() => {
-    const activeRows = sortedAlocAllRows.filter((row) => row.is_window_active);
+    const activeRows = sortedAlocAllRows.filter((row) => row.is_window_active && (hasMinPendingStock(row) || startedAlocCoddvs.has(row.coddv)));
     if (!selectedZones.length) return activeRows;
     return activeRows.filter((row) => zoneFilterSet.has(row.zona));
-  }, [sortedAlocAllRows, selectedZones, zoneFilterSet]);
+  }, [sortedAlocAllRows, selectedZones, zoneFilterSet, startedAlocCoddvs]);
 
   const sortedPvpsCompletedRows = useMemo(
     () => [...filteredPvpsCompletedRows].sort((a, b) => {
@@ -2843,6 +2853,32 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     }),
     [filteredAlocCompletedRows]
   );
+
+  const pvpsCompletedRowsByCoddv = useMemo(() => {
+    const grouped = new Map<number, PvpsCompletedRow[]>();
+    for (const item of pvpsCompletedRows) {
+      const current = grouped.get(item.coddv) ?? [];
+      current.push(item);
+      grouped.set(item.coddv, current);
+    }
+    for (const list of grouped.values()) {
+      list.sort((a, b) => compareEndereco(a.end_sep, b.end_sep) || (new Date(a.dt_hr).getTime() - new Date(b.dt_hr).getTime()));
+    }
+    return grouped;
+  }, [pvpsCompletedRows]);
+
+  const alocCompletedRowsByCoddv = useMemo(() => {
+    const grouped = new Map<number, AlocacaoCompletedRow[]>();
+    for (const item of alocCompletedRows) {
+      const current = grouped.get(item.coddv) ?? [];
+      current.push(item);
+      grouped.set(item.coddv, current);
+    }
+    for (const list of grouped.values()) {
+      list.sort((a, b) => compareEndereco(a.endereco, b.endereco) || (new Date(a.dt_hr).getTime() - new Date(b.dt_hr).getTime()));
+    }
+    return grouped;
+  }, [alocCompletedRows]);
 
   const zoneScopeKey = useMemo(
     () => selectedZones.slice().sort((a, b) => a.localeCompare(b)).join(","),
@@ -4807,6 +4843,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const canEdit = canEditAudit(row.auditor_id);
                   const statusInfo = alocHistoryStatus(row);
+                  const sepCompletedItems = pvpsCompletedRowsByCoddv.get(row.coddv) ?? [];
+                  const pulCompletedItems = alocCompletedRowsByCoddv.get(row.coddv) ?? [row];
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
                       {showZoneHeader ? (
@@ -4834,10 +4872,60 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
-                            <small>Andar {formatAndar(row.nivel)} | Auditor: {row.auditor_nome}</small>
-                            <small>Validade Sistema: {row.val_sist}</small>
-                            <small>Informada: {row.val_conf ?? "-"}</small>
-                            <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
+                            <div className="pvps-completed-section">
+                              <div className="pvps-completed-section-head">
+                                <strong>Separação</strong>
+                                <span>{sepCompletedItems.length}</span>
+                              </div>
+                              {sepCompletedItems.length > 0 ? (
+                                <div className="pvps-pul-completed-list">
+                                  {sepCompletedItems.map((item) => {
+                                    const sepStatus = pvpsHistoryStatus(item);
+                                    return (
+                                      <div key={`sep:${item.audit_id}`} className="pvps-pul-completed-item">
+                                        <div className="pvps-pul-completed-item-head">
+                                          <strong>{item.end_sep}</strong>
+                                          <span>{formatDateTime(item.dt_hr)}</span>
+                                        </div>
+                                        <div className="pvps-pul-completed-item-meta">
+                                          <small>Validade informada: <strong>{item.val_sep ?? "-"}</strong></small>
+                                          <small>Auditor: <strong>{item.auditor_nome}</strong></small>
+                                          <small>Status: <strong>{sepStatus.label}</strong></small>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <small className="pvps-completed-note">Nenhum endereço SEP auditado hoje para este SKU.</small>
+                              )}
+                            </div>
+                            <div className="pvps-completed-section pvps-pul-completed-group">
+                              <div className="pvps-completed-section-head">
+                                <strong>Pulmões auditados</strong>
+                                <span>{pulCompletedItems.length}</span>
+                              </div>
+                              <div className="pvps-pul-completed-list">
+                                {pulCompletedItems.map((item) => {
+                                  const pulStatus = alocHistoryStatus(item);
+                                  return (
+                                    <div key={`pul:${item.audit_id}`} className="pvps-pul-completed-item">
+                                      <div className="pvps-pul-completed-item-head">
+                                        <strong>{item.endereco}</strong>
+                                        <span>{formatDateTime(item.dt_hr)}</span>
+                                      </div>
+                                      <div className="pvps-pul-completed-item-meta">
+                                        <small>Andar: <strong>{formatAndar(item.nivel)}</strong></small>
+                                        <small>Validade sistema: <strong>{item.val_sist}</strong></small>
+                                        <small>Validade informada: <strong>{item.val_conf ?? "-"}</strong></small>
+                                        <small>Auditor: <strong>{item.auditor_nome}</strong></small>
+                                        <small>Status: <strong>{pulStatus.label}</strong></small>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
                         ) : null}
                       </AnimatedFeedReveal>
