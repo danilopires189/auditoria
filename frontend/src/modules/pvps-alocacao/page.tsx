@@ -5106,7 +5106,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               className="confirm-dialog pvps-popup-card"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="pvps-editor-popup">
+              <div className="pvps-editor-popup pvps-editor-popup-compact">
                 <div className="pvps-editor-popup-header">
                   <div className="pvps-editor-popup-heading">
                     <h3 id="aloc-inform-title">Auditar Alocação</h3>
@@ -5127,34 +5127,42 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   </button>
                 </div>
 
-                <div className="pvps-editor-summary">
-                  <div className="pvps-editor-summary-address">
-                    <strong>{activeAloc.endereco}</strong>
+                <div className="pvps-editor-summary pvps-editor-summary-compact">
+                  <div className="pvps-editor-summary-address pvps-editor-summary-address-compact">
+                    <strong className="pvps-editor-summary-address-line">
+                      <span className="pvps-editor-summary-address-text">{activeAloc.endereco}</span>
+                      {(() => {
+                        const andar = resolveFeedAndar(activeAloc.nivel);
+                        if (!andar) return null;
+                        return (
+                          <span className="pvps-row-floor-indicator pvps-editor-floor-indicator" title={`Andar ${andar}`}>
+                            {floorLevelIcon()}
+                            {andar}
+                          </span>
+                        );
+                      })()}
+                    </strong>
                     <span>{activeAloc.coddv} - {activeAloc.descricao}</span>
-                  </div>
-                  <div className="pvps-editor-summary-chips">
-                    <span className="pvps-editor-chip">Zona {activeAloc.zona}</span>
-                    <span className="pvps-editor-chip">Andar {formatAndar(activeAloc.nivel)}</span>
                   </div>
                 </div>
 
                 <div className="pvps-editor-panel">
-                  <div className="pvps-editor-info-grid">
-                    <div className="pvps-editor-info-card">
-                      <small>Validade do sistema</small>
+                  <div className="pvps-editor-info-grid pvps-editor-info-grid-compact">
+                    <div className="pvps-editor-info-card pvps-editor-info-card-inline">
+                      <small>Val Sist.</small>
                       <strong>{activeAloc.val_sist}</strong>
                     </div>
                     {editingAlocCompleted ? (
-                      <div className="pvps-editor-info-card">
+                      <div className="pvps-editor-info-card pvps-editor-info-card-inline">
                         <small>Ultima auditoria</small>
                         <strong>{formatDateTime(editingAlocCompleted.dt_hr)}</strong>
                       </div>
                     ) : null}
                   </div>
 
-                  <form className="form-grid pvps-editor-form" onSubmit={(event) => void handleSubmitAlocacao(event)}>
-                    <label>
-                      Validade do produto
+                  <form className="form-grid pvps-editor-form pvps-editor-form-compact" onSubmit={(event) => void handleSubmitAlocacao(event)}>
+                    <label className="pvps-editor-field">
+                      <span className="pvps-editor-field-label">Validade do produto</span>
                       <div className="pvps-validity-row">
                         <button
                           type="button"
