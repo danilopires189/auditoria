@@ -15,6 +15,7 @@ from app.etl.extract.readers import read_source_dataframe
 from app.etl.table_specs import get_table_spec
 from app.etl.transform.cast import apply_type_casts
 from app.etl.transform.normalize import normalize_dataframe, snake_case
+from app.etl.transform.table_rules import apply_table_specific_rules
 from app.etl.transform.validate import validate_frame
 from app.utils.json_safe import to_json_safe
 from app.utils.logging import get_logger
@@ -121,6 +122,7 @@ def _prepare_rows_for_table(
         _effective_types(table_name, table_cfg),
     )
     prepared_frame, _ = _drop_fully_empty_business_rows(table_name, cast_result.frame)
+    prepared_frame, _ = apply_table_specific_rules(table_name, prepared_frame)
 
     required = _normalize_list(table_cfg.required_columns)
     unique_keys = _normalize_list(table_cfg.unique_keys)
