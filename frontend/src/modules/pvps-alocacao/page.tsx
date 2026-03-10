@@ -2854,32 +2854,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     [filteredAlocCompletedRows]
   );
 
-  const pvpsCompletedRowsByCoddv = useMemo(() => {
-    const grouped = new Map<number, PvpsCompletedRow[]>();
-    for (const item of pvpsCompletedRows) {
-      const current = grouped.get(item.coddv) ?? [];
-      current.push(item);
-      grouped.set(item.coddv, current);
-    }
-    for (const list of grouped.values()) {
-      list.sort((a, b) => compareEndereco(a.end_sep, b.end_sep) || (new Date(a.dt_hr).getTime() - new Date(b.dt_hr).getTime()));
-    }
-    return grouped;
-  }, [pvpsCompletedRows]);
-
-  const alocCompletedRowsByCoddv = useMemo(() => {
-    const grouped = new Map<number, AlocacaoCompletedRow[]>();
-    for (const item of alocCompletedRows) {
-      const current = grouped.get(item.coddv) ?? [];
-      current.push(item);
-      grouped.set(item.coddv, current);
-    }
-    for (const list of grouped.values()) {
-      list.sort((a, b) => compareEndereco(a.endereco, b.endereco) || (new Date(a.dt_hr).getTime() - new Date(b.dt_hr).getTime()));
-    }
-    return grouped;
-  }, [alocCompletedRows]);
-
   const zoneScopeKey = useMemo(
     () => selectedZones.slice().sort((a, b) => a.localeCompare(b)).join(","),
     [selectedZones]
@@ -4843,8 +4817,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const canEdit = canEditAudit(row.auditor_id);
                   const statusInfo = alocHistoryStatus(row);
-                  const sepCompletedItems = pvpsCompletedRowsByCoddv.get(row.coddv) ?? [];
-                  const pulCompletedItems = alocCompletedRowsByCoddv.get(row.coddv) ?? [row];
                   return (
                     <div key={row.audit_id} className="pvps-zone-group">
                       {showZoneHeader ? (
@@ -4872,60 +4844,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </div>
                         {open ? (
                           <div className="pvps-row-details">
-                            <div className="pvps-completed-section">
-                              <div className="pvps-completed-section-head">
-                                <strong>Separação</strong>
-                                <span>{sepCompletedItems.length}</span>
-                              </div>
-                              {sepCompletedItems.length > 0 ? (
-                                <div className="pvps-pul-completed-list">
-                                  {sepCompletedItems.map((item) => {
-                                    const sepStatus = pvpsHistoryStatus(item);
-                                    return (
-                                      <div key={`sep:${item.audit_id}`} className="pvps-pul-completed-item">
-                                        <div className="pvps-pul-completed-item-head">
-                                          <strong>{item.end_sep}</strong>
-                                          <span>{formatDateTime(item.dt_hr)}</span>
-                                        </div>
-                                        <div className="pvps-pul-completed-item-meta">
-                                          <small>Validade informada: <strong>{item.val_sep ?? "-"}</strong></small>
-                                          <small>Auditor: <strong>{item.auditor_nome}</strong></small>
-                                          <small>Status: <strong>{sepStatus.label}</strong></small>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <small className="pvps-completed-note">Nenhum endereço SEP auditado hoje para este SKU.</small>
-                              )}
-                            </div>
-                            <div className="pvps-completed-section pvps-pul-completed-group">
-                              <div className="pvps-completed-section-head">
-                                <strong>Pulmões auditados</strong>
-                                <span>{pulCompletedItems.length}</span>
-                              </div>
-                              <div className="pvps-pul-completed-list">
-                                {pulCompletedItems.map((item) => {
-                                  const pulStatus = alocHistoryStatus(item);
-                                  return (
-                                    <div key={`pul:${item.audit_id}`} className="pvps-pul-completed-item">
-                                      <div className="pvps-pul-completed-item-head">
-                                        <strong>{item.endereco}</strong>
-                                        <span>{formatDateTime(item.dt_hr)}</span>
-                                      </div>
-                                      <div className="pvps-pul-completed-item-meta">
-                                        <small>Andar: <strong>{formatAndar(item.nivel)}</strong></small>
-                                        <small>Validade sistema: <strong>{item.val_sist}</strong></small>
-                                        <small>Validade informada: <strong>{item.val_conf ?? "-"}</strong></small>
-                                        <small>Auditor: <strong>{item.auditor_nome}</strong></small>
-                                        <small>Status: <strong>{pulStatus.label}</strong></small>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                            <small>Andar {formatAndar(row.nivel)} | Auditor: {row.auditor_nome}</small>
+                            <small>Validade Sistema: {row.val_sist}</small>
+                            <small>Informada: {row.val_conf ?? "-"}</small>
+                            <small>Concluído em: {formatDateTime(row.dt_hr)}</small>
                           </div>
                         ) : null}
                       </AnimatedFeedReveal>
