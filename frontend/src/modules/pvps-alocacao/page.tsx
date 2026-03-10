@@ -831,6 +831,15 @@ function floorLevelIcon() {
 
 type HistoryStatusTone = "ok" | "bad" | "warn" | "wait";
 type PulFeedbackTone = "ok" | "bad" | "warn";
+type PendingSaveFeedbackTarget = "pvps-sep" | "aloc" | `pvps-pul:${string}`;
+
+const SAVE_BUTTON_FEEDBACK_MS = 500;
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 function formatOcorrenciaLabel(value: PvpsEndSit | null): string {
   if (value === "vazio") return "Vazio";
@@ -1033,16 +1042,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     () => (activePvpsMode === "pul" ? (activePulItem?.end_pul ?? editorPvpsRow?.end_sep ?? "") : (editorPvpsRow?.end_sep ?? "")),
     [activePvpsMode, activePulItem, editorPvpsRow]
   );
-  const activePvpsZonaAuditada = useMemo(
-    () => zoneFromEndereco(activePvpsEnderecoAuditado),
-    [activePvpsEnderecoAuditado]
-  );
 
   const [endSit, setEndSit] = useState<PvpsEndSit | "">("");
   const [valSep, setValSep] = useState("");
   const [pulInputs, setPulInputs] = useState<Record<string, string>>({});
   const [pulEndSits, setPulEndSits] = useState<Record<string, PvpsEndSit | "">>({});
   const [pulFeedback, setPulFeedback] = useState<{ tone: PulFeedbackTone; text: string; feedKey: string } | null>(null);
+  const [pendingSaveFeedbackTarget, setPendingSaveFeedbackTarget] = useState<PendingSaveFeedbackTarget | null>(null);
 
   const [activeAlocQueue, setActiveAlocQueue] = useState<string | null>(null);
   const activeAloc = useMemo(
@@ -3095,6 +3101,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   async function openPvpsPopup(row: PvpsManifestRow, options?: { motion?: "default" | "next" }): Promise<void> {
     closePendingSwipe();
     setPulFeedback(null);
+    setPendingSaveFeedbackTarget(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
     if (row.status === "pendente_pul") {
@@ -3130,6 +3137,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   function openPvpsPulPopup(row: PvpsManifestRow, endPul: string, options?: { motion?: "default" | "next" }): void {
     closePendingSwipe();
     setPulFeedback(null);
+    setPendingSaveFeedbackTarget(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
     setEditingPvpsCompleted(null);
@@ -3142,6 +3150,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function openAlocPopup(row: AlocacaoManifestRow): void {
     closePendingSwipe();
+    setPendingSaveFeedbackTarget(null);
     setEditingAlocCompleted(null);
     setShowAlocOccurrence(false);
     setActiveAlocQueue(row.queue_id);
@@ -3153,12 +3162,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   function closePvpsPopup(): void {
     setPulFeedback(null);
+    setPendingSaveFeedbackTarget(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
     setPvpsPopupRow(null);
     setActivePvpsMode("sep");
     setActivePulEnd(null);
     setShowPvpsPopup(false);
+  }
+
+  async function showPendingSaveFeedback(target: PendingSaveFeedbackTarget): Promise<void> {
+    setPendingSaveFeedbackTarget(target);
+    await waitMs(SAVE_BUTTON_FEEDBACK_MS);
+    setPendingSaveFeedbackTarget((current) => (current === target ? null : current));
   }
 
   async function resolvePendingPvpsEmptyTarget(item: PvpsFeedItem): Promise<{ kind: "sep"; row: PvpsManifestRow } | { kind: "pul"; row: PvpsManifestRow; endPul: string } | null> {
@@ -3618,6 +3634,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           )));
           setStatusMessage(`Separação salva na fila. Pulmão ficará pendente para auditoria separada e será sincronizado ${syncTail}`);
         }
+        await showPendingSaveFeedback("pvps-sep");
         openNextPvpsSepFrom(currentFeedKey);
         if (shouldTriggerQueuedBackgroundSync(isOnline)) {
           void runPendingSync({ manual: false });
@@ -3770,6 +3787,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             ? `Pulmão com ocorrência salvo na fila. Avançando e sincronizando ${syncTail}`
             : `Pulmão salvo na fila. Avançando e sincronizando ${syncTail}`
         );
+        await showPendingSaveFeedback(`pvps-pul:${endPul}`);
         openNextPvpsFrom(currentFeedKey, zoneFromEndereco(endPul));
         if (shouldTriggerQueuedBackgroundSync(isOnline)) {
           void runPendingSync({ manual: false });
@@ -3885,6 +3903,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setShowAlocOccurrence(false);
         setAlocEndSit("");
         setAlocValConf("");
+        await showPendingSaveFeedback("aloc");
         openNextAlocacaoFrom(currentQueueId, currentZone);
         if (shouldTriggerQueuedBackgroundSync(isOnline)) {
           void runPendingSync({ manual: false });
@@ -4860,7 +4879,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               className="confirm-dialog pvps-popup-card pvps-popup-card-compact"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="pvps-editor-popup">
+              <div className="pvps-editor-popup pvps-editor-popup-compact">
                 <div className="pvps-editor-popup-header">
                   <div className="pvps-editor-popup-heading">
                     <h3 id="pvps-inform-title">{activePvpsMode === "pul" ? "Auditar Pulmao" : "Auditar Separacao"}</h3>
@@ -4879,13 +4898,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   </button>
                 </div>
 
-                <div className="pvps-editor-summary">
-                  <div className="pvps-editor-summary-address">
+                <div className="pvps-editor-summary pvps-editor-summary-compact">
+                  <div className="pvps-editor-summary-address pvps-editor-summary-address-compact">
                     <strong>{activePvpsEnderecoAuditado}</strong>
                     <span>{editorPvpsRow.coddv} - {editorPvpsRow.descricao}</span>
                   </div>
                   <div className="pvps-editor-summary-chips">
-                    <span className="pvps-editor-chip">Zona {activePvpsZonaAuditada}</span>
                     <span className="pvps-editor-chip">{activePvpsMode === "pul" ? "Pulmao" : "Separacao"}</span>
                   </div>
                 </div>
@@ -4957,7 +4975,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         </label>
 
                         <div className="pvps-editor-actions">
-                          <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
+                          <button
+                            className={`btn btn-primary pvps-save-btn${pendingSaveFeedbackTarget === "pvps-sep" ? " is-saved" : ""}`}
+                            type="submit"
+                            disabled={busy}
+                          >
+                            {pendingSaveFeedbackTarget === "pvps-sep" ? "Salvo" : "Salvar"}
+                          </button>
                           <button
                             className="btn btn-muted"
                             type="button"
@@ -5052,8 +5076,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           </label>
 
                           <div className="pvps-editor-actions">
-                            <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void handleSubmitPul(activePulItem.end_pul)}>
-                              Salvar
+                            <button
+                              className={`btn btn-primary pvps-save-btn${pendingSaveFeedbackTarget === `pvps-pul:${activePulItem.end_pul}` ? " is-saved" : ""}`}
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handleSubmitPul(activePulItem.end_pul)}
+                            >
+                              {pendingSaveFeedbackTarget === `pvps-pul:${activePulItem.end_pul}` ? "Salvo" : "Salvar"}
                             </button>
                             <button
                               className="btn btn-muted"
@@ -5215,7 +5244,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     </label>
 
                     <div className="pvps-editor-actions">
-                      <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
+                      <button
+                        className={`btn btn-primary pvps-save-btn${pendingSaveFeedbackTarget === "aloc" ? " is-saved" : ""}`}
+                        type="submit"
+                        disabled={busy}
+                      >
+                        {pendingSaveFeedbackTarget === "aloc" ? "Salvo" : "Salvar"}
+                      </button>
                       <button
                         className="btn btn-muted"
                         type="button"

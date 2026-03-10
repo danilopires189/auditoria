@@ -6928,6 +6928,21 @@ small {
   padding: 10px 12px;
 }
 
+.pvps-save-btn {
+  transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease, color 150ms ease;
+}
+
+.pvps-save-btn.is-saved {
+  background: linear-gradient(130deg, #169d68, #25ba7d);
+  border-color: #169d68;
+  color: #ffffff;
+  box-shadow: 0 10px 18px rgba(22, 157, 104, 0.18);
+}
+
+.pvps-save-btn.is-saved:disabled {
+  opacity: 1;
+}
+
 .pvps-editor-muted {
   margin: 0;
   color: #5a7195;
