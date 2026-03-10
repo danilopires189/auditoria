@@ -11,6 +11,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import {
@@ -131,16 +132,7 @@ function toDisplayName(value: string): string {
 }
 
 function formatDateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(parsed);
+  return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "-" });
 }
 
 function hasRowChangeAfterCollect(row: ColetaRow): boolean {
@@ -213,15 +205,6 @@ function fixedCdFromProfile(profile: ColetaModuleProfile): number | null {
     return Math.trunc(profile.cd_default);
   }
   return parseCdFromLabel(profile.cd_nome);
-}
-
-function todayIsoBrasilia(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
 }
 
 function toPendingLocalId(row: ColetaRow): string {

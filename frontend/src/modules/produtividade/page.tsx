@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { formatDateOnlyPtBR, formatDateTimeBrasilia, monthStartIsoBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { formatCountLabel, formatMetricWithUnit as formatMetricWithInflection } from "../../shared/inflection";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
@@ -61,47 +62,12 @@ function fixedCdFromProfile(profile: ProdutividadeModuleProfile): number | null 
   return parseCdFromLabel(profile.cd_nome);
 }
 
-function todayIsoBrasilia(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
-}
-
-function monthStartIsoBrasilia(): string {
-  const now = new Date();
-  const month = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit"
-  }).format(now);
-  return `${month}-01`;
-}
-
 function formatDate(value: string): string {
-  if (!value) return "-";
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(parsed);
+  return formatDateOnlyPtBR(value, "-", "value");
 }
 
 function formatDateTime(value: string): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(parsed);
+  return formatDateTimeBrasilia(value, { emptyFallback: "-", invalidFallback: "value" });
 }
 
 function formatMetric(value: number, unit: string): string {

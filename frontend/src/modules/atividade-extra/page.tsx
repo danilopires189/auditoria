@@ -2,6 +2,12 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import {
+  formatDateOnlyPtBR,
+  formatDateTimeBrasilia,
+  nowHourMinuteBrasilia,
+  todayIsoBrasilia
+} from "../../shared/brasilia-datetime";
 import { formatCountLabel } from "../../shared/inflection";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
@@ -69,24 +75,6 @@ function fixedCdFromProfile(profile: AtividadeExtraModuleProfile): number | null
   return parseCdFromLabel(profile.cd_nome);
 }
 
-function todayIsoBrasilia(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
-}
-
-function nowHourMinuteBrasilia(): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "America/Sao_Paulo",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(new Date());
-}
-
 function toTimeInputValue(value: string): string {
   const compact = value.trim();
   if (!compact) return "";
@@ -145,27 +133,11 @@ function computePoints(durationSeconds: number | null): number {
 }
 
 function formatDate(value: string): string {
-  if (!value) return "-";
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(parsed);
+  return formatDateOnlyPtBR(value, "-", "value");
 }
 
 function formatDateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(parsed);
+  return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "-" });
 }
 
 function formatPoints(value: number): string {

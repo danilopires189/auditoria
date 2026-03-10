@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } 
 import { Link } from "react-router-dom";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   fetchIndicadoresBlitzDailySeries,
@@ -78,37 +79,12 @@ function asErrorMessage(error: unknown): string {
   return "Erro inesperado.";
 }
 
-function todayIsoBrasilia(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
-}
-
 function formatDate(value: string | null): string {
-  if (!value) return "-";
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(parsed);
+  return formatDateOnlyPtBR(value, "-", "value");
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(parsed);
+  return formatDateTimeBrasilia(value, { emptyFallback: "-", invalidFallback: "value" });
 }
 
 function formatInteger(value: number): string {
