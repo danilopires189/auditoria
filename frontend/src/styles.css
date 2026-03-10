@@ -6624,6 +6624,11 @@ small {
   animation: none;
 }
 
+.pvps-popup-card-compact {
+  width: min(560px, calc(100vw - 56px));
+  min-height: auto;
+}
+
 .pvps-popup-card>p {
   max-height: none;
   overflow: visible;
@@ -6696,7 +6701,10 @@ small {
 }
 
 .pvps-editor-popup-compact {
-  gap: 10px;
+  gap: 8px;
+  padding: 12px;
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
 .pvps-editor-popup-header {
@@ -6714,13 +6722,13 @@ small {
 .pvps-editor-popup-heading h3 {
   margin: 0;
   color: #112742;
-  font-size: 1.08rem;
+  font-size: 1rem;
 }
 
 .pvps-editor-close-icon {
-  min-height: 38px;
-  min-width: 38px;
-  width: 38px;
+  min-height: 34px;
+  min-width: 34px;
+  width: 34px;
   padding: 0;
   border-radius: 999px;
   display: inline-flex;
@@ -6734,8 +6742,8 @@ small {
 }
 
 .pvps-editor-close-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   stroke: currentColor;
   stroke-width: 2.2;
 }
@@ -6759,8 +6767,9 @@ small {
 }
 
 .pvps-editor-summary-compact {
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 14px;
 }
 
 .pvps-editor-summary-address {
@@ -6769,7 +6778,7 @@ small {
 }
 
 .pvps-editor-summary-address-compact {
-  gap: 4px;
+  gap: 2px;
 }
 
 .pvps-editor-summary-address strong {
@@ -6784,7 +6793,7 @@ small {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -6795,6 +6804,7 @@ small {
 .pvps-editor-summary-address span {
   color: #5a7094;
   font-size: 0.88rem;
+  line-height: 1.2;
 }
 
 .pvps-editor-summary-chips {
@@ -6818,12 +6828,12 @@ small {
 
 .pvps-editor-panel {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .pvps-editor-form {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .pvps-editor-info-grid {
@@ -6834,7 +6844,7 @@ small {
 
 .pvps-editor-info-grid-compact {
   grid-template-columns: repeat(auto-fit, minmax(150px, max-content));
-  gap: 6px;
+  gap: 4px;
 }
 
 .pvps-editor-info-card {
@@ -6850,8 +6860,8 @@ small {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 7px 10px;
 }
 
 .pvps-editor-info-card small {
@@ -6870,27 +6880,28 @@ small {
 
 .pvps-editor-info-card-inline strong {
   white-space: nowrap;
+  font-size: 0.88rem;
 }
 
 .pvps-editor-form-compact {
-  gap: 10px;
+  gap: 8px;
 }
 
 .pvps-editor-field {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .pvps-editor-field-label {
   color: #243d63;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
 .pvps-editor-actions {
   display: flex;
   flex-wrap: nowrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .pvps-editor-actions .btn {
@@ -6903,6 +6914,18 @@ small {
   font-size: 0.95rem;
   font-weight: 700;
   border-radius: 12px;
+}
+
+.pvps-popup-card-compact .form-grid input,
+.pvps-popup-card-compact .form-grid select,
+.pvps-popup-card-compact .form-grid .btn,
+.pvps-popup-card-compact .pvps-editor-actions .btn {
+  min-height: 46px;
+}
+
+.pvps-popup-card-compact .form-grid input,
+.pvps-popup-card-compact .form-grid select {
+  padding: 10px 12px;
 }
 
 .pvps-editor-muted {
@@ -7087,9 +7110,9 @@ small {
 .pvps-validity-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 /* Botão ⚠️ dentro da linha de validade */
@@ -7101,7 +7124,7 @@ small {
   flex: 0 0 auto;
   opacity: 1;
   border-radius: 6px;
-  padding: 4px 6px;
+  padding: 4px 5px;
   transition: background 150ms ease, transform 120ms ease, outline 120ms ease;
   user-select: none;
 }
@@ -7128,6 +7151,11 @@ small {
   border-radius: 12px !important;
   font-size: 16px !important;
   padding: 10px 14px !important;
+}
+
+.pvps-popup-card-compact .pvps-validity-row input {
+  min-height: 46px !important;
+  padding: 9px 12px !important;
 }
 
 /* Badge que substitui o input quando ocorrência está ativa */
@@ -7540,8 +7568,8 @@ small {
 }
 
 .pvps-editor-floor-indicator {
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 26px;
+  padding: 0 9px;
   border-radius: 999px;
   border: 1px solid #d3e0f5;
   background: rgba(255, 255, 255, 0.96);
@@ -8022,6 +8050,11 @@ small {
     border-radius: 20px 20px 0 0;
   }
 
+  .pvps-popup-card-compact {
+    max-width: calc(100vw - 26px);
+    min-height: auto;
+  }
+
   .pvps-zone-popup-card {
     width: 100%;
     max-width: calc(100vw - 8px);
@@ -8055,7 +8088,8 @@ small {
   }
 
   .pvps-editor-popup-compact {
-    gap: 8px;
+    gap: 6px;
+    padding: 10px 10px calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   .pvps-editor-popup-header {
@@ -8064,7 +8098,7 @@ small {
   }
 
   .pvps-editor-summary-address strong {
-    font-size: 1.24rem;
+    font-size: 1.14rem;
   }
 
   .pvps-editor-summary-address-line {
