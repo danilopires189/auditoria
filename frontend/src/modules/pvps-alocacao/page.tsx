@@ -5103,7 +5103,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             }}
           >
             <div
-              className="confirm-dialog pvps-popup-card"
+              className="confirm-dialog pvps-popup-card pvps-popup-card-compact"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="pvps-editor-popup pvps-editor-popup-compact">
