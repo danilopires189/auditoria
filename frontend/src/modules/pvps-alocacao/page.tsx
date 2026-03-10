@@ -5158,8 +5158,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
                 <div className="pvps-editor-summary pvps-editor-summary-compact">
                   <div className="pvps-editor-summary-address pvps-editor-summary-address-compact">
-                    <strong className="pvps-editor-summary-address-line">
-                      <span className="pvps-editor-summary-address-text">{activeAloc.endereco}</span>
+                    <div className="pvps-editor-summary-address-line">
+                      <strong className="pvps-editor-summary-address-title">{activeAloc.endereco}</strong>
                       {(() => {
                         const andar = resolveFeedAndar(activeAloc.nivel);
                         if (!andar) return null;
@@ -5170,7 +5170,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                           </span>
                         );
                       })()}
-                    </strong>
+                    </div>
                     <span>{activeAloc.coddv} - {activeAloc.descricao}</span>
                   </div>
                 </div>
