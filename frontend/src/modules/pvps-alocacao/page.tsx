@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, TouchEvent as ReactTouchEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { jsPDF } from "jspdf";
@@ -73,6 +73,7 @@ type ModuleTab = "pvps" | "alocacao";
 type FeedView = "pendentes" | "concluidos";
 type AdminRulesView = "active" | "history";
 type PendingAddressSortDirection = "asc" | "desc";
+type PendingSwipeSide = "edit" | "empty";
 
 interface AdminRuleDraft {
   modulo: PvpsModulo;
@@ -189,6 +190,8 @@ type PvpsFeedItem =
 const MODULE_DEF = getModuleByKeyOrThrow("pvps-alocacao");
 const FEED_NEXT_PREVIEW_LIMIT = 5;
 const ADMIN_HISTORY_VIEW_LIMIT = 20;
+const SWIPE_ACTION_WIDTH = 104;
+const SWIPE_OPEN_THRESHOLD = 40;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 let reportLogoDataUrlPromise: Promise<string | null> | null = null;
 
@@ -996,6 +999,15 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportPdfPreview, setReportPdfPreview] = useState<PdfReportPreview | null>(null);
+  const swipeTouchRowRef = useRef<string | null>(null);
+  const swipeStartXRef = useRef(0);
+  const swipeStartYRef = useRef(0);
+  const swipeStartOffsetRef = useRef(0);
+  const swipeCurrentOffsetRef = useRef(0);
+  const swipeDraggingRef = useRef(false);
+  const suppressRowClickRef = useRef<string | null>(null);
+  const [pendingSwipeOpen, setPendingSwipeOpen] = useState<{ rowId: string; side: PendingSwipeSide } | null>(null);
+  const [pendingSwipeDrag, setPendingSwipeDrag] = useState<{ rowId: string; offset: number } | null>(null);
 
   const [activePvpsKey, setActivePvpsKey] = useState<string | null>(null);
   const activePvps = useMemo(
@@ -2849,9 +2861,95 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     [selectedZones]
   );
   const showPendingZoneSortToggle = feedView === "pendentes" && selectedZones.length > 0;
+  const visiblePendingSwipeRowIds = useMemo(() => {
+    if (feedView !== "pendentes") return [] as string[];
+    if (tab === "pvps") return pvpsFeedItems.map((item) => `pvps:${item.feedKey}`);
+    return visibleAlocRows.map((row) => `aloc:${row.queue_id}`);
+  }, [feedView, tab, pvpsFeedItems, visibleAlocRows]);
 
   function togglePendingAddressSortDirection(): void {
     setPendingAddressSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+  }
+
+  function resetPendingSwipeTransientState(): void {
+    swipeTouchRowRef.current = null;
+    swipeDraggingRef.current = false;
+    swipeStartOffsetRef.current = 0;
+    swipeCurrentOffsetRef.current = 0;
+    setPendingSwipeDrag(null);
+  }
+
+  function closePendingSwipe(): void {
+    resetPendingSwipeTransientState();
+    setPendingSwipeOpen(null);
+  }
+
+  function getOpenedPendingSwipeOffset(rowId: string): number {
+    if (!pendingSwipeOpen || pendingSwipeOpen.rowId !== rowId) return 0;
+    return pendingSwipeOpen.side === "edit" ? SWIPE_ACTION_WIDTH : -SWIPE_ACTION_WIDTH;
+  }
+
+  function getPendingRowSwipeOffset(rowId: string): number {
+    if (pendingSwipeDrag && pendingSwipeDrag.rowId === rowId) return pendingSwipeDrag.offset;
+    return getOpenedPendingSwipeOffset(rowId);
+  }
+
+  function onPendingRowTouchStart(event: ReactTouchEvent<HTMLDivElement>, rowId: string, disabled = false): void {
+    if (disabled) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    swipeTouchRowRef.current = rowId;
+    swipeStartXRef.current = touch.clientX;
+    swipeStartYRef.current = touch.clientY;
+    swipeStartOffsetRef.current = getPendingRowSwipeOffset(rowId);
+    swipeCurrentOffsetRef.current = swipeStartOffsetRef.current;
+    swipeDraggingRef.current = false;
+    if (pendingSwipeOpen && pendingSwipeOpen.rowId !== rowId) {
+      setPendingSwipeOpen(null);
+    }
+  }
+
+  function onPendingRowTouchMove(event: ReactTouchEvent<HTMLDivElement>, rowId: string, disabled = false): void {
+    if (disabled || swipeTouchRowRef.current !== rowId) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const deltaX = touch.clientX - swipeStartXRef.current;
+    const deltaY = touch.clientY - swipeStartYRef.current;
+
+    if (!swipeDraggingRef.current) {
+      if (Math.abs(deltaX) < 8) return;
+      if (Math.abs(deltaX) <= Math.abs(deltaY)) {
+        swipeTouchRowRef.current = null;
+        return;
+      }
+      swipeDraggingRef.current = true;
+    }
+
+    event.preventDefault();
+    const rawOffset = swipeStartOffsetRef.current + deltaX;
+    const clamped = Math.max(-SWIPE_ACTION_WIDTH, Math.min(SWIPE_ACTION_WIDTH, rawOffset));
+    swipeCurrentOffsetRef.current = clamped;
+    setPendingSwipeDrag({ rowId, offset: clamped });
+  }
+
+  function onPendingRowTouchEnd(rowId: string): void {
+    if (swipeTouchRowRef.current !== rowId) return;
+    const wasDragging = swipeDraggingRef.current;
+    const finalOffset = swipeCurrentOffsetRef.current;
+
+    resetPendingSwipeTransientState();
+
+    if (!wasDragging) return;
+    suppressRowClickRef.current = rowId;
+    if (finalOffset >= SWIPE_OPEN_THRESHOLD) {
+      setPendingSwipeOpen({ rowId, side: "edit" });
+      return;
+    }
+    if (finalOffset <= -SWIPE_OPEN_THRESHOLD) {
+      setPendingSwipeOpen({ rowId, side: "empty" });
+      return;
+    }
+    setPendingSwipeOpen(null);
   }
 
   function renderZoneHeader(scope: string, zone: string) {
@@ -2941,6 +3039,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [tab, feedView, sortedPvpsAllRows, activeCd, feedPulBySepKey, isOnline]);
 
   useEffect(() => {
+    if (!pendingSwipeOpen) return;
+    if (visiblePendingSwipeRowIds.includes(pendingSwipeOpen.rowId)) return;
+    setPendingSwipeOpen(null);
+  }, [pendingSwipeOpen, visiblePendingSwipeRowIds]);
+
+  useEffect(() => {
+    closePendingSwipe();
+  }, [feedView, tab]);
+
+  useEffect(() => {
     if (tab === "pvps") {
       if (showPvpsPopup) return;
       const visibleKeys = new Set(pvpsFeedItems.map((item) => keyOfPvps(item.row)));
@@ -2985,6 +3093,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [lastPendingReviewAt, tab]);
 
   async function openPvpsPopup(row: PvpsManifestRow, options?: { motion?: "default" | "next" }): Promise<void> {
+    closePendingSwipe();
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
@@ -3019,6 +3128,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openPvpsPulPopup(row: PvpsManifestRow, endPul: string, options?: { motion?: "default" | "next" }): void {
+    closePendingSwipe();
     setPulFeedback(null);
     setShowSepOccurrence(false);
     setShowPulOccurrence(false);
@@ -3031,6 +3141,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }
 
   function openAlocPopup(row: AlocacaoManifestRow): void {
+    closePendingSwipe();
     setEditingAlocCompleted(null);
     setShowAlocOccurrence(false);
     setActiveAlocQueue(row.queue_id);
@@ -3048,6 +3159,205 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setActivePvpsMode("sep");
     setActivePulEnd(null);
     setShowPvpsPopup(false);
+  }
+
+  async function resolvePendingPvpsEmptyTarget(item: PvpsFeedItem): Promise<{ kind: "sep"; row: PvpsManifestRow } | { kind: "pul"; row: PvpsManifestRow; endPul: string } | null> {
+    if (item.kind === "pul") {
+      return { kind: "pul", row: item.row, endPul: item.endPul };
+    }
+    if (item.row.status !== "pendente_pul") {
+      return { kind: "sep", row: item.row };
+    }
+
+    const rowKey = keyOfPvps(item.row);
+    const cachedItems = getPulItemsByRowKey(feedPulBySepKey, item.row.coddv, item.row.end_sep);
+    let pendingPul = cachedItems.find((pulItem) => !pulItem.auditado) ?? null;
+
+    if (!pendingPul && isOnline && activeCd != null) {
+      try {
+        const fetchedItems = await fetchPvpsPulItems(item.row.coddv, item.row.end_sep, activeCd);
+        if (hasUsablePulCacheForRow(item.row, fetchedItems)) {
+          setFeedPulBySepKey((current) => ({ ...current, [rowKey]: fetchedItems }));
+        }
+        pendingPul = fetchedItems.find((pulItem) => !pulItem.auditado) ?? null;
+      } catch {
+        pendingPul = null;
+      }
+    }
+
+    if (!pendingPul) return null;
+    return { kind: "pul", row: item.row, endPul: pendingPul.end_pul };
+  }
+
+  function openPendingPvpsEditor(item: PvpsFeedItem): void {
+    closePendingSwipe();
+    if (item.kind === "pul") {
+      openPvpsPulPopup(item.row, item.endPul);
+      return;
+    }
+    void openPvpsPopup(item.row);
+  }
+
+  async function quickSavePendingSepOccurrence(row: PvpsManifestRow, occurrence: PvpsEndSit): Promise<void> {
+    if (activeCd == null) {
+      setErrorMessage("CD ativo obrigatório para auditoria PVPS.");
+      return;
+    }
+    const currentKey = keyOfPvps(row);
+    const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
+    setBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      await saveOfflineSepEvent({
+        user_id: profile.user_id,
+        cd: activeCd,
+        coddv: row.coddv,
+        end_sep: row.end_sep,
+        end_sit: occurrence,
+        val_sep: null
+      });
+      await upsertOfflineSepCache({
+        user_id: profile.user_id,
+        cd: activeCd,
+        coddv: row.coddv,
+        end_sep: row.end_sep,
+        end_sit: occurrence,
+        val_sep: null
+      });
+      await refreshPendingState();
+      setPvpsRows((current) => current.filter((currentRow) => keyOfPvps(currentRow) !== currentKey));
+      setStatusMessage(`Separação marcada como vazio na fila e será sincronizada ${syncTail}`);
+      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
+        void runPendingSync({ manual: false });
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao marcar Separação como vazio.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function quickSavePendingPulOccurrence(row: PvpsManifestRow, endPul: string, occurrence: PvpsEndSit): Promise<void> {
+    if (activeCd == null) {
+      setErrorMessage("CD ativo obrigatório para auditoria PVPS.");
+      return;
+    }
+
+    let hasSep = await hasOfflineSepCache(profile.user_id, activeCd, row.coddv, row.end_sep);
+    if (!hasSep && (row.val_sep || row.end_sit)) {
+      await upsertOfflineSepCache({
+        user_id: profile.user_id,
+        cd: activeCd,
+        coddv: row.coddv,
+        end_sep: row.end_sep,
+        end_sit: row.end_sit ?? null,
+        val_sep: normalizeMmaa(row.val_sep)
+      });
+      hasSep = true;
+    }
+    if (!hasSep) {
+      setErrorMessage("Para informar Pulmão offline, salve primeiro a linha de Separação no mesmo endereço.");
+      return;
+    }
+
+    const rowKey = keyOfPvps(row);
+    const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
+    setBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      await saveOfflinePulEvent({
+        user_id: profile.user_id,
+        cd: activeCd,
+        coddv: row.coddv,
+        end_sep: row.end_sep,
+        end_pul: endPul,
+        end_sit: occurrence,
+        val_pul: null,
+        audit_id: row.audit_id
+      });
+      await refreshPendingState();
+      setFeedPulBySepKey((current) => {
+        const cachedItems = current[rowKey];
+        if (!cachedItems?.length) return current;
+        return {
+          ...current,
+          [rowKey]: cachedItems.map((pulItem) => (
+            pulItem.end_pul === endPul
+              ? { ...pulItem, auditado: true, end_sit: occurrence, val_pul: null }
+              : pulItem
+          ))
+        };
+      });
+      if (activePvpsKey === rowKey) {
+        setPulItems((current) => current.map((pulItem) => (
+          pulItem.end_pul === endPul
+            ? { ...pulItem, auditado: true, end_sit: occurrence, val_pul: null }
+            : pulItem
+        )));
+      }
+      setPulInputs((current) => (endPul in current ? { ...current, [endPul]: "" } : current));
+      setPulEndSits((current) => (endPul in current ? { ...current, [endPul]: "" } : current));
+      setPvpsRows((current) => current.map((currentRow) => {
+        if (keyOfPvps(currentRow) !== rowKey) return currentRow;
+        return {
+          ...currentRow,
+          pul_auditados: Math.min(currentRow.pul_auditados + 1, Math.max(currentRow.pul_total, currentRow.pul_auditados + 1))
+        };
+      }));
+      setStatusMessage(`Pulmão marcado como vazio na fila e será sincronizado ${syncTail}`);
+      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
+        void runPendingSync({ manual: false });
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao marcar Pulmão como vazio.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePendingPvpsSwipeEmpty(item: PvpsFeedItem): Promise<void> {
+    closePendingSwipe();
+    const target = await resolvePendingPvpsEmptyTarget(item);
+    if (!target) {
+      setErrorMessage("Endereço de Pulmão ainda está carregando. Tente novamente em instantes.");
+      return;
+    }
+    if (target.kind === "sep") {
+      await quickSavePendingSepOccurrence(target.row, "vazio");
+      return;
+    }
+    await quickSavePendingPulOccurrence(target.row, target.endPul, "vazio");
+  }
+
+  async function handlePendingAlocSwipeEmpty(row: AlocacaoManifestRow): Promise<void> {
+    closePendingSwipe();
+    const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
+    setBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      await saveOfflineAlocacaoEvent({
+        user_id: profile.user_id,
+        cd: activeCd ?? row.cd,
+        queue_id: row.queue_id,
+        coddv: row.coddv,
+        zona: row.zona,
+        end_sit: "vazio",
+        val_conf: null
+      });
+      await refreshPendingState();
+      setAlocRows((current) => current.filter((currentRow) => currentRow.queue_id !== row.queue_id));
+      setStatusMessage(`Alocação marcada como vazio na fila e será sincronizada ${syncTail}`);
+      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
+        void runPendingSync({ manual: false });
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Falha ao marcar Alocação como vazio.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function canEditAudit(auditorId: string): boolean {
@@ -4080,7 +4390,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   : null}
                 {pvpsFeedItems.map((item, index) => {
                   const itemKey = item.feedKey;
+                  const swipeRowId = `pvps:${itemKey}`;
                   const open = Boolean(expandedPvps[itemKey]);
+                  const rowOffset = getPendingRowSwipeOffset(swipeRowId);
+                  const isDraggingRow = pendingSwipeDrag?.rowId === swipeRowId;
                   const previous = index > 0 ? pvpsFeedItems[index - 1] : null;
                   const showZoneHeader = !previous || previous.zone !== item.zone;
                   const row = item.row;
@@ -4088,57 +4401,115 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   return (
                     <div key={itemKey} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-pvps-${feedView}-${tab}`, item.zone) : null}
-                      <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={itemKey}>
-                        <div className="pvps-row-head">
-                          <div className="pvps-row-main">
-                            <strong className="pvps-row-address-line">
-                              <span className="pvps-row-address-text">{item.endereco}</span>
-                              {feedAndar ? (
-                                <span className="pvps-row-floor-indicator" title={`Andar ${feedAndar}`}>
-                                  {floorLevelIcon()}
-                                  {feedAndar}
-                                </span>
-                              ) : null}
-                            </strong>
-                            <span>{row.coddv} - {row.descricao}</span>
-                            {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
-                          </div>
-                          <div className="pvps-row-actions">
+                      <AnimatedFeedReveal className={`pvps-row pvps-pending-row${open ? " is-open" : ""}`} cardKey={itemKey}>
+                        <div className="pvps-row-swipe">
+                          <div className="pvps-row-swipe-actions" aria-hidden="true">
                             <button
-                              className="btn btn-primary pvps-icon-btn"
+                              className="pvps-row-swipe-action edit"
                               type="button"
-                              onClick={() => {
-                                if (item.kind === "pul") {
-                                  openPvpsPulPopup(row, item.endPul);
-                                } else {
-                                  void openPvpsPopup(row);
-                                }
-                              }}
+                              disabled={busy}
+                              onClick={() => openPendingPvpsEditor(item)}
                               title="Editar"
+                              aria-label="Editar"
                             >
-                              {editIcon()}
+                              <span aria-hidden="true">{editIcon()}</span>
+                              <span>Editar</span>
                             </button>
-                            <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedPvps(itemKey)} title="Expandir">
-                              {chevronIcon(open)}
+                            <button
+                              className="pvps-row-swipe-action empty"
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handlePendingPvpsSwipeEmpty(item)}
+                              title="Marcar como vazio"
+                              aria-label="Marcar como vazio"
+                            >
+                              <span aria-hidden="true">{occurrenceIcon()}</span>
+                              <span>Vazio</span>
                             </button>
+                          </div>
+
+                          <div
+                            className={`pvps-row-line is-swipeable${isDraggingRow ? " is-dragging" : ""}`}
+                            role="button"
+                            tabIndex={0}
+                            style={{ transform: `translateX(${rowOffset}px)` }}
+                            onTouchStart={(event) => onPendingRowTouchStart(event, swipeRowId, busy)}
+                            onTouchMove={(event) => onPendingRowTouchMove(event, swipeRowId, busy)}
+                            onTouchEnd={() => onPendingRowTouchEnd(swipeRowId)}
+                            onTouchCancel={() => onPendingRowTouchEnd(swipeRowId)}
+                            onClick={() => {
+                              if (suppressRowClickRef.current === swipeRowId) {
+                                suppressRowClickRef.current = null;
+                                return;
+                              }
+                              setPendingSwipeOpen(null);
+                              toggleExpandedPvps(itemKey);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter" && event.key !== " ") return;
+                              event.preventDefault();
+                              setPendingSwipeOpen(null);
+                              toggleExpandedPvps(itemKey);
+                            }}
+                          >
+                            <div className="pvps-row-head">
+                              <div className="pvps-row-main">
+                                <strong className="pvps-row-address-line">
+                                  <span className="pvps-row-address-text">{item.endereco}</span>
+                                  {feedAndar ? (
+                                    <span className="pvps-row-floor-indicator" title={`Andar ${feedAndar}`}>
+                                      {floorLevelIcon()}
+                                      {feedAndar}
+                                    </span>
+                                  ) : null}
+                                </strong>
+                                <span>{row.coddv} - {row.descricao}</span>
+                                {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
+                              </div>
+                              <div className="pvps-row-actions">
+                                <button
+                                  className="btn btn-primary pvps-icon-btn"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openPendingPvpsEditor(item);
+                                  }}
+                                  title="Editar"
+                                >
+                                  {editIcon()}
+                                </button>
+                                <button
+                                  className="btn btn-muted pvps-icon-btn"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setPendingSwipeOpen(null);
+                                    toggleExpandedPvps(itemKey);
+                                  }}
+                                  title="Expandir"
+                                >
+                                  {chevronIcon(open)}
+                                </button>
+                              </div>
+                            </div>
+                            {open ? (
+                              <div className="pvps-row-details">
+                                {item.kind === "pul" ? (
+                                  <>
+                                    <small>Endereço separação: {row.end_sep}</small>
+                                    <small>Validade separação: {row.val_sep ?? "-"}</small>
+                                  </>
+                                ) : (
+                                  <small>Status {pvpsStatusLabel(row.status)} | Pulmão {row.pul_auditados}/{row.pul_total}</small>
+                                )}
+                                {item.kind === "pul" ? (
+                                  row.end_sit ? <small>Ocorrência linha: {formatOcorrenciaLabel(row.end_sit)}</small> : null
+                                ) : null}
+                                <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
-                        {open ? (
-                          <div className="pvps-row-details">
-                            {item.kind === "pul" ? (
-                              <>
-                                <small>Endereço separação: {row.end_sep}</small>
-                                <small>Validade separação: {row.val_sep ?? "-"}</small>
-                              </>
-                            ) : (
-                              <small>Status {pvpsStatusLabel(row.status)} | Pulmão {row.pul_auditados}/{row.pul_total}</small>
-                            )}
-                            {item.kind === "pul" ? (
-                              row.end_sit ? <small>Ocorrência linha: {formatOcorrenciaLabel(row.end_sit)}</small> : null
-                            ) : null}
-                            <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
-                          </div>
-                        ) : null}
                       </AnimatedFeedReveal>
                     </div>
                   );
@@ -4162,43 +4533,115 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               <div className="pvps-list">
                 {visibleAlocRows.length === 0 ? <p>Nenhum item de Alocação pendente para os filtros atuais.</p> : null}
                 {visibleAlocRows.map((row, index) => {
+                  const swipeRowId = `aloc:${row.queue_id}`;
                   const open = Boolean(expandedAloc[row.queue_id]);
+                  const rowOffset = getPendingRowSwipeOffset(swipeRowId);
+                  const isDraggingRow = pendingSwipeDrag?.rowId === swipeRowId;
                   const previous = index > 0 ? visibleAlocRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const feedAndar = resolveFeedAndar(row.nivel);
                   return (
                     <div key={row.queue_id} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-alocacao-${feedView}-${tab}`, row.zona) : null}
-                      <AnimatedFeedReveal className={`pvps-row${open ? " is-open" : ""}`} cardKey={row.queue_id}>
-                        <div className="pvps-row-head">
-                          <div className="pvps-row-main">
-                            <strong className="pvps-row-address-line">
-                              <span className="pvps-row-address-text">{row.endereco}</span>
-                              {feedAndar ? (
-                                <span className="pvps-row-floor-indicator" title={`Andar ${feedAndar}`}>
-                                  {floorLevelIcon()}
-                                  {feedAndar}
-                                </span>
-                              ) : null}
-                            </strong>
-                            <span>{row.coddv} - {row.descricao}</span>
+                      <AnimatedFeedReveal className={`pvps-row pvps-pending-row${open ? " is-open" : ""}`} cardKey={row.queue_id}>
+                        <div className="pvps-row-swipe">
+                          <div className="pvps-row-swipe-actions" aria-hidden="true">
+                            <button
+                              className="pvps-row-swipe-action edit"
+                              type="button"
+                              disabled={busy}
+                              onClick={() => openAlocPopup(row)}
+                              title="Editar"
+                              aria-label="Editar"
+                            >
+                              <span aria-hidden="true">{editIcon()}</span>
+                              <span>Editar</span>
+                            </button>
+                            <button
+                              className="pvps-row-swipe-action empty"
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handlePendingAlocSwipeEmpty(row)}
+                              title="Marcar como vazio"
+                              aria-label="Marcar como vazio"
+                            >
+                              <span aria-hidden="true">{occurrenceIcon()}</span>
+                              <span>Vazio</span>
+                            </button>
                           </div>
-                          <div className="pvps-row-actions">
-                            <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocPopup(row)} title="Editar">
-                              {editIcon()}
-                            </button>
-                            <button className="btn btn-muted pvps-icon-btn" type="button" onClick={() => toggleExpandedAloc(row.queue_id)} title="Expandir">
-                              {chevronIcon(open)}
-                            </button>
+
+                          <div
+                            className={`pvps-row-line is-swipeable${isDraggingRow ? " is-dragging" : ""}`}
+                            role="button"
+                            tabIndex={0}
+                            style={{ transform: `translateX(${rowOffset}px)` }}
+                            onTouchStart={(event) => onPendingRowTouchStart(event, swipeRowId, busy)}
+                            onTouchMove={(event) => onPendingRowTouchMove(event, swipeRowId, busy)}
+                            onTouchEnd={() => onPendingRowTouchEnd(swipeRowId)}
+                            onTouchCancel={() => onPendingRowTouchEnd(swipeRowId)}
+                            onClick={() => {
+                              if (suppressRowClickRef.current === swipeRowId) {
+                                suppressRowClickRef.current = null;
+                                return;
+                              }
+                              setPendingSwipeOpen(null);
+                              toggleExpandedAloc(row.queue_id);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter" && event.key !== " ") return;
+                              event.preventDefault();
+                              setPendingSwipeOpen(null);
+                              toggleExpandedAloc(row.queue_id);
+                            }}
+                          >
+                            <div className="pvps-row-head">
+                              <div className="pvps-row-main">
+                                <strong className="pvps-row-address-line">
+                                  <span className="pvps-row-address-text">{row.endereco}</span>
+                                  {feedAndar ? (
+                                    <span className="pvps-row-floor-indicator" title={`Andar ${feedAndar}`}>
+                                      {floorLevelIcon()}
+                                      {feedAndar}
+                                    </span>
+                                  ) : null}
+                                </strong>
+                                <span>{row.coddv} - {row.descricao}</span>
+                              </div>
+                              <div className="pvps-row-actions">
+                                <button
+                                  className="btn btn-primary pvps-icon-btn"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openAlocPopup(row);
+                                  }}
+                                  title="Editar"
+                                >
+                                  {editIcon()}
+                                </button>
+                                <button
+                                  className="btn btn-muted pvps-icon-btn"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setPendingSwipeOpen(null);
+                                    toggleExpandedAloc(row.queue_id);
+                                  }}
+                                  title="Expandir"
+                                >
+                                  {chevronIcon(open)}
+                                </button>
+                              </div>
+                            </div>
+                            {open ? (
+                              <div className="pvps-row-details">
+                                <small>Andar {formatAndar(row.nivel)}</small>
+                                <small>Validade sistema: {row.val_sist}</small>
+                                <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
-                        {open ? (
-                          <div className="pvps-row-details">
-                            <small>Andar {formatAndar(row.nivel)}</small>
-                            <small>Validade sistema: {row.val_sist}</small>
-                            <small>Última compra: {formatDate(row.dat_ult_compra)}</small>
-                          </div>
-                        ) : null}
                       </AnimatedFeedReveal>
                     </div>
                   );

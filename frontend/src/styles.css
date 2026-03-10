@@ -7263,6 +7263,96 @@ small {
   transition: box-shadow 200ms ease, border-color 200ms ease, transform 150ms ease;
 }
 
+.pvps-pending-row {
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.pvps-row-swipe {
+  position: relative;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.pvps-row-swipe-actions {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.pvps-row-swipe-action {
+  width: min(30vw, 112px);
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #f8fbff;
+  pointer-events: auto;
+}
+
+.pvps-row-swipe-action span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pvps-row-swipe-action svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pvps-row-swipe-action.edit {
+  justify-content: flex-start;
+  padding-left: 14px;
+  background: linear-gradient(135deg, #3f79c8, #2858a3);
+}
+
+.pvps-row-swipe-action.empty {
+  justify-content: flex-end;
+  padding-right: 14px;
+  background: linear-gradient(135deg, #d1892f, #b66717);
+}
+
+.pvps-row-line {
+  width: 100%;
+  border: 0;
+  background: inherit;
+  color: inherit;
+  padding: 14px 16px;
+  text-align: left;
+  display: grid;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: inherit;
+}
+
+.pvps-row-line.is-swipeable {
+  touch-action: pan-y;
+  will-change: transform;
+  transition: transform 180ms ease;
+}
+
+.pvps-row-line.is-dragging {
+  transition: none;
+}
+
+.pvps-row-line:focus-visible {
+  outline: 2px solid rgba(47, 95, 170, 0.55);
+  outline-offset: -2px;
+}
+
 .pvps-card-reveal {
   opacity: 0;
   transform: translateY(18px) scale(0.985);
@@ -7354,6 +7444,12 @@ small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pvps-pending-row .pvps-row-address-text {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 .pvps-row-floor-indicator {
