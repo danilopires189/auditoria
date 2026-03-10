@@ -5,6 +5,15 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import {
+  BRAZIL_TIME_ZONE,
+  formatDateOnlyPtBR,
+  formatDateTimeBrasilia,
+  formatTimeBrasilia,
+  monthKeyBrasilia,
+  monthStartIsoBrasilia,
+  todayIsoBrasilia
+} from "../../shared/brasilia-datetime";
 import { formatCountLabel } from "../../shared/inflection";
 import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
@@ -387,43 +396,18 @@ function applyPendingEventsToOfflineData(input: {
 
 function formatDate(value: string): string {
   const normalized = value.trim();
-  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
-  const parsed = dateOnlyMatch
-    ? new Date(
-      Number.parseInt(dateOnlyMatch[1], 10),
-      Number.parseInt(dateOnlyMatch[2], 10) - 1,
-      Number.parseInt(dateOnlyMatch[3], 10)
-    )
-    : new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) return value || "-";
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(parsed);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return formatDateOnlyPtBR(normalized, "-", "value");
+  }
+  return formatDateTimeBrasilia(normalized, { emptyFallback: "-", invalidFallback: "value" });
 }
 
 function formatDateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value || "-";
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(parsed);
+  return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "value" });
 }
 
 function formatTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value || "-";
-  return new Intl.DateTimeFormat("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(parsed);
+  return formatTimeBrasilia(value, "-", "value");
 }
 
 function reportValue(row: PvpsAuditoriasReportRow, ...keys: string[]): string {
@@ -458,21 +442,15 @@ function normalizeMmaa(value: string | null | undefined): string | null {
 }
 
 function brtDayKey(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(now);
+  return todayIsoBrasilia(now);
 }
 
 function brtMonthStartKey(now = new Date()): string {
-  const dayKey = brtDayKey(now);
-  return `${dayKey.slice(0, 8)}01`;
+  return monthStartIsoBrasilia(now);
 }
 
 function brtMonthKey(now = new Date()): string {
-  return brtDayKey(now).slice(0, 7);
+  return monthKeyBrasilia(now);
 }
 
 function monthRangeFromInput(value: string): { dtIni: string; dtFim: string; monthLabel: string } | null {
@@ -485,9 +463,10 @@ function monthRangeFromInput(value: string): { dtIni: string; dtFim: string; mon
   const lastDate = new Date(year, month, 0);
   const lastDay = `${match[1]}-${match[2]}-${String(lastDate.getDate()).padStart(2, "0")}`;
   const monthLabel = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: BRAZIL_TIME_ZONE,
     month: "long",
     year: "numeric"
-  }).format(new Date(year, month - 1, 1));
+  }).format(new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)));
   return {
     dtIni: firstDay,
     dtFim: lastDay,

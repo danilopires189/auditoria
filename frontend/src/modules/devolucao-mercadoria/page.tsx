@@ -8,6 +8,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { chooseByJoinedValues, formatCountLabel } from "../../shared/inflection";
 import { shouldTriggerQueuedBackgroundSync, shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
@@ -143,15 +144,6 @@ function toDisplayName(value: string): string {
     .join(" ");
 }
 
-function todayIsoBrasilia(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
-}
-
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
   const matched = /cd\s*0*(\d+)/i.exec(label);
@@ -191,17 +183,7 @@ function formatCollaboratorName(value: {
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(parsed);
+  return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "-" });
 }
 
 function latestTimestamp(values: Array<string | null | undefined>): string | null {

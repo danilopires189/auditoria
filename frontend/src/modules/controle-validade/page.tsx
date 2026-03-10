@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type Keyb
 import { createPortal } from "react-dom";
 import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
+import { formatDateTimeBrasilia } from "../../shared/brasilia-datetime";
 import { getDbBarrasMeta } from "../../shared/db-barras/storage";
 import { normalizeBarcode, refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
 import { getDbEndMeta } from "../../shared/db-end/storage";
@@ -108,17 +109,7 @@ function normalizeValidadeInput(raw: string): string {
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(parsed);
+  return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "value" });
 }
 
 function safeUuid(): string {

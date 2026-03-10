@@ -4,6 +4,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import { formatDateOnlyPtBR, formatDateTimeBrasilia } from "../../shared/brasilia-datetime";
 import {
   fetchDbBarrasByBarcodeOnline,
   normalizeBarcode,
@@ -445,22 +446,11 @@ function formatPercent(value: number): string {
 }
 
 function formatDateTime(value: string): string {
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(parsed);
+  return formatDateTimeBrasilia(value, { emptyFallback: "-", invalidFallback: "value" });
 }
 
 function formatDate(value: string): string {
-  const parsed = Date.parse(`${value}T00:00:00`);
-  if (!Number.isFinite(parsed)) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(parsed);
+  return formatDateOnlyPtBR(value, "-", "value");
 }
 
 function sumNullable(values: Array<number | null>): number | null {
