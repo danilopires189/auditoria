@@ -109,6 +109,9 @@ function mapZoneRow(raw: Record<string, unknown>): IndicadoresBlitzZoneTotalRow 
 }
 
 function mapDayDetailRow(raw: Record<string, unknown>): IndicadoresBlitzDayDetailRow {
+  const zona = parseString(raw.zona, "Sem zona");
+  const endereco = parseNullableString(raw.endereco) ?? zona;
+
   return {
     data_conf: parseString(raw.data_conf),
     filial: parseInteger(raw.filial),
@@ -117,7 +120,8 @@ function mapDayDetailRow(raw: Record<string, unknown>): IndicadoresBlitzDayDetai
     seq: parseInteger(raw.seq),
     coddv: parseInteger(raw.coddv),
     descricao: parseString(raw.descricao, "Item sem descrição"),
-    zona: parseString(raw.zona, "Sem zona"),
+    zona,
+    endereco,
     status: parseString(raw.status, "Falta") as IndicadoresBlitzDayDetailRow["status"],
     quantidade: parseInteger(raw.quantidade),
     vl_div: parseNumber(raw.vl_div)

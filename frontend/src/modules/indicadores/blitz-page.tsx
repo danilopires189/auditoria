@@ -163,6 +163,11 @@ function statusClassName(status: IndicadoresBlitzDayDetailRow["status"]): string
   return "is-fora";
 }
 
+function formatAddress(value: string): string {
+  const compact = value.trim().replace(/\s+/g, " ");
+  return compact || "Sem endereço";
+}
+
 function AnimatedDayReveal({ itemKey, className, children, rootRef }: AnimatedDayRevealProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
@@ -598,10 +603,10 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
               <div className="indicadores-day-list">
                 <div className="indicadores-day-list-head">
                   <span>Descrição</span>
-                  <span>Zona</span>
+                  <span>Endereço</span>
                   <span>Status</span>
                   <span>Filial</span>
-                  <span>Qtd</span>
+                  <span>Divergência</span>
                 </div>
                 <div ref={dayListBodyRef} className="indicadores-day-list-body">
                   {loadingDetails ? (
@@ -645,12 +650,20 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                               <strong>{row.descricao}</strong>
                               <small>Pedido {formatPlainInteger(row.pedido)} · COD {formatPlainInteger(row.coddv)}</small>
                             </span>
-                            <span>{row.zona}</span>
+                            <span className="indicadores-day-address" title={formatAddress(row.endereco)}>
+                              {formatAddress(row.endereco)}
+                            </span>
                             <span>
                               <i className={`indicadores-status-badge ${statusClassName(row.status)}`}>{row.status}</i>
                             </span>
-                            <span>{formatInteger(row.filial)}</span>
-                            <span>{formatInteger(row.quantidade)}</span>
+                            <span className="indicadores-day-field">
+                              <strong className="indicadores-day-inline-label">Filial:</strong>
+                              <span>{formatInteger(row.filial)}</span>
+                            </span>
+                            <span className="indicadores-day-field">
+                              <strong className="indicadores-day-inline-label">Divergência:</strong>
+                              <span>{formatInteger(row.quantidade)}</span>
+                            </span>
                           </AnimatedDayReveal>
                         );
                       });
