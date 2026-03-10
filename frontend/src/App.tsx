@@ -911,7 +911,17 @@ function isRecoverableSignOutError(error: unknown): boolean {
   return friendly === "Sem conexão com o servidor. Verifique sua internet e tente novamente.";
 }
 
-async function signOutWithFallback(): Promise<{ usedLocalFallback: boolean }> {
+async function signOutWithFallback(scope: "global" | "local" = "global"): Promise<{ usedLocalFallback: boolean }> {
+  if (scope === "local") {
+    const { error: localError } = await withTimeout(
+      Promise.resolve(supabase!.auth.signOut({ scope: "local" })),
+      SIGN_OUT_LOCAL_TIMEOUT_MS,
+      "auth.signOut.local"
+    );
+    if (localError) throw localError;
+    return { usedLocalFallback: false };
+  }
+
   try {
     const { error } = await withTimeout(
       Promise.resolve(supabase!.auth.signOut()),
@@ -1568,9 +1578,14 @@ export default function App() {
     setShowLogoutConfirm(false);
   };
 
-  const executeSignOut = useCallback(async (options?: { successMessage?: string; releaseSessionGuard?: boolean }) => {
+  const executeSignOut = useCallback(async (options?: {
+    successMessage?: string;
+    releaseSessionGuard?: boolean;
+    signOutScope?: "global" | "local";
+  }) => {
     const shouldReleaseSessionGuard = options?.releaseSessionGuard !== false;
     const nextSuccessMessage = options?.successMessage ?? "";
+    const signOutScope = options?.signOutScope ?? "global";
     setLogoutBusy(true);
     clearAlerts();
     try {
@@ -1630,7 +1645,7 @@ export default function App() {
           // Ignore local cleanup failures and proceed with logout.
         }
       }
-      const signOutResult = await signOutWithFallback();
+      const signOutResult = await signOutWithFallback(signOutScope);
       setAuthMode("login");
       clearRegisterValidation();
       clearResetValidation();
@@ -1650,7 +1665,7 @@ export default function App() {
 
   const onLogout = async () => {
     setForcedLogoutNotice(null);
-    await executeSignOut({ successMessage: "Sessão encerrada.", releaseSessionGuard: true });
+    await executeSignOut({ successMessage: "Sessão encerrada.", releaseSessionGuard: true, signOutScope: "global" });
   };
 
   const handleForcedLogout = useCallback(async (reason: "replaced" | "idle_timeout") => {
@@ -1670,7 +1685,7 @@ export default function App() {
 
     setForcedLogoutNotice(notice);
     try {
-      await executeSignOut({ successMessage: "", releaseSessionGuard: false });
+      await executeSignOut({ successMessage: "", releaseSessionGuard: false, signOutScope: "local" });
     } finally {
       forceLogoutInFlightRef.current = false;
     }
