@@ -3904,6 +3904,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setAlocEndSit("");
         setAlocValConf("");
         await showPendingSaveFeedback("aloc");
+        setAlocRows((current) => current.filter((row) => row.queue_id !== currentQueueId));
         openNextAlocacaoFrom(currentQueueId, currentZone);
         if (shouldTriggerQueuedBackgroundSync(isOnline)) {
           void runPendingSync({ manual: false });
@@ -4484,7 +4485,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                   ) : null}
                                 </strong>
                                 <span>{row.coddv} - {row.descricao}</span>
-                                {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
                               </div>
                               <div className="pvps-row-actions">
                                 <button
