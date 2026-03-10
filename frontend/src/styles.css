@@ -6865,6 +6865,11 @@ small {
   padding: 7px 10px;
 }
 
+.pvps-editor-info-card-inline-compact {
+  gap: 6px;
+  padding: 6px 9px;
+}
+
 .pvps-editor-info-card small {
   color: #6f83a4;
   font-size: 0.74rem;
@@ -6882,6 +6887,15 @@ small {
 .pvps-editor-info-card-inline strong {
   white-space: nowrap;
   font-size: 0.88rem;
+}
+
+.pvps-editor-info-card-inline-compact small {
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+}
+
+.pvps-editor-info-card-inline-compact strong {
+  font-size: 0.84rem;
 }
 
 .pvps-editor-form-compact {
