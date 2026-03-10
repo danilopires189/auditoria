@@ -191,7 +191,8 @@ function mapPvpsPul(raw: Record<string, unknown>): PvpsPulItemRow {
     end_sit: parseEndSit(raw.end_sit),
     auditado: parseBoolean(raw.auditado),
     dt_hr: parseNullableString(raw.dt_hr),
-    auditor_nome: parseNullableString(raw.auditor_nome)
+    auditor_nome: parseNullableString(raw.auditor_nome),
+    is_lower: parseBoolean(raw.is_lower)
   };
 }
 
@@ -314,6 +315,17 @@ export async function fetchPvpsPulItems(coddv: number, endSep: string, pCd?: num
     p_cd: pCd ?? null,
     p_coddv: coddv,
     p_end_sep: endSep
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapPvpsPul(row as Record<string, unknown>));
+}
+
+export async function fetchPvpsCompletedPulItems(auditId: string, pCd?: number | null): Promise<PvpsPulItemRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_pvps_completed_pul_items", {
+    p_cd: pCd ?? null,
+    p_audit_id: auditId
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
