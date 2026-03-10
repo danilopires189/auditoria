@@ -183,7 +183,7 @@ export async function fetchIndicadoresBlitzZoneTotals(cd: number | null, monthSt
 export async function fetchIndicadoresBlitzDayDetails(
   cd: number | null,
   monthStart: string,
-  day: string
+  day: string | null
 ): Promise<IndicadoresBlitzDayDetailRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 

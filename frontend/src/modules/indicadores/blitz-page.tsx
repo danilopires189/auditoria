@@ -40,6 +40,7 @@ interface AnimatedDayRevealProps {
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
 const ZONA_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+const ALL_DAYS_VALUE = "__ALL_DAYS__";
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -130,6 +131,7 @@ function resolveInitialDay(summary: IndicadoresBlitzSummary, previousDay: string
   const allDays = buildCalendarDays(summary.month_start, summary.month_end);
   const today = todayIsoBrasilia();
 
+  if (previousDay === ALL_DAYS_VALUE) return ALL_DAYS_VALUE;
   if (previousDay && allDays.includes(previousDay)) return previousDay;
   if (today >= summary.month_start && today <= summary.month_end && allDays.includes(today)) return today;
   if (summary.available_day_end && allDays.includes(summary.available_day_end)) return summary.available_day_end;
@@ -402,7 +404,11 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
       setLoadingDetails(true);
       setErrorMessage(null);
       try {
-        const rows = await fetchIndicadoresBlitzDayDetails(activeCd, selectedMonthStart, selectedDay);
+        const rows = await fetchIndicadoresBlitzDayDetails(
+          activeCd,
+          selectedMonthStart,
+          selectedDay === ALL_DAYS_VALUE ? null : selectedDay
+        );
         if (!cancelled) setDayDetails(rows);
       } catch (error) {
         if (!cancelled) {
@@ -431,15 +437,24 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
   }, [summary]);
 
   const selectedDaySeries = useMemo(
-    () => dailySeries.find((row) => row.date_ref === selectedDay) ?? null,
+    () => (selectedDay === ALL_DAYS_VALUE ? null : dailySeries.find((row) => row.date_ref === selectedDay) ?? null),
     [dailySeries, selectedDay]
   );
+
+  const showingMonthDetails = selectedDay === ALL_DAYS_VALUE;
+
+  const monthErrorsTotal = useMemo(() => {
+    if (dailySeries.length === 0) return summary?.divergencia_oficial ?? 0;
+    return dailySeries.reduce((total, row) => total + row.divergencia_oficial, 0);
+  }, [dailySeries, summary]);
 
   const sortedDayDetails = useMemo(() => {
     const rows = [...dayDetails];
     rows.sort((left, right) => {
       const zoneCmp = ZONA_COLLATOR.compare(left.zona, right.zona);
       if (zoneCmp !== 0) return zoneCmp;
+      const dateCmp = right.data_conf.localeCompare(left.data_conf);
+      if (dateCmp !== 0) return dateCmp;
       const descCmp = ZONA_COLLATOR.compare(left.descricao, right.descricao);
       if (descCmp !== 0) return descCmp;
       if (left.filial !== right.filial) return left.filial - right.filial;
@@ -451,8 +466,9 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
 
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
-    const selectedDayErrors =
-      selectedDaySeries && selectedDaySeries.conferido_total > 0
+    const selectedDayErrors = showingMonthDetails
+      ? formatInteger(monthErrorsTotal)
+      : selectedDaySeries && selectedDaySeries.conferido_total > 0
         ? formatInteger(selectedDaySeries.divergencia_oficial)
         : " ";
 
@@ -463,14 +479,14 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
       { label: "Fora da Política", value: formatInteger(summary.fora_politica_total), accent: "warning" },
       { label: "Avaria Mês", value: formatInteger(summary.avaria_mes) },
       {
-        label: "Erros do Dia",
+        label: showingMonthDetails ? "Erros do Mês" : "Erros do Dia",
         value: selectedDayErrors,
         accent: "danger"
       },
       { label: "Média de Conferência", value: formatInteger(summary.media_conferencia_dia) },
       { label: "Conferido Geral", value: formatInteger(summary.conferido_total) }
     ];
-  }, [selectedDaySeries, summary]);
+  }, [monthErrorsTotal, selectedDaySeries, showingMonthDetails, summary]);
 
   return (
     <>
@@ -539,6 +555,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                     disabled={!summary || dayOptions.length === 0}
                   >
                     {dayOptions.length === 0 ? <option value="">Sem datas</option> : null}
+                    {dayOptions.length > 0 ? <option value={ALL_DAYS_VALUE}>Todos</option> : null}
                     {dayOptions.map((day) => (
                       <option key={day} value={day}>
                         {formatDate(day)}
@@ -576,8 +593,8 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
 
             <section className="indicadores-panel indicadores-panel-side indicadores-panel-divergencias">
               <div className="indicadores-panel-head">
-                <h3>Divergências do dia</h3>
-                <span>{selectedDay ? formatDate(selectedDay) : "-"}</span>
+                <h3>{showingMonthDetails ? "Divergências do mês" : "Divergências do dia"}</h3>
+                <span>{showingMonthDetails ? selectedMonthLabel : selectedDay ? formatDate(selectedDay) : "-"}</span>
               </div>
               <div className="indicadores-day-list">
                 <div className="indicadores-day-list-head">
@@ -589,9 +606,9 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                 </div>
                 <div ref={dayListBodyRef} className="indicadores-day-list-body">
                   {loadingDetails ? (
-                    <div className="indicadores-empty-box"><p>Carregando divergências do dia...</p></div>
+                    <div className="indicadores-empty-box"><p>{showingMonthDetails ? "Carregando divergências do mês..." : "Carregando divergências do dia..."}</p></div>
                   ) : sortedDayDetails.length === 0 ? (
-                    <div className="indicadores-empty-box"><p>Nenhuma divergência encontrada para a data selecionada.</p></div>
+                    <div className="indicadores-empty-box"><p>{showingMonthDetails ? "Nenhuma divergência encontrada para o mês selecionado." : "Nenhuma divergência encontrada para a data selecionada."}</p></div>
                   ) : (
                     (() => {
                       const items: ReactNode[] = [];
@@ -626,7 +643,10 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                             className="indicadores-day-row"
                           >
                             <span className="indicadores-day-description">
-                              <strong>{row.descricao}</strong>
+                              <span className="indicadores-day-description-head">
+                                <strong>{row.descricao}</strong>
+                                <small className="indicadores-day-date">{formatDate(row.data_conf)}</small>
+                              </span>
                               <small>Pedido {formatPlainInteger(row.pedido)} · COD {formatPlainInteger(row.coddv)}</small>
                             </span>
                             <span className="indicadores-day-address" title={formatAddress(row.endereco)}>
