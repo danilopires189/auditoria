@@ -9653,10 +9653,21 @@ small {
   min-width: 0;
 }
 
+.indicadores-day-description-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
 .indicadores-day-description strong {
+  display: block;
+  min-width: 0;
   color: #102e5f;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .indicadores-day-description small {
@@ -9664,6 +9675,14 @@ small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.indicadores-day-date {
+  flex: 0 0 auto;
+  color: #274a77;
+  font-size: inherit;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .indicadores-day-address {
@@ -9824,6 +9843,10 @@ small {
     display: grid;
     align-items: start;
     min-height: auto;
+  }
+
+  .indicadores-day-description-head {
+    flex-wrap: wrap;
   }
 
   .indicadores-day-address {
