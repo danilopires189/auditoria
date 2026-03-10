@@ -4394,6 +4394,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const open = Boolean(expandedPvps[itemKey]);
                   const rowOffset = getPendingRowSwipeOffset(swipeRowId);
                   const isDraggingRow = pendingSwipeDrag?.rowId === swipeRowId;
+                  const isSwipeVisible = isDraggingRow || pendingSwipeOpen?.rowId === swipeRowId;
                   const previous = index > 0 ? pvpsFeedItems[index - 1] : null;
                   const showZoneHeader = !previous || previous.zone !== item.zone;
                   const row = item.row;
@@ -4402,7 +4403,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     <div key={itemKey} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-pvps-${feedView}-${tab}`, item.zone) : null}
                       <AnimatedFeedReveal className={`pvps-row pvps-pending-row${open ? " is-open" : ""}`} cardKey={itemKey}>
-                        <div className="pvps-row-swipe">
+                        <div className={`pvps-row-swipe${isSwipeVisible ? " is-swipe-visible" : ""}`}>
                           <div className="pvps-row-swipe-actions" aria-hidden="true">
                             <button
                               className="pvps-row-swipe-action edit"
@@ -4467,6 +4468,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 {item.kind === "pul" ? <small>Pulmão pendente</small> : null}
                               </div>
                               <div className="pvps-row-actions">
+                                <span className="pvps-swipe-hint">Deslize</span>
                                 <button
                                   className="btn btn-primary pvps-icon-btn"
                                   type="button"
@@ -4537,6 +4539,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   const open = Boolean(expandedAloc[row.queue_id]);
                   const rowOffset = getPendingRowSwipeOffset(swipeRowId);
                   const isDraggingRow = pendingSwipeDrag?.rowId === swipeRowId;
+                  const isSwipeVisible = isDraggingRow || pendingSwipeOpen?.rowId === swipeRowId;
                   const previous = index > 0 ? visibleAlocRows[index - 1] : null;
                   const showZoneHeader = !previous || previous.zona !== row.zona;
                   const feedAndar = resolveFeedAndar(row.nivel);
@@ -4544,7 +4547,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     <div key={row.queue_id} className="pvps-zone-group">
                       {showZoneHeader ? renderZoneHeader(`pending-alocacao-${feedView}-${tab}`, row.zona) : null}
                       <AnimatedFeedReveal className={`pvps-row pvps-pending-row${open ? " is-open" : ""}`} cardKey={row.queue_id}>
-                        <div className="pvps-row-swipe">
+                        <div className={`pvps-row-swipe${isSwipeVisible ? " is-swipe-visible" : ""}`}>
                           <div className="pvps-row-swipe-actions" aria-hidden="true">
                             <button
                               className="pvps-row-swipe-action edit"
@@ -4608,6 +4611,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 <span>{row.coddv} - {row.descricao}</span>
                               </div>
                               <div className="pvps-row-actions">
+                                <span className="pvps-swipe-hint">Deslize</span>
                                 <button
                                   className="btn btn-primary pvps-icon-btn"
                                   type="button"
