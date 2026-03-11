@@ -124,7 +124,10 @@ export interface EntradaNotasPartialReopenInfo {
   previous_started_nome: string | null;
   locked_items: number;
   pending_items: number;
+  falta_items: number;
+  sobra_items: number;
   can_reopen: boolean;
+  can_restart: boolean;
 }
 
 export interface EntradaNotasBarcodeSeqNfOption {

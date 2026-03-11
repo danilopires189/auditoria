@@ -757,6 +757,9 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("CONFERENCIA_FINALIZADA_SEM_PENDENCIA")) {
     return "Esta Seq/NF já foi finalizada e não possui itens pendentes para retomada.";
   }
+  if (value.includes("CONFERENCIA_DIVERGENCIA_SEM_REINICIO_PERMITIDO")) {
+    return "Esta Seq/NF só pode ser reiniciada pelo usuário que a finalizou com falta ou sobra.";
+  }
   if (value.includes("CONFERENCIA_AVULSA_EM_USO")) return "A conferência avulsa está em uso por outro usuário.";
   if (value.includes("CONFERENCIA_AVULSA_JA_FINALIZADA_OUTRO_USUARIO")) {
     return "A conferência avulsa de hoje já foi finalizada por outro usuário.";
@@ -1793,9 +1796,10 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const reopenPartialVolume = useCallback(async (
     etiqueta: string,
     selectedCd: number,
-    successMessage: string
+    successMessage: string,
+    options?: { restart?: boolean }
   ) => {
-    const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd);
+    const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd, options);
     const [reopenedItems, reopenedContributors] = await Promise.all([
       fetchVolumeItems(reopenedVolume.conf_id),
       fetchSeqNfContributors(reopenedVolume)
@@ -1823,15 +1827,64 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   ): Promise<boolean> => {
     const reopenInfo = await fetchPartialReopenInfo(etiqueta, selectedCd);
     const reopenedBySameUser = reopenInfo.previous_started_by === profile.user_id;
-    if (reopenedBySameUser) {
+    const hasPendingItems = reopenInfo.can_reopen && reopenInfo.pending_items > 0;
+    const canRestartDivergence = (
+      reopenedBySameUser
+      && reopenInfo.can_restart
+      && (reopenInfo.falta_items > 0 || reopenInfo.sobra_items > 0)
+    );
+
+    if (hasPendingItems) {
+      const previousCollaborator = formatCollaboratorName({
+        nome: reopenInfo.previous_started_nome,
+        mat: reopenInfo.previous_started_mat
+      });
+
+      showDialog({
+        title: "Conferência parcialmente finalizada",
+        message:
+          `A Seq/NF ${etiqueta} foi finalizada em parte por ${reopenedBySameUser ? "você" : previousCollaborator}.\n\n`
+          + `Itens bloqueados: ${reopenInfo.locked_items}\n`
+          + `Itens pendentes: ${reopenInfo.pending_items}\n\n`
+          + "Os itens já conferidos não podem ser alterados. Deseja reabrir para concluir os pendentes?",
+        confirmLabel: "Reabrir conferência",
+        cancelLabel: "Cancelar",
+        onConfirm: () => {
+          void (async () => {
+            closeDialog();
+            setBusyOpenVolume(true);
+            setStatusMessage(null);
+            setErrorMessage(null);
+            try {
+              await reopenPartialVolume(
+                etiqueta,
+                selectedCd,
+                "Conferência retomada. Itens já conferidos por outro usuário permanecem bloqueados."
+              );
+            } catch (reopenError) {
+              const reopenMessage = reopenError instanceof Error
+                ? reopenError.message
+                : "Falha ao reabrir conferência parcial.";
+              setErrorMessage(normalizeRpcErrorMessage(reopenMessage));
+            } finally {
+              setBusyOpenVolume(false);
+            }
+          })();
+        }
+      });
+      return true;
+    }
+
+    if (canRestartDivergence) {
       showDialog({
         title: "Conferência já finalizada",
         message:
           `A Seq/NF ${etiqueta} já foi finalizada por você hoje.\n\n`
           + `Itens bloqueados: ${reopenInfo.locked_items}\n`
-          + `Itens pendentes: ${reopenInfo.pending_items}\n\n`
-          + "Escolha como deseja abrir a conferência:",
-        confirmLabel: "Reabrir conferência",
+          + `Itens com falta: ${reopenInfo.falta_items}\n`
+          + `Itens com sobra: ${reopenInfo.sobra_items}\n\n`
+          + "Deseja abrir em somente leitura ou reiniciar a conferência?",
+        confirmLabel: "Reiniciar conferência",
         cancelLabel: "Abrir leitura",
         onCancel: () => {
           closeDialog();
@@ -1868,7 +1921,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               await reopenPartialVolume(
                 etiqueta,
                 selectedCd,
-                "Conferência reaberta. Você pode editar todos os itens novamente."
+                "Conferência reiniciada. Todos os itens foram liberados para uma nova conferência.",
+                { restart: true }
               );
             } catch (reopenError) {
               const reopenMessage = reopenError instanceof Error
@@ -1884,49 +1938,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return true;
     }
 
-    if (!reopenInfo.can_reopen) {
-      return false;
-    }
-
-    const previousCollaborator = formatCollaboratorName({
-      nome: reopenInfo.previous_started_nome,
-      mat: reopenInfo.previous_started_mat
-    });
-
-    showDialog({
-      title: "Conferência parcialmente finalizada",
-      message:
-        `A Seq/NF ${etiqueta} foi finalizada em parte por ${reopenedBySameUser ? "você" : previousCollaborator}.\n\n`
-        + `Itens bloqueados: ${reopenInfo.locked_items}\n`
-        + `Itens pendentes: ${reopenInfo.pending_items}\n\n`
-        + "Os itens já conferidos não podem ser alterados. Deseja reabrir para concluir os pendentes?",
-      confirmLabel: "Reabrir conferência",
-      cancelLabel: "Cancelar",
-      onConfirm: () => {
-        void (async () => {
-          closeDialog();
-          setBusyOpenVolume(true);
-          setStatusMessage(null);
-          setErrorMessage(null);
-          try {
-            await reopenPartialVolume(
-              etiqueta,
-              selectedCd,
-              "Conferência retomada. Itens já conferidos por outro usuário permanecem bloqueados."
-            );
-          } catch (reopenError) {
-            const reopenMessage = reopenError instanceof Error
-              ? reopenError.message
-              : "Falha ao reabrir conferência parcial.";
-            setErrorMessage(normalizeRpcErrorMessage(reopenMessage));
-          } finally {
-            setBusyOpenVolume(false);
-          }
-        })();
-      }
-    });
-
-    return true;
+    return false;
   }, [
     closeDialog,
     fetchSeqNfVolumeSnapshot,

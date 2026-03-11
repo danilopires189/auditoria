@@ -301,7 +301,10 @@ function mapPartialReopenInfo(raw: Record<string, unknown>): EntradaNotasPartial
     previous_started_nome: parseNullableString(raw.previous_started_nome),
     locked_items: Math.max(parseInteger(raw.locked_items), 0),
     pending_items: Math.max(parseInteger(raw.pending_items), 0),
-    can_reopen: raw.can_reopen === true
+    falta_items: Math.max(parseInteger(raw.falta_items), 0),
+    sobra_items: Math.max(parseInteger(raw.sobra_items), 0),
+    can_reopen: raw.can_reopen === true,
+    can_restart: raw.can_restart === true
   };
 }
 
@@ -541,7 +544,8 @@ export async function fetchPartialReopenInfo(
 
 export async function reopenPartialConference(
   nrVolume: string,
-  cd: number
+  cd: number,
+  options?: { restart?: boolean }
 ): Promise<EntradaNotasVolumeRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const parsed = parseVolumeLabel(nrVolume);
@@ -550,7 +554,8 @@ export async function reopenPartialConference(
   const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_reopen_partial_conference", {
     p_seq_entrada: parsed.seqEntrada,
     p_nf: parsed.nf,
-    p_cd: cd
+    p_cd: cd,
+    p_restart: options?.restart === true
   });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
