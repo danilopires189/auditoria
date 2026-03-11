@@ -1828,7 +1828,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     const reopenInfo = await fetchPartialReopenInfo(etiqueta, selectedCd);
     const reopenedBySameUser = reopenInfo.previous_started_by === profile.user_id;
     const hasPendingItems = reopenInfo.can_reopen && reopenInfo.pending_items > 0;
-    const canRestartDivergence = (
+    const canResumeDivergence = (
       reopenedBySameUser
       && reopenInfo.can_restart
       && (reopenInfo.falta_items > 0 || reopenInfo.sobra_items > 0)
@@ -1875,7 +1875,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       return true;
     }
 
-    if (canRestartDivergence) {
+    if (canResumeDivergence) {
       showDialog({
         title: "Conferência já finalizada",
         message:
@@ -1883,8 +1883,8 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
           + `Itens bloqueados: ${reopenInfo.locked_items}\n`
           + `Itens com falta: ${reopenInfo.falta_items}\n`
           + `Itens com sobra: ${reopenInfo.sobra_items}\n\n`
-          + "Deseja abrir em somente leitura ou reiniciar a conferência?",
-        confirmLabel: "Reiniciar conferência",
+          + "Deseja abrir em somente leitura ou retomar a conferência?",
+        confirmLabel: "Retomar conferência",
         cancelLabel: "Abrir leitura",
         onCancel: () => {
           closeDialog();
@@ -1921,8 +1921,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               await reopenPartialVolume(
                 etiqueta,
                 selectedCd,
-                "Conferência reiniciada. Todos os itens foram liberados para uma nova conferência.",
-                { restart: true }
+                "Conferência retomada com os itens já conferidos preservados."
               );
             } catch (reopenError) {
               const reopenMessage = reopenError instanceof Error
