@@ -1438,7 +1438,10 @@ export default function App() {
         options: {
           data: {
             mat: normalizeMat(registerMat),
-            nome: registerChallenge.nome
+            nome: registerChallenge.nome,
+            name: registerChallenge.nome,
+            full_name: registerChallenge.nome,
+            display_name: registerChallenge.nome
           }
         }
       });
