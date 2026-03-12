@@ -43,30 +43,55 @@ export default function MaintenancePage({ appHeading }: MaintenancePageProps) {
 
               <rect x="28" y="20" width="304" height="180" rx="32" fill="url(#plug-card-glow)" />
               <path
-                d="M205 108C221 108 236 121 246 133C258 148 277 155 303 155"
+                d="M55 158C71 148 83 137 95 126"
+                fill="none"
+                stroke="#173766"
+                strokeWidth="12"
+                strokeLinecap="round"
+              />
+              <circle cx="82" cy="138" r="7" fill="#2f69c8" />
+              <circle cx="92" cy="132" r="5" fill="#90b5f3" />
+              <circle cx="74" cy="128" r="7" fill="#f7b267" />
+              <circle cx="88" cy="104" r="11" fill="#f23f5f" />
+              <path
+                d="M191 107C214 110 233 122 247 139"
                 fill="none"
                 stroke="#15305f"
                 strokeWidth="14"
                 strokeLinecap="round"
               />
               <path
-                d="M58 152C75 141 94 132 115 125"
+                d="M246 139C261 158 286 164 312 159"
                 fill="none"
                 stroke="#15305f"
-                strokeWidth="12"
+                strokeWidth="14"
                 strokeLinecap="round"
-                strokeDasharray="10 16"
               />
-              <rect x="102" y="92" width="88" height="56" rx="18" fill="url(#plug-body)" />
-              <rect x="170" y="102" width="42" height="36" rx="14" fill="url(#plug-head)" />
-              <rect x="113" y="80" width="10" height="26" rx="5" fill="#f7f8fb" />
-              <rect x="137" y="80" width="10" height="26" rx="5" fill="#f7f8fb" />
-              <circle cx="88" cy="104" r="9" fill="#f23f5f" />
-              <circle cx="76" cy="128" r="6" fill="#f7b267" />
-              <circle cx="97" cy="135" r="5" fill="#2f69c8" />
-              <rect x="238" y="115" width="62" height="52" rx="16" fill="#f7f8fb" stroke="#bdd0ee" strokeWidth="6" />
-              <rect x="258" y="132" width="10" height="18" rx="5" fill="#1b4588" />
-              <rect x="276" y="132" width="10" height="18" rx="5" fill="#1b4588" />
+              <rect x="96" y="92" width="96" height="58" rx="19" fill="url(#plug-body)" />
+              <rect x="172" y="104" width="48" height="34" rx="14" fill="url(#plug-head)" />
+              <rect x="110" y="78" width="12" height="28" rx="6" fill="#f7f8fb" />
+              <rect x="136" y="78" width="12" height="28" rx="6" fill="#f7f8fb" />
+              <rect
+                x="230"
+                y="115"
+                width="78"
+                height="56"
+                rx="18"
+                fill="#f7f8fb"
+                stroke="#b7c9e6"
+                strokeWidth="6"
+              />
+              <rect x="258" y="132" width="11" height="20" rx="5.5" fill="#1b4588" />
+              <rect x="280" y="132" width="11" height="20" rx="5.5" fill="#1b4588" />
+              <rect x="206" y="112" width="7" height="12" rx="3.5" fill="#f4f7fd" transform="rotate(23 206 112)" />
+              <rect x="214" y="124" width="7" height="12" rx="3.5" fill="#f4f7fd" transform="rotate(23 214 124)" />
+              <path
+                d="M224 118C231 115 237 116 242 121"
+                fill="none"
+                stroke="#7ea4df"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
             </svg>
           </div>
         </div>
