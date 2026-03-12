@@ -31,73 +31,62 @@ export default function MaintenancePage({ appHeading }: MaintenancePageProps) {
                   <stop offset="0%" stopColor="#eff6ff" />
                   <stop offset="100%" stopColor="#dce9ff" />
                 </linearGradient>
-                <linearGradient id="satellite-body" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#173766" />
-                  <stop offset="100%" stopColor="#0f2343" />
-                </linearGradient>
-                <linearGradient id="satellite-panel" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#2f69c8" />
-                  <stop offset="100%" stopColor="#194a98" />
+                <linearGradient id="signal-core" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#1b4588" />
+                  <stop offset="100%" stopColor="#11294d" />
                 </linearGradient>
               </defs>
 
               <rect x="28" y="20" width="304" height="180" rx="32" fill="url(#plug-card-glow)" />
-              <circle cx="94" cy="102" r="12" fill="#f23f5f" />
-              <circle cx="76" cy="130" r="8" fill="#f7b267" />
-              <circle cx="96" cy="140" r="6" fill="#88adf1" />
-              <rect x="132" y="102" width="76" height="48" rx="18" fill="url(#satellite-body)" />
-              <rect x="95" y="94" width="32" height="16" rx="8" fill="url(#satellite-panel)" transform="rotate(-30 95 94)" />
-              <rect x="88" y="116" width="32" height="16" rx="8" fill="url(#satellite-panel)" transform="rotate(-30 88 116)" />
-              <rect x="204" y="94" width="32" height="16" rx="8" fill="url(#satellite-panel)" transform="rotate(30 204 94)" />
-              <rect x="211" y="116" width="32" height="16" rx="8" fill="url(#satellite-panel)" transform="rotate(30 211 116)" />
-              <circle cx="170" cy="126" r="8" fill="#90b5f3" />
+              <circle cx="180" cy="112" r="58" fill="#f6f9ff" stroke="#c6d7f1" strokeWidth="6" />
+              <circle cx="180" cy="136" r="8" fill="url(#signal-core)" />
               <path
-                d="M166 134L148 162"
+                d="M180 132L180 98"
                 fill="none"
-                stroke="#173766"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M148 162L174 184"
-                fill="none"
-                stroke="#173766"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M148 162L116 184"
-                fill="none"
-                stroke="#173766"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M222 98C246 90 268 94 286 108"
-                fill="none"
-                stroke="#89aae0"
-                strokeWidth="6"
-                strokeLinecap="round"
-              />
-              <path
-                d="M230 85C259 72 289 77 313 97"
-                fill="none"
-                stroke="#b1c8ef"
-                strokeWidth="6"
-                strokeLinecap="round"
-              />
-              <path
-                d="M228 145L304 69"
-                fill="none"
-                stroke="#f23f5f"
+                stroke="url(#signal-core)"
                 strokeWidth="10"
                 strokeLinecap="round"
               />
               <path
-                d="M304 145L228 69"
+                d="M180 98L156 116"
+                fill="none"
+                stroke="url(#signal-core)"
+                strokeWidth="10"
+                strokeLinecap="round"
+              />
+              <path
+                d="M180 98L204 116"
+                fill="none"
+                stroke="url(#signal-core)"
+                strokeWidth="10"
+                strokeLinecap="round"
+              />
+              <path
+                d="M152 132C162 120 174 114 180 114C186 114 198 120 208 132"
+                fill="none"
+                stroke="#9fbce9"
+                strokeWidth="8"
+                strokeLinecap="round"
+              />
+              <path
+                d="M134 120C149 102 168 92 180 92C192 92 211 102 226 120"
+                fill="none"
+                stroke="#c1d4f3"
+                strokeWidth="8"
+                strokeLinecap="round"
+              />
+              <path
+                d="M214 78L146 146"
                 fill="none"
                 stroke="#f23f5f"
-                strokeWidth="10"
+                strokeWidth="12"
+                strokeLinecap="round"
+              />
+              <path
+                d="M106 152H254"
+                fill="none"
+                stroke="#d5e1f4"
+                strokeWidth="6"
                 strokeLinecap="round"
               />
             </svg>
