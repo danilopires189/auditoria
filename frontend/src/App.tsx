@@ -27,6 +27,7 @@ import PvpsAlocacaoPage from "./modules/pvps-alocacao/page";
 import RegistroEmbarquePage from "./modules/registro-embarque/page";
 import ZeradosPage from "./modules/zerados/page";
 import HomePage from "./pages/HomePage";
+import MaintenancePage from "./pages/MaintenancePage";
 import type { DashboardModuleKey } from "./modules/types";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { HomeModulesViewMode } from "./types/ui";
@@ -66,6 +67,7 @@ const SESSION_ACTIVITY_PING_THROTTLE_MS = 15 * 1000;
 const AUTH_REQUEST_TIMEOUT_MS = 25_000;
 const LOGIN_RPC_TIMEOUT_MS = 15_000;
 const PROFILE_RPC_TIMEOUT_MS = 12_000;
+const RUNTIME_STATUS_REFRESH_INTERVAL_MS = 60 * 1000;
 const PROFILE_SYNC_RETRY_BASE_MS = 5_000;
 const PROFILE_SYNC_RETRY_MAX_MS = 60_000;
 const PROFILE_SYNC_MAX_RETRIES = 6;
@@ -142,6 +144,12 @@ function isModuleAccessible(moduleKey: DashboardModuleKey, branding: AuthBrandin
 interface CdOption {
   cd: number;
   cd_nome: string;
+}
+
+interface RuntimeStatusState {
+  initialized: boolean;
+  maintenanceMode: boolean;
+  updatedAt: string | null;
 }
 
 function globalCdSelectionKey(userId: string): string {
@@ -964,6 +972,29 @@ async function rpcStartIdentityChallenge(
   return row as ChallengeRow;
 }
 
+async function rpcRuntimeStatus(): Promise<Pick<RuntimeStatusState, "maintenanceMode" | "updatedAt">> {
+  const { data, error } = await withTimeout(
+    Promise.resolve(supabase!.rpc("rpc_runtime_status")),
+    AUTH_REQUEST_TIMEOUT_MS,
+    "rpc_runtime_status"
+  );
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] : null;
+  if (!row || typeof row !== "object") {
+    return {
+      maintenanceMode: false,
+      updatedAt: null
+    };
+  }
+
+  const runtimeRow = row as Record<string, unknown>;
+  return {
+    maintenanceMode: runtimeRow.maintenance_mode === true,
+    updatedAt: typeof runtimeRow.updated_at === "string" ? runtimeRow.updated_at : null
+  };
+}
+
 function fallbackProfileFromSession(session: Session): ProfileContext {
   const meta = session.user.user_metadata ?? {};
   const matByMeta = typeof meta.mat === "string" ? meta.mat : "";
@@ -1064,6 +1095,11 @@ export default function App() {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileContext | null>(null);
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatusState>({
+    initialized: false,
+    maintenanceMode: false,
+    updatedAt: null
+  });
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
   const [loadingSession, setLoadingSession] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -1106,6 +1142,60 @@ export default function App() {
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    let inFlight = false;
+
+    const refreshRuntimeStatus = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const next = await rpcRuntimeStatus();
+        if (!mounted) return;
+        setRuntimeStatus({
+          initialized: true,
+          maintenanceMode: next.maintenanceMode,
+          updatedAt: next.updatedAt
+        });
+      } catch {
+        if (!mounted) return;
+        setRuntimeStatus((current) =>
+          current.initialized
+            ? current
+            : {
+                initialized: true,
+                maintenanceMode: false,
+                updatedAt: null
+              }
+        );
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const handleRuntimeRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void refreshRuntimeStatus();
+    };
+
+    void refreshRuntimeStatus();
+    window.addEventListener("focus", handleRuntimeRefresh);
+    document.addEventListener("visibilitychange", handleRuntimeRefresh);
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refreshRuntimeStatus();
+      }
+    }, RUNTIME_STATUS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleRuntimeRefresh);
+      document.removeEventListener("visibilitychange", handleRuntimeRefresh);
+    };
+  }, []);
 
   const clearAlerts = () => {
     setErrorMessage(null);
@@ -1207,7 +1297,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!runtimeStatus.initialized) return;
+    if (runtimeStatus.maintenanceMode) {
+      setLoadingSession(false);
+      return;
+    }
+
     let mounted = true;
+    setLoadingSession(true);
 
     const bootstrapSession = async () => {
       try {
@@ -1235,7 +1332,7 @@ export default function App() {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [refreshProfile]);
+  }, [refreshProfile, runtimeStatus.initialized, runtimeStatus.maintenanceMode]);
 
   useEffect(() => {
     if (!session) {
@@ -1273,6 +1370,14 @@ export default function App() {
   }, [isOnline, profile, profileSyncRetryCount, refreshProfile, session]);
 
   useEffect(() => {
+    if (!runtimeStatus.initialized) {
+      document.title = `${authBranding.appLabel} - Verificando disponibilidade`;
+      return;
+    }
+    if (runtimeStatus.maintenanceMode) {
+      document.title = `${authBranding.appLabel} - Aplicação desabilitada`;
+      return;
+    }
     if (!session) {
       const authModeLabel = authMode === "register" ? "Cadastro" : authMode === "reset" ? "Redefinir senha" : "Login";
       document.title = `${authBranding.appLabel} - ${authModeLabel}`;
@@ -1280,7 +1385,7 @@ export default function App() {
     }
     const pageModule = findModuleByPath(location.pathname);
     document.title = pageModule ? pageModule.title : "Início";
-  }, [authBranding.appLabel, authMode, location.pathname, session]);
+  }, [authBranding.appLabel, authMode, location.pathname, runtimeStatus.initialized, runtimeStatus.maintenanceMode, session]);
 
   useEffect(() => {
     let mounted = true;
@@ -2165,6 +2270,24 @@ export default function App() {
     () => (activeModule ? isModuleAccessible(activeModule.key, authBranding) : true),
     [activeModule, authBranding]
   );
+  if (!runtimeStatus.initialized) {
+    return (
+      <div className="page-shell">
+        <div className="loading-card surface-enter">
+          <div className="loading-brands">
+            <img className="loading-logo" src={logoImage} alt="Logo" />
+            <img className="loading-pm" src={pmImage} alt="PM" />
+          </div>
+          <p>Verificando disponibilidade...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (runtimeStatus.maintenanceMode) {
+    return <MaintenancePage appHeading={authBranding.authCaption} />;
+  }
+
   if (loadingSession) {
     return (
       <div className="page-shell">
