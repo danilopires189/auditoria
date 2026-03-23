@@ -1,0 +1,1349 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resumo da Aplicacao Auditoria</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root { color-scheme: light; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; line-height: 1.45; font-size: 12px; margin: 0; }
+  main { max-width: 100%; }
+  h1, h2, h3 { color: #0f172a; margin: 0 0 8px; }
+  h1 { font-size: 24px; margin-top: 0; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; }
+  h2 { font-size: 18px; margin-top: 18px; padding: 6px 8px; background: #f8fafc; border-left: 4px solid #2563eb; }
+  h3 { font-size: 14px; margin-top: 14px; }
+  p { margin: 0 0 8px; }
+  ul, ol { margin: 0 0 10px 22px; padding: 0; }
+  li { margin: 0 0 4px; }
+  code { font-family: Consolas, monospace; background: #f3f4f6; padding: 1px 4px; border-radius: 4px; font-size: 11px; }
+  pre { white-space: pre-wrap; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; overflow: hidden; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 11px; }
+  th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; }
+  blockquote { border-left: 4px solid #cbd5e1; margin: 8px 0; padding: 4px 0 4px 12px; color: #4b5563; }
+</style>
+</head>
+<body>
+<main>
+<h1 id="resumo-da-aplicacao-auditoria">Resumo da Aplicação Auditoria</h1>
+<h2 id="1-o-que-a-aplicacao-faz">1. O que a aplicação faz</h2>
+<p>A solução é composta por duas partes:</p>
+<ul>
+<li>Um backend local em Windows que lê arquivos Excel/CSV operacionais, valida os dados, carrega em tabelas de staging, promove para tabelas finais no Supabase Postgres, registra auditoria de execução e pode rodar manualmente, via GUI ou via tarefa agendada do Windows.</li>
+<li>Um frontend web em React que autentica usuários por matrícula, aplica controle de acesso por CD e perfil, trabalha com módulos operacionais de auditoria/conferência e, em vários casos, permite operação offline com sincronização posterior.</li>
+</ul>
+<h2 id="2-fluxos-principais-da-solucao">2. Fluxos principais da solução</h2>
+<h3 id="backend-local">Backend local</h3>
+<p>O backend:</p>
+<ul>
+<li>Executa <code>bootstrap</code> para criar/atualizar estrutura SQL, funções de segurança, RLS e objetos auxiliares.</li>
+<li>Executa <code>healthcheck</code> para validar conectividade com Supabase por PostgreSQL direto ou por Edge Function HTTPS.</li>
+<li>Executa <code>refresh</code> para atualizar planilhas Excel que dependem de conexão/consulta externa.</li>
+<li>Executa <code>validate</code> para validar estrutura e conteúdo antes da promoção.</li>
+<li>Executa <code>sync</code> para carregar os arquivos para o banco.</li>
+<li>Executa <code>dry-run</code> para validar sem promover.</li>
+<li>Executa <code>automation-cycle</code> para rodar em política agendada, inclusive reprocessando tabelas com falha.</li>
+<li>Instala/remove/consulta/dispara uma tarefa do Windows Scheduler.</li>
+<li>Pode abrir uma GUI Tkinter para operação manual.</li>
+</ul>
+<h3 id="frontend-web">Frontend web</h3>
+<p>O frontend:</p>
+<ul>
+<li>Faz login por matrícula + senha.</li>
+<li>Permite cadastro por matrícula, data de nascimento e data de admissão.</li>
+<li>Permite redefinição de senha pelo mesmo fluxo de validação.</li>
+<li>Trabalha com perfil por usuário e escopo de CD.</li>
+<li>Permite contexto global para administradores com acesso a todos os CDs.</li>
+<li>Pode entrar em modo de manutenção.</li>
+<li>Mantém sessão persistida e possui proteção contra sessão inativa / dispositivo concorrente.</li>
+</ul>
+<h2 id="3-modulos-funcionais-publicados">3. Módulos funcionais publicados</h2>
+<h3 id="modulos-implementados">Módulos implementados</h3>
+<ul>
+<li><code>Atividade Extra</code>: lançamento, edição, exclusão e aprovação de atividades extras com pontuação.</li>
+<li><code>Indicadores</code>: indicadores de Blitz com séries, resumo diário, totais por zona e detalhamento.</li>
+<li><code>Auditoria de PVPS e Alocação</code>: operação online/offline, fila operacional, regras administrativas, auditoria de separação/pulmão/alocação e exportação de relatórios.</li>
+<li><code>Busca por Produto</code>: consulta de produto por código de barras / código interno, incluindo lista de barras.</li>
+<li><code>Coleta de Mercadoria</code>: coleta com leitura de barras, ocorrências e relatório.</li>
+<li><code>Conferência de Entrada de Notas</code>: abertura de conferência por volume/lote, leitura de barras, divergências, colaboradores, cancelamento e finalização.</li>
+<li><code>Conferência de Pedido Direto</code>: abertura por volume, leitura de barras, divergências, visão por rota/filial, cancelamento e finalização.</li>
+<li><code>Conferência de Termo</code>: abertura por etiqueta, leitura de barras, divergências, visão por rota/filial, cancelamento e finalização.</li>
+<li><code>Conferência de Volume Avulso</code>: abertura por volume, leitura de barras, divergências, visão por rota, cancelamento e finalização.</li>
+<li><code>Controle de Validade</code>: coleta e retirada por linha/pulmão, lookup de produto e registros operacionais.</li>
+<li><code>Devolução de Mercadoria</code>: abertura por NFD/chave, leitura de barras, conferência com ou sem NFD, lotes/validades, cancelamento e finalização.</li>
+<li><code>Inventário (zerados)</code>: conferência por zona/endereço, trava operacional, revisão, seed administrativo, inclusão manual de produtos e relatórios.</li>
+<li><code>Produtividade</code>: ranking, totais por colaborador, visibilidade por CD e consolidação de produção.</li>
+<li><code>Validar Endereçamento</code>: valida se o endereço informado bate com o cadastro do produto.</li>
+<li><code>Validar Etiqueta Pulmão</code>: valida se a etiqueta/código interno aponta para o produto correto.</li>
+</ul>
+<h3 id="modulos-publicados-como-placeholder">Módulos publicados como placeholder</h3>
+<ul>
+<li><code>Check List</code></li>
+<li><code>Meta Mês</code></li>
+<li><code>Registro de Embarque</code></li>
+</ul>
+<p>Hoje esses 3 módulos existem no menu, mas a tela é somente “Em construção. Volte depois.”</p>
+<h2 id="4-capacidades-operacionais-relevantes">4. Capacidades operacionais relevantes</h2>
+<ul>
+<li>Operação offline em vários módulos usando <code>IndexedDB</code> e <code>localStorage</code>.</li>
+<li>Sincronização posterior de pendências locais quando a conexão volta.</li>
+<li>Cache local de <code>db_barras</code> e, em alguns módulos, também de <code>db_end</code> e bases operacionais.</li>
+<li>Scanner por câmera no navegador com <code>BarcodeDetector</code> nativo ou fallback <code>@zxing/browser</code>.</li>
+<li>Exportação de relatórios em PDF e Excel em pelo menos o módulo de PVPS/Alocação.</li>
+<li>Deploy web preparado para Vercel.</li>
+<li>Sync local empacotável em <code>.exe</code> com PyInstaller.</li>
+</ul>
+<h2 id="5-tecnologias-usadas">5. Tecnologias usadas</h2>
+<h3 id="frontend">Frontend</h3>
+<ul>
+<li>React 18</li>
+<li>TypeScript</li>
+<li>Vite</li>
+<li>React Router DOM</li>
+<li>Supabase JS</li>
+<li><code>@zxing/browser</code> para leitura por câmera</li>
+<li><code>xlsx</code> para exportação Excel</li>
+<li><code>jspdf</code> e <code>jspdf-autotable</code> para PDF</li>
+<li><code>IndexedDB</code> e <code>localStorage</code> para modo offline</li>
+</ul>
+<h3 id="backend-local_1">Backend local</h3>
+<ul>
+<li>Python 3.11+</li>
+<li>Typer (CLI)</li>
+<li>Tkinter (GUI)</li>
+<li>Pandas</li>
+<li>OpenPyXL</li>
+<li>SQLAlchemy</li>
+<li>Psycopg2</li>
+<li>Pydantic</li>
+<li>Python Dotenv</li>
+<li>Loguru</li>
+<li>PyYAML</li>
+<li>PyInstaller</li>
+<li><code>xlwings</code> e <code>pywin32</code> opcionalmente para refresh de Excel</li>
+<li>Windows Task Scheduler (<code>schtasks</code>)</li>
+</ul>
+<h3 id="banco-e-plataforma">Banco e plataforma</h3>
+<ul>
+<li>Supabase Postgres</li>
+<li>Supabase Auth</li>
+<li>RPCs SQL no banco</li>
+<li>RLS (Row Level Security)</li>
+<li>Edge Function TypeScript para ingestão via HTTPS</li>
+<li>Vercel para hospedagem do frontend</li>
+</ul>
+<h2 id="6-fontes-de-dados-carregadas-pelo-backend">6. Fontes de dados carregadas pelo backend</h2>
+<p>Arquivos operacionais carregados para o Supabase:</p>
+<ul>
+<li><code>DB_ENTRADA_NOTAS.xlsx</code></li>
+<li><code>BD_AVULSO.xlsx</code></li>
+<li><code>DB_USUARIO.xlsx</code></li>
+<li><code>DB_BARRAS.xlsx</code></li>
+<li><code>DB_DEVOLUCAO.xlsx</code></li>
+<li><code>DB_PEDIDO_DIRETO.xlsx</code></li>
+<li><code>BD_ROTAS.xlsx</code></li>
+<li><code>DB_TERMO.xlsx</code></li>
+<li><code>convertido/BD_END.csv</code></li>
+<li><code>convertido/DB_ESTQ_ENTR.csv</code></li>
+<li><code>convertido/DB_LOG_END.csv</code></li>
+<li><code>DB_PROD_BLITZ.xlsx</code></li>
+<li><code>DB_PROD_VOL.xlsx</code></li>
+</ul>
+<h2 id="7-acessos-que-a-ti-precisa-liberar">7. Acessos que a TI precisa liberar</h2>
+<h3 id="para-o-frontend-web">Para o frontend web</h3>
+<ul>
+<li>HTTPS para o domínio onde o frontend estiver publicado.</li>
+<li>HTTPS para o projeto Supabase configurado em <code>VITE_SUPABASE_URL</code>.</li>
+<li>Se houver política restritiva por domínio, liberar também autenticação e RPCs do mesmo projeto Supabase.</li>
+<li>Permissão de câmera no navegador para módulos com scanner.</li>
+<li>Permissão para <code>IndexedDB</code> e <code>localStorage</code> no navegador, senão o modo offline não funciona.</li>
+</ul>
+<h3 id="para-o-backend-local">Para o backend local</h3>
+<ul>
+<li>Saída TCP para o banco Supabase:</li>
+<li><code>db.&lt;project-ref&gt;.supabase.co:5432</code></li>
+<li>opcionalmente <code>:6543</code> se for adotado pooler</li>
+<li>Se a rede não puder liberar PostgreSQL direto, liberar HTTPS para a Edge Function:</li>
+<li><code>https://&lt;project-ref&gt;.functions.supabase.co/sync_ingest</code></li>
+<li>Liberação de execução do <code>sync_backend.exe</code> ou do Python local.</li>
+<li>Liberação do <code>schtasks</code> para criação/execução da tarefa agendada <code>AUDITORIA_SYNC_AUTO</code>.</li>
+<li>Permissão de leitura/escrita na pasta local da aplicação:</li>
+<li><code>data\</code></li>
+<li><code>logs\</code></li>
+<li><code>logs\rejections\</code></li>
+<li>Se o fluxo usar refresh de Excel:</li>
+<li>Microsoft Excel instalado</li>
+<li>permissões de automação COM / Office</li>
+<li>suporte a <code>pywin32</code> ou <code>xlwings</code></li>
+</ul>
+<h3 id="credenciais-e-variaveis-necessarias">Credenciais e variáveis necessárias</h3>
+<ul>
+<li><code>SUPABASE_DB_HOST</code></li>
+<li><code>SUPABASE_DB_PORT</code></li>
+<li><code>SUPABASE_DB_NAME</code></li>
+<li><code>SUPABASE_DB_USER</code></li>
+<li><code>SUPABASE_DB_PASSWORD</code></li>
+<li><code>SYNC_TRANSPORT</code></li>
+<li><code>EDGE_FUNCTION_URL</code> quando usar transporte HTTPS</li>
+<li><code>EDGE_FUNCTION_BEARER_TOKEN</code> quando usar Edge Function</li>
+<li><code>EDGE_FUNCTION_SHARED_SECRET</code> quando usar Edge Function</li>
+<li><code>VITE_SUPABASE_URL</code></li>
+<li><code>VITE_SUPABASE_ANON_KEY</code></li>
+</ul>
+<h2 id="8-observacoes-de-seguranca-e-operacao">8. Observações de segurança e operação</h2>
+<ul>
+<li>O frontend depende de RLS e RPCs do banco para controle de acesso.</li>
+<li>Existe separação por perfil e por CD.</li>
+<li>Há fluxo de administrador global com troca de CD no frontend.</li>
+<li>Há modo de manutenção global.</li>
+<li>Há controle de sessão por dispositivo e proteção por inatividade.</li>
+<li>O backend registra execuções, rejeições por tabela e metadados de carga.</li>
+</ul>
+<h2 id="9-inventario-de-tabelas-e-colunas">9. Inventário de tabelas e colunas</h2>
+<h2 id="91-autenticacao-perfil-e-sessao">9.1. Autenticação, perfil e sessão</h2>
+<h3 id="profiles"><code>profiles</code></h3>
+<ul>
+<li><code>user_id</code></li>
+<li><code>nome</code></li>
+<li><code>mat</code></li>
+<li><code>role</code></li>
+<li><code>cd_default</code></li>
+<li><code>created_at</code></li>
+<li><code>home_menu_view</code></li>
+</ul>
+<h3 id="user_deposits"><code>user_deposits</code></h3>
+<ul>
+<li><code>user_id</code></li>
+<li><code>cd</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="global_login_accounts"><code>global_login_accounts</code></h3>
+<ul>
+<li><code>login_email</code></li>
+<li><code>mat</code></li>
+<li><code>nome</code></li>
+<li><code>active</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="identity_challenges"><code>identity_challenges</code></h3>
+<ul>
+<li><code>challenge_id</code></li>
+<li><code>purpose</code></li>
+<li><code>mat</code></li>
+<li><code>dt_nasc</code></li>
+<li><code>dt_adm</code></li>
+<li><code>nome</code></li>
+<li><code>cargo</code></li>
+<li><code>role_suggested</code></li>
+<li><code>cd_default</code></li>
+<li><code>cds</code></li>
+<li><code>expires_at</code></li>
+<li><code>consumed_at</code></li>
+<li><code>created_at</code></li>
+<li><code>created_by</code></li>
+<li><code>created_ip</code></li>
+</ul>
+<h3 id="active_login_sessions"><code>active_login_sessions</code></h3>
+<ul>
+<li><code>user_id</code></li>
+<li><code>device_id</code></li>
+<li><code>claimed_at</code></li>
+<li><code>last_activity_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="runtime_settings"><code>runtime_settings</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>maintenance_mode</code></li>
+<li><code>updated_at</code></li>
+<li><code>updated_by</code></li>
+</ul>
+<h2 id="92-tabelas-de-controle-de-migracao-e-auditoria-do-etl">9.2. Tabelas de controle de migração e auditoria do ETL</h2>
+<h3 id="schema_migrations"><code>schema_migrations</code></h3>
+<ul>
+<li><code>version</code></li>
+<li><code>filename</code></li>
+<li><code>checksum</code></li>
+<li><code>applied_at</code></li>
+</ul>
+<h3 id="runs"><code>runs</code></h3>
+<ul>
+<li><code>run_id</code></li>
+<li><code>started_at</code></li>
+<li><code>finished_at</code></li>
+<li><code>status</code></li>
+<li><code>app_version</code></li>
+<li><code>machine_id</code></li>
+<li><code>config_hash</code></li>
+<li><code>notes</code></li>
+<li><code>triggered_by</code></li>
+</ul>
+<h3 id="run_steps"><code>run_steps</code></h3>
+<ul>
+<li><code>step_id</code></li>
+<li><code>run_id</code></li>
+<li><code>step_name</code></li>
+<li><code>table_name</code></li>
+<li><code>started_at</code></li>
+<li><code>finished_at</code></li>
+<li><code>status</code></li>
+<li><code>rows_in</code></li>
+<li><code>rows_out</code></li>
+<li><code>rows_rejected</code></li>
+<li><code>error_message</code></li>
+<li><code>details</code></li>
+</ul>
+<h3 id="runs_metadata"><code>runs_metadata</code></h3>
+<ul>
+<li><code>run_id</code></li>
+<li><code>table_name</code></li>
+<li><code>meta_key</code></li>
+<li><code>meta_value</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="table_snapshots"><code>table_snapshots</code></h3>
+<ul>
+<li><code>run_id</code></li>
+<li><code>table_name</code></li>
+<li><code>row_count</code></li>
+<li><code>checksum</code></li>
+<li><code>captured_at</code></li>
+</ul>
+<h2 id="93-tabelas-de-origem-sincronizadas-pelo-backend">9.3. Tabelas de origem sincronizadas pelo backend</h2>
+<h3 id="db_entrada_notas"><code>db_entrada_notas</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>transportadora</code></li>
+<li><code>forn</code></li>
+<li><code>seq_entrada</code></li>
+<li><code>nf</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_cx</code></li>
+<li><code>un_por_cx</code></li>
+<li><code>qtd_total</code></li>
+<li><code>vl_tt</code></li>
+<li><code>run_id</code></li>
+<li><code>source_file</code></li>
+<li><code>source_row_number</code></li>
+<li><code>ingested_at</code></li>
+</ul>
+<h3 id="db_avulso"><code>db_avulso</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>id_mov</code></li>
+<li><code>nr_volume</code></li>
+<li><code>dt_mov</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>lote</code></li>
+<li><code>val</code></li>
+<li><code>qtd_mov</code></li>
+<li><code>run_id</code></li>
+<li><code>source_file</code></li>
+<li><code>source_row_number</code></li>
+<li><code>ingested_at</code></li>
+</ul>
+<h3 id="db_usuario"><code>db_usuario</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>mat</code></li>
+<li><code>nome</code></li>
+<li><code>dt_nasc</code></li>
+<li><code>dt_adm</code></li>
+<li><code>cargo</code></li>
+<li><code>cd_nome</code></li>
+<li><code>run_id</code></li>
+<li><code>source_file</code></li>
+<li><code>source_row_number</code></li>
+<li><code>ingested_at</code></li>
+</ul>
+<h3 id="db_barras"><code>db_barras</code></h3>
+<ul>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>barras</code></li>
+<li><code>run_id</code></li>
+<li><code>source_file</code></li>
+<li><code>source_row_number</code></li>
+<li><code>ingested_at</code></li>
+</ul>
+<h3 id="db_devolucao"><code>db_devolucao</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>motivo</code></li>
+<li><code>nfd</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>tipo</code></li>
+<li><code>qtd_dev</code></li>
+<li><code>dt_gera</code></li>
+<li><code>chave</code></li>
+<li><code>geracao</code></li>
+<li><code>run_id</code></li>
+<li><code>source_file</code></li>
+<li><code>source_row_number</code></li>
+<li><code>ingested_at</code></li>
+</ul>
+<h3 id="db_pedido_direto"><code>db_pedido_direto</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>pedido</code></li>
+<li><code>sq</code></li>
+<li><code>filial</code></li>
+<li><code>dt_pedido</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_fat</code></li>
+<li><code>run_id</code></li>
+<li><code>source_file</code></li>
+<li><code>source_row_number</code></li>
+<li><code>ingested_at</code></li>
+<li><code>pedidoseq</code></li>
+</ul>
+<h3 id="db_rotas"><code>db_rotas</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>filial</code></li>
+<li><code>uf</code></li>
+<li><code>nome</code></li>
+<li><code>rota</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="db_termo"><code>db_termo</code></h3>
+<ul>
+<li><code>pedido</code></li>
+<li><code>cd</code></li>
+<li><code>filial</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>caixa</code></li>
+<li><code>qtd_separada</code></li>
+<li><code>num_rota</code></li>
+<li><code>id_etiqueta</code></li>
+<li><code>run_id</code></li>
+<li><code>source_file</code></li>
+<li><code>source_row_number</code></li>
+<li><code>ingested_at</code></li>
+</ul>
+<h3 id="db_end"><code>db_end</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>endereco</code></li>
+<li><code>andar</code></li>
+<li><code>validade</code></li>
+<li><code>tipo</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="db_estq_entr"><code>db_estq_entr</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>coddv</code></li>
+<li><code>qtd_est_atual</code></li>
+<li><code>qtd_est_disp</code></li>
+<li><code>dat_ult_compra</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="db_log_end"><code>db_log_end</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>coddv</code></li>
+<li><code>endereco</code></li>
+<li><code>exclusao</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="db_prod_blitz"><code>db_prod_blitz</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>filial</code></li>
+<li><code>nr_pedido</code></li>
+<li><code>dt_conf</code></li>
+<li><code>auditor</code></li>
+<li><code>qtd_un</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="db_prod_vol"><code>db_prod_vol</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>aud</code></li>
+<li><code>vol_conf</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="db_inventario"><code>db_inventario</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>endereco</code></li>
+<li><code>descricao</code></li>
+<li><code>rua</code></li>
+<li><code>coddv</code></li>
+<li><code>estoque</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+<li><code>base_updated_by</code></li>
+</ul>
+<h3 id="db_conf_blitz"><code>db_conf_blitz</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>filial</code></li>
+<li><code>pedido</code></li>
+<li><code>seq</code></li>
+<li><code>tt_un</code></li>
+<li><code>conferente</code></li>
+<li><code>dt_conf</code></li>
+<li><code>tt_vol</code></li>
+<li><code>qtd_avaria</code></li>
+<li><code>qtd_vencido</code></li>
+<li><code>qtd_falta</code></li>
+<li><code>qtd_sobra</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="db_div_blitz"><code>db_div_blitz</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>pedido</code></li>
+<li><code>seq</code></li>
+<li><code>filial</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_nfo</code></li>
+<li><code>conf</code></li>
+<li><code>vl_div</code></li>
+<li><code>conferente</code></li>
+<li><code>data_conf</code></li>
+<li><code>qtd_venc</code></li>
+<li><code>caixa</code></li>
+<li><code>endereco</code></li>
+<li><code>zona</code></li>
+<li><code>source_run_id</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="db_pvps"><code>db_pvps</code></h3>
+<ul>
+<li><code>queue_id</code></li>
+<li><code>cd</code></li>
+<li><code>zona</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>end_sep</code></li>
+<li><code>end_pul</code></li>
+<li><code>qtd_est_disp</code></li>
+<li><code>dat_ult_compra</code></li>
+<li><code>is_pending</code></li>
+<li><code>source_run_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+<li><code>is_window_active</code></li>
+</ul>
+<h3 id="db_alocacao"><code>db_alocacao</code></h3>
+<ul>
+<li><code>queue_id</code></li>
+<li><code>cd</code></li>
+<li><code>zona</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>endereco</code></li>
+<li><code>nivel</code></li>
+<li><code>val_sist</code></li>
+<li><code>qtd_est_disp</code></li>
+<li><code>dat_ult_compra</code></li>
+<li><code>is_pending</code></li>
+<li><code>source_run_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+<li><code>is_window_active</code></li>
+</ul>
+<h2 id="94-rejeicoes-do-etl">9.4. Rejeições do ETL</h2>
+<h3 id="rejections_db_avulso"><code>rejections_db_avulso</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_barras"><code>rejections_db_barras</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_conf_blitz"><code>rejections_db_conf_blitz</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_devolucao"><code>rejections_db_devolucao</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_div_blitz"><code>rejections_db_div_blitz</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_end"><code>rejections_db_end</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_entrada_notas"><code>rejections_db_entrada_notas</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_estq_entr"><code>rejections_db_estq_entr</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_inventario"><code>rejections_db_inventario</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_log_end"><code>rejections_db_log_end</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_pedido_direto"><code>rejections_db_pedido_direto</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_prod_blitz"><code>rejections_db_prod_blitz</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_prod_vol"><code>rejections_db_prod_vol</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_rotas"><code>rejections_db_rotas</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_termo"><code>rejections_db_termo</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="rejections_db_usuario"><code>rejections_db_usuario</code></h3>
+<ul>
+<li><code>rejection_id</code></li>
+<li><code>run_id</code></li>
+<li><code>source_row_number</code></li>
+<li><code>reason_code</code></li>
+<li><code>reason_detail</code></li>
+<li><code>payload</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h2 id="95-modulo-coleta-validacoes-operacionais">9.5. Módulo Coleta / validações operacionais</h2>
+<h3 id="aud_coleta"><code>aud_coleta</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>etiqueta</code></li>
+<li><code>cd</code></li>
+<li><code>barras</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd</code></li>
+<li><code>ocorrencia</code></li>
+<li><code>lote</code></li>
+<li><code>val_mmaa</code></li>
+<li><code>mat_aud</code></li>
+<li><code>nome_aud</code></li>
+<li><code>user_id</code></li>
+<li><code>data_hr</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="endereco"><code>endereco</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>data_hr</code></li>
+<li><code>user_id</code></li>
+<li><code>usuario</code></li>
+<li><code>cd</code></li>
+<li><code>barra</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>end_infor</code></li>
+<li><code>end_corret</code></li>
+<li><code>validado</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="etiqueta_pulmao"><code>etiqueta_pulmao</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>data_hr</code></li>
+<li><code>user_id</code></li>
+<li><code>usuario</code></li>
+<li><code>cd</code></li>
+<li><code>codigo_interno</code></li>
+<li><code>barra</code></li>
+<li><code>coddv_resolvido</code></li>
+<li><code>descricao</code></li>
+<li><code>validado</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h2 id="96-modulo-atividade-extra-produtividade">9.6. Módulo Atividade Extra / Produtividade</h2>
+<h3 id="atividade_extra"><code>atividade_extra</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>cd</code></li>
+<li><code>user_id</code></li>
+<li><code>mat</code></li>
+<li><code>nome</code></li>
+<li><code>data_inicio</code></li>
+<li><code>hora_inicio</code></li>
+<li><code>data_fim</code></li>
+<li><code>hora_fim</code></li>
+<li><code>duracao_segundos</code></li>
+<li><code>pontos</code></li>
+<li><code>descricao</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+<li><code>approval_status</code></li>
+</ul>
+<h3 id="atividade_extra_cd_settings"><code>atividade_extra_cd_settings</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>visibility_mode</code></li>
+<li><code>updated_by</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="produtividade_cd_settings"><code>produtividade_cd_settings</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>visibility_mode</code></li>
+<li><code>updated_by</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h2 id="97-modulo-pvps-e-alocacao">9.7. Módulo PVPS e Alocação</h2>
+<h3 id="aud_pvps"><code>aud_pvps</code></h3>
+<ul>
+<li><code>audit_id</code></li>
+<li><code>cd</code></li>
+<li><code>zona</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>end_sep</code></li>
+<li><code>end_sit</code></li>
+<li><code>val_sep</code></li>
+<li><code>auditor_id</code></li>
+<li><code>auditor_mat</code></li>
+<li><code>auditor_nome</code></li>
+<li><code>status</code></li>
+<li><code>dt_hr</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="aud_pvps_pul"><code>aud_pvps_pul</code></h3>
+<ul>
+<li><code>audit_pul_id</code></li>
+<li><code>audit_id</code></li>
+<li><code>end_pul</code></li>
+<li><code>val_pul</code></li>
+<li><code>dt_hr</code></li>
+<li><code>updated_at</code></li>
+<li><code>end_sit</code></li>
+</ul>
+<h3 id="aud_alocacao"><code>aud_alocacao</code></h3>
+<ul>
+<li><code>audit_id</code></li>
+<li><code>queue_id</code></li>
+<li><code>cd</code></li>
+<li><code>zona</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>endereco</code></li>
+<li><code>nivel</code></li>
+<li><code>end_sit</code></li>
+<li><code>val_sist</code></li>
+<li><code>val_conf</code></li>
+<li><code>aud_sit</code></li>
+<li><code>auditor_id</code></li>
+<li><code>auditor_mat</code></li>
+<li><code>auditor_nome</code></li>
+<li><code>dt_hr</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="pvps_admin_rules"><code>pvps_admin_rules</code></h3>
+<ul>
+<li><code>rule_id</code></li>
+<li><code>cd</code></li>
+<li><code>modulo</code></li>
+<li><code>rule_kind</code></li>
+<li><code>target_type</code></li>
+<li><code>target_value</code></li>
+<li><code>priority_value</code></li>
+<li><code>active</code></li>
+<li><code>created_by</code></li>
+<li><code>created_at</code></li>
+<li><code>removed_by</code></li>
+<li><code>removed_at</code></li>
+</ul>
+<h3 id="pvps_admin_rule_history"><code>pvps_admin_rule_history</code></h3>
+<ul>
+<li><code>history_id</code></li>
+<li><code>rule_id</code></li>
+<li><code>cd</code></li>
+<li><code>modulo</code></li>
+<li><code>rule_kind</code></li>
+<li><code>target_type</code></li>
+<li><code>target_value</code></li>
+<li><code>priority_value</code></li>
+<li><code>action_type</code></li>
+<li><code>apply_mode</code></li>
+<li><code>affected_pvps</code></li>
+<li><code>affected_alocacao</code></li>
+<li><code>actor_user_id</code></li>
+<li><code>details_json</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="pvps_admin_rule_grace"><code>pvps_admin_rule_grace</code></h3>
+<ul>
+<li><code>grace_id</code></li>
+<li><code>rule_id</code></li>
+<li><code>modulo</code></li>
+<li><code>item_key</code></li>
+<li><code>created_at</code></li>
+</ul>
+<h3 id="pvps_alocacao_blacklist"><code>pvps_alocacao_blacklist</code></h3>
+<ul>
+<li><code>blacklist_id</code></li>
+<li><code>cd</code></li>
+<li><code>modulo</code></li>
+<li><code>zona</code></li>
+<li><code>coddv</code></li>
+<li><code>created_at</code></li>
+<li><code>created_by</code></li>
+</ul>
+<h3 id="pvps_alocacao_priority_zones"><code>pvps_alocacao_priority_zones</code></h3>
+<ul>
+<li><code>priority_id</code></li>
+<li><code>cd</code></li>
+<li><code>modulo</code></li>
+<li><code>zona</code></li>
+<li><code>prioridade</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="pvps_alocacao_replenish_state"><code>pvps_alocacao_replenish_state</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>modulo</code></li>
+<li><code>last_run_at</code></li>
+<li><code>pending_before</code></li>
+<li><code>reason</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="pvps_alocacao_offline_discard"><code>pvps_alocacao_offline_discard</code></h3>
+<ul>
+<li><code>discard_id</code></li>
+<li><code>created_at</code></li>
+<li><code>cd</code></li>
+<li><code>modulo</code></li>
+<li><code>event_kind</code></li>
+<li><code>local_event_id</code></li>
+<li><code>local_event_created_at</code></li>
+<li><code>local_payload</code></li>
+<li><code>local_user_id</code></li>
+<li><code>local_user_mat</code></li>
+<li><code>local_user_nome</code></li>
+<li><code>coddv</code></li>
+<li><code>zona</code></li>
+<li><code>end_sep</code></li>
+<li><code>end_pul</code></li>
+<li><code>queue_id</code></li>
+<li><code>conflict_reason</code></li>
+<li><code>existing_audit_id</code></li>
+<li><code>existing_auditor_id</code></li>
+<li><code>existing_auditor_mat</code></li>
+<li><code>existing_auditor_nome</code></li>
+<li><code>existing_audit_dt_hr</code></li>
+<li><code>existing_status</code></li>
+<li><code>details_json</code></li>
+</ul>
+<h2 id="98-conferencia-de-termo">9.8. Conferência de Termo</h2>
+<h3 id="conf_termo"><code>conf_termo</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>conf_date</code></li>
+<li><code>cd</code></li>
+<li><code>id_etiqueta</code></li>
+<li><code>caixa</code></li>
+<li><code>pedido</code></li>
+<li><code>filial</code></li>
+<li><code>filial_nome</code></li>
+<li><code>rota</code></li>
+<li><code>started_by</code></li>
+<li><code>started_mat</code></li>
+<li><code>started_nome</code></li>
+<li><code>status</code></li>
+<li><code>falta_motivo</code></li>
+<li><code>started_at</code></li>
+<li><code>finalized_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_termo_itens"><code>conf_termo_itens</code></h3>
+<ul>
+<li><code>item_id</code></li>
+<li><code>conf_id</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_esperada</code></li>
+<li><code>qtd_conferida</code></li>
+<li><code>updated_at</code></li>
+<li><code>barras</code></li>
+<li><code>id_etiqueta</code></li>
+</ul>
+<h2 id="99-conferencia-de-pedido-direto">9.9. Conferência de Pedido Direto</h2>
+<h3 id="conf_pedido_direto"><code>conf_pedido_direto</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>conf_date</code></li>
+<li><code>cd</code></li>
+<li><code>id_vol</code></li>
+<li><code>caixa</code></li>
+<li><code>pedido</code></li>
+<li><code>filial</code></li>
+<li><code>filial_nome</code></li>
+<li><code>rota</code></li>
+<li><code>started_by</code></li>
+<li><code>started_mat</code></li>
+<li><code>started_nome</code></li>
+<li><code>status</code></li>
+<li><code>falta_motivo</code></li>
+<li><code>started_at</code></li>
+<li><code>finalized_at</code></li>
+<li><code>updated_at</code></li>
+<li><code>sq</code></li>
+</ul>
+<h3 id="conf_pedido_direto_itens"><code>conf_pedido_direto_itens</code></h3>
+<ul>
+<li><code>item_id</code></li>
+<li><code>conf_id</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_esperada</code></li>
+<li><code>qtd_conferida</code></li>
+<li><code>updated_at</code></li>
+<li><code>barras</code></li>
+<li><code>id_vol</code></li>
+</ul>
+<h2 id="910-conferencia-de-volume-avulso">9.10. Conferência de Volume Avulso</h2>
+<h3 id="conf_volume_avulso"><code>conf_volume_avulso</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>conf_date</code></li>
+<li><code>cd</code></li>
+<li><code>nr_volume</code></li>
+<li><code>caixa</code></li>
+<li><code>pedido</code></li>
+<li><code>filial</code></li>
+<li><code>filial_nome</code></li>
+<li><code>rota</code></li>
+<li><code>started_by</code></li>
+<li><code>started_mat</code></li>
+<li><code>started_nome</code></li>
+<li><code>status</code></li>
+<li><code>falta_motivo</code></li>
+<li><code>started_at</code></li>
+<li><code>finalized_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_volume_avulso_itens"><code>conf_volume_avulso_itens</code></h3>
+<ul>
+<li><code>item_id</code></li>
+<li><code>conf_id</code></li>
+<li><code>nr_volume</code></li>
+<li><code>coddv</code></li>
+<li><code>barras</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_esperada</code></li>
+<li><code>qtd_conferida</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h2 id="911-conferencia-de-entrada-de-notas">9.11. Conferência de Entrada de Notas</h2>
+<h3 id="conf_entrada_notas"><code>conf_entrada_notas</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>conf_date</code></li>
+<li><code>cd</code></li>
+<li><code>seq_entrada</code></li>
+<li><code>nf</code></li>
+<li><code>transportadora</code></li>
+<li><code>fornecedor</code></li>
+<li><code>started_by</code></li>
+<li><code>started_mat</code></li>
+<li><code>started_nome</code></li>
+<li><code>status</code></li>
+<li><code>started_at</code></li>
+<li><code>finalized_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_entrada_notas_itens"><code>conf_entrada_notas_itens</code></h3>
+<ul>
+<li><code>item_id</code></li>
+<li><code>conf_id</code></li>
+<li><code>seq_entrada</code></li>
+<li><code>nf</code></li>
+<li><code>coddv</code></li>
+<li><code>barras</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_esperada</code></li>
+<li><code>qtd_conferida</code></li>
+<li><code>updated_at</code></li>
+<li><code>locked_by</code></li>
+<li><code>locked_mat</code></li>
+<li><code>locked_nome</code></li>
+</ul>
+<h3 id="conf_entrada_notas_itens_conferidos"><code>conf_entrada_notas_itens_conferidos</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>item_id</code></li>
+<li><code>seq_entrada</code></li>
+<li><code>nf</code></li>
+<li><code>coddv</code></li>
+<li><code>barras</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_conferida</code></li>
+<li><code>divergencia_tipo</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_entrada_notas_colaboradores"><code>conf_entrada_notas_colaboradores</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>user_id</code></li>
+<li><code>mat</code></li>
+<li><code>nome</code></li>
+<li><code>first_action_at</code></li>
+<li><code>last_action_at</code></li>
+</ul>
+<h3 id="conf_entrada_notas_ocorrencias"><code>conf_entrada_notas_ocorrencias</code></h3>
+<ul>
+<li><code>ocorrencia_id</code></li>
+<li><code>conf_id</code></li>
+<li><code>item_id</code></li>
+<li><code>coddv</code></li>
+<li><code>tipo</code></li>
+<li><code>qtd</code></li>
+<li><code>updated_by</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_entrada_notas_avulsa"><code>conf_entrada_notas_avulsa</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>conf_date</code></li>
+<li><code>cd</code></li>
+<li><code>kind</code></li>
+<li><code>transportadora</code></li>
+<li><code>fornecedor</code></li>
+<li><code>started_by</code></li>
+<li><code>started_mat</code></li>
+<li><code>started_nome</code></li>
+<li><code>status</code></li>
+<li><code>started_at</code></li>
+<li><code>finalized_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_entrada_notas_avulsa_itens"><code>conf_entrada_notas_avulsa_itens</code></h3>
+<ul>
+<li><code>item_id</code></li>
+<li><code>conf_id</code></li>
+<li><code>coddv</code></li>
+<li><code>barras</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_esperada</code></li>
+<li><code>qtd_conferida</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_entrada_notas_avulsa_itens_conferidos"><code>conf_entrada_notas_avulsa_itens_conferidos</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>item_id</code></li>
+<li><code>coddv</code></li>
+<li><code>barras</code></li>
+<li><code>descricao</code></li>
+<li><code>qtd_conferida</code></li>
+<li><code>divergencia_tipo</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_entrada_notas_avulsa_targets"><code>conf_entrada_notas_avulsa_targets</code></h3>
+<ul>
+<li><code>avulsa_conf_id</code></li>
+<li><code>target_conf_id</code></li>
+<li><code>cd</code></li>
+<li><code>seq_entrada</code></li>
+<li><code>nf</code></li>
+<li><code>created_via_session</code></li>
+<li><code>first_scan_at</code></li>
+<li><code>last_scan_at</code></li>
+</ul>
+<h2 id="912-devolucao-de-mercadoria">9.12. Devolução de Mercadoria</h2>
+<h3 id="conf_devolucao"><code>conf_devolucao</code></h3>
+<ul>
+<li><code>conf_id</code></li>
+<li><code>conf_date</code></li>
+<li><code>cd</code></li>
+<li><code>conference_kind</code></li>
+<li><code>nfd</code></li>
+<li><code>chave</code></li>
+<li><code>source_motivo</code></li>
+<li><code>nfo</code></li>
+<li><code>motivo_sem_nfd</code></li>
+<li><code>status</code></li>
+<li><code>falta_motivo</code></li>
+<li><code>started_by</code></li>
+<li><code>started_mat</code></li>
+<li><code>started_nome</code></li>
+<li><code>started_at</code></li>
+<li><code>finalized_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_devolucao_itens"><code>conf_devolucao_itens</code></h3>
+<ul>
+<li><code>item_id</code></li>
+<li><code>conf_id</code></li>
+<li><code>coddv</code></li>
+<li><code>barras</code></li>
+<li><code>descricao</code></li>
+<li><code>tipo</code></li>
+<li><code>qtd_esperada</code></li>
+<li><code>qtd_conferida</code></li>
+<li><code>qtd_manual_total</code></li>
+<li><code>updated_at</code></li>
+<li><code>lotes</code></li>
+</ul>
+<h2 id="913-inventario-zerados">9.13. Inventário (zerados)</h2>
+<h3 id="conf_inventario_counts"><code>conf_inventario_counts</code></h3>
+<ul>
+<li><code>count_id</code></li>
+<li><code>cycle_date</code></li>
+<li><code>cd</code></li>
+<li><code>zona</code></li>
+<li><code>endereco</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>estoque</code></li>
+<li><code>etapa</code></li>
+<li><code>qtd_contada</code></li>
+<li><code>barras</code></li>
+<li><code>resultado</code></li>
+<li><code>counted_by</code></li>
+<li><code>counted_mat</code></li>
+<li><code>counted_nome</code></li>
+<li><code>client_event_id</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_inventario_reviews"><code>conf_inventario_reviews</code></h3>
+<ul>
+<li><code>review_id</code></li>
+<li><code>cycle_date</code></li>
+<li><code>cd</code></li>
+<li><code>zona</code></li>
+<li><code>endereco</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>estoque</code></li>
+<li><code>reason_code</code></li>
+<li><code>snapshot</code></li>
+<li><code>status</code></li>
+<li><code>final_qtd</code></li>
+<li><code>final_barras</code></li>
+<li><code>final_resultado</code></li>
+<li><code>resolved_by</code></li>
+<li><code>resolved_mat</code></li>
+<li><code>resolved_nome</code></li>
+<li><code>resolved_at</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_inventario_zone_locks"><code>conf_inventario_zone_locks</code></h3>
+<ul>
+<li><code>lock_id</code></li>
+<li><code>cycle_date</code></li>
+<li><code>cd</code></li>
+<li><code>zona</code></li>
+<li><code>etapa</code></li>
+<li><code>locked_by</code></li>
+<li><code>locked_mat</code></li>
+<li><code>locked_nome</code></li>
+<li><code>heartbeat_at</code></li>
+<li><code>expires_at</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="conf_inventario_event_log"><code>conf_inventario_event_log</code></h3>
+<ul>
+<li><code>client_event_id</code></li>
+<li><code>user_id</code></li>
+<li><code>event_type</code></li>
+<li><code>payload</code></li>
+<li><code>status</code></li>
+<li><code>info</code></li>
+<li><code>processed_at</code></li>
+</ul>
+<h3 id="conf_inventario_admin_seed_config"><code>conf_inventario_admin_seed_config</code></h3>
+<ul>
+<li><code>cd</code></li>
+<li><code>zonas</code></li>
+<li><code>estoque_ini</code></li>
+<li><code>estoque_fim</code></li>
+<li><code>incluir_pul</code></li>
+<li><code>manual_coddv</code></li>
+<li><code>updated_by</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h2 id="914-controle-de-validade">9.14. Controle de Validade</h2>
+<h3 id="ctrl_validade_linha_coletas"><code>ctrl_validade_linha_coletas</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>client_event_id</code></li>
+<li><code>cd</code></li>
+<li><code>barras</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>endereco_sep</code></li>
+<li><code>val_mmaa</code></li>
+<li><code>qtd</code></li>
+<li><code>data_coleta</code></li>
+<li><code>auditor_id</code></li>
+<li><code>auditor_mat</code></li>
+<li><code>auditor_nome</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="ctrl_validade_linha_retiradas"><code>ctrl_validade_linha_retiradas</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>client_event_id</code></li>
+<li><code>cd</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>endereco_sep</code></li>
+<li><code>val_mmaa</code></li>
+<li><code>ref_coleta_mes</code></li>
+<li><code>qtd_retirada</code></li>
+<li><code>data_retirada</code></li>
+<li><code>auditor_id</code></li>
+<li><code>auditor_mat</code></li>
+<li><code>auditor_nome</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h3 id="ctrl_validade_pul_retiradas"><code>ctrl_validade_pul_retiradas</code></h3>
+<ul>
+<li><code>id</code></li>
+<li><code>client_event_id</code></li>
+<li><code>cd</code></li>
+<li><code>coddv</code></li>
+<li><code>descricao</code></li>
+<li><code>endereco_pul</code></li>
+<li><code>val_mmaa</code></li>
+<li><code>qtd_retirada</code></li>
+<li><code>data_retirada</code></li>
+<li><code>auditor_id</code></li>
+<li><code>auditor_mat</code></li>
+<li><code>auditor_nome</code></li>
+<li><code>created_at</code></li>
+<li><code>updated_at</code></li>
+</ul>
+<h2 id="915-fechamento">9.15. Fechamento</h2>
+<p>Esse inventário foi montado a partir das migrations SQL, do <code>config.yml</code>, do backend Python e do frontend React existentes no repositório. Se você quiser, o próximo passo pode ser eu transformar este material em:</p>
+<ul>
+<li>um documento executivo de 1 página para a TI</li>
+<li>uma planilha CSV com todas as tabelas e colunas</li>
+<li>ou um mapa “módulo x tabela x porta/domínio a liberar”</li>
+</ul>
+</main>
+</body>
+</html>
