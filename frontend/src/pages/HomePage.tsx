@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import pmImage from "../../assets/pm.png";
 import { DASHBOARD_MODULES } from "../modules/registry";
@@ -46,6 +47,15 @@ function InfoIcon() {
   );
 }
 
+function ClearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
 export default function HomePage({
   displayContext,
   appHeading,
@@ -63,8 +73,15 @@ export default function HomePage({
   const nextViewMode = modulesViewMode === "list" ? "grid" : "list";
   const viewToggleLabel = nextViewMode === "grid" ? "Mudar visual para ícones" : "Mudar visual para lista";
   const moduleCollator = new Intl.Collator("pt-BR", { sensitivity: "base" });
+  const [moduleSearch, setModuleSearch] = useState("");
+  const normalizedModuleSearch = moduleSearch.trim().toLocaleLowerCase("pt-BR");
   const sortedVisibleModules = [...DASHBOARD_MODULES]
     .filter((moduleDef) => !hiddenModuleSet.has(moduleDef.key) && (!allowedModuleSet || allowedModuleSet.has(moduleDef.key)))
+    .filter((moduleDef) => (
+      normalizedModuleSearch === ""
+        ? true
+        : moduleDef.title.toLocaleLowerCase("pt-BR").includes(normalizedModuleSearch)
+    ))
     .sort((left, right) => moduleCollator.compare(left.title, right.title));
 
   return (
@@ -128,7 +145,36 @@ export default function HomePage({
 
       <section className="modules-shell">
         <div className="modules-head">
-          <h2>{appHeading}</h2>
+          <div className="modules-head-row">
+            <h2>{appHeading}</h2>
+            <label className="modules-head-search" aria-label="Buscar módulo pelo nome">
+              <span className="modules-head-search-icon" aria-hidden="true">
+                <ModuleIcon name="search" />
+              </span>
+              <input
+                type="text"
+                className="modules-head-search-input"
+                value={moduleSearch}
+                onChange={(event) => setModuleSearch(event.target.value)}
+                placeholder="Buscar módulo..."
+                inputMode="search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="search"
+              />
+              <button
+                type="button"
+                className="modules-head-search-clear"
+                onClick={() => setModuleSearch("")}
+                aria-label="Limpar busca de módulos"
+                disabled={normalizedModuleSearch === ""}
+                title="Limpar busca"
+              >
+                <ClearIcon />
+              </button>
+            </label>
+          </div>
           <p>Selecione um módulo para iniciar.</p>
         </div>
         <div className={`modules-grid ${modulesViewMode === "grid" ? "is-icon-view" : "is-list-view"}`}>
@@ -152,6 +198,9 @@ export default function HomePage({
             </Link>
           ))}
         </div>
+        {sortedVisibleModules.length === 0 ? (
+          <p className="modules-empty-state">Nenhum módulo encontrado para essa busca.</p>
+        ) : null}
       </section>
     </>
   );
