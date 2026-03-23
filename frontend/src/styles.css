@@ -4456,6 +4456,10 @@ small {
     max-width: none;
     width: 100%;
   }
+
+  .modules-head-search-input {
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 520px) {
