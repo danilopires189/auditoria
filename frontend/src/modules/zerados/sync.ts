@@ -490,6 +490,7 @@ export async function fetchReportRows(params: {
   dt_ini: string;
   dt_fim: string;
   cd: number;
+  offset?: number;
   limit?: number;
 }): Promise<InventarioReportRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
@@ -497,6 +498,7 @@ export async function fetchReportRows(params: {
     p_dt_ini: params.dt_ini,
     p_dt_fim: params.dt_fim,
     p_cd: params.cd,
+    p_offset: Math.max(0, params.offset ?? 0),
     p_limit: Math.max(1, Math.trunc(params.limit ?? 20000))
   });
   if (error) throw new Error(toErrorMessage(error));
