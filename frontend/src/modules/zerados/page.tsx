@@ -208,6 +208,9 @@ function parseErr(error: unknown): string {
   if (raw.includes("rpc_conf_inventario_admin_apply_seed_v2") || raw.includes("rpc_conf_inventario_admin_clear_base_v2") || raw.includes("rpc_conf_inventario_admin_apply_manual_coddv_v2")) {
     return "Backend desatualizado para metadados da gestão de base. Execute as migrações mais recentes e tente novamente.";
   }
+  if (raw.includes("rpc_conf_inventario_report_rows") && raw.includes("p_offset")) {
+    return "Backend desatualizado para paginação do relatório. Execute as migrações mais recentes e tente novamente.";
+  }
   if (raw.includes("rpc_conf_inventario_admin_apply_manual_coddv") || raw.includes("Could not find the function public.rpc_conf_inventario_admin_apply_manual_coddv")) {
     return "Backend desatualizado para Código e Dígito (CODDV) manual. Execute as migrações mais recentes e tente novamente.";
   }
@@ -215,6 +218,7 @@ function parseErr(error: unknown): string {
     return "Backend com função de inventário em modo somente leitura. Execute as migrações mais recentes e sincronize novamente.";
   }
   if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia. Use 'Gerir Base' para montar e sincronize novamente.";
+  if (raw.includes("RELATORIO_MUITO_GRANDE")) return "Relatório acima do limite suportado para exportação. Reduza o período e tente novamente.";
   if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este Código e Dígito (CODDV).";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
   if (raw.includes("ETAPA2_APENAS_QUANDO_SOBRA")) return "2ª verificação só é permitida quando houver sobra na 1ª verificação.";
@@ -2755,9 +2759,21 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const exportReport = useCallback(async () => {
     if (!canExport || cd == null) return;
-    const total = await countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
-    setReportCount(total);
-    const rowsReport = await fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, limit: 30000 });
+    const pageSize = 2000;
+    const rowsReport: InventarioReportRow[] = [];
+
+    for (let offset = 0; offset < 50000; offset += pageSize) {
+      const batch = await fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit: pageSize });
+      if (!batch.length) break;
+      rowsReport.push(...batch);
+      if (batch.length < pageSize) break;
+    }
+
+    if (rowsReport.length >= 50000) {
+      throw new Error("RELATORIO_MUITO_GRANDE_50000");
+    }
+
+    setReportCount(rowsReport.length);
     const XLSX = await import("xlsx");
     const pickFirstBarcode = (rows: InventarioReportRow[]): string | null => {
       for (const getter of [
