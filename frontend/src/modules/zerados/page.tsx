@@ -458,6 +458,24 @@ function formatDate(value: string): string {
   return formatDateOnlyPtBR(value, "-", "value");
 }
 
+function dateKeyBrasiliaFromTimestamp(value: string | null | undefined): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(parsed);
+}
+
+function isCurrentManifestBase(meta: InventarioManifestMeta | null): boolean {
+  if (!meta?.base_atualizado_em) return false;
+  return dateKeyBrasiliaFromTimestamp(meta.base_atualizado_em) === CYCLE_DATE;
+}
+
 function sumNullable(values: Array<number | null>): number | null {
   let total = 0;
   let hasValue = false;
@@ -1009,6 +1027,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       listManifestItemsByCd(profile.user_id, cd),
       getRemoteStateCache(profile.user_id, cd, CYCLE_DATE)
     ]);
+    if (meta && !isCurrentManifestBase(meta)) {
+      await clearManifestSnapshotByCd(profile.user_id, cd);
+      setManifestMeta(null);
+      setManifestItems([]);
+      setRemoteState(state ?? defaultState());
+      return;
+    }
     setManifestMeta(meta);
     setManifestItems(items);
     setRemoteState(state ?? defaultState());
@@ -1061,6 +1086,17 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setErr(null);
     try {
       const remoteMeta = await fetchManifestMeta(cd);
+      if (!isCurrentManifestBase(remoteMeta)) {
+        await clearManifestSnapshotByCd(profile.user_id, cd);
+        setManifestMeta(null);
+        setManifestItems([]);
+        await pull();
+        const bm = await getDbBarrasMeta();
+        setDbBarrasCount(bm.row_count);
+        setDbBarrasLastSyncAt(bm.last_sync_at);
+        setMsg("Base do inventário pertence ao dia anterior. Use 'Gerir Base' para montar a base de hoje.");
+        return;
+      }
       const localMeta = await getManifestMetaLocal(profile.user_id, cd);
       const localRows = await listManifestItemsByCd(profile.user_id, cd);
       const localCount = localRows.length;
@@ -1415,7 +1451,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       ]);
 
       if (!isOnline) {
-        if (!localMeta || localMeta.row_count <= 0) {
+        if (!localMeta || !isCurrentManifestBase(localMeta) || localMeta.row_count <= 0) {
           throw new Error("Sem base local do inventário. Conecte-se e sincronize antes de usar offline.");
         }
         if (localBarrasMeta.row_count <= 0) {
