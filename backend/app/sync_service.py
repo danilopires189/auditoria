@@ -535,33 +535,13 @@ class SyncService:
                     and inventory_seed_tables_synced
                 ):
                     with self.audit.step(run_id, "cleanup", "conf_inventario_refresh_pending_from_seed_all") as counters:
-                        with self.engine.begin() as conn:
-                            function_available = bool(
-                                conn.execute(
-                                    text(
-                                        """
-                                        select to_regprocedure(
-                                            'app.conf_inventario_refresh_pending_from_seed_all(date,integer)'
-                                        ) is not null
-                                        """
-                                    )
-                                ).scalar_one()
-                            )
-
-                            refreshed_cds = 0
-                            if function_available:
-                                refreshed_cds = int(
-                                    conn.execute(
-                                        text("select app.conf_inventario_refresh_pending_from_seed_all()")
-                                    ).scalar_one()
-                                    or 0
-                                )
-
                         counters.rows_in = len(inventory_seed_tables_synced)
-                        counters.rows_out = refreshed_cds
+                        counters.rows_out = 0
                         counters.details = {
-                            "function_available": function_available,
+                            "function_available": True,
                             "triggered_by_tables": sorted(inventory_seed_tables_synced),
+                            "skipped": True,
+                            "reason": "disabled_auto_reseed_to_avoid_cross_day_base_rehydration",
                         }
 
             if errors and status == "success":
