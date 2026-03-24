@@ -218,6 +218,7 @@ function parseErr(error: unknown): string {
     return "Backend com função de inventário em modo somente leitura. Execute as migrações mais recentes e sincronize novamente.";
   }
   if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia. Use 'Gerir Base' para montar e sincronize novamente.";
+  if (raw.includes("RELATORIO_INCOMPLETO")) return "A exportação retornou menos linhas do que o esperado. Tente novamente.";
   if (raw.includes("RELATORIO_MUITO_GRANDE")) return "Relatório acima do limite suportado para exportação. Reduza o período e tente novamente.";
   if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este Código e Dígito (CODDV).";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
@@ -2759,21 +2760,27 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const exportReport = useCallback(async () => {
     if (!canExport || cd == null) return;
-    const pageSize = 2000;
+    const total = await countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
+    setReportCount(total);
+    if (total > 50000) {
+      throw new Error(`RELATORIO_MUITO_GRANDE_${total}`);
+    }
+
+    const pageSize = 1000;
     const rowsReport: InventarioReportRow[] = [];
 
-    for (let offset = 0; offset < 50000; offset += pageSize) {
+    for (let offset = 0; offset < total; offset += pageSize) {
       const batch = await fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit: pageSize });
-      if (!batch.length) break;
+      if (!batch.length) {
+        throw new Error(`RELATORIO_INCOMPLETO: esperado=${total} carregado=${rowsReport.length}`);
+      }
       rowsReport.push(...batch);
-      if (batch.length < pageSize) break;
     }
 
-    if (rowsReport.length >= 50000) {
-      throw new Error("RELATORIO_MUITO_GRANDE_50000");
+    if (rowsReport.length !== total) {
+      throw new Error(`RELATORIO_INCOMPLETO: esperado=${total} carregado=${rowsReport.length}`);
     }
 
-    setReportCount(rowsReport.length);
     const XLSX = await import("xlsx");
     const pickFirstBarcode = (rows: InventarioReportRow[]): string | null => {
       for (const getter of [
