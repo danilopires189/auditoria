@@ -106,8 +106,8 @@ function formatDecimal(value: number, digits = 2): string {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
-function formatPercent(value: number): string {
-  return `${formatDecimal(value, 2)}%`;
+function formatPercent(value: number, digits = 2): string {
+  return `${formatDecimal(value, digits)}%`;
 }
 
 function buildCalendarDays(monthStart: string, monthEnd: string): string[] {
@@ -473,7 +473,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
         : " ";
 
     return [
-      { label: "Percentual Oficial %", value: formatPercent(summary.percentual_oficial) },
+      { label: "Percentual Oficial %", value: formatPercent(summary.percentual_oficial, 3) },
       { label: "Divergências Oficial", value: formatInteger(summary.divergencia_oficial), accent: "danger" },
       { label: "Fora da Política %", value: formatPercent(summary.percentual_fora_politica), accent: "warning" },
       { label: "Fora da Política", value: formatInteger(summary.fora_politica_total), accent: "warning" },
