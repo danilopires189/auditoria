@@ -3442,8 +3442,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             </label>
                           ) : null}
                           <div className="inventario-editor-actions">
-                            <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
                             <button className="btn btn-muted" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(true)}>Descartar</button>
+                            <button className="btn btn-primary" type="button" disabled={!canEditCount(active) || busy} onClick={() => void saveCount(false)}>{saveCountLabel}</button>
                           </div>
                         </>
                       )}
