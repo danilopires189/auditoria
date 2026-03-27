@@ -3675,7 +3675,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             disabled={adminBusy || cd == null}
                           />
                         </label>
-                        <label>
+                        <label className="inventario-admin-field inventario-admin-field-stock-type">
                           Tipo estoque *
                           <select
                             value={adminStockType}
@@ -3690,7 +3690,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         </label>
                       </div>
                       <div className="inventario-admin-grid inventario-admin-grid-recent">
-                        <label>
+                        <label className="inventario-admin-field inventario-admin-field-recent-days">
                           Ignorar auditados em at&eacute;
                           <input
                             type="number"
@@ -3701,7 +3701,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             disabled={adminBusy || cd == null}
                           />
                         </label>
-                        <p className="inventario-admin-zone-meta">0 = nao filtrar.</p>
+                        <p className="inventario-admin-zone-meta inventario-admin-zone-meta-compact">0 = nao filtrar.</p>
                       </div>
                       <label className="inventario-admin-check">
                         <input
@@ -3790,7 +3790,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       </select>
                     </label>
                     <div className="inventario-admin-grid inventario-admin-grid-recent">
-                      <label>
+                      <label className="inventario-admin-field inventario-admin-field-recent-days">
                         Ignorar auditados em at&eacute;
                         <input
                           type="number"
@@ -3801,7 +3801,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           disabled={adminBusy || cd == null}
                         />
                       </label>
-                      <p className="inventario-admin-zone-meta">0 = nao filtrar.</p>
+                      <p className="inventario-admin-zone-meta inventario-admin-zone-meta-compact">0 = nao filtrar.</p>
                     </div>
                     <label className="inventario-admin-check">
                       <input
