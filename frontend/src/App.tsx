@@ -302,8 +302,10 @@ function asErrorMessage(error: unknown): string {
   }
 
   let raw = "Erro inesperado.";
+  let abortLike = false;
   if (error instanceof Error) {
     raw = error.message;
+    abortLike = error.name === "AbortError";
   } else if (typeof error === "string") {
     raw = error;
   } else if (error && typeof error === "object") {
@@ -315,6 +317,8 @@ function asErrorMessage(error: unknown): string {
           ? candidate.error_description
           : null;
     const details = typeof candidate.details === "string" ? candidate.details : null;
+    const name = typeof candidate.name === "string" ? candidate.name : null;
+    abortLike = name === "AbortError";
     raw = [message, details].filter(Boolean).join(" - ") || "Erro inesperado.";
   }
 
@@ -333,6 +337,14 @@ function asErrorMessage(error: unknown): string {
   }
   if (raw.includes("SENHA_FRACA_MIN_8") || raw.includes("SENHA_DEVE_TER_LETRAS_E_NUMEROS")) {
     return PASSWORD_HINT;
+  }
+  if (
+    abortLike
+    || raw.includes("signal is aborted")
+    || raw.includes("The operation was aborted")
+    || raw.includes("AbortError")
+  ) {
+    return "A requisição foi interrompida antes da resposta do Supabase. Verifique conexão, URL/chave do projeto e tente novamente.";
   }
   if (raw.includes("Failed to fetch") || raw.includes("NetworkError") || raw.includes("Load failed")) {
     return "Sem conexão com o servidor. Verifique sua internet e tente novamente.";
