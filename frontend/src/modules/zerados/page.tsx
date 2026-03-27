@@ -42,13 +42,16 @@ import {
   applyInventarioEvent,
   clearInventarioAdminBase,
   countReportRows,
+  countInventarioErroEnderecoReportRows,
   fetchInventarioAdminZones,
   fetchCdOptions,
+  fetchInventarioErroEnderecoReportRows,
   fetchManifestBundle,
   fetchManifestMeta,
   previewInventarioAdminSeed,
   fetchReportRows,
-  fetchSyncPull
+  fetchSyncPull,
+  logInventarioErroEndereco
 } from "./sync";
 import type {
   CdOption,
@@ -59,6 +62,7 @@ import type {
   InventarioAdminZoneRow,
   InventarioAddressBucket,
   InventarioCountRow,
+  InventarioErroEnderecoReportRow,
   InventarioEventType,
   InventarioManifestItemRow,
   InventarioManifestMeta,
@@ -212,6 +216,9 @@ function parseErr(error: unknown): string {
   }
   if (raw.includes("rpc_conf_inventario_report_rows") && raw.includes("p_offset")) {
     return "Backend desatualizado para paginação do relatório. Execute as migrações mais recentes e tente novamente.";
+  }
+  if (raw.includes("rpc_conf_inventario_erro_end_rows") || raw.includes("rpc_conf_inventario_erro_end_count")) {
+    return "Backend desatualizado para relatório de erro de endereço. Execute as migrações mais recentes e tente novamente.";
   }
   if (raw.includes("rpc_conf_inventario_admin_apply_manual_coddv") || raw.includes("Could not find the function public.rpc_conf_inventario_admin_apply_manual_coddv")) {
     return "Backend desatualizado para Código e Dígito (CODDV) manual. Execute as migrações mais recentes e tente novamente.";
@@ -804,6 +811,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   });
   const barcodeLookupCacheRef = useRef<Map<string, DbBarrasCacheRow | false>>(new Map());
   const barcodeLookupInFlightRef = useRef<Map<string, Promise<DbBarrasCacheRow | null>>>(new Map());
+  const erroEnderecoLogCacheRef = useRef<Map<string, number>>(new Map());
   const autoSyncDebounceTimerRef = useRef<number | null>(null);
   const backgroundPullTimerRef = useRef<number | null>(null);
   const backgroundPullRunningRef = useRef(false);
@@ -2289,14 +2297,65 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     return lookupPromise;
   }, [isOnline, preferOffline]);
 
+  const logErroEnderecoMismatch = useCallback(async (params: {
+    scannedBarcode: string;
+    scannedProduct: DbBarrasCacheRow;
+  }): Promise<void> => {
+    if (!active || cd == null) return;
+
+    const qtyRaw = tab === "conciliation" ? finalQtd : qtd;
+    const parsedQty = Number.parseInt(qtyRaw, 10);
+    const qtdInformada = Number.isFinite(parsedQty) && parsedQty >= 0 ? parsedQty : null;
+    const contexto = tab === "conciliation"
+      ? "conciliacao"
+      : tab === "s2"
+        ? "segunda_contagem"
+        : "primeira_contagem";
+    const dedupeKey = [
+      CYCLE_DATE,
+      cd,
+      contexto,
+      active.key,
+      params.scannedProduct.coddv,
+      params.scannedBarcode
+    ].join("|");
+    const nowTs = Date.now();
+    const lastLoggedAt = erroEnderecoLogCacheRef.current.get(dedupeKey) ?? 0;
+    if (nowTs - lastLoggedAt < 60_000) return;
+    erroEnderecoLogCacheRef.current.set(dedupeKey, nowTs);
+
+    try {
+      await logInventarioErroEndereco({
+        cycle_date: CYCLE_DATE,
+        cd,
+        contexto,
+        zona_auditada: active.zona,
+        endereco_auditado: active.endereco,
+        coddv_esperado: active.coddv,
+        descricao_esperada: active.descricao,
+        estoque_esperado: active.estoque,
+        qtd_informada: qtdInformada,
+        barras_bipado: params.scannedBarcode
+      });
+    } catch {
+      // O log é auxiliar e não deve bloquear a auditoria nem a validação.
+    }
+  }, [active, cd, finalQtd, qtd, tab]);
+
   const validateBarras = useCallback(async (coddv: number, value: string): Promise<string> => {
     const normalized = normalizeBarcode(value);
     if (!normalized) throw new Error("Informe o código de barras.");
     const found = await resolveBarcodeLookup(normalized);
     if (!found) throw new Error("Código de barras não encontrado na base.");
-    if (found.coddv !== coddv) throw new Error("Código de barras inválido para este Código e Dígito (CODDV).");
+    if (found.coddv !== coddv) {
+      void logErroEnderecoMismatch({
+        scannedBarcode: normalized,
+        scannedProduct: found
+      });
+      throw new Error("Código de barras inválido para este Código e Dígito (CODDV).");
+    }
     return found.barras;
-  }, [resolveBarcodeLookup]);
+  }, [logErroEnderecoMismatch, resolveBarcodeLookup]);
 
   const autoValidateStageBarras = useCallback(async (value: string): Promise<boolean> => {
     if (!active || !(tab === "s1" || tab === "s2")) return false;
@@ -2853,6 +2912,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const exportReport = useCallback(async () => {
     if (!canExport || cd == null) return;
     const total = await countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
+    const totalErroEndereco = await countInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
     setReportCount(total);
     if (total > 50000) {
       throw new Error(`RELATORIO_MUITO_GRANDE_${total}`);
@@ -2860,6 +2920,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
     const pageSize = 1000;
     const rowsReport: InventarioReportRow[] = [];
+    const erroEnderecoRows: InventarioErroEnderecoReportRow[] = [];
 
     for (let offset = 0; offset < total; offset += pageSize) {
       const batch = await fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit: pageSize });
@@ -2871,6 +2932,18 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
     if (rowsReport.length !== total) {
       throw new Error(`RELATORIO_INCOMPLETO: esperado=${total} carregado=${rowsReport.length}`);
+    }
+
+    for (let offset = 0; offset < totalErroEndereco; offset += pageSize) {
+      const batch = await fetchInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit: pageSize });
+      if (!batch.length) {
+        throw new Error(`RELATORIO_ERRO_END_INCOMPLETO: esperado=${totalErroEndereco} carregado=${erroEnderecoRows.length}`);
+      }
+      erroEnderecoRows.push(...batch);
+    }
+
+    if (erroEnderecoRows.length !== totalErroEndereco) {
+      throw new Error(`RELATORIO_ERRO_END_INCOMPLETO: esperado=${totalErroEndereco} carregado=${erroEnderecoRows.length}`);
     }
 
     const XLSX = await import("xlsx");
@@ -2944,10 +3017,39 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         StatusFinal: statusFinal
       };
     });
+    const erroEnderecoSheet = (erroEnderecoRows.length ? erroEnderecoRows : []).map((row) => ({
+      Data: formatDate(row.cycle_date),
+      "Data/Hora": formatDateTimeBrasilia(row.created_at),
+      CD: row.cd,
+      Contexto: row.contexto,
+      Usuario: `${row.usuario_nome ?? "-"} (${row.usuario_mat ?? "-"})`,
+      ZonaAuditada: row.zona_auditada ?? "-",
+      EnderecoAuditado: row.endereco_auditado,
+      CODDVEsperado: row.coddv_esperado,
+      DescricaoEsperada: row.descricao_esperada ?? "-",
+      EstoqueEsperado: row.estoque_esperado ?? "-",
+      QtdInformada: row.qtd_informada ?? "-",
+      BarrasBipado: row.barras_bipado,
+      CODDVBipado: row.coddv_bipado,
+      DescricaoBipada: row.descricao_bipada ?? "-",
+      ZonasCorretasSEP: row.zonas_sep_corretas ?? "-",
+      EnderecosCorretosSEP: row.enderecos_sep_corretos ?? "-",
+      EnderecosBaseEnd: row.enderecos_base_end ?? "-",
+      TiposBaseEnd: row.tipos_base_end ?? "-"
+    }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail), "Detalhe");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Resumo por Zona");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidated), "Consolidado");
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        erroEnderecoSheet.length
+          ? erroEnderecoSheet
+          : [{ Mensagem: "Nenhum erro de endereço encontrado no período." }]
+      ),
+      "Erros Endereço"
+    );
     XLSX.writeFile(wb, `inventario-zerados-${dtIni}-${dtFim}-cd${String(cd).padStart(2, "0")}.xlsx`, { compression: true });
   }, [canExport, cd, dtFim, dtIni]);
 
