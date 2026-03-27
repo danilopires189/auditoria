@@ -5827,6 +5827,7 @@ small {
   padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
   display: grid;
   gap: 12px;
+  align-content: start;
   overflow: auto;
   min-height: 0;
   background: #fff;
@@ -6469,19 +6470,15 @@ small {
 
   .inventario-admin-zone-popup,
   .inventario-admin-confirm-popup {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    width: 100dvw;
-    height: 100vh;
-    height: 100dvh;
-    max-height: none;
-    border-radius: 0;
-    border-left: 0;
-    border-right: 0;
-    border-bottom: 0;
-    display: flex;
-    flex-direction: column;
+    width: min(760px, calc(100vw - 24px));
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px 16px 0 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .inventario-admin-confirm-popup {
+    width: min(560px, calc(100vw - 24px));
   }
 
   .inventario-admin-popup .inventario-popup-head,
@@ -6497,7 +6494,6 @@ small {
   .inventario-admin-popup .inventario-popup-body,
   .inventario-admin-zone-popup .inventario-popup-body,
   .inventario-admin-confirm-popup .inventario-popup-body {
-    flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
