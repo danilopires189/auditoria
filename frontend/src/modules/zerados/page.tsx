@@ -1316,13 +1316,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setMsg(`Base por zona aplicada. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
       await syncNow(true);
       await loadAdminZones();
-      closeAllAdminPopups();
     } catch (error) {
       setErr(parseErr(error));
     } finally {
       setAdminBusy(false);
     }
-  }, [buildAdminSeedPayload, canManageBase, cd, closeAllAdminPopups, loadAdminZones, syncNow]);
+  }, [buildAdminSeedPayload, canManageBase, cd, loadAdminZones, syncNow]);
 
   const runAdminApplyZona = useCallback((mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
@@ -1369,13 +1368,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setMsg(`Código e Dígito (CODDV) manual aplicado. Itens no escopo: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
       await syncNow(true);
       await loadAdminZones();
-      closeAllAdminPopups();
     } catch (error) {
       setErr(parseErr(error));
     } finally {
       setAdminBusy(false);
     }
-  }, [adminIncluirPul, adminManualCoddvCsv, adminRecentAuditDaysValue, adminStockType, adminStockTypeValid, canManageBase, cd, closeAllAdminPopups, loadAdminZones, syncNow]);
+  }, [adminIncluirPul, adminManualCoddvCsv, adminRecentAuditDaysValue, adminStockType, adminStockTypeValid, canManageBase, cd, loadAdminZones, syncNow]);
 
   const runAdminApplyCoddv = useCallback(() => {
     if (!canManageBase || cd == null) return;
