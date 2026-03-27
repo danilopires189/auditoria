@@ -3689,18 +3689,25 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           </select>
                         </label>
                       </div>
-                      <div className="inventario-admin-grid inventario-admin-grid-recent">
-                        <label className="inventario-admin-field inventario-admin-field-recent-days">
-                          Ignorar auditados em at&eacute;
+                      <div className="inventario-admin-recent-control">
+                        <label className="inventario-admin-recent-title" htmlFor="inventario-admin-recent-days-zona">
+                          Ignorar endere&ccedil;os auditados dos &uacute;ltimos:
+                        </label>
+                        <div className="inventario-admin-recent-inline">
                           <input
+                            id="inventario-admin-recent-days-zona"
+                            className="inventario-admin-recent-input"
                             type="number"
                             min={0}
                             inputMode="numeric"
                             value={adminIgnoreRecentAuditedDays}
                             onChange={(event) => setAdminIgnoreRecentAuditedDays(event.target.value)}
                             disabled={adminBusy || cd == null}
+                            placeholder="0"
+                            aria-label="Quantidade de dias para ignorar enderecos auditados"
                           />
-                        </label>
+                          <span className="inventario-admin-recent-unit">dias</span>
+                        </div>
                         <p className="inventario-admin-zone-meta inventario-admin-zone-meta-compact">0 = nao filtrar.</p>
                       </div>
                       <label className="inventario-admin-check">
@@ -3789,18 +3796,25 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         <option value="atual">Atual</option>
                       </select>
                     </label>
-                    <div className="inventario-admin-grid inventario-admin-grid-recent">
-                      <label className="inventario-admin-field inventario-admin-field-recent-days">
-                        Ignorar auditados em at&eacute;
+                    <div className="inventario-admin-recent-control">
+                      <label className="inventario-admin-recent-title" htmlFor="inventario-admin-recent-days-coddv">
+                        Ignorar endere&ccedil;os auditados dos &uacute;ltimos:
+                      </label>
+                      <div className="inventario-admin-recent-inline">
                         <input
+                          id="inventario-admin-recent-days-coddv"
+                          className="inventario-admin-recent-input"
                           type="number"
                           min={0}
                           inputMode="numeric"
                           value={adminIgnoreRecentAuditedDays}
                           onChange={(event) => setAdminIgnoreRecentAuditedDays(event.target.value)}
                           disabled={adminBusy || cd == null}
+                          placeholder="0"
+                          aria-label="Quantidade de dias para ignorar enderecos auditados"
                         />
-                      </label>
+                        <span className="inventario-admin-recent-unit">dias</span>
+                      </div>
                       <p className="inventario-admin-zone-meta inventario-admin-zone-meta-compact">0 = nao filtrar.</p>
                     </div>
                     <label className="inventario-admin-check">

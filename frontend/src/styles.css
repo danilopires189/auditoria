@@ -6067,11 +6067,6 @@ small {
   align-items: end;
 }
 
-.inventario-admin-grid-recent {
-  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
-  align-items: end;
-}
-
 .inventario-admin-field {
   min-width: 0;
 }
@@ -6080,9 +6075,41 @@ small {
   max-width: 220px;
 }
 
+.inventario-admin-recent-control {
+  display: grid;
+  gap: 6px;
+}
+
+.inventario-admin-recent-title {
+  display: grid;
+  gap: 4px;
+  color: #203a63;
+  font-weight: 700;
+}
+
+.inventario-admin-recent-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.inventario-admin-recent-input {
+  width: 96px;
+  text-align: center;
+}
+
+.inventario-admin-recent-unit {
+  color: #3f557c;
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .inventario-admin-zone-meta-compact {
   margin: 0;
-  align-self: end;
+  align-self: start;
 }
 
 .inventario-admin-check {
@@ -6319,49 +6346,51 @@ small {
   }
 
   .inventario-admin-grid-stock {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 0.78fr) minmax(0, 0.92fr);
     gap: 8px;
   }
 
-  .inventario-admin-grid-recent {
-    gap: 8px 10px;
-    grid-template-columns: minmax(0, 148px) minmax(0, 1fr);
-  }
-
   .inventario-admin-grid-stock label {
-    font-size: 0.84rem;
-    gap: 6px;
-  }
-
-  .inventario-admin-grid-recent label {
-    font-size: 0.84rem;
+    font-size: 0.78rem;
     gap: 6px;
   }
 
   .inventario-admin-grid-stock input:not([type="checkbox"]):not([type="radio"]),
   .inventario-admin-grid-stock select {
-    min-height: 40px;
-    padding: 8px 10px;
+    min-height: 38px;
+    padding: 7px 9px;
     font-size: 16px;
   }
 
-  .inventario-admin-grid-recent input:not([type="checkbox"]):not([type="radio"]) {
-    min-height: 40px;
-    padding: 8px 10px;
+  .inventario-admin-recent-input {
+    min-height: 38px;
+    width: 88px;
+    padding: 7px 8px;
     font-size: 16px;
   }
 
   .inventario-admin-field-stock-type {
-    grid-column: 1 / -1;
-  }
-
-  .inventario-admin-field-recent-days {
-    max-width: 148px;
+    min-width: 0;
   }
 
   .inventario-admin-zone-meta-compact {
-    align-self: center;
     font-size: 0.8rem;
+  }
+
+  .inventario-admin-recent-control {
+    gap: 5px;
+  }
+
+  .inventario-admin-recent-title {
+    font-size: 0.84rem;
+  }
+
+  .inventario-admin-recent-inline {
+    gap: 8px;
+  }
+
+  .inventario-admin-recent-unit {
+    font-size: 0.84rem;
   }
 
   .inventario-popup-body .inventario-popup-input-action-wrap input:not([type="checkbox"]):not([type="radio"]) {
