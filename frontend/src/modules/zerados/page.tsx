@@ -1247,6 +1247,28 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
   }, [loadAdminZones]);
 
+  const reloadManifestAfterAdminApply = useCallback(async () => {
+    if (cd == null) return;
+
+    const bundle = await fetchManifestBundle(cd);
+    await saveManifestSnapshot({ user_id: profile.user_id, cd, meta: bundle.meta, items: bundle.items });
+    setManifestMeta(bundle.meta);
+    setManifestItems(bundle.items);
+    setTab("s1");
+    setStatusFilter("pendente");
+    setReviewFilter("pendente");
+    setZone(null);
+    setSearch("");
+    setSelectedAddress(null);
+    setSelectedItem(null);
+    setMobileStep("stage");
+
+    await pull();
+    const barrasMeta = await getDbBarrasMeta();
+    setDbBarrasCount(barrasMeta.row_count);
+    setDbBarrasLastSyncAt(barrasMeta.last_sync_at);
+  }, [cd, profile.user_id, pull]);
+
   const adminStockTypeValid = isInventarioAdminStockType(adminStockType);
   const adminStockTypeLabel = adminStockTypeValid ? formatInventarioAdminStockTypeLabel(adminStockType) : null;
   const adminRecentAuditDaysValue = parseAdminStock(adminIgnoreRecentAuditedDays, 0);
@@ -1314,14 +1336,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setAdminSummary(summary);
       setAdminSuccessMsg("Dados inseridos com sucesso no fluxo por zona.");
       setMsg(`Base por zona aplicada. Itens afetados: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
-      await syncNow(true);
+      await reloadManifestAfterAdminApply();
       await loadAdminZones();
     } catch (error) {
       setErr(parseErr(error));
     } finally {
       setAdminBusy(false);
     }
-  }, [buildAdminSeedPayload, canManageBase, cd, loadAdminZones, syncNow]);
+  }, [buildAdminSeedPayload, canManageBase, cd, loadAdminZones, reloadManifestAfterAdminApply]);
 
   const runAdminApplyZona = useCallback((mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
@@ -1366,14 +1388,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       setAdminSummary(summary);
       setAdminSuccessMsg("Dados inseridos com sucesso no fluxo por Código e Dígito.");
       setMsg(`Código e Dígito (CODDV) manual aplicado. Itens no escopo: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
-      await syncNow(true);
+      await reloadManifestAfterAdminApply();
       await loadAdminZones();
     } catch (error) {
       setErr(parseErr(error));
     } finally {
       setAdminBusy(false);
     }
-  }, [adminIncluirPul, adminManualCoddvCsv, adminRecentAuditDaysValue, adminStockType, adminStockTypeValid, canManageBase, cd, loadAdminZones, syncNow]);
+  }, [adminIncluirPul, adminManualCoddvCsv, adminRecentAuditDaysValue, adminStockType, adminStockTypeValid, canManageBase, cd, loadAdminZones, reloadManifestAfterAdminApply]);
 
   const runAdminApplyCoddv = useCallback(() => {
     if (!canManageBase || cd == null) return;
