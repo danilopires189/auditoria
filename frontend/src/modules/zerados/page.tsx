@@ -3884,6 +3884,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   <div className="inventario-admin-preview">
                     <h4>{adminPreviewScope === "coddv" ? "Prévia da inserção por Código e Dígito (CODDV)" : "Prévia da inserção por zona"}</h4>
                     <p className="inventario-editor-text">{`Total geral: ${adminPreviewTotal} itens`}</p>
+                    {adminPreviewScope === "zona" ? (
+                      <p className="inventario-admin-zone-meta">
+                        A prévia considera os filtros aplicados: faixa de estoque, tipo de estoque, auditoria recente e Pulmão.
+                      </p>
+                    ) : null}
                     <div className="inventario-admin-preview-list">
                       {adminPreviewRows.map((row) => (
                         <p key={row.zona}>{`${row.zona}: ${row.itens} itens`}</p>
@@ -3968,6 +3973,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                 <p className="inventario-admin-zone-meta">
                   {formatCountLabel(adminZoneDraft.length, "zona marcada", "zonas marcadas")}
                 </p>
+                <p className="inventario-admin-zone-meta">
+                  Os totais abaixo mostram o volume bruto de endereços SEP por zona, antes dos filtros da prévia.
+                </p>
 
                 <div className="inventario-admin-zone-list">
                   {adminZonesLoading ? (
@@ -3997,7 +4005,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         />
                         <span className="inventario-admin-zone-main">
                           <span>{row.zona}</span>
-                          <small>{`${row.itens} Endereços de Separação`}</small>
+                          <small>{`${row.itens} endereços SEP totais`}</small>
                         </span>
                       </label>
                     );
