@@ -55,6 +55,7 @@ import type {
   InventarioAdminApplyMode,
   InventarioAdminPreviewZoneRow,
   InventarioAdminSeedSummary,
+  InventarioAdminStockType,
   InventarioAdminZoneRow,
   InventarioAddressBucket,
   InventarioCountRow,
@@ -83,6 +84,7 @@ type ScannerTarget = "barras" | "final_barras";
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 type InventarioAdminSeedScope = "zona" | "coddv";
 type InventarioAdminManageMode = "zona" | "coddv";
+type InventarioAdminStockTypeValue = InventarioAdminStockType | "";
 type InventarioAdminConfirmAction =
   | { kind: "apply_zona"; mode: InventarioAdminApplyMode }
   | { kind: "apply_coddv" }
@@ -233,12 +235,22 @@ function parseErr(error: unknown): string {
   if (raw.includes("ETAPA1_BLOQUEADA_SEGUNDA_EXISTE")) return "A 1ª verificação não pode ser alterada após existir 2ª verificação.";
   if (raw.includes("ITEM_JA_RESOLVIDO")) return "Endereço já resolvido na conciliação.";
   if (raw.includes("ESTOQUE_FAIXA_INVALIDA")) return "Faixa de estoque inválida. O final deve ser maior ou igual ao inicial.";
+  if (raw.includes("TIPO_ESTOQUE_OBRIGATORIO")) return "Selecione o tipo de estoque: Disponível ou Atual.";
+  if (raw.includes("AUDITORIA_RECORRENTE_DIAS_INVALIDO")) return "Informe um prazo em dias maior que zero para ignorar endereços auditados.";
   if (raw.includes("ZONAS_OU_CODDV_OBRIGATORIO")) return "Selecione ao menos uma zona ou informe Código e Dígito (CODDV) manual.";
   if (raw.includes("ZONAS_OBRIGATORIAS")) return "Selecione pelo menos uma zona.";
   if (raw.includes("CODDV_MANUAL_OBRIGATORIO")) return "Informe ao menos um Código e Dígito (CODDV) manual para essa ação.";
   if (raw.includes("MODE_INVALIDO")) return "Modo de aplicação inválido.";
   if (raw.includes("SCOPE_INVALIDO")) return "Escopo de limpeza inválido.";
   return raw;
+}
+
+function isInventarioAdminStockType(value: string): value is InventarioAdminStockType {
+  return value === "disponivel" || value === "atual";
+}
+
+function formatInventarioAdminStockTypeLabel(value: InventarioAdminStockType): string {
+  return value === "atual" ? "Atual" : "Disponível";
 }
 
 function extractDiscardConflictCode(rawValue: string): string | null {
@@ -737,6 +749,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [adminSelectedZones, setAdminSelectedZones] = useState<string[]>([]);
   const [adminEstoqueIni, setAdminEstoqueIni] = useState("0");
   const [adminEstoqueFim, setAdminEstoqueFim] = useState("0");
+  const [adminStockType, setAdminStockType] = useState<InventarioAdminStockTypeValue>("");
+  const [adminIgnoreRecentAuditedDays, setAdminIgnoreRecentAuditedDays] = useState("0");
   const [adminIncluirPul, setAdminIncluirPul] = useState(false);
   const [adminManualCoddvCsv, setAdminManualCoddvCsv] = useState("");
   const [adminZoneSearch, setAdminZoneSearch] = useState("");
@@ -1233,19 +1247,32 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
   }, [loadAdminZones]);
 
+  const adminStockTypeValid = isInventarioAdminStockType(adminStockType);
+  const adminStockTypeLabel = adminStockTypeValid ? formatInventarioAdminStockTypeLabel(adminStockType) : null;
+  const adminRecentAuditDaysValue = parseAdminStock(adminIgnoreRecentAuditedDays, 0);
+  const ensureAdminStockTypeSelected = useCallback(() => {
+    if (adminStockTypeValid) return true;
+    setErr("Selecione o tipo de estoque: Disponível ou Atual.");
+    return false;
+  }, [adminStockTypeValid]);
+
   const buildAdminSeedPayload = useCallback((scope: InventarioAdminSeedScope) => {
     const isZona = scope === "zona";
     return {
       zonas: isZona ? adminSelectedZones : [],
       estoque_ini: parseAdminStock(adminEstoqueIni, 0),
       estoque_fim: parseAdminStock(adminEstoqueFim, 0),
+      estoque_tipo: adminStockTypeValid ? adminStockType : "disponivel",
+      ignorar_endereco_auditado: adminRecentAuditDaysValue > 0,
+      auditoria_recente_dias: adminRecentAuditDaysValue,
       incluir_pul: adminIncluirPul,
       manual_coddv_csv: isZona ? "" : adminManualCoddvCsv
     };
-  }, [adminEstoqueFim, adminEstoqueIni, adminIncluirPul, adminManualCoddvCsv, adminSelectedZones, parseAdminStock]);
+  }, [adminEstoqueFim, adminEstoqueIni, adminIncluirPul, adminManualCoddvCsv, adminRecentAuditDaysValue, adminSelectedZones, adminStockType, adminStockTypeValid, parseAdminStock]);
 
   const runAdminPreview = useCallback(async (scope: InventarioAdminSeedScope) => {
     if (!canManageBase || cd == null) return;
+    if (!ensureAdminStockTypeSelected()) return;
     if (scope === "zona" && adminSelectedZones.length === 0) {
       setErr("Selecione ao menos uma zona para gerar a prévia por zona.");
       return;
@@ -1271,7 +1298,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     } finally {
       setAdminBusy(false);
     }
-  }, [adminManualCoddvCsv, adminSelectedZones.length, buildAdminSeedPayload, canManageBase, cd]);
+  }, [adminManualCoddvCsv, adminSelectedZones.length, buildAdminSeedPayload, canManageBase, cd, ensureAdminStockTypeSelected]);
 
   const executeAdminApplyZona = useCallback(async (mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
@@ -1299,6 +1326,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const runAdminApplyZona = useCallback((mode: InventarioAdminApplyMode) => {
     if (!canManageBase || cd == null) return;
+    if (!ensureAdminStockTypeSelected()) return;
     if (adminSelectedZones.length === 0) {
       setErr("Nenhuma zona selecionada. Abra 'Escolher zonas' e salve a seleção.");
       return;
@@ -1312,13 +1340,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       title: "Confirmar inserção por zona",
       lines: [
         `Modo: ${mode === "replace_cd" ? "Substituir base do CD" : "Recarregar zonas selecionadas"}`,
+        `Tipo de estoque: ${adminStockTypeLabel ?? "Não informado"}`,
+        `Ignorar auditados recentes: ${adminRecentAuditDaysValue > 0 ? `${adminRecentAuditDaysValue} dia(s)` : "Não"}`,
         `Zonas na prévia: ${adminPreviewRows.length}`,
         `Total geral: ${adminPreviewTotal}`
       ],
       confirm_label: "Confirmar inserção",
       action: { kind: "apply_zona", mode }
     });
-  }, [adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, adminSelectedZones.length, canManageBase, cd]);
+  }, [adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, adminRecentAuditDaysValue, adminSelectedZones.length, adminStockTypeLabel, canManageBase, cd, ensureAdminStockTypeSelected]);
 
   const executeAdminApplyCoddv = useCallback(async () => {
     if (!canManageBase || cd == null) return;
@@ -1329,6 +1359,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       const summary = await applyInventarioAdminManualCoddv({
         cd,
         manual_coddv_csv: adminManualCoddvCsv,
+        estoque_tipo: adminStockTypeValid ? adminStockType : "disponivel",
+        ignorar_endereco_auditado: adminRecentAuditDaysValue > 0,
+        auditoria_recente_dias: adminRecentAuditDaysValue,
         incluir_pul: adminIncluirPul
       });
       setAdminSummary(summary);
@@ -1342,10 +1375,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     } finally {
       setAdminBusy(false);
     }
-  }, [adminIncluirPul, adminManualCoddvCsv, canManageBase, cd, closeAllAdminPopups, loadAdminZones, syncNow]);
+  }, [adminIncluirPul, adminManualCoddvCsv, adminRecentAuditDaysValue, adminStockType, adminStockTypeValid, canManageBase, cd, closeAllAdminPopups, loadAdminZones, syncNow]);
 
   const runAdminApplyCoddv = useCallback(() => {
     if (!canManageBase || cd == null) return;
+    if (!ensureAdminStockTypeSelected()) return;
     if (!adminManualCoddvCsv.trim()) {
       setErr("Informe ao menos um Código e Dígito (CODDV) manual antes de confirmar.");
       return;
@@ -1358,13 +1392,15 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setAdminConfirm({
       title: "Confirmar inserção por Código e Dígito (CODDV)",
       lines: [
+        `Tipo de estoque: ${adminStockTypeLabel ?? "Não informado"}`,
+        `Ignorar auditados recentes: ${adminRecentAuditDaysValue > 0 ? `${adminRecentAuditDaysValue} dia(s)` : "Não"}`,
         `Zonas na prévia: ${adminPreviewRows.length}`,
         `Total geral: ${adminPreviewTotal}`
       ],
       confirm_label: "Confirmar inserção",
       action: { kind: "apply_coddv" }
     });
-  }, [adminManualCoddvCsv, adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, canManageBase, cd]);
+  }, [adminManualCoddvCsv, adminPreviewRows.length, adminPreviewScope, adminPreviewTotal, adminRecentAuditDaysValue, adminStockTypeLabel, canManageBase, cd, ensureAdminStockTypeSelected]);
 
   const executeAdminClearAll = useCallback(async () => {
     if (!canManageBase || cd == null) return;
@@ -3616,9 +3652,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   <>
                     <div className="inventario-admin-section">
                       <h4>Selecao por zona e faixa de estoque</h4>
-                      <div className="inventario-admin-grid">
+                      <div className="inventario-admin-grid inventario-admin-grid-stock">
                         <label>
-                          Estoque inicial
+                          Est. Inicial
                           <input
                             type="number"
                             min={0}
@@ -3629,7 +3665,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                           />
                         </label>
                         <label>
-                          Estoque final
+                          Est. Final
                           <input
                             type="number"
                             min={0}
@@ -3639,6 +3675,33 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                             disabled={adminBusy || cd == null}
                           />
                         </label>
+                        <label>
+                          Tipo estoque *
+                          <select
+                            value={adminStockType}
+                            onChange={(event) => setAdminStockType(event.target.value as InventarioAdminStockTypeValue)}
+                            disabled={adminBusy || cd == null}
+                            required
+                          >
+                            <option value="">Selecione</option>
+                            <option value="disponivel">Disponível</option>
+                            <option value="atual">Atual</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="inventario-admin-grid inventario-admin-grid-recent">
+                        <label>
+                          Ignorar auditados em at&eacute;
+                          <input
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            value={adminIgnoreRecentAuditedDays}
+                            onChange={(event) => setAdminIgnoreRecentAuditedDays(event.target.value)}
+                            disabled={adminBusy || cd == null}
+                          />
+                        </label>
+                        <p className="inventario-admin-zone-meta">0 = nao filtrar.</p>
                       </div>
                       <label className="inventario-admin-check">
                         <input
@@ -3682,7 +3745,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       <button
                         className="btn btn-muted"
                         type="button"
-                        disabled={adminBusy || cd == null}
+                        disabled={adminBusy || cd == null || !adminStockTypeValid}
                         onClick={() => void runAdminPreview("zona")}
                       >
                         {adminBusy ? "Processando..." : "Prévia  de enderços a auditar"}
@@ -3690,7 +3753,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       <button
                         className="btn btn-primary"
                         type="button"
-                        disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
+                        disabled={adminBusy || cd == null || !adminStockTypeValid || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
                         onClick={() => void runAdminApplyZona("replace_cd")}
                       >
                         Adicionar (substituir base do CD)
@@ -3698,7 +3761,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       <button
                         className="btn btn-muted"
                         type="button"
-                        disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
+                        disabled={adminBusy || cd == null || !adminStockTypeValid || adminPreviewRows.length === 0 || adminPreviewScope !== "zona"}
                         onClick={() => void runAdminApplyZona("replace_zones")}
                       >
                         Recarregar zonas selecionadas
@@ -3713,6 +3776,33 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     <p className="inventario-editor-text">
                       Informe um ou vários Códigos e Dígitos (CODDV) para serem incluídos na base de endereços a auditar.
                     </p>
+                    <label>
+                      Tipo de estoque *
+                      <select
+                        value={adminStockType}
+                        onChange={(event) => setAdminStockType(event.target.value as InventarioAdminStockTypeValue)}
+                        disabled={adminBusy || cd == null}
+                        required
+                      >
+                        <option value="">Selecione</option>
+                        <option value="disponivel">Disponível</option>
+                        <option value="atual">Atual</option>
+                      </select>
+                    </label>
+                    <div className="inventario-admin-grid inventario-admin-grid-recent">
+                      <label>
+                        Ignorar auditados em at&eacute;
+                        <input
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          value={adminIgnoreRecentAuditedDays}
+                          onChange={(event) => setAdminIgnoreRecentAuditedDays(event.target.value)}
+                          disabled={adminBusy || cd == null}
+                        />
+                      </label>
+                      <p className="inventario-admin-zone-meta">0 = nao filtrar.</p>
+                    </div>
                     <label className="inventario-admin-check">
                       <input
                         type="checkbox"
@@ -3736,7 +3826,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       <button
                         className="btn btn-muted"
                         type="button"
-                        disabled={adminBusy || cd == null}
+                        disabled={adminBusy || cd == null || !adminStockTypeValid}
                         onClick={() => void runAdminPreview("coddv")}
                       >
                         {adminBusy ? "Processando..." : "Gerar prévia"}
@@ -3744,7 +3834,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                       <button
                         className="btn btn-primary"
                         type="button"
-                        disabled={adminBusy || cd == null || adminPreviewRows.length === 0 || adminPreviewScope !== "coddv"}
+                        disabled={adminBusy || cd == null || !adminStockTypeValid || adminPreviewRows.length === 0 || adminPreviewScope !== "coddv"}
                         onClick={() => void runAdminApplyCoddv()}
                       >
                         Adicionar a base

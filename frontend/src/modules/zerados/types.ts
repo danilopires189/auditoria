@@ -208,6 +208,7 @@ export interface InventarioReportRow {
 
 export type InventarioAdminApplyMode = "replace_cd" | "replace_zones";
 export type InventarioAdminClearScope = "all" | "zones";
+export type InventarioAdminStockType = "disponivel" | "atual";
 
 export interface InventarioAdminZoneRow {
   zona: string;
@@ -224,6 +225,9 @@ export interface InventarioAdminSeedPayload {
   zonas: string[];
   estoque_ini: number;
   estoque_fim: number;
+  estoque_tipo: InventarioAdminStockType;
+  ignorar_endereco_auditado: boolean;
+  auditoria_recente_dias: number;
   incluir_pul: boolean;
   manual_coddv_csv: string;
   mode: InventarioAdminApplyMode;

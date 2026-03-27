@@ -6062,6 +6062,16 @@ small {
   gap: 10px;
 }
 
+.inventario-admin-grid-stock {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+}
+
+.inventario-admin-grid-recent {
+  grid-template-columns: minmax(0, 1.25fr) minmax(120px, 0.75fr);
+  align-items: end;
+}
+
 .inventario-admin-check {
   display: flex;
   gap: 8px;
@@ -6293,6 +6303,38 @@ small {
 
   .inventario-popup-body textarea {
     min-height: 96px;
+  }
+
+  .inventario-admin-grid-stock {
+    gap: 8px;
+  }
+
+  .inventario-admin-grid-recent {
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) 116px;
+  }
+
+  .inventario-admin-grid-stock label {
+    font-size: 0.84rem;
+    gap: 6px;
+  }
+
+  .inventario-admin-grid-recent label {
+    font-size: 0.84rem;
+    gap: 6px;
+  }
+
+  .inventario-admin-grid-stock input:not([type="checkbox"]):not([type="radio"]),
+  .inventario-admin-grid-stock select {
+    min-height: 44px;
+    padding: 10px 11px;
+    font-size: 0.95rem;
+  }
+
+  .inventario-admin-grid-recent input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+    padding: 10px 11px;
+    font-size: 0.95rem;
   }
 
   .inventario-popup-body .inventario-popup-input-action-wrap input:not([type="checkbox"]):not([type="radio"]) {
