@@ -3,6 +3,7 @@ import type {
   CdOption,
   InventarioAdminApplyMode,
   InventarioAdminSeedSummary,
+  InventarioAdminStockType,
   InventarioAdminZoneRow,
   InventarioAdminPreviewZoneRow,
   InventarioCountRow,
@@ -528,6 +529,9 @@ export async function previewInventarioAdminSeed(params: {
   zonas: string[];
   estoque_ini: number;
   estoque_fim: number;
+  estoque_tipo: InventarioAdminStockType;
+  ignorar_endereco_auditado: boolean;
+  auditoria_recente_dias: number;
   incluir_pul: boolean;
   manual_coddv_csv: string;
 }): Promise<InventarioAdminPreviewZoneRow[]> {
@@ -537,6 +541,9 @@ export async function previewInventarioAdminSeed(params: {
     p_zonas: params.zonas,
     p_estoque_ini: Math.max(Math.trunc(params.estoque_ini), 0),
     p_estoque_fim: Math.max(Math.trunc(params.estoque_fim), 0),
+    p_estoque_tipo: params.estoque_tipo,
+    p_ignorar_endereco_auditado: Boolean(params.ignorar_endereco_auditado),
+    p_auditoria_recente_dias: Math.max(Math.trunc(params.auditoria_recente_dias), 0),
     p_incluir_pul: Boolean(params.incluir_pul),
     p_manual_coddv_csv: params.manual_coddv_csv
   });
@@ -558,6 +565,9 @@ export async function applyInventarioAdminSeed(params: {
   zonas: string[];
   estoque_ini: number;
   estoque_fim: number;
+  estoque_tipo: InventarioAdminStockType;
+  ignorar_endereco_auditado: boolean;
+  auditoria_recente_dias: number;
   incluir_pul: boolean;
   manual_coddv_csv: string;
   mode: InventarioAdminApplyMode;
@@ -568,6 +578,9 @@ export async function applyInventarioAdminSeed(params: {
     p_zonas: params.zonas,
     p_estoque_ini: Math.max(Math.trunc(params.estoque_ini), 0),
     p_estoque_fim: Math.max(Math.trunc(params.estoque_fim), 0),
+    p_estoque_tipo: params.estoque_tipo,
+    p_ignorar_endereco_auditado: Boolean(params.ignorar_endereco_auditado),
+    p_auditoria_recente_dias: Math.max(Math.trunc(params.auditoria_recente_dias), 0),
     p_incluir_pul: Boolean(params.incluir_pul),
     p_manual_coddv_csv: params.manual_coddv_csv,
     p_mode: params.mode
@@ -618,12 +631,18 @@ export async function clearInventarioAdminBase(params: {
 export async function applyInventarioAdminManualCoddv(params: {
   cd: number;
   manual_coddv_csv: string;
+  estoque_tipo: InventarioAdminStockType;
+  ignorar_endereco_auditado: boolean;
+  auditoria_recente_dias: number;
   incluir_pul: boolean;
 }): Promise<InventarioAdminSeedSummary> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_inventario_admin_apply_manual_coddv_v2", {
     p_cd: params.cd,
     p_manual_coddv_csv: params.manual_coddv_csv,
+    p_estoque_tipo: params.estoque_tipo,
+    p_ignorar_endereco_auditado: Boolean(params.ignorar_endereco_auditado),
+    p_auditoria_recente_dias: Math.max(Math.trunc(params.auditoria_recente_dias), 0),
     p_incluir_pul: Boolean(params.incluir_pul)
   });
   if (error) throw new Error(toErrorMessage(error));
