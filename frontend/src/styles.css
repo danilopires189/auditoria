@@ -6115,9 +6115,14 @@ small {
 .inventario-admin-check {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: flex-start;
   color: #203a63;
   font-weight: 600;
+}
+
+.inventario-admin-check input {
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .inventario-admin-zone-head {
@@ -6144,6 +6149,15 @@ small {
   font-size: 0.82rem;
 }
 
+.inventario-admin-zone-inline {
+  border: 1px solid #d6e2f4;
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  background: #f8fbff;
+}
+
 .inventario-admin-zone-list {
   max-height: min(42vh, 380px);
   min-height: 140px;
@@ -6158,7 +6172,7 @@ small {
 .inventario-popup-body .inventario-admin-zone-item {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   border: 1px solid #e4ebf7;
   border-radius: 10px;
@@ -6346,13 +6360,14 @@ small {
   }
 
   .inventario-admin-grid-stock {
-    grid-template-columns: minmax(0, 0.78fr) minmax(0, 0.78fr) minmax(0, 0.92fr);
+    grid-template-columns: minmax(74px, 0.7fr) minmax(74px, 0.7fr) minmax(118px, 0.95fr);
     gap: 8px;
   }
 
   .inventario-admin-grid-stock label {
-    font-size: 0.78rem;
-    gap: 6px;
+    min-width: 0;
+    font-size: 0.74rem;
+    gap: 5px;
   }
 
   .inventario-admin-grid-stock input:not([type="checkbox"]):not([type="radio"]),
@@ -6387,10 +6402,25 @@ small {
 
   .inventario-admin-recent-inline {
     gap: 8px;
+    flex-wrap: wrap;
   }
 
   .inventario-admin-recent-unit {
     font-size: 0.84rem;
+  }
+
+  .inventario-admin-zone-inline {
+    padding: 8px;
+  }
+
+  .inventario-admin-zone-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .inventario-admin-zone-list {
+    max-height: min(34vh, 280px);
   }
 
   .inventario-popup-body .inventario-popup-input-action-wrap input:not([type="checkbox"]):not([type="radio"]) {
@@ -6434,16 +6464,59 @@ small {
 
   .inventario-admin-popup,
   .inventario-admin-entry-popup {
+    position: fixed;
+    inset: 0;
     width: 100vw;
     width: 100dvw;
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .inventario-admin-zone-popup,
   .inventario-admin-confirm-popup {
+    position: fixed;
+    inset: 0;
     width: 100vw;
     width: 100dvw;
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .inventario-admin-popup .inventario-popup-head,
+  .inventario-admin-entry-popup .inventario-popup-head,
+  .inventario-admin-zone-popup .inventario-popup-head,
+  .inventario-admin-confirm-popup .inventario-popup-head {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #fff;
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px;
+  }
+
+  .inventario-admin-popup .inventario-popup-body,
+  .inventario-admin-entry-popup .inventario-popup-body,
+  .inventario-admin-zone-popup .inventario-popup-body,
+  .inventario-admin-confirm-popup .inventario-popup-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    -webkit-overflow-scrolling: touch;
   }
 
   .inventario-admin-zone-actions,
