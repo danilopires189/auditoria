@@ -7,6 +7,8 @@ import type {
   InventarioAdminZoneRow,
   InventarioAdminPreviewZoneRow,
   InventarioCountRow,
+  InventarioErroEnderecoLogResponse,
+  InventarioErroEnderecoReportRow,
   InventarioEventApplyResponse,
   InventarioEventType,
   InventarioLockAcquireResponse,
@@ -227,6 +229,39 @@ function mapReportRow(raw: Record<string, unknown>): InventarioReportRow {
     valor_divergencia: raw.valor_divergencia == null ? null : parseInteger(raw.valor_divergencia),
     origem_final: parseString(raw.origem_final),
     status_final: parseString(raw.status_final)
+  };
+}
+
+function mapErroEnderecoLogResponse(raw: Record<string, unknown> | undefined): InventarioErroEnderecoLogResponse {
+  return {
+    logged: parseBoolean(raw?.logged),
+    info: parseString(raw?.info),
+    erro_id: raw?.erro_id == null ? null : parseInteger(raw?.erro_id)
+  };
+}
+
+function mapErroEnderecoReportRow(raw: Record<string, unknown>): InventarioErroEnderecoReportRow {
+  return {
+    erro_id: parseInteger(raw.erro_id),
+    cycle_date: parseString(raw.cycle_date),
+    created_at: parseString(raw.created_at, new Date().toISOString()),
+    cd: parseInteger(raw.cd),
+    contexto: parseString(raw.contexto),
+    usuario_mat: parseNullableString(raw.usuario_mat),
+    usuario_nome: parseNullableString(raw.usuario_nome),
+    zona_auditada: parseNullableString(raw.zona_auditada),
+    endereco_auditado: parseString(raw.endereco_auditado),
+    coddv_esperado: parseInteger(raw.coddv_esperado),
+    descricao_esperada: parseNullableString(raw.descricao_esperada),
+    estoque_esperado: raw.estoque_esperado == null ? null : Math.max(parseInteger(raw.estoque_esperado), 0),
+    qtd_informada: raw.qtd_informada == null ? null : Math.max(parseInteger(raw.qtd_informada), 0),
+    barras_bipado: parseString(raw.barras_bipado),
+    coddv_bipado: parseInteger(raw.coddv_bipado),
+    descricao_bipada: parseNullableString(raw.descricao_bipada),
+    zonas_sep_corretas: parseNullableString(raw.zonas_sep_corretas),
+    enderecos_sep_corretos: parseNullableString(raw.enderecos_sep_corretos),
+    enderecos_base_end: parseNullableString(raw.enderecos_base_end),
+    tipos_base_end: parseNullableString(raw.tipos_base_end)
   };
 }
 
@@ -505,6 +540,71 @@ export async function fetchReportRows(params: {
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapReportRow(row as Record<string, unknown>));
+}
+
+export async function logInventarioErroEndereco(params: {
+  cycle_date: string;
+  cd: number;
+  contexto: string;
+  zona_auditada: string;
+  endereco_auditado: string;
+  coddv_esperado: number;
+  descricao_esperada?: string | null;
+  estoque_esperado?: number | null;
+  qtd_informada?: number | null;
+  barras_bipado: string;
+}): Promise<InventarioErroEnderecoLogResponse> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_log_erro_end", {
+    p_cycle_date: params.cycle_date,
+    p_cd: params.cd,
+    p_contexto: params.contexto,
+    p_zona_auditada: params.zona_auditada,
+    p_endereco_auditado: params.endereco_auditado,
+    p_coddv_esperado: params.coddv_esperado,
+    p_descricao_esperada: params.descricao_esperada ?? null,
+    p_estoque_esperado: params.estoque_esperado == null ? null : Math.max(Math.trunc(params.estoque_esperado), 0),
+    p_qtd_informada: params.qtd_informada == null ? null : Math.max(Math.trunc(params.qtd_informada), 0),
+    p_barras_bipado: params.barras_bipado
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  return mapErroEnderecoLogResponse(first);
+}
+
+export async function countInventarioErroEnderecoReportRows(params: {
+  dt_ini: string;
+  dt_fim: string;
+  cd: number;
+}): Promise<number> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_erro_end_count", {
+    p_dt_ini: params.dt_ini,
+    p_dt_fim: params.dt_fim,
+    p_cd: params.cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  return parseInteger(data, 0);
+}
+
+export async function fetchInventarioErroEnderecoReportRows(params: {
+  dt_ini: string;
+  dt_fim: string;
+  cd: number;
+  offset?: number;
+  limit?: number;
+}): Promise<InventarioErroEnderecoReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_inventario_erro_end_rows", {
+    p_dt_ini: params.dt_ini,
+    p_dt_fim: params.dt_fim,
+    p_cd: params.cd,
+    p_offset: Math.max(0, params.offset ?? 0),
+    p_limit: Math.max(1, Math.trunc(params.limit ?? 5000))
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapErroEnderecoReportRow(row as Record<string, unknown>));
 }
 
 export async function fetchInventarioAdminZones(cd: number): Promise<InventarioAdminZoneRow[]> {

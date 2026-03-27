@@ -206,6 +206,35 @@ export interface InventarioReportRow {
   status_final: string;
 }
 
+export interface InventarioErroEnderecoLogResponse {
+  logged: boolean;
+  info: string;
+  erro_id: number | null;
+}
+
+export interface InventarioErroEnderecoReportRow {
+  erro_id: number;
+  cycle_date: string;
+  created_at: string;
+  cd: number;
+  contexto: string;
+  usuario_mat: string | null;
+  usuario_nome: string | null;
+  zona_auditada: string | null;
+  endereco_auditado: string;
+  coddv_esperado: number;
+  descricao_esperada: string | null;
+  estoque_esperado: number | null;
+  qtd_informada: number | null;
+  barras_bipado: string;
+  coddv_bipado: number;
+  descricao_bipada: string | null;
+  zonas_sep_corretas: string | null;
+  enderecos_sep_corretos: string | null;
+  enderecos_base_end: string | null;
+  tipos_base_end: string | null;
+}
+
 export type InventarioAdminApplyMode = "replace_cd" | "replace_zones";
 export type InventarioAdminClearScope = "all" | "zones";
 export type InventarioAdminStockType = "disponivel" | "atual";
