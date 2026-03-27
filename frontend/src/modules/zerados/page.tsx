@@ -3727,10 +3727,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         <button
                           type="button"
                           className="btn btn-muted"
-                          onClick={openAdminZonePicker}
+                          onClick={adminZonePickerOpen ? () => setAdminZonePickerOpen(false) : openAdminZonePicker}
                           disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
                         >
-                          Escolher zonas
+                          {adminZonePickerOpen ? "Fechar seleção" : "Escolher zonas"}
                         </button>
                         <button
                           type="button"
@@ -3747,6 +3747,85 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                         ? "Nenhuma zona selecionada. Abra \"Escolher zonas\" para marcar."
                         : formatCountLabel(adminSelectedZones.length, "zona selecionada", "zonas selecionadas")}
                     </p>
+
+                    {adminZonePickerOpen ? (
+                      <div className="inventario-admin-zone-inline">
+                        <div className="inventario-admin-zone-actions">
+                          <button
+                            type="button"
+                            className="btn btn-muted"
+                            onClick={() => setAdminZoneDraft(adminZones.map((row) => row.zona))}
+                            disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
+                          >
+                            Selecionar todas
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-muted"
+                            onClick={() => setAdminZoneDraft([])}
+                            disabled={adminBusy || cd == null || adminZones.length === 0}
+                          >
+                            Limpar marcações
+                          </button>
+                        </div>
+
+                        <input
+                          type="text"
+                          className="inventario-admin-zone-search"
+                          value={adminZoneSearch}
+                          onChange={(event) => setAdminZoneSearch(event.target.value)}
+                          placeholder="Buscar zona (ex.: A101)"
+                          disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
+                        />
+                        <p className="inventario-admin-zone-meta">
+                          {formatCountLabel(adminZoneDraft.length, "zona marcada", "zonas marcadas")}
+                        </p>
+
+                        <div className="inventario-admin-zone-list">
+                          {adminZonesLoading ? (
+                            <p className="inventario-popup-note">Carregando zonas...</p>
+                          ) : adminZones.length === 0 ? (
+                            <p className="inventario-popup-note warn">Nenhuma zona de Separação (SEP) encontrada para este CD.</p>
+                          ) : filteredAdminZones.length === 0 ? (
+                            <p className="inventario-popup-note warn">Nenhuma zona encontrada para o filtro informado.</p>
+                          ) : filteredAdminZones.map((row) => {
+                            const checked = adminZoneDraft.includes(row.zona);
+                            return (
+                              <label key={row.zona} className="inventario-admin-zone-item">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) => {
+                                    const isChecked = event.target.checked;
+                                    setAdminZoneDraft((current) => {
+                                      if (isChecked) {
+                                        if (current.includes(row.zona)) return current;
+                                        return [...current, row.zona].sort((a, b) => a.localeCompare(b));
+                                      }
+                                      return current.filter((zonaItem) => zonaItem !== row.zona);
+                                    });
+                                  }}
+                                  disabled={adminBusy || cd == null}
+                                />
+                                <span className="inventario-admin-zone-main">
+                                  <span>{row.zona}</span>
+                                  <small>{`${row.itens} Endereços de Separação`}</small>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+
+                        <div className="inventario-admin-actions">
+                          <button className="btn btn-muted" type="button" onClick={() => setAdminZonePickerOpen(false)}>
+                            Cancelar
+                          </button>
+                          <button className="btn btn-primary" type="button" onClick={saveAdminZonePicker}>
+                            Salvar seleção
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
 
                     <div className="inventario-admin-actions">
                       <button
@@ -3901,97 +3980,6 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                     {adminSummaryActorLabel ? <p>{`Atualizado por: ${adminSummaryActorLabel}`}</p> : null}
                   </div>
                 ) : null}
-              </div>
-            </div>
-          </div>,
-          document.body
-        ) : null}
-
-        {canManageBase && adminOpen && isAdminZonaFlow && adminZonePickerOpen && typeof document !== "undefined" ? createPortal(
-          <div className="inventario-popup-overlay" role="dialog" aria-modal="true" onClick={closeAllAdminPopups}>
-            <div className="inventario-popup-card inventario-admin-zone-popup" onClick={(event) => event.stopPropagation()}>
-              <div className="inventario-popup-head">
-                <div>
-                  <h3>Selecionar zonas de Separação (SEP)</h3>
-                  <p>Marque as zonas para a inserção por zona e salve para voltar.</p>
-                </div>
-                <button type="button" className="inventario-popup-close" onClick={closeAllAdminPopups} aria-label="Fechar popup">Fechar</button>
-              </div>
-              <div className="inventario-popup-body">
-                <div className="inventario-admin-zone-actions">
-                  <button
-                    type="button"
-                    className="btn btn-muted"
-                    onClick={() => setAdminZoneDraft(adminZones.map((row) => row.zona))}
-                    disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
-                  >
-                    Selecionar todas
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-muted"
-                    onClick={() => setAdminZoneDraft([])}
-                    disabled={adminBusy || cd == null || adminZones.length === 0}
-                  >
-                    Limpar seleção
-                  </button>
-                </div>
-
-                <input
-                  type="text"
-                  className="inventario-admin-zone-search"
-                  value={adminZoneSearch}
-                  onChange={(event) => setAdminZoneSearch(event.target.value)}
-                  placeholder="Buscar zona (ex.: A101)"
-                  disabled={adminBusy || adminZonesLoading || cd == null || adminZones.length === 0}
-                />
-                <p className="inventario-admin-zone-meta">
-                  {formatCountLabel(adminZoneDraft.length, "zona marcada", "zonas marcadas")}
-                </p>
-
-                <div className="inventario-admin-zone-list">
-                  {adminZonesLoading ? (
-                    <p className="inventario-popup-note">Carregando zonas...</p>
-                  ) : adminZones.length === 0 ? (
-                    <p className="inventario-popup-note warn">Nenhuma zona de Separação (SEP) encontrada para este CD.</p>
-                  ) : filteredAdminZones.length === 0 ? (
-                    <p className="inventario-popup-note warn">Nenhuma zona encontrada para o filtro informado.</p>
-                  ) : filteredAdminZones.map((row) => {
-                    const checked = adminZoneDraft.includes(row.zona);
-                    return (
-                      <label key={row.zona} className="inventario-admin-zone-item">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) => {
-                            const isChecked = event.target.checked;
-                            setAdminZoneDraft((current) => {
-                              if (isChecked) {
-                                if (current.includes(row.zona)) return current;
-                                return [...current, row.zona].sort((a, b) => a.localeCompare(b));
-                              }
-                              return current.filter((zonaItem) => zonaItem !== row.zona);
-                            });
-                          }}
-                          disabled={adminBusy || cd == null}
-                        />
-                        <span className="inventario-admin-zone-main">
-                          <span>{row.zona}</span>
-                          <small>{`${row.itens} Endereços de Separação`}</small>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-
-                <div className="inventario-admin-actions">
-                  <button className="btn btn-muted" type="button" onClick={() => setAdminZonePickerOpen(false)}>
-                    Cancelar
-                  </button>
-                  <button className="btn btn-primary" type="button" onClick={saveAdminZonePicker}>
-                    Salvar seleção
-                  </button>
-                </div>
               </div>
             </div>
           </div>,
