@@ -228,6 +228,7 @@ function parseErr(error: unknown): string {
   }
   if (raw.includes("BASE_INVENTARIO_VAZIA")) return "Base do inventário vazia. Use 'Gerir Base' para montar e sincronize novamente.";
   if (raw.includes("RELATORIO_INCOMPLETO")) return "A exportação retornou menos linhas do que o esperado. Tente novamente.";
+  if (raw.includes("RELATORIO_ERRO_END_INCOMPLETO")) return "A exportação do relatório de erros de endereço retornou menos linhas do que o esperado. Tente novamente.";
   if (raw.includes("RELATORIO_MUITO_GRANDE")) return "Relatório acima do limite suportado para exportação. Reduza o período e tente novamente.";
   if (raw.includes("BARRAS_INVALIDA_CODDV")) return "Código de barras inválido para este Código e Dígito (CODDV).";
   if (raw.includes("SEGUNDA_CONTAGEM_EXIGE_USUARIO_DIFERENTE")) return "2ª verificação exige usuário diferente.";
@@ -254,6 +255,14 @@ function parseErr(error: unknown): string {
 
 function isInventarioAdminStockType(value: string): value is InventarioAdminStockType {
   return value === "disponivel" || value === "atual";
+}
+
+function isReportTimeoutError(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  const normalized = raw.toLowerCase();
+  return normalized.includes("a consulta demorou além do limite")
+    || normalized.includes("statement timeout")
+    || normalized.includes("canceling statement");
 }
 
 function formatInventarioAdminStockTypeLabel(value: InventarioAdminStockType): string {
@@ -748,6 +757,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [dtIni, setDtIni] = useState(CYCLE_DATE);
   const [dtFim, setDtFim] = useState(CYCLE_DATE);
   const [reportCount, setReportCount] = useState<number | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportStatus, setReportStatus] = useState<string | null>(null);
   const [adminEntryOpen, setAdminEntryOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminManageMode, setAdminManageMode] = useState<InventarioAdminManageMode | null>(null);
@@ -2910,148 +2921,194 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   }, [autoValidateFinalBarras, autoValidateStageBarras, closeCameraScanner, resolveScannerTrack, scannerOpen, scannerTarget, stopCameraScanner, supportsTrackTorch]);
 
   const exportReport = useCallback(async () => {
-    if (!canExport || cd == null) return;
-    const total = await countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
-    const totalErroEndereco = await countInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
-    setReportCount(total);
-    if (total > 50000) {
-      throw new Error(`RELATORIO_MUITO_GRANDE_${total}`);
-    }
+    if (!canExport || cd == null || reportBusy) return;
+    setErr(null);
+    setReportBusy(true);
+    setReportStatus("Contando registros do relatório...");
 
-    const pageSize = 1000;
-    const rowsReport: InventarioReportRow[] = [];
-    const erroEnderecoRows: InventarioErroEnderecoReportRow[] = [];
+    const loadPagedRows = async <T,>(params: {
+      totalRows: number;
+      label: string;
+      incompleteCode: string;
+      fetchPage: (offset: number, limit: number) => Promise<T[]>;
+    }): Promise<T[]> => {
+      const { totalRows, label, incompleteCode, fetchPage } = params;
+      if (totalRows < 1) return [];
 
-    for (let offset = 0; offset < total; offset += pageSize) {
-      const batch = await fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit: pageSize });
-      if (!batch.length) {
-        throw new Error(`RELATORIO_INCOMPLETO: esperado=${total} carregado=${rowsReport.length}`);
-      }
-      rowsReport.push(...batch);
-    }
+      const rows: T[] = [];
+      let offset = 0;
+      let pageSize = 1000;
 
-    if (rowsReport.length !== total) {
-      throw new Error(`RELATORIO_INCOMPLETO: esperado=${total} carregado=${rowsReport.length}`);
-    }
+      while (rows.length < totalRows) {
+        setReportStatus(`${label}: ${rows.length}/${totalRows} registros`);
+        try {
+          const batch = await fetchPage(offset, pageSize);
+          if (!batch.length) {
+            throw new Error(`${incompleteCode}: esperado=${totalRows} carregado=${rows.length}`);
+          }
 
-    for (let offset = 0; offset < totalErroEndereco; offset += pageSize) {
-      const batch = await fetchInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit: pageSize });
-      if (!batch.length) {
-        throw new Error(`RELATORIO_ERRO_END_INCOMPLETO: esperado=${totalErroEndereco} carregado=${erroEnderecoRows.length}`);
-      }
-      erroEnderecoRows.push(...batch);
-    }
+          const nextLoaded = rows.length + batch.length;
+          if (nextLoaded > totalRows) {
+            throw new Error(`${incompleteCode}: esperado=${totalRows} carregado=${nextLoaded}`);
+          }
 
-    if (erroEnderecoRows.length !== totalErroEndereco) {
-      throw new Error(`RELATORIO_ERRO_END_INCOMPLETO: esperado=${totalErroEndereco} carregado=${erroEnderecoRows.length}`);
-    }
+          rows.push(...batch);
+          offset += batch.length;
+          setReportStatus(`${label}: ${rows.length}/${totalRows} registros`);
 
-    const XLSX = await import("xlsx");
-    const pickFirstBarcode = (rows: InventarioReportRow[]): string | null => {
-      for (const getter of [
-        (row: InventarioReportRow) => row.review_final_barras,
-        (row: InventarioReportRow) => row.barras_segunda,
-        (row: InventarioReportRow) => row.barras_primeira
-      ]) {
-        for (const row of rows) {
-          const candidate = getter(row)?.trim();
-          if (candidate) return candidate;
+          if (batch.length < pageSize && rows.length < totalRows) {
+            throw new Error(`${incompleteCode}: esperado=${totalRows} carregado=${rows.length}`);
+          }
+        } catch (error) {
+          if (isReportTimeoutError(error) && pageSize > 100) {
+            pageSize = pageSize > 300 ? 300 : 100;
+            setReportStatus(`${label}: consulta lenta, reduzindo lote para ${pageSize} registros...`);
+            continue;
+          }
+          throw error;
         }
       }
-      return null;
+
+      if (rows.length !== totalRows) {
+        throw new Error(`${incompleteCode}: esperado=${totalRows} carregado=${rows.length}`);
+      }
+
+      return rows;
     };
-    const detail = rowsReport.map((r) => ({
-      Data: formatDate(r.cycle_date),
-      CD: r.cd,
-      Zona: r.zona,
-      Endereco: r.endereco,
-      "Código e Dígito (CODDV)": r.coddv,
-      Descricao: r.descricao,
-      Estoque: r.estoque,
-      QtdPrimeira: r.qtd_primeira,
-      QtdSegunda: r.qtd_segunda,
-      QtdFinal: r.contado_final,
-      BarrasFinal: r.barras_final,
-      DivergenciaFinal: r.divergencia_final,
-      ValorDivergencia: r.valor_divergencia,
-      StatusFinal: r.status_final,
-      UsuarioPrimeira: `${r.primeira_nome ?? "-"} (${r.primeira_mat ?? "-"})`,
-      UsuarioSegunda: `${r.segunda_nome ?? "-"} (${r.segunda_mat ?? "-"})`,
-      UsuarioRevisao: `${r.review_resolved_nome ?? "-"} (${r.review_resolved_mat ?? "-"})`
-    }));
-    const summary = Array.from(rowsReport.reduce((acc, r) => {
-      const z = r.zona;
-      const cur = acc.get(z) ?? { Zona: z, Total: 0, Concluidos: 0, Pendentes: 0 };
-      cur.Total += 1;
-      if (r.status_final === "concluido") cur.Concluidos += 1; else cur.Pendentes += 1;
-      acc.set(z, cur);
-      return acc;
-    }, new Map<string, { Zona: string; Total: number; Concluidos: number; Pendentes: number }>()).values());
-    const consolidated = Array.from(rowsReport.reduce((acc, row) => {
-      const key = `${row.cycle_date}|${row.cd}|${row.coddv}`;
-      const bucket = acc.get(key) ?? { first: row, rows: [] as InventarioReportRow[] };
-      bucket.rows.push(row);
-      acc.set(key, bucket);
-      return acc;
-    }, new Map<string, { first: InventarioReportRow; rows: InventarioReportRow[] }>()).values()).map(({ first, rows }) => {
-      const statuses = rows.map((row) => row.status_final);
-      const statusFinal = statuses.every((status) => status === "concluido")
-        ? "concluido"
-        : statuses.includes("pendente_revisao")
-          ? "pendente_revisao"
-          : statuses.includes("pendente_segunda")
-            ? "pendente_segunda"
-            : statuses.find((status) => status !== "concluido") ?? "pendente_primeira";
-      return {
-        Data: formatDate(first.cycle_date),
-        CD: first.cd,
-        "Código e Dígito (CODDV)": first.coddv,
-        Descricao: first.descricao,
-        Estoque: rows.reduce((totalEstoque, row) => totalEstoque + row.estoque, 0),
-        QtdPrimeira: sumNullable(rows.map((row) => row.qtd_primeira)),
-        QtdSegunda: sumNullable(rows.map((row) => row.qtd_segunda)),
-        QtdFinal: sumNullable(rows.map((row) => row.contado_final)),
-        BarrasFinal: pickFirstBarcode(rows),
-        DivergenciaFinal: first.divergencia_final,
-        ValorDivergencia: first.valor_divergencia,
-        StatusFinal: statusFinal
+
+    try {
+      const total = await countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
+      const totalErroEndereco = await countInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
+      setReportCount(total);
+      if (total > 50000) {
+        throw new Error(`RELATORIO_MUITO_GRANDE_${total}`);
+      }
+
+      const rowsReport = await loadPagedRows<InventarioReportRow>({
+        totalRows: total,
+        label: "Baixando detalhe",
+        incompleteCode: "RELATORIO_INCOMPLETO",
+        fetchPage: (offset, limit) => fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit })
+      });
+      const erroEnderecoRows = await loadPagedRows<InventarioErroEnderecoReportRow>({
+        totalRows: totalErroEndereco,
+        label: "Baixando erros de endereço",
+        incompleteCode: "RELATORIO_ERRO_END_INCOMPLETO",
+        fetchPage: (offset, limit) => fetchInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit })
+      });
+
+      setReportStatus("Montando arquivo XLSX...");
+      const XLSX = await import("xlsx");
+      const pickFirstBarcode = (rows: InventarioReportRow[]): string | null => {
+        for (const getter of [
+          (row: InventarioReportRow) => row.review_final_barras,
+          (row: InventarioReportRow) => row.barras_segunda,
+          (row: InventarioReportRow) => row.barras_primeira
+        ]) {
+          for (const row of rows) {
+            const candidate = getter(row)?.trim();
+            if (candidate) return candidate;
+          }
+        }
+        return null;
       };
-    });
-    const erroEnderecoSheet = (erroEnderecoRows.length ? erroEnderecoRows : []).map((row) => ({
-      Data: formatDate(row.cycle_date),
-      "Data/Hora": formatDateTimeBrasilia(row.created_at),
-      CD: row.cd,
-      Contexto: row.contexto,
-      Usuario: `${row.usuario_nome ?? "-"} (${row.usuario_mat ?? "-"})`,
-      ZonaAuditada: row.zona_auditada ?? "-",
-      EnderecoAuditado: row.endereco_auditado,
-      CODDVEsperado: row.coddv_esperado,
-      DescricaoEsperada: row.descricao_esperada ?? "-",
-      EstoqueEsperado: row.estoque_esperado ?? "-",
-      QtdInformada: row.qtd_informada ?? "-",
-      BarrasBipado: row.barras_bipado,
-      CODDVBipado: row.coddv_bipado,
-      DescricaoBipada: row.descricao_bipada ?? "-",
-      ZonasCorretasSEP: row.zonas_sep_corretas ?? "-",
-      EnderecosCorretosSEP: row.enderecos_sep_corretos ?? "-",
-      EnderecosBaseEnd: row.enderecos_base_end ?? "-",
-      TiposBaseEnd: row.tipos_base_end ?? "-"
-    }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail), "Detalhe");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Resumo por Zona");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidated), "Consolidado");
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(
-        erroEnderecoSheet.length
-          ? erroEnderecoSheet
-          : [{ Mensagem: "Nenhum erro de endereço encontrado no período." }]
-      ),
-      "Erros Endereço"
-    );
-    XLSX.writeFile(wb, `inventario-zerados-${dtIni}-${dtFim}-cd${String(cd).padStart(2, "0")}.xlsx`, { compression: true });
-  }, [canExport, cd, dtFim, dtIni]);
+      const detail = rowsReport.map((r) => ({
+        Data: formatDate(r.cycle_date),
+        CD: r.cd,
+        Zona: r.zona,
+        Endereco: r.endereco,
+        "Código e Dígito (CODDV)": r.coddv,
+        Descricao: r.descricao,
+        Estoque: r.estoque,
+        QtdPrimeira: r.qtd_primeira,
+        QtdSegunda: r.qtd_segunda,
+        QtdFinal: r.contado_final,
+        BarrasFinal: r.barras_final,
+        DivergenciaFinal: r.divergencia_final,
+        ValorDivergencia: r.valor_divergencia,
+        StatusFinal: r.status_final,
+        UsuarioPrimeira: `${r.primeira_nome ?? "-"} (${r.primeira_mat ?? "-"})`,
+        UsuarioSegunda: `${r.segunda_nome ?? "-"} (${r.segunda_mat ?? "-"})`,
+        UsuarioRevisao: `${r.review_resolved_nome ?? "-"} (${r.review_resolved_mat ?? "-"})`
+      }));
+      const summary = Array.from(rowsReport.reduce((acc, r) => {
+        const z = r.zona;
+        const cur = acc.get(z) ?? { Zona: z, Total: 0, Concluidos: 0, Pendentes: 0 };
+        cur.Total += 1;
+        if (r.status_final === "concluido") cur.Concluidos += 1; else cur.Pendentes += 1;
+        acc.set(z, cur);
+        return acc;
+      }, new Map<string, { Zona: string; Total: number; Concluidos: number; Pendentes: number }>()).values());
+      const consolidated = Array.from(rowsReport.reduce((acc, row) => {
+        const key = `${row.cycle_date}|${row.cd}|${row.coddv}`;
+        const bucket = acc.get(key) ?? { first: row, rows: [] as InventarioReportRow[] };
+        bucket.rows.push(row);
+        acc.set(key, bucket);
+        return acc;
+      }, new Map<string, { first: InventarioReportRow; rows: InventarioReportRow[] }>()).values()).map(({ first, rows }) => {
+        const statuses = rows.map((row) => row.status_final);
+        const statusFinal = statuses.every((status) => status === "concluido")
+          ? "concluido"
+          : statuses.includes("pendente_revisao")
+            ? "pendente_revisao"
+            : statuses.includes("pendente_segunda")
+              ? "pendente_segunda"
+              : statuses.find((status) => status !== "concluido") ?? "pendente_primeira";
+        return {
+          Data: formatDate(first.cycle_date),
+          CD: first.cd,
+          "Código e Dígito (CODDV)": first.coddv,
+          Descricao: first.descricao,
+          Estoque: rows.reduce((totalEstoque, row) => totalEstoque + row.estoque, 0),
+          QtdPrimeira: sumNullable(rows.map((row) => row.qtd_primeira)),
+          QtdSegunda: sumNullable(rows.map((row) => row.qtd_segunda)),
+          QtdFinal: sumNullable(rows.map((row) => row.contado_final)),
+          BarrasFinal: pickFirstBarcode(rows),
+          DivergenciaFinal: first.divergencia_final,
+          ValorDivergencia: first.valor_divergencia,
+          StatusFinal: statusFinal
+        };
+      });
+      const erroEnderecoSheet = (erroEnderecoRows.length ? erroEnderecoRows : []).map((row) => ({
+        Data: formatDate(row.cycle_date),
+        "Data/Hora": formatDateTimeBrasilia(row.created_at),
+        CD: row.cd,
+        Contexto: row.contexto,
+        Usuario: `${row.usuario_nome ?? "-"} (${row.usuario_mat ?? "-"})`,
+        ZonaAuditada: row.zona_auditada ?? "-",
+        EnderecoAuditado: row.endereco_auditado,
+        CODDVEsperado: row.coddv_esperado,
+        DescricaoEsperada: row.descricao_esperada ?? "-",
+        EstoqueEsperado: row.estoque_esperado ?? "-",
+        QtdInformada: row.qtd_informada ?? "-",
+        BarrasBipado: row.barras_bipado,
+        CODDVBipado: row.coddv_bipado,
+        DescricaoBipada: row.descricao_bipada ?? "-",
+        ZonasCorretasSEP: row.zonas_sep_corretas ?? "-",
+        EnderecosCorretosSEP: row.enderecos_sep_corretos ?? "-",
+        EnderecosBaseEnd: row.enderecos_base_end ?? "-",
+        TiposBaseEnd: row.tipos_base_end ?? "-"
+      }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail), "Detalhe");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Resumo por Zona");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(consolidated), "Consolidado");
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.json_to_sheet(
+          erroEnderecoSheet.length
+            ? erroEnderecoSheet
+            : [{ Mensagem: "Nenhum erro de endereço encontrado no período." }]
+        ),
+        "Erros Endereço"
+      );
+      XLSX.writeFile(wb, `inventario-zerados-${dtIni}-${dtFim}-cd${String(cd).padStart(2, "0")}.xlsx`, { compression: true });
+      setMsg(`Relatório exportado com ${rowsReport.length}/${total} registros e ${erroEnderecoRows.length}/${totalErroEndereco} erros de endereço.`);
+    } finally {
+      setReportBusy(false);
+      setReportStatus(null);
+    }
+  }, [canExport, cd, dtFim, dtIni, reportBusy]);
 
   return (
     <>
@@ -4196,10 +4253,11 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
                   </label>
                 </div>
                 <div className="inventario-report-actions">
-                  <button className="btn btn-muted" type="button" onClick={() => void countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd: cd ?? -1 }).then(setReportCount).catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Contar</button>
-                  <button className="btn btn-primary" type="button" onClick={() => void exportReport().catch((e) => setErr(parseErr(e)))} disabled={cd == null}>Exportar XLSX</button>
+                  <button className="btn btn-muted" type="button" onClick={() => void countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd: cd ?? -1 }).then(setReportCount).catch((e) => setErr(parseErr(e)))} disabled={cd == null || reportBusy}>Contar</button>
+                  <button className="btn btn-primary" type="button" onClick={() => void exportReport().catch((e) => setErr(parseErr(e)))} disabled={cd == null || reportBusy}>{reportBusy ? "Exportando..." : "Exportar XLSX"}</button>
                 </div>
                 {reportCount != null ? <p>{labelByCount(reportCount, "registro", "registros")}</p> : null}
+                {reportStatus ? <p>{reportStatus}</p> : null}
               </div>
             </div>
           </div>
