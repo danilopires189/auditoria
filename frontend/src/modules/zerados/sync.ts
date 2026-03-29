@@ -511,12 +511,14 @@ export async function countReportRows(params: {
   dt_ini: string;
   dt_fim: string;
   cd: number;
+  snapshot_at?: string | null;
 }): Promise<number> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_inventario_report_count", {
     p_dt_ini: params.dt_ini,
     p_dt_fim: params.dt_fim,
-    p_cd: params.cd
+    p_cd: params.cd,
+    p_snapshot_at: params.snapshot_at ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
   return parseInteger(data, 0);
@@ -528,6 +530,7 @@ export async function fetchReportRows(params: {
   cd: number;
   offset?: number;
   limit?: number;
+  snapshot_at?: string | null;
 }): Promise<InventarioReportRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_inventario_report_rows", {
@@ -535,7 +538,8 @@ export async function fetchReportRows(params: {
     p_dt_fim: params.dt_fim,
     p_cd: params.cd,
     p_offset: Math.max(0, params.offset ?? 0),
-    p_limit: Math.max(1, Math.trunc(params.limit ?? 20000))
+    p_limit: Math.max(1, Math.trunc(params.limit ?? 20000)),
+    p_snapshot_at: params.snapshot_at ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -576,12 +580,14 @@ export async function countInventarioErroEnderecoReportRows(params: {
   dt_ini: string;
   dt_fim: string;
   cd: number;
+  snapshot_at?: string | null;
 }): Promise<number> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_inventario_erro_end_count", {
     p_dt_ini: params.dt_ini,
     p_dt_fim: params.dt_fim,
-    p_cd: params.cd
+    p_cd: params.cd,
+    p_snapshot_at: params.snapshot_at ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
   return parseInteger(data, 0);
@@ -593,6 +599,7 @@ export async function fetchInventarioErroEnderecoReportRows(params: {
   cd: number;
   offset?: number;
   limit?: number;
+  snapshot_at?: string | null;
 }): Promise<InventarioErroEnderecoReportRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_inventario_erro_end_rows", {
@@ -600,7 +607,8 @@ export async function fetchInventarioErroEnderecoReportRows(params: {
     p_dt_fim: params.dt_fim,
     p_cd: params.cd,
     p_offset: Math.max(0, params.offset ?? 0),
-    p_limit: Math.max(1, Math.trunc(params.limit ?? 5000))
+    p_limit: Math.max(1, Math.trunc(params.limit ?? 5000)),
+    p_snapshot_at: params.snapshot_at ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];

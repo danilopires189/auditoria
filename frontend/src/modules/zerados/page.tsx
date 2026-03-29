@@ -217,8 +217,14 @@ function parseErr(error: unknown): string {
   if (raw.includes("rpc_conf_inventario_report_rows") && raw.includes("p_offset")) {
     return "Backend desatualizado para paginação do relatório. Execute as migrações mais recentes e tente novamente.";
   }
+  if ((raw.includes("rpc_conf_inventario_report_rows") || raw.includes("rpc_conf_inventario_report_count")) && raw.includes("p_snapshot_at")) {
+    return "Backend desatualizado para snapshot do relatório. Execute as migrações mais recentes e tente novamente.";
+  }
   if (raw.includes("rpc_conf_inventario_erro_end_rows") || raw.includes("rpc_conf_inventario_erro_end_count")) {
     return "Backend desatualizado para relatório de erro de endereço. Execute as migrações mais recentes e tente novamente.";
+  }
+  if ((raw.includes("rpc_conf_inventario_erro_end_rows") || raw.includes("rpc_conf_inventario_erro_end_count")) && raw.includes("p_snapshot_at")) {
+    return "Backend desatualizado para snapshot do relatório de erro de endereço. Execute as migrações mais recentes e tente novamente.";
   }
   if (raw.includes("rpc_conf_inventario_admin_apply_manual_coddv") || raw.includes("Could not find the function public.rpc_conf_inventario_admin_apply_manual_coddv")) {
     return "Backend desatualizado para Código e Dígito (CODDV) manual. Execute as migrações mais recentes e tente novamente.";
@@ -2977,8 +2983,9 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     };
 
     try {
-      const total = await countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
-      const totalErroEndereco = await countInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd });
+      const snapshotAt = new Date().toISOString();
+      const total = await countReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, snapshot_at: snapshotAt });
+      const totalErroEndereco = await countInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, snapshot_at: snapshotAt });
       setReportCount(total);
       if (total > 50000) {
         throw new Error(`RELATORIO_MUITO_GRANDE_${total}`);
@@ -2988,13 +2995,13 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         totalRows: total,
         label: "Baixando detalhe",
         incompleteCode: "RELATORIO_INCOMPLETO",
-        fetchPage: (offset, limit) => fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit })
+        fetchPage: (offset, limit) => fetchReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit, snapshot_at: snapshotAt })
       });
       const erroEnderecoRows = await loadPagedRows<InventarioErroEnderecoReportRow>({
         totalRows: totalErroEndereco,
         label: "Baixando erros de endereço",
         incompleteCode: "RELATORIO_ERRO_END_INCOMPLETO",
-        fetchPage: (offset, limit) => fetchInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit })
+        fetchPage: (offset, limit) => fetchInventarioErroEnderecoReportRows({ dt_ini: dtIni, dt_fim: dtFim, cd, offset, limit, snapshot_at: snapshotAt })
       });
 
       setReportStatus("Montando arquivo XLSX...");
