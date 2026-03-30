@@ -554,14 +554,14 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   const exportRankingPdf = useCallback(async (preview: ProdutividadePdfPreview) => {
     const logoDataUrl = await loadReportLogoDataUrl();
     const doc = new jsPDF({
-      orientation: "landscape",
+      orientation: "portrait",
       unit: "pt",
       format: "a4"
     });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 36;
-    const contentWidth = pageWidth - (marginX * 2);
+    let pageWidth = doc.internal.pageSize.getWidth();
+    let pageHeight = doc.internal.pageSize.getHeight();
+    let contentWidth = pageWidth - (marginX * 2);
 
     let cursorY = 40;
     const logoWidth = 75;
@@ -662,11 +662,15 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       }
     });
 
-    const afterRanking = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? (cursorY + 60);
+    doc.addPage("a4", "landscape");
+    pageWidth = doc.internal.pageSize.getWidth();
+    pageHeight = doc.internal.pageSize.getHeight();
+    contentWidth = pageWidth - (marginX * 2);
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.setTextColor(24, 51, 97);
-    doc.text("Detalhamento por Colaborador", marginX, afterRanking + 26);
+    doc.text("Detalhamento por Colaborador", marginX, 52);
 
     const detailsHead = [[
       "Pos.",
@@ -703,7 +707,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       formatRankingPdfPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas")
     ]);
     autoTable(doc, {
-      startY: afterRanking + 34,
+      startY: 60,
       margin: { left: marginX, right: marginX },
       head: detailsHead,
       body: detailsBody,
@@ -770,10 +774,12 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     const totalPages = doc.getNumberOfPages();
     for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
       doc.setPage(pageNumber);
+      const currentPageWidth = doc.internal.pageSize.getWidth();
+      const currentPageHeight = doc.internal.pageSize.getHeight();
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(86, 103, 132);
-      doc.text(`Página ${pageNumber} de ${totalPages}`, pageWidth - marginX, pageHeight - 20, { align: "right" });
+      doc.text(`Página ${pageNumber} de ${totalPages}`, currentPageWidth - marginX, currentPageHeight - 20, { align: "right" });
     }
     doc.save(`ranking-produtividade-${preview.month}-cd-${String(activeCd).padStart(2, "0")}.pdf`);
   }, [activeCd]);
