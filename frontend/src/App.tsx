@@ -58,6 +58,7 @@ import { clearUserControleValidadeCache } from "./modules/controle-validade/stor
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
 const DEFAULT_GLOBAL_CD = 2;
+const SHARED_CD_SCOPE_10_11 = [10, 11] as const;
 const HOME_MODULES_VIEW_STORAGE_KEY = "auditoria.home.modules_view.v1";
 const SESSION_DEVICE_STORAGE_KEY = "auditoria.session_device_id.v1";
 const SESSION_ACTIVITY_STORAGE_PREFIX = "auditoria.last_activity.v1:";
@@ -403,6 +404,19 @@ function formatCdOptionLabel(cd: number, cdNome: string): string {
     .trim();
   if (!cdDescription) return base;
   return `${base} - ${cdDescription}`;
+}
+
+function isSharedCd10Or11(cd: number | null | undefined): boolean {
+  return cd === 10 || cd === 11;
+}
+
+function listIncludesAllCds(options: CdOption[], cds: readonly number[]): boolean {
+  return cds.every((cd) => options.some((option) => option.cd === cd));
+}
+
+function filterCdOptions(options: CdOption[], cds: readonly number[]): CdOption[] {
+  const allowed = new Set<number>(cds);
+  return options.filter((option) => allowed.has(option.cd));
 }
 
 function roleLabel(role: "admin" | "auditor" | "viewer" | null): string {
@@ -1920,6 +1934,19 @@ export default function App() {
     [effectiveProfile]
   );
 
+  const hasSharedCd10And11Scope = useMemo(() => {
+    if (!effectiveProfile || isGlobalProfile) return false;
+    return isSharedCd10Or11(effectiveProfile.cd_default) && listIncludesAllCds(globalCdOptions, SHARED_CD_SCOPE_10_11);
+  }, [effectiveProfile, globalCdOptions, isGlobalProfile]);
+
+  const runtimeCdOptions = useMemo(() => {
+    if (isGlobalProfile) return globalCdOptions;
+    if (hasSharedCd10And11Scope) return filterCdOptions(globalCdOptions, SHARED_CD_SCOPE_10_11);
+    return [];
+  }, [globalCdOptions, hasSharedCd10And11Scope, isGlobalProfile]);
+
+  const canUseRuntimeCdSwitcher = runtimeCdOptions.length > 0;
+
   useEffect(() => {
     if (!session) {
       setHomeModulesViewMode("list");
@@ -1963,16 +1990,13 @@ export default function App() {
       return;
     }
 
-    if (!isGlobalProfile) {
-      setGlobalCdOptions([]);
-      setGlobalCdSelection(null);
-      setGlobalCdLoading(false);
-      return;
-    }
-
     let mounted = true;
     const storageKey = globalCdSelectionKey(session.user.id);
-    let preferredCd = DEFAULT_GLOBAL_CD;
+    const profilePreferredCd =
+      typeof effectiveProfile?.cd_default === "number" && Number.isFinite(effectiveProfile.cd_default)
+        ? Math.trunc(effectiveProfile.cd_default)
+        : DEFAULT_GLOBAL_CD;
+    let preferredCd = profilePreferredCd;
     if (typeof window !== "undefined") {
       const cached = parseInteger(window.localStorage.getItem(storageKey));
       if (cached != null) {
@@ -1991,12 +2015,20 @@ export default function App() {
         const nextCd =
           options.some((item) => item.cd === preferredCd)
             ? preferredCd
-            : (options[0]?.cd ?? null);
+            : options.some((item) => item.cd === profilePreferredCd)
+              ? profilePreferredCd
+              : (options[0]?.cd ?? null);
 
-        setGlobalCdSelection(nextCd);
-        if (nextCd != null && typeof window !== "undefined") {
-          window.localStorage.setItem(storageKey, String(nextCd));
-        }
+        setGlobalCdSelection((current) => {
+          const resolved =
+            current != null && options.some((item) => item.cd === current)
+              ? current
+              : nextCd;
+          if (resolved != null && typeof window !== "undefined") {
+            window.localStorage.setItem(storageKey, String(resolved));
+          }
+          return resolved;
+        });
       } catch (error) {
         if (!mounted) return;
         setGlobalCdOptions([]);
@@ -2013,20 +2045,24 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [isGlobalProfile, session]);
+  }, [effectiveProfile, session]);
 
   const effectiveProfileWithCd = useMemo<ProfileContext | null>(() => {
     if (!effectiveProfile) return null;
-    if (!isGlobalProfile) return effectiveProfile;
+    if (!canUseRuntimeCdSwitcher) return effectiveProfile;
 
-    const selectedCd = globalCdSelection ?? DEFAULT_GLOBAL_CD;
-    const selectedCdName = globalCdOptions.find((item) => item.cd === selectedCd)?.cd_nome ?? null;
+    const fallbackCd =
+      typeof effectiveProfile.cd_default === "number" && Number.isFinite(effectiveProfile.cd_default)
+        ? Math.trunc(effectiveProfile.cd_default)
+        : DEFAULT_GLOBAL_CD;
+    const selectedCd = globalCdSelection ?? fallbackCd;
+    const selectedCdName = runtimeCdOptions.find((item) => item.cd === selectedCd)?.cd_nome ?? null;
     return {
       ...effectiveProfile,
       cd_default: selectedCd,
       cd_nome: selectedCdName
     };
-  }, [effectiveProfile, globalCdOptions, globalCdSelection, isGlobalProfile]);
+  }, [canUseRuntimeCdSwitcher, effectiveProfile, globalCdSelection, runtimeCdOptions]);
 
   const handleHomeModulesViewModeChange = useCallback(async (nextMode: HomeModulesViewMode) => {
     if (!session) return;
@@ -2339,9 +2375,9 @@ export default function App() {
                   onRequestLogout={openLogoutConfirm}
                   modulesViewMode={homeModulesViewMode}
                   onToggleModulesViewMode={handleHomeModulesViewModeChange}
-                  showCdSwitcher={isGlobalProfile && globalCdOptions.length > 0}
+                  showCdSwitcher={canUseRuntimeCdSwitcher}
                   onRequestCdSwitcher={() => {
-                    setPendingGlobalCdSelection(globalCdSelection);
+                    setPendingGlobalCdSelection(globalCdSelection ?? runtimeCdOptions[0]?.cd ?? null);
                     setShowGlobalCdSwitcher(true);
                   }}
                 />
@@ -2572,11 +2608,11 @@ export default function App() {
                   <p>Selecione o CD para continuar sem sair da conta.</p>
                   <div className="global-cd-picker" role="listbox" aria-label="Centros de distribuição disponíveis">
                     {globalCdLoading ? <div className="global-cd-picker-loading">Carregando CDs...</div> : null}
-                    {!globalCdLoading && globalCdOptions.length === 0 ? (
+                    {!globalCdLoading && runtimeCdOptions.length === 0 ? (
                       <div className="global-cd-picker-empty">Nenhum CD disponível no momento.</div>
                     ) : null}
                     {!globalCdLoading
-                      ? globalCdOptions.map((option) => (
+                      ? runtimeCdOptions.map((option) => (
                           <button
                             key={option.cd}
                             type="button"
