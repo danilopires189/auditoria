@@ -44,10 +44,7 @@ interface ProdutividadePdfPreview {
   cdLabel: string;
   generatedAt: string;
   generatedBy: string;
-  visibilityLabel: string;
   totalCollaborators: number;
-  totalPoints: number;
-  averagePoints: number;
   leaderLabel: string;
   rankingRows: ProdutividadeRankingRow[];
 }
@@ -124,6 +121,12 @@ function formatRankingPointsAndCount(points: number, count: number, singular: st
   })}`;
 }
 
+function formatRankingPdfPointsAndCount(points: number, count: number, singular: string, plural: string): string {
+  return `${formatMetric(points, "")} pts\n${formatCountLabel(count, singular, plural, {
+    formatValue: (value) => formatMetric(value, "")
+  })}`;
+}
+
 function asUnknownErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -146,11 +149,22 @@ function formatRankingMonthLabel(value: string): string {
   const year = Number.parseInt(yearRaw ?? "", 10);
   const month = Number.parseInt(monthRaw ?? "", 10);
   if (!Number.isFinite(year) || !Number.isFinite(month)) return value;
-  return new Intl.DateTimeFormat("pt-BR", {
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Sao_Paulo"
-  }).format(new Date(Date.UTC(year, month - 1, 1)));
+  const monthNames = [
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro"
+  ];
+  const monthLabel = monthNames[month - 1];
+  return monthLabel ? `${monthLabel} de ${year}` : value;
 }
 
 function isBrowserDesktop(): boolean {
@@ -530,12 +544,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         cdLabel: friendlyCdLabel(profile.cd_nome, activeCd),
         generatedAt: new Date().toISOString(),
         generatedBy: `${displayUserName} (${profile.mat || "-"})`,
-        visibilityLabel: visibility ? visibilityModeLabel(visibility.visibility_mode) : "Não definido",
         totalCollaborators: rankingRows.length,
-        totalPoints: rankingRows.reduce((total, row) => total + row.total_pontos, 0),
-        averagePoints: rankingRows.length > 0
-          ? rankingRows.reduce((total, row) => total + row.total_pontos, 0) / rankingRows.length
-          : 0,
         leaderLabel: rankingRows[0] ? `${rankingRows[0].nome} (${formatMetric(rankingRows[0].total_pontos, "")} pts)` : "-",
         rankingRows
       };
@@ -550,7 +559,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     } finally {
       setReportBusyPrepare(false);
     }
-  }, [activeCd, canUseRankingPdf, displayUserName, profile.cd_nome, profile.mat, rankingMonth, rankingRows, visibility]);
+  }, [activeCd, canUseRankingPdf, displayUserName, profile.cd_nome, profile.mat, rankingMonth, rankingRows]);
 
   const exportRankingPdf = useCallback(async (preview: ProdutividadePdfPreview) => {
     const logoDataUrl = await loadReportLogoDataUrl();
@@ -564,7 +573,6 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     const marginX = 36;
     const contentWidth = pageWidth - (marginX * 2);
     const summaryGap = 10;
-    const summaryWidth = (contentWidth - (summaryGap * 3)) / 4;
 
     let cursorY = 40;
     const logoWidth = 75;
@@ -575,7 +583,6 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     const metaLines = [
       `Mês de referência: ${preview.monthLabel}`,
       `CD: ${preview.cdLabel}`,
-      `Visibilidade: ${preview.visibilityLabel}`,
       `Gerado por: ${preview.generatedBy}`,
       `Data/Hora: ${formatDateTime(preview.generatedAt)}`
     ];
@@ -597,26 +604,31 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     });
 
     cursorY = 170;
-    const cards = [
-      { label: "Colaboradores", value: reportSummaryLabel(preview.totalCollaborators) },
-      { label: "Soma dos pontos", value: `${reportSummaryLabel(preview.totalPoints)} pts` },
-      { label: "Média de pontos", value: `${reportSummaryLabel(preview.averagePoints)} pts` },
-      { label: "Líder", value: preview.leaderLabel }
-    ];
-    cards.forEach((card, index) => {
-      const boxX = marginX + (index * (summaryWidth + summaryGap));
-      doc.setFillColor(245, 248, 253);
+    const collaboratorsWidth = 156;
+    const leaderWidth = contentWidth - collaboratorsWidth - summaryGap;
+    [
+      { label: "Colaboradores", value: reportSummaryLabel(preview.totalCollaborators), boxX: marginX, boxWidth: collaboratorsWidth, valueFont: 18, accent: false },
+      {
+        label: "Líder do ranking",
+        value: preview.leaderLabel,
+        boxX: marginX + collaboratorsWidth + summaryGap,
+        boxWidth: leaderWidth,
+        valueFont: 16,
+        accent: true
+      }
+    ].forEach((card) => {
+      doc.setFillColor(card.accent ? 236 : 245, card.accent ? 243 : 248, 253);
       doc.setDrawColor(209, 221, 241);
-      doc.roundedRect(boxX, cursorY, summaryWidth, 74, 10, 10, "FD");
+      doc.roundedRect(card.boxX, cursorY, card.boxWidth, 78, 10, 10, "FD");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(index === 3 ? 12 : 16);
+      doc.setFontSize(card.valueFont);
       doc.setTextColor(28, 58, 106);
-      const lines = doc.splitTextToSize(card.value, summaryWidth - 24);
-      doc.text(lines, boxX + 12, cursorY + 24);
+      const lines = doc.splitTextToSize(card.value, card.boxWidth - 24);
+      doc.text(lines, card.boxX + 12, cursorY + 24);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(86, 103, 132);
-      doc.text(card.label, boxX + 12, cursorY + 58);
+      doc.text(card.label, card.boxX + 12, cursorY + 62);
     });
 
     cursorY += 110;
@@ -692,17 +704,17 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       row.nome,
       row.mat,
       `${formatMetric(row.total_pontos, "")} pts`,
-      formatRankingPointsAndCount(row.pvps_pontos, row.pvps_qtd, "end", "ends"),
-      formatRankingPointsAndCount(row.vol_pontos, row.vol_qtd, "Vol.", "Vol."),
-      formatRankingPointsAndCount(row.blitz_pontos, row.blitz_qtd, "un", "un"),
-      formatRankingPointsAndCount(row.zerados_pontos, row.zerados_qtd, "end", "ends"),
-      formatRankingPointsAndCount(row.atividade_extra_pontos, row.atividade_extra_qtd, "Regist.", "Regist."),
-      formatRankingPointsAndCount(row.alocacao_pontos, row.alocacao_qtd, "end", "ends"),
-      formatRankingPointsAndCount(row.devolucao_pontos, row.devolucao_qtd, "nf", "nfs"),
-      formatRankingPointsAndCount(row.conf_termo_pontos, row.conf_termo_qtd, "sku", "skus"),
-      formatRankingPointsAndCount(row.conf_avulso_pontos, row.conf_avulso_qtd, "sku", "skus"),
-      formatRankingPointsAndCount(row.conf_entrada_pontos, row.conf_entrada_qtd, "sku", "skus"),
-      formatRankingPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas")
+      formatRankingPdfPointsAndCount(row.pvps_pontos, row.pvps_qtd, "end", "ends"),
+      formatRankingPdfPointsAndCount(row.vol_pontos, row.vol_qtd, "Vol.", "Vol."),
+      formatRankingPdfPointsAndCount(row.blitz_pontos, row.blitz_qtd, "un", "un"),
+      formatRankingPdfPointsAndCount(row.zerados_pontos, row.zerados_qtd, "end", "ends"),
+      formatRankingPdfPointsAndCount(row.atividade_extra_pontos, row.atividade_extra_qtd, "Regist.", "Regist."),
+      formatRankingPdfPointsAndCount(row.alocacao_pontos, row.alocacao_qtd, "end", "ends"),
+      formatRankingPdfPointsAndCount(row.devolucao_pontos, row.devolucao_qtd, "nf", "nfs"),
+      formatRankingPdfPointsAndCount(row.conf_termo_pontos, row.conf_termo_qtd, "sku", "skus"),
+      formatRankingPdfPointsAndCount(row.conf_avulso_pontos, row.conf_avulso_qtd, "sku", "skus"),
+      formatRankingPdfPointsAndCount(row.conf_entrada_pontos, row.conf_entrada_qtd, "sku", "skus"),
+      formatRankingPdfPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas")
     ]);
     autoTable(doc, {
       startY: afterRanking + 34,
@@ -712,9 +724,9 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       theme: "grid",
       tableWidth: contentWidth,
       styles: {
-        fontSize: 6.1,
-        cellPadding: 3,
-        overflow: "ellipsize",
+        fontSize: 5.5,
+        cellPadding: 2.5,
+        overflow: "linebreak",
         valign: "middle",
         lineColor: [214, 225, 241],
         lineWidth: 0.4,
@@ -736,24 +748,35 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         contentWidth,
         [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
         {
-          0: 30,
-          1: 124,
-          2: 54,
-          3: 52,
-          4: 56,
-          5: 62,
-          6: 52,
-          7: 56,
-          8: 60,
-          9: 56,
-          10: 56,
-          11: 56,
-          12: 56,
-          13: 60,
-          14: 56
+          0: 24,
+          1: 98,
+          2: 42,
+          3: 46,
+          4: 44,
+          5: 48,
+          6: 42,
+          7: 44,
+          8: 46,
+          9: 44,
+          10: 44,
+          11: 44,
+          12: 44,
+          13: 46,
+          14: 44
         },
         {
-          1: 180
+          1: 132,
+          4: 54,
+          5: 58,
+          6: 50,
+          7: 54,
+          8: 58,
+          9: 54,
+          10: 54,
+          11: 54,
+          12: 54,
+          13: 58,
+          14: 54
         }
       )
     });
