@@ -94,6 +94,12 @@ function formatMetricWithUnit(value: number, unitLabel: string): string {
   return formatMetricWithInflection(value, unitLabel, formatMetric);
 }
 
+function formatRankingPointsAndCount(points: number, count: number, singular: string, plural: string): string {
+  return `${formatMetric(points, "")} pts | ${formatCountLabel(count, singular, plural, {
+    formatValue: (value) => formatMetric(value, "")
+  })}`;
+}
+
 function asUnknownErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -564,26 +570,105 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                               {isExpanded && (
                                 <tr className="ranking-details-row">
                                   <td colSpan={4} className="ranking-details-cell">
-                                    <div className="ranking-details-grid" style={{
-                                      display: "grid",
-                                      gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-                                      gap: "8px",
-                                      padding: "16px",
-                                      background: "var(--color-bg-alt)",
-                                      borderRadius: "8px",
-                                      marginTop: "4px"
-                                    }}>
-                                      <div><strong>PVPs:</strong><br />{formatMetric(row.pvps_pontos, "")} pts</div>
-                                      <div><strong>Volume:</strong><br />{formatMetric(row.vol_pontos, "")} pts</div>
-                                      <div><strong>Blitz:</strong><br />{formatMetric(row.blitz_pontos, "")} pts</div>
-                                      <div><strong>Zerados:</strong><br />{`${formatMetric(row.zerados_pontos, "")} pts | ${formatCountLabel(row.zerados_qtd, "end", "ends")}`}</div>
-                                      <div><strong>Ativ Extra:</strong><br />{formatMetric(row.atividade_extra_pontos, "")} pts</div>
-                                      <div><strong>Alocação:</strong><br />{formatCountLabel(row.alocacao_qtd, "end", "ends")}</div>
-                                      <div><strong>Devolução:</strong><br />{formatCountLabel(row.devolucao_qtd, "nf", "nfs")}</div>
-                                      <div><strong>Ter. Conf:</strong><br />{formatCountLabel(row.conf_termo_qtd, "sku", "skus")}</div>
-                                      <div><strong>Avul. Conf:</strong><br />{formatCountLabel(row.conf_avulso_qtd, "sku", "skus")}</div>
-                                      <div><strong>Ent. Notas:</strong><br />{formatCountLabel(row.conf_entrada_qtd, "sku", "skus")}</div>
-                                      <div><strong>Reg Lojas:</strong><br />{formatCountLabel(row.conf_lojas_qtd, "loja", "lojas")}</div>
+                                    <div
+                                      className="ranking-details-grid"
+                                      style={{
+                                        display: "grid",
+                                        gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+                                        gap: "8px",
+                                        padding: "16px",
+                                        background: "var(--color-bg-alt)",
+                                        borderRadius: "8px",
+                                        marginTop: "4px"
+                                      }}
+                                    >
+                                      {[
+                                        {
+                                          label: "PVPs",
+                                          value: formatRankingPointsAndCount(row.pvps_pontos, row.pvps_qtd, "end", "ends")
+                                        },
+                                        {
+                                          label: "Vol. Expedido",
+                                          value: formatRankingPointsAndCount(row.vol_pontos, row.vol_qtd, "volume", "volumes")
+                                        },
+                                        {
+                                          label: "Blitz",
+                                          value: formatRankingPointsAndCount(row.blitz_pontos, row.blitz_qtd, "un", "un")
+                                        },
+                                        {
+                                          label: "Zerados",
+                                          value: formatRankingPointsAndCount(row.zerados_pontos, row.zerados_qtd, "end", "ends")
+                                        },
+                                        {
+                                          label: "Ativ Extra",
+                                          value: formatRankingPointsAndCount(
+                                            row.atividade_extra_pontos,
+                                            row.atividade_extra_qtd,
+                                            "registro",
+                                            "registros"
+                                          )
+                                        },
+                                        {
+                                          label: "Alocação",
+                                          value: formatRankingPointsAndCount(
+                                            row.alocacao_pontos,
+                                            row.alocacao_qtd,
+                                            "end",
+                                            "ends"
+                                          )
+                                        },
+                                        {
+                                          label: "Devolução",
+                                          value: formatRankingPointsAndCount(
+                                            row.devolucao_pontos,
+                                            row.devolucao_qtd,
+                                            "nf",
+                                            "nfs"
+                                          )
+                                        },
+                                        {
+                                          label: "Ter. Conf",
+                                          value: formatRankingPointsAndCount(
+                                            row.conf_termo_pontos,
+                                            row.conf_termo_qtd,
+                                            "sku",
+                                            "skus"
+                                          )
+                                        },
+                                        {
+                                          label: "Avul. Conf",
+                                          value: formatRankingPointsAndCount(
+                                            row.conf_avulso_pontos,
+                                            row.conf_avulso_qtd,
+                                            "sku",
+                                            "skus"
+                                          )
+                                        },
+                                        {
+                                          label: "Ent. Notas",
+                                          value: formatRankingPointsAndCount(
+                                            row.conf_entrada_pontos,
+                                            row.conf_entrada_qtd,
+                                            "sku",
+                                            "skus"
+                                          )
+                                        },
+                                        {
+                                          label: "Reg Lojas",
+                                          value: formatRankingPointsAndCount(
+                                            row.conf_lojas_pontos,
+                                            row.conf_lojas_qtd,
+                                            "loja",
+                                            "lojas"
+                                          )
+                                        }
+                                      ].map((item) => (
+                                        <div key={item.label}>
+                                          <strong>{item.label}:</strong>
+                                          <br />
+                                          {item.value}
+                                        </div>
+                                      ))}
                                     </div>
                                   </td>
                                 </tr>
