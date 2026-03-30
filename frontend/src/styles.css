@@ -3998,16 +3998,22 @@ small {
   align-items: end;
 }
 
+.produtividade-period-row > * {
+  min-width: 0;
+}
+
 .produtividade-period-row label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-weight: 600;
   color: #1b3a67;
+  min-width: 0;
 }
 
 .produtividade-period-row input {
   width: 100%;
+  min-width: 0;
   padding: 10px 11px;
   border-radius: 10px;
   border: 1px solid #c9d6ea;
@@ -4486,7 +4492,12 @@ small {
   }
 
   .produtividade-period-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .produtividade-period-row label,
+  .produtividade-period-row .btn {
+    width: 100%;
   }
 
   .produtividade-body {

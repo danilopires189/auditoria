@@ -251,7 +251,15 @@ function buildPdfColumnStyles(
 
 function pdfIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M6 3h9l3 3v15H6z" />
       <path d="M15 3v3h3" />
       <path d="M8 14h2.5a1.5 1.5 0 0 0 0-3H8v6" />
@@ -956,7 +964,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                     {canUseRankingPdf ? (
                       <button
                         type="button"
-                        className="btn btn-icon"
+                        className="btn btn-muted inventario-report-icon-btn"
                         onClick={() => void runRankingPdfExport()}
                         disabled={reportBusyExport || loadingRanking}
                         title="Exportar PDF do ranking"
