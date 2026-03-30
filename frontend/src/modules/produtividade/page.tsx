@@ -589,7 +589,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                         },
                                         {
                                           label: "Vol. Expedido",
-                                          value: formatRankingPointsAndCount(row.vol_pontos, row.vol_qtd, "volume", "volumes")
+                                          value: formatRankingPointsAndCount(row.vol_pontos, row.vol_qtd, "Vol.", "Vol.")
                                         },
                                         {
                                           label: "Blitz",
@@ -604,8 +604,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                           value: formatRankingPointsAndCount(
                                             row.atividade_extra_pontos,
                                             row.atividade_extra_qtd,
-                                            "registro",
-                                            "registros"
+                                            "Regist.",
+                                            "Regist."
                                           )
                                         },
                                         {
