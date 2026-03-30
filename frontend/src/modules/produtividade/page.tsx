@@ -1,6 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia, monthStartIsoBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { formatCountLabel, formatMetricWithUnit as formatMetricWithInflection } from "../../shared/inflection";
@@ -35,7 +38,22 @@ type ConfirmDialogState = {
   nextMode: ProdutividadeVisibilityMode;
 };
 
+interface ProdutividadePdfPreview {
+  month: string;
+  monthLabel: string;
+  cdLabel: string;
+  generatedAt: string;
+  generatedBy: string;
+  visibilityLabel: string;
+  totalCollaborators: number;
+  totalPoints: number;
+  averagePoints: number;
+  leaderLabel: string;
+  rankingRows: ProdutividadeRankingRow[];
+}
+
 const MODULE_DEF = getModuleByKeyOrThrow("produtividade");
+let reportLogoDataUrlPromise: Promise<string | null> | null = null;
 
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
@@ -94,6 +112,12 @@ function formatMetricWithUnit(value: number, unitLabel: string): string {
   return formatMetricWithInflection(value, unitLabel, formatMetric);
 }
 
+function reportSummaryLabel(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: 3
+  }).format(value);
+}
+
 function formatRankingPointsAndCount(points: number, count: number, singular: string, plural: string): string {
   return `${formatMetric(points, "")} pts | ${formatCountLabel(count, singular, plural, {
     formatValue: (value) => formatMetric(value, "")
@@ -108,6 +132,114 @@ function asUnknownErrorMessage(error: unknown): string {
 
 function visibilityModeLabel(mode: ProdutividadeVisibilityMode): string {
   return mode === "owner_only" ? "Somente dono/admin" : "Público no CD";
+}
+
+function friendlyCdLabel(profileCdName: string | null | undefined, cd: number | null): string {
+  const profileLabel = typeof profileCdName === "string" ? profileCdName.trim().replace(/\s+/g, " ") : "";
+  if (profileLabel) return profileLabel;
+  if (cd != null) return `CD ${String(cd).padStart(2, "0")}`;
+  return "CD não definido";
+}
+
+function formatRankingMonthLabel(value: string): string {
+  const [yearRaw, monthRaw] = value.split("-");
+  const year = Number.parseInt(yearRaw ?? "", 10);
+  const month = Number.parseInt(monthRaw ?? "", 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo"
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+function isBrowserDesktop(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(min-width: 980px)").matches;
+}
+
+async function loadReportLogoDataUrl(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  if (!reportLogoDataUrlPromise) {
+    reportLogoDataUrlPromise = fetch(pmImage)
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        return await new Promise<string | null>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      })
+      .catch(() => null);
+  }
+  return reportLogoDataUrlPromise;
+}
+
+function buildPdfColumnStyles(
+  doc: jsPDF,
+  headRow: string[],
+  bodyRows: string[][],
+  contentWidth: number,
+  wrapColumns: number[],
+  minWidths?: Partial<Record<number, number>>,
+  maxWidths?: Partial<Record<number, number>>
+): Record<number, { cellWidth: number; overflow?: "linebreak" | "ellipsize" }> {
+  const fontSize = 7;
+  const horizontalPadding = 12;
+  const defaultMinWidth = 38;
+  const wrapSet = new Set(wrapColumns);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(fontSize);
+
+  const measured = headRow.map((header, columnIndex) => {
+    let longest = doc.getTextWidth(String(header ?? ""));
+    for (const row of bodyRows) {
+      const width = doc.getTextWidth(String(row[columnIndex] ?? ""));
+      if (width > longest) longest = width;
+    }
+    const minWidth = Math.max(minWidths?.[columnIndex] ?? defaultMinWidth, longest + horizontalPadding);
+    const maxWidth = maxWidths?.[columnIndex] ?? (wrapSet.has(columnIndex) ? 140 : 90);
+    return Math.min(Math.max(minWidth, defaultMinWidth), maxWidth);
+  });
+
+  const baseMinWidths = headRow.map((_, columnIndex) => minWidths?.[columnIndex] ?? defaultMinWidth);
+  let widths = [...measured];
+  let total = widths.reduce((sum, value) => sum + value, 0);
+
+  if (total > contentWidth) {
+    let shrinkable = widths.reduce((sum, value, index) => sum + Math.max(value - baseMinWidths[index], 0), 0);
+    if (shrinkable > 0) {
+      const overflow = total - contentWidth;
+      widths = widths.map((value, index) => {
+        const available = Math.max(value - baseMinWidths[index], 0);
+        if (available <= 0 || shrinkable <= 0) return value;
+        const reduction = Math.min(available, (available / shrinkable) * overflow);
+        return value - reduction;
+      });
+      total = widths.reduce((sum, value) => sum + value, 0);
+    }
+  }
+
+  if (total < contentWidth) {
+    const growableColumns = headRow.map((_, index) => index).filter((index) => wrapSet.has(index));
+    const perColumnExtra = growableColumns.length > 0 ? (contentWidth - total) / growableColumns.length : 0;
+    widths = widths.map((value, index) => (
+      growableColumns.includes(index) ? value + perColumnExtra : value
+    ));
+  }
+
+  return Object.fromEntries(
+    widths.map((width, index) => [
+      index,
+      {
+        cellWidth: Number(width.toFixed(2)),
+        overflow: wrapSet.has(index) ? "linebreak" : "ellipsize"
+      }
+    ])
+  );
 }
 
 function visibilityIcon(isOwnerOnly: boolean) {
@@ -131,6 +263,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   const displayUserName = toDisplayName(profile.nome);
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const isAdmin = profile.role === "admin";
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => isBrowserDesktop());
 
   const [dateStart, setDateStart] = useState<string>(monthStartIsoBrasilia());
   const [dateEnd, setDateEnd] = useState<string>(todayIsoBrasilia());
@@ -146,6 +279,11 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   const [rankingRows, setRankingRows] = useState<ProdutividadeRankingRow[]>([]);
   const [loadingRanking, setLoadingRanking] = useState(false);
   const [expandedRankingUser, setExpandedRankingUser] = useState<string | null>(null);
+  const [reportPdfPreview, setReportPdfPreview] = useState<ProdutividadePdfPreview | null>(null);
+  const [reportBusyPrepare, setReportBusyPrepare] = useState(false);
+  const [reportBusyExport, setReportBusyExport] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -188,6 +326,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   }, [collaborators]);
 
   const canLoadRange = dateStart.trim() !== "" && dateEnd.trim() !== "" && dateStart <= dateEnd;
+  const canUseRankingPdf = isAdmin && isDesktop;
 
   const dailyGroups = useMemo(() => {
     const map = new Map<string, { date: string; total: number; items: ProdutividadeDailyRow[] }>();
@@ -212,6 +351,25 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         items: [...bucket.items].sort((a, b) => b.valor_total - a.valor_total)
       }));
   }, [dailyRows]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(min-width: 980px)");
+    const onChange = () => setIsDesktop(media.matches);
+    onChange();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", onChange);
+      return () => media.removeEventListener("change", onChange);
+    }
+    media.addListener(onChange);
+    return () => media.removeListener(onChange);
+  }, []);
+
+  useEffect(() => {
+    setReportPdfPreview(null);
+    setReportError(null);
+    setReportMessage(null);
+  }, [activeCd, rankingMonth, rankingRows]);
 
   const loadEntriesOnly = useCallback(async (targetUserId: string | null, nextActivityKey: string | null) => {
     if (activeCd == null || targetUserId == null) {
@@ -347,6 +505,291 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       setLoadingRanking(false);
     }
   }, [activeCd, rankingMonth]);
+
+  const prepareRankingPdfPreview = useCallback(async (): Promise<ProdutividadePdfPreview | null> => {
+    if (!canUseRankingPdf) {
+      setReportError("A exportação em PDF do ranking está disponível apenas para admin no desktop.");
+      return null;
+    }
+    if (activeCd == null) {
+      setReportError("CD não definido para este usuário.");
+      return null;
+    }
+    if (rankingRows.length === 0) {
+      setReportError("Clique em Buscar Ranking para preparar o PDF antes de exportar.");
+      return null;
+    }
+
+    setReportBusyPrepare(true);
+    setReportError(null);
+    setReportMessage(null);
+    try {
+      const preview: ProdutividadePdfPreview = {
+        month: rankingMonth,
+        monthLabel: formatRankingMonthLabel(rankingMonth),
+        cdLabel: friendlyCdLabel(profile.cd_nome, activeCd),
+        generatedAt: new Date().toISOString(),
+        generatedBy: `${displayUserName} (${profile.mat || "-"})`,
+        visibilityLabel: visibility ? visibilityModeLabel(visibility.visibility_mode) : "Não definido",
+        totalCollaborators: rankingRows.length,
+        totalPoints: rankingRows.reduce((total, row) => total + row.total_pontos, 0),
+        averagePoints: rankingRows.length > 0
+          ? rankingRows.reduce((total, row) => total + row.total_pontos, 0) / rankingRows.length
+          : 0,
+        leaderLabel: rankingRows[0] ? `${rankingRows[0].nome} (${formatMetric(rankingRows[0].total_pontos, "")} pts)` : "-",
+        rankingRows
+      };
+      setReportPdfPreview(preview);
+      setReportMessage(
+        `Prévia preparada com ${formatCountLabel(preview.totalCollaborators, "colaborador", "colaboradores")} no ranking.`
+      );
+      return preview;
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Falha ao preparar relatório PDF.");
+      return null;
+    } finally {
+      setReportBusyPrepare(false);
+    }
+  }, [activeCd, canUseRankingPdf, displayUserName, profile.cd_nome, profile.mat, rankingMonth, rankingRows, visibility]);
+
+  const exportRankingPdf = useCallback(async (preview: ProdutividadePdfPreview) => {
+    const logoDataUrl = await loadReportLogoDataUrl();
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "pt",
+      format: "a4"
+    });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 36;
+    const contentWidth = pageWidth - (marginX * 2);
+    const summaryGap = 10;
+    const summaryWidth = (contentWidth - (summaryGap * 3)) / 4;
+
+    let cursorY = 40;
+    const logoWidth = 75;
+    const logoHeight = 75;
+    const titleX = marginX + 92;
+    const metaStartY = cursorY + 38;
+    const metaLineHeight = 16;
+    const metaLines = [
+      `Mês de referência: ${preview.monthLabel}`,
+      `CD: ${preview.cdLabel}`,
+      `Visibilidade: ${preview.visibilityLabel}`,
+      `Gerado por: ${preview.generatedBy}`,
+      `Data/Hora: ${formatDateTime(preview.generatedAt)}`
+    ];
+    const metaBlockCenterY = metaStartY + ((metaLines.length - 1) * metaLineHeight) / 2;
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, "PNG", marginX, metaBlockCenterY - (logoHeight / 2) - 6, logoWidth, logoHeight);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(19);
+    doc.setTextColor(24, 51, 97);
+    doc.text("Relatório de Ranking de Produtividade", titleX, cursorY + 12);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(70, 92, 126);
+    metaLines.forEach((line, index) => {
+      doc.text(line, titleX, metaStartY + (index * metaLineHeight));
+    });
+
+    cursorY = 170;
+    const cards = [
+      { label: "Colaboradores", value: reportSummaryLabel(preview.totalCollaborators) },
+      { label: "Soma dos pontos", value: `${reportSummaryLabel(preview.totalPoints)} pts` },
+      { label: "Média de pontos", value: `${reportSummaryLabel(preview.averagePoints)} pts` },
+      { label: "Líder", value: preview.leaderLabel }
+    ];
+    cards.forEach((card, index) => {
+      const boxX = marginX + (index * (summaryWidth + summaryGap));
+      doc.setFillColor(245, 248, 253);
+      doc.setDrawColor(209, 221, 241);
+      doc.roundedRect(boxX, cursorY, summaryWidth, 74, 10, 10, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(index === 3 ? 12 : 16);
+      doc.setTextColor(28, 58, 106);
+      const lines = doc.splitTextToSize(card.value, summaryWidth - 24);
+      doc.text(lines, boxX + 12, cursorY + 24);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(86, 103, 132);
+      doc.text(card.label, boxX + 12, cursorY + 58);
+    });
+
+    cursorY += 110;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(24, 51, 97);
+    doc.text("Ranking Geral", marginX, cursorY);
+
+    const rankingHead = [["Posição", "Colaborador", "Matrícula", "Pontos Totais"]];
+    const rankingBody = preview.rankingRows.map((row, index) => [
+      String(row.posicao > 0 ? row.posicao : index + 1),
+      row.nome,
+      row.mat,
+      `${formatMetric(row.total_pontos, "")} pts`
+    ]);
+    autoTable(doc, {
+      startY: cursorY + 8,
+      margin: { left: marginX, right: marginX },
+      head: rankingHead,
+      body: rankingBody,
+      theme: "grid",
+      tableWidth: contentWidth,
+      styles: {
+        fontSize: 8,
+        cellPadding: 4,
+        overflow: "ellipsize",
+        valign: "middle",
+        lineColor: [214, 225, 241],
+        lineWidth: 0.4,
+        textColor: [31, 45, 69]
+      },
+      headStyles: {
+        fillColor: [31, 69, 125],
+        textColor: [255, 255, 255],
+        fontStyle: "bold"
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 253]
+      },
+      columnStyles: {
+        0: { cellWidth: 52 },
+        1: { cellWidth: 280, overflow: "linebreak" },
+        2: { cellWidth: 88 },
+        3: { cellWidth: 96 }
+      }
+    });
+
+    const afterRanking = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? (cursorY + 60);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(24, 51, 97);
+    doc.text("Detalhamento por Colaborador", marginX, afterRanking + 26);
+
+    const detailsHead = [[
+      "Pos.",
+      "Colaborador",
+      "Matrícula",
+      "Total",
+      "PVPs",
+      "Vol. Expedido",
+      "Blitz",
+      "Zerados",
+      "Ativ Extra",
+      "Alocação",
+      "Devolução",
+      "Ter. Conf",
+      "Avul. Conf",
+      "Ent. Notas",
+      "Reg Lojas"
+    ]];
+    const detailsBody = preview.rankingRows.map((row, index) => [
+      String(row.posicao > 0 ? row.posicao : index + 1),
+      row.nome,
+      row.mat,
+      `${formatMetric(row.total_pontos, "")} pts`,
+      formatRankingPointsAndCount(row.pvps_pontos, row.pvps_qtd, "end", "ends"),
+      formatRankingPointsAndCount(row.vol_pontos, row.vol_qtd, "Vol.", "Vol."),
+      formatRankingPointsAndCount(row.blitz_pontos, row.blitz_qtd, "un", "un"),
+      formatRankingPointsAndCount(row.zerados_pontos, row.zerados_qtd, "end", "ends"),
+      formatRankingPointsAndCount(row.atividade_extra_pontos, row.atividade_extra_qtd, "Regist.", "Regist."),
+      formatRankingPointsAndCount(row.alocacao_pontos, row.alocacao_qtd, "end", "ends"),
+      formatRankingPointsAndCount(row.devolucao_pontos, row.devolucao_qtd, "nf", "nfs"),
+      formatRankingPointsAndCount(row.conf_termo_pontos, row.conf_termo_qtd, "sku", "skus"),
+      formatRankingPointsAndCount(row.conf_avulso_pontos, row.conf_avulso_qtd, "sku", "skus"),
+      formatRankingPointsAndCount(row.conf_entrada_pontos, row.conf_entrada_qtd, "sku", "skus"),
+      formatRankingPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas")
+    ]);
+    autoTable(doc, {
+      startY: afterRanking + 34,
+      margin: { left: marginX, right: marginX },
+      head: detailsHead,
+      body: detailsBody,
+      theme: "grid",
+      tableWidth: contentWidth,
+      styles: {
+        fontSize: 6.1,
+        cellPadding: 3,
+        overflow: "ellipsize",
+        valign: "middle",
+        lineColor: [214, 225, 241],
+        lineWidth: 0.4,
+        textColor: [31, 45, 69]
+      },
+      headStyles: {
+        fillColor: [31, 69, 125],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        overflow: "linebreak"
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 253]
+      },
+      columnStyles: buildPdfColumnStyles(
+        doc,
+        detailsHead[0],
+        detailsBody,
+        contentWidth,
+        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        {
+          0: 30,
+          1: 124,
+          2: 54,
+          3: 52,
+          4: 56,
+          5: 62,
+          6: 52,
+          7: 56,
+          8: 60,
+          9: 56,
+          10: 56,
+          11: 56,
+          12: 56,
+          13: 60,
+          14: 56
+        },
+        {
+          1: 180
+        }
+      )
+    });
+
+    const totalPages = doc.getNumberOfPages();
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+      doc.setPage(pageNumber);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(86, 103, 132);
+      doc.text(`Página ${pageNumber} de ${totalPages}`, pageWidth - marginX, pageHeight - 20, { align: "right" });
+    }
+    doc.save(`ranking-produtividade-${preview.month}-cd-${String(activeCd).padStart(2, "0")}.pdf`);
+  }, [activeCd]);
+
+  const runRankingPdfExport = useCallback(async () => {
+    if (!canUseRankingPdf) {
+      setReportError("A exportação em PDF do ranking está disponível apenas para admin no desktop.");
+      return;
+    }
+    if (!reportPdfPreview) {
+      setReportError("Prepare o PDF antes de exportar.");
+      return;
+    }
+    setReportBusyExport(true);
+    setReportError(null);
+    setReportMessage(null);
+    try {
+      await exportRankingPdf(reportPdfPreview);
+      setReportMessage("Relatório PDF gerado com sucesso.");
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório PDF.");
+    } finally {
+      setReportBusyExport(false);
+    }
+  }, [canUseRankingPdf, exportRankingPdf, reportPdfPreview]);
 
   useEffect(() => {
     if (viewMode === "history") {
@@ -515,6 +958,61 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                     </button>
                   </div>
                 </div>
+
+                {isAdmin && !isDesktop ? (
+                  <div className="alert info">A exportação do ranking em PDF está disponível apenas no desktop.</div>
+                ) : null}
+
+                {canUseRankingPdf ? (
+                  <div className="produtividade-period-card">
+                    <div className="produtividade-period-row" style={{ alignItems: "center" }}>
+                      <div style={{ flex: "1 1 280px" }}>
+                        <strong style={{ display: "block", marginBottom: 4 }}>Relatório PDF do Ranking</strong>
+                        <small style={{ color: "var(--color-text-muted)" }}>
+                          Prepare a prévia e depois exporte o PDF do mês selecionado.
+                        </small>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-muted"
+                        onClick={() => void prepareRankingPdfPreview()}
+                        disabled={reportBusyPrepare || loadingRanking}
+                      >
+                        {reportBusyPrepare ? "Preparando..." : "Preparar PDF"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => void runRankingPdfExport()}
+                        disabled={reportBusyExport || reportPdfPreview == null}
+                      >
+                        {reportBusyExport ? "Exportando..." : "Exportar PDF"}
+                      </button>
+                    </div>
+                    {reportError ? <div className="alert error" style={{ marginTop: 12 }}>{reportError}</div> : null}
+                    {reportMessage ? <div className="alert success" style={{ marginTop: 12 }}>{reportMessage}</div> : null}
+                    {reportPdfPreview ? (
+                      <div className="produtividade-overview-strip" style={{ marginTop: 12 }}>
+                        <article className="produtividade-kpi-card">
+                          <small>Referência</small>
+                          <strong>{reportPdfPreview.monthLabel}</strong>
+                        </article>
+                        <article className="produtividade-kpi-card">
+                          <small>CD</small>
+                          <strong>{reportPdfPreview.cdLabel}</strong>
+                        </article>
+                        <article className="produtividade-kpi-card">
+                          <small>Colaboradores</small>
+                          <strong>{reportPdfPreview.totalCollaborators}</strong>
+                        </article>
+                        <article className="produtividade-kpi-card">
+                          <small>Líder</small>
+                          <strong>{reportPdfPreview.rankingRows[0]?.nome ?? "-"}</strong>
+                        </article>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {loadingRanking ? (
                   <div className="coleta-empty">Calculando ranking...</div>
