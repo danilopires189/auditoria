@@ -44,7 +44,6 @@ interface ProdutividadePdfPreview {
   cdLabel: string;
   generatedAt: string;
   generatedBy: string;
-  totalCollaborators: number;
   leaderLabel: string;
   rankingRows: ProdutividadeRankingRow[];
 }
@@ -107,12 +106,6 @@ function formatMetric(value: number, unit: string): string {
 
 function formatMetricWithUnit(value: number, unitLabel: string): string {
   return formatMetricWithInflection(value, unitLabel, formatMetric);
-}
-
-function reportSummaryLabel(value: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    maximumFractionDigits: 3
-  }).format(value);
 }
 
 function formatRankingPointsAndCount(points: number, count: number, singular: string, plural: string): string {
@@ -256,6 +249,19 @@ function buildPdfColumnStyles(
   );
 }
 
+function pdfIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 3h9l3 3v15H6z" />
+      <path d="M15 3v3h3" />
+      <path d="M8 14h2.5a1.5 1.5 0 0 0 0-3H8v6" />
+      <path d="M13 11h1.5a2 2 0 0 1 0 4H13z" />
+      <path d="M17 11h-2v6" />
+      <path d="M17 14h1.5" />
+    </svg>
+  );
+}
+
 function visibilityIcon(isOwnerOnly: boolean) {
   if (isOwnerOnly) {
     return (
@@ -293,11 +299,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   const [rankingRows, setRankingRows] = useState<ProdutividadeRankingRow[]>([]);
   const [loadingRanking, setLoadingRanking] = useState(false);
   const [expandedRankingUser, setExpandedRankingUser] = useState<string | null>(null);
-  const [reportPdfPreview, setReportPdfPreview] = useState<ProdutividadePdfPreview | null>(null);
-  const [reportBusyPrepare, setReportBusyPrepare] = useState(false);
   const [reportBusyExport, setReportBusyExport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
-  const [reportMessage, setReportMessage] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -378,12 +381,6 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     media.addListener(onChange);
     return () => media.removeListener(onChange);
   }, []);
-
-  useEffect(() => {
-    setReportPdfPreview(null);
-    setReportError(null);
-    setReportMessage(null);
-  }, [activeCd, rankingMonth, rankingRows]);
 
   const loadEntriesOnly = useCallback(async (targetUserId: string | null, nextActivityKey: string | null) => {
     if (activeCd == null || targetUserId == null) {
@@ -520,7 +517,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     }
   }, [activeCd, rankingMonth]);
 
-  const prepareRankingPdfPreview = useCallback(async (): Promise<ProdutividadePdfPreview | null> => {
+  const buildRankingPdfPreview = useCallback((): ProdutividadePdfPreview | null => {
     if (!canUseRankingPdf) {
       setReportError("A exportação em PDF do ranking está disponível apenas para admin no desktop.");
       return null;
@@ -530,35 +527,20 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       return null;
     }
     if (rankingRows.length === 0) {
-      setReportError("Clique em Buscar Ranking para preparar o PDF antes de exportar.");
+      setReportError("Clique em Buscar Ranking antes de exportar o PDF.");
       return null;
     }
 
-    setReportBusyPrepare(true);
     setReportError(null);
-    setReportMessage(null);
-    try {
-      const preview: ProdutividadePdfPreview = {
-        month: rankingMonth,
-        monthLabel: formatRankingMonthLabel(rankingMonth),
-        cdLabel: friendlyCdLabel(profile.cd_nome, activeCd),
-        generatedAt: new Date().toISOString(),
-        generatedBy: `${displayUserName} (${profile.mat || "-"})`,
-        totalCollaborators: rankingRows.length,
-        leaderLabel: rankingRows[0] ? `${rankingRows[0].nome} (${formatMetric(rankingRows[0].total_pontos, "")} pts)` : "-",
-        rankingRows
-      };
-      setReportPdfPreview(preview);
-      setReportMessage(
-        `Prévia preparada com ${formatCountLabel(preview.totalCollaborators, "colaborador", "colaboradores")} no ranking.`
-      );
-      return preview;
-    } catch (error) {
-      setReportError(error instanceof Error ? error.message : "Falha ao preparar relatório PDF.");
-      return null;
-    } finally {
-      setReportBusyPrepare(false);
-    }
+    return {
+      month: rankingMonth,
+      monthLabel: formatRankingMonthLabel(rankingMonth),
+      cdLabel: friendlyCdLabel(profile.cd_nome, activeCd),
+      generatedAt: new Date().toISOString(),
+      generatedBy: `${displayUserName} (${profile.mat || "-"})`,
+      leaderLabel: rankingRows[0] ? `${rankingRows[0].nome} (${formatMetric(rankingRows[0].total_pontos, "")} pts)` : "-",
+      rankingRows
+    };
   }, [activeCd, canUseRankingPdf, displayUserName, profile.cd_nome, profile.mat, rankingMonth, rankingRows]);
 
   const exportRankingPdf = useCallback(async (preview: ProdutividadePdfPreview) => {
@@ -572,7 +554,6 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 36;
     const contentWidth = pageWidth - (marginX * 2);
-    const summaryGap = 10;
 
     let cursorY = 40;
     const logoWidth = 75;
@@ -604,15 +585,12 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     });
 
     cursorY = 170;
-    const collaboratorsWidth = 156;
-    const leaderWidth = contentWidth - collaboratorsWidth - summaryGap;
     [
-      { label: "Colaboradores", value: reportSummaryLabel(preview.totalCollaborators), boxX: marginX, boxWidth: collaboratorsWidth, valueFont: 18, accent: false },
       {
         label: "Líder do ranking",
         value: preview.leaderLabel,
-        boxX: marginX + collaboratorsWidth + summaryGap,
-        boxWidth: leaderWidth,
+        boxX: marginX,
+        boxWidth: contentWidth,
         valueFont: 16,
         accent: true
       }
@@ -797,22 +775,18 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       setReportError("A exportação em PDF do ranking está disponível apenas para admin no desktop.");
       return;
     }
-    if (!reportPdfPreview) {
-      setReportError("Prepare o PDF antes de exportar.");
-      return;
-    }
     setReportBusyExport(true);
     setReportError(null);
-    setReportMessage(null);
     try {
-      await exportRankingPdf(reportPdfPreview);
-      setReportMessage("Relatório PDF gerado com sucesso.");
+      const preview = buildRankingPdfPreview();
+      if (!preview) return;
+      await exportRankingPdf(preview);
     } catch (error) {
       setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório PDF.");
     } finally {
       setReportBusyExport(false);
     }
-  }, [canUseRankingPdf, exportRankingPdf, reportPdfPreview]);
+  }, [buildRankingPdfPreview, canUseRankingPdf, exportRankingPdf]);
 
   useEffect(() => {
     if (viewMode === "history") {
@@ -979,6 +953,18 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                     >
                       {loadingRanking ? "Calculando..." : "Buscar Ranking"}
                     </button>
+                    {canUseRankingPdf ? (
+                      <button
+                        type="button"
+                        className="btn btn-icon"
+                        onClick={() => void runRankingPdfExport()}
+                        disabled={reportBusyExport || loadingRanking}
+                        title="Exportar PDF do ranking"
+                        aria-label="Exportar PDF do ranking"
+                      >
+                        {reportBusyExport ? "..." : pdfIcon()}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -986,56 +972,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                   <div className="alert info">A exportação do ranking em PDF está disponível apenas no desktop.</div>
                 ) : null}
 
-                {canUseRankingPdf ? (
-                  <div className="produtividade-period-card">
-                    <div className="produtividade-period-row" style={{ alignItems: "center" }}>
-                      <div style={{ flex: "1 1 280px" }}>
-                        <strong style={{ display: "block", marginBottom: 4 }}>Relatório PDF do Ranking</strong>
-                        <small style={{ color: "var(--color-text-muted)" }}>
-                          Prepare a prévia e depois exporte o PDF do mês selecionado.
-                        </small>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn btn-muted"
-                        onClick={() => void prepareRankingPdfPreview()}
-                        disabled={reportBusyPrepare || loadingRanking}
-                      >
-                        {reportBusyPrepare ? "Preparando..." : "Preparar PDF"}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => void runRankingPdfExport()}
-                        disabled={reportBusyExport || reportPdfPreview == null}
-                      >
-                        {reportBusyExport ? "Exportando..." : "Exportar PDF"}
-                      </button>
-                    </div>
-                    {reportError ? <div className="alert error" style={{ marginTop: 12 }}>{reportError}</div> : null}
-                    {reportMessage ? <div className="alert success" style={{ marginTop: 12 }}>{reportMessage}</div> : null}
-                    {reportPdfPreview ? (
-                      <div className="produtividade-overview-strip" style={{ marginTop: 12 }}>
-                        <article className="produtividade-kpi-card">
-                          <small>Referência</small>
-                          <strong>{reportPdfPreview.monthLabel}</strong>
-                        </article>
-                        <article className="produtividade-kpi-card">
-                          <small>CD</small>
-                          <strong>{reportPdfPreview.cdLabel}</strong>
-                        </article>
-                        <article className="produtividade-kpi-card">
-                          <small>Colaboradores</small>
-                          <strong>{reportPdfPreview.totalCollaborators}</strong>
-                        </article>
-                        <article className="produtividade-kpi-card">
-                          <small>Líder</small>
-                          <strong>{reportPdfPreview.rankingRows[0]?.nome ?? "-"}</strong>
-                        </article>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
+                {reportError ? <div className="alert error">{reportError}</div> : null}
 
                 {loadingRanking ? (
                   <div className="coleta-empty">Calculando ranking...</div>
