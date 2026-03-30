@@ -603,6 +603,29 @@ function resolveModalNfdValue(row: { nfd: number | null; ref: string }): string 
   return /^\d+$/.test(ref) ? ref : null;
 }
 
+function resolveModalNfdSortValue(row: { nfd: number | null; ref: string }): number | null {
+  const nfdValue = resolveModalNfdValue(row);
+  if (!nfdValue) return null;
+  const parsed = Number.parseInt(nfdValue, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function compareModalRowsByNfdDesc(
+  a: { nfd: number | null; ref: string },
+  b: { nfd: number | null; ref: string }
+): number {
+  const aNfd = resolveModalNfdSortValue(a);
+  const bNfd = resolveModalNfdSortValue(b);
+
+  if (aNfd != null && bNfd != null && aNfd !== bNfd) {
+    return bNfd - aNfd;
+  }
+  if (aNfd != null && bNfd == null) return -1;
+  if (aNfd == null && bNfd != null) return 1;
+
+  return b.ref.localeCompare(a.ref, "pt-BR", { numeric: true, sensitivity: "base" });
+}
+
 function resolveModalOpenRef(row: { nfd: number | null; chave: string | null; ref: string }): string {
   const ref = row.ref.trim();
   if (ref) return ref;
@@ -992,7 +1015,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       : withStatus;
 
     return filtered.sort((a, b) => (
-      a.ref.localeCompare(b.ref, "pt-BR", { numeric: true, sensitivity: "base" })
+      compareModalRowsByNfdDesc(a, b)
     ));
   }, [activeVolume, currentCd, isOnline, manifestVolumeRows, modalVolumeHistory, routeSearchInput]);
 
