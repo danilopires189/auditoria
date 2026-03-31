@@ -19,6 +19,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "devolucao-mercadoria",
   "zerados",
   "produtividade",
+  "meta-mes",
   "busca-produto",
   "validar-enderecamento",
   "validar-etiqueta-pulmao"
