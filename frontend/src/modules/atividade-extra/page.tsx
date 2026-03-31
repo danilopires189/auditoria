@@ -912,7 +912,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                                 : "Digite a matrícula para carregar o nome do colaborador."}
                           </div>
                         </label>
-                        <label>
+                        <label className="atividade-extra-form-date-wide">
                           Data da atividade
                           <div className="input-icon-wrap atividade-extra-picker-input-wrap">
                             <input
