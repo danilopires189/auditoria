@@ -7,6 +7,9 @@ import type {
   VolumeAvulsoManifestBarrasRow,
   VolumeAvulsoManifestItemRow,
   VolumeAvulsoManifestMeta,
+  VolumeAvulsoReportCount,
+  VolumeAvulsoReportFilters,
+  VolumeAvulsoReportRow,
   VolumeAvulsoManifestVolumeRow,
   VolumeAvulsoPartialReopenInfo,
   VolumeAvulsoRouteOverviewRow,
@@ -210,6 +213,54 @@ function mapItem(raw: Record<string, unknown>): VolumeAvulsoItemRow {
     lotes: parseNullableString(raw.lotes ?? raw.lote),
     validades: parseNullableString(raw.validades ?? raw.val),
     updated_at: String(raw.updated_at ?? new Date().toISOString())
+  };
+}
+
+function mapReportCount(raw: Record<string, unknown>): VolumeAvulsoReportCount {
+  return {
+    total_conferencias: Math.max(parseInteger(raw.total_conferencias), 0),
+    total_itens: Math.max(parseInteger(raw.total_itens), 0)
+  };
+}
+
+function mapReportRow(raw: Record<string, unknown>): VolumeAvulsoReportRow {
+  const statusRaw = String(raw.status ?? "em_conferencia");
+  const status = statusRaw === "finalizado_ok" || statusRaw === "finalizado_falta"
+    ? statusRaw
+    : "em_conferencia";
+  const tipoRaw = String(raw.divergencia_tipo ?? "correto").toLowerCase();
+  const divergencia_tipo = tipoRaw === "falta" || tipoRaw === "sobra" ? tipoRaw : "correto";
+
+  return {
+    conf_date: String(raw.conf_date ?? ""),
+    cd: parseInteger(raw.cd),
+    nr_volume: String(raw.nr_volume ?? "").trim(),
+    caixa: parseNullableString(raw.caixa),
+    pedido: parseIntegerOrNull(raw.pedido),
+    filial: parseIntegerOrNull(raw.filial),
+    filial_nome: parseNullableString(raw.filial_nome),
+    rota: parseNullableString(raw.rota),
+    status,
+    started_mat: parseNullableString(raw.started_mat),
+    started_nome: parseNullableString(raw.started_nome),
+    started_at: parseNullableString(raw.started_at),
+    finalized_at: parseNullableString(raw.finalized_at),
+    updated_at: parseNullableString(raw.updated_at),
+    total_itens: Math.max(parseInteger(raw.total_itens), 0),
+    itens_conferidos: Math.max(parseInteger(raw.itens_conferidos), 0),
+    itens_divergentes: Math.max(parseInteger(raw.itens_divergentes), 0),
+    falta_motivo: parseNullableString(raw.falta_motivo),
+    coddv: parseInteger(raw.coddv),
+    descricao: String(raw.descricao ?? "").trim(),
+    barras: parseNullableString(raw.barras),
+    qtd_esperada: Math.max(parseInteger(raw.qtd_esperada), 0),
+    qtd_conferida: Math.max(parseInteger(raw.qtd_conferida), 0),
+    qtd_falta: Math.max(parseInteger(raw.qtd_falta), 0),
+    qtd_sobra: Math.max(parseInteger(raw.qtd_sobra), 0),
+    divergencia_tipo,
+    lotes: parseNullableString(raw.lotes),
+    validades: parseNullableString(raw.validades),
+    item_updated_at: parseNullableString(raw.item_updated_at)
   };
 }
 
@@ -671,4 +722,41 @@ export async function syncPendingVolumeAvulsoVolumes(userId: string): Promise<{
     synced,
     failed
   };
+}
+
+export async function countVolumeAvulsoReportRows(
+  filters: VolumeAvulsoReportFilters
+): Promise<VolumeAvulsoReportCount> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_conf_volume_avulso_report_count", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) return { total_conferencias: 0, total_itens: 0 };
+  return mapReportCount(first);
+}
+
+export async function fetchVolumeAvulsoReportRows(
+  filters: VolumeAvulsoReportFilters,
+  offset = 0,
+  limit = 1000
+): Promise<VolumeAvulsoReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_conf_volume_avulso_report_rows", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd,
+    p_offset: Math.max(offset, 0),
+    p_limit: Math.max(1, limit)
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapReportRow(row as Record<string, unknown>));
 }

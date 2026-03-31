@@ -73,6 +73,47 @@ export interface PedidoDiretoItemRow {
   updated_at: string;
 }
 
+export interface PedidoDiretoReportFilters {
+  dtIni: string;
+  dtFim: string;
+  cd: number;
+}
+
+export interface PedidoDiretoReportCount {
+  total_conferencias: number;
+  total_itens: number;
+}
+
+export interface PedidoDiretoReportRow {
+  conf_date: string;
+  cd: number;
+  id_vol: string;
+  caixa: string | null;
+  pedido: number | null;
+  filial: number | null;
+  filial_nome: string | null;
+  rota: string | null;
+  status: PedidoDiretoConfStatus;
+  started_mat: string | null;
+  started_nome: string | null;
+  started_at: string | null;
+  finalized_at: string | null;
+  updated_at: string | null;
+  total_itens: number;
+  itens_conferidos: number;
+  itens_divergentes: number;
+  falta_motivo: string | null;
+  coddv: number;
+  descricao: string;
+  barras: string | null;
+  qtd_esperada: number;
+  qtd_conferida: number;
+  qtd_falta: number;
+  qtd_sobra: number;
+  divergencia_tipo: PedidoDiretoDivergenciaTipo;
+  item_updated_at: string | null;
+}
+
 export interface PedidoDiretoVolumeRow {
   conf_id: string;
   conf_date: string;
