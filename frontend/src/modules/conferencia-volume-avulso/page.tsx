@@ -935,11 +935,6 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         Data: formatReportDate(row.conf_date),
         CD: row.cd,
         NR_Volume: row.nr_volume,
-        Caixa: row.caixa ?? "",
-        Pedido: row.pedido ?? "",
-        Filial: row.filial ?? "",
-        Filial_Nome: row.filial_nome ?? "",
-        Rota: row.rota ?? "",
         Status: formatConferenceStatusLabel(row.status),
         Conferente_Principal: row.started_nome ?? "",
         Matricula: row.started_mat ?? "",
@@ -955,11 +950,6 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         Data: formatReportDate(row.conf_date),
         CD: row.cd,
         NR_Volume: row.nr_volume,
-        Caixa: row.caixa ?? "",
-        Pedido: row.pedido ?? "",
-        Filial: row.filial ?? "",
-        Filial_Nome: row.filial_nome ?? "",
-        Rota: row.rota ?? "",
         Status: formatConferenceStatusLabel(row.status),
         CODDV: row.coddv,
         Descricao: row.descricao,
@@ -984,10 +974,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         Finalizacao: formatDateTime(row.finalized_at),
         Status: formatConferenceStatusLabel(row.status),
         Status_Divergencia: row.itens_divergentes > 0 ? "Com divergencia" : "Sem divergencia",
-        CD: row.cd,
-        Rota: row.rota ?? "",
-        Filial: row.filial_nome ?? (row.filial != null ? String(row.filial) : ""),
-        Caixa: row.caixa ?? ""
+        CD: row.cd
       }));
 
       const totalQtdEsperada = itemRows.reduce((sum, row) => sum + row.qtd_esperada, 0);
@@ -1037,18 +1024,17 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
       summarySheet["!cols"] = [{ wch: 28 }, { wch: 24 }];
       conferencesSheet["!cols"] = [
-        { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 26 },
-        { wch: 16 }, { wch: 22 }, { wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 22 },
-        { wch: 12 }, { wch: 14 }, { wch: 16 }
+        { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 22 }, { wch: 24 }, { wch: 14 },
+        { wch: 20 }, { wch: 20 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 16 }
       ];
       itemsSheet["!cols"] = [
-        { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 26 },
-        { wch: 16 }, { wch: 22 }, { wch: 10 }, { wch: 42 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
-        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 24 }, { wch: 22 }
+        { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 22 }, { wch: 10 }, { wch: 42 }, { wch: 18 },
+        { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 18 },
+        { wch: 24 }, { wch: 22 }
       ];
       collaboratorsSheet["!cols"] = [
         { wch: 26 }, { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 22 },
-        { wch: 22 }, { wch: 8 }, { wch: 16 }, { wch: 26 }, { wch: 14 }
+        { wch: 22 }, { wch: 8 }
       ];
 
       XLSX.utils.book_append_sheet(workbook, summarySheet, "Resumo");
