@@ -1,5 +1,6 @@
 export type AtividadeExtraVisibilityMode = "public_cd" | "owner_only";
 export type AtividadeExtraApprovalStatus = "pending" | "approved";
+export type AtividadeExtraEntryMode = "timed" | "manual_points";
 
 export interface AtividadeExtraModuleProfile {
   user_id: string;
@@ -27,12 +28,19 @@ export interface AtividadeExtraCollaboratorRow {
   atividades_count: number;
 }
 
+export interface AtividadeExtraAssignableUserRow {
+  user_id: string;
+  mat: string;
+  nome: string;
+}
+
 export interface AtividadeExtraEntryRow {
   id: string;
   cd: number;
   user_id: string;
   mat: string;
   nome: string;
+  entry_mode: AtividadeExtraEntryMode;
   data_inicio: string;
   hora_inicio: string;
   data_fim: string;
@@ -59,6 +67,14 @@ export interface AtividadeExtraCreatePayload {
   hora_inicio: string;
   data_fim: string;
   hora_fim: string;
+  descricao: string;
+}
+
+export interface AtividadeExtraAdminPointsCreatePayload {
+  cd: number;
+  target_user_id: string;
+  data_atividade: string;
+  pontos: number;
   descricao: string;
 }
 
