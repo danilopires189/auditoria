@@ -2340,6 +2340,8 @@ small {
 .atividade-extra-editor-dialog {
   width: min(100%, 460px);
   max-width: min(calc(100vw - 24px), 460px);
+  max-height: min(calc(100dvh - 24px), 760px);
+  overflow-y: auto;
 }
 
 .atividade-extra-editor-dialog .atividade-extra-form {
@@ -2375,6 +2377,34 @@ small {
 
 .atividade-extra-form-grid label {
   min-width: 0;
+}
+
+.atividade-extra-mat-input {
+  font-variant-numeric: tabular-nums;
+}
+
+.atividade-extra-readonly-field {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  color: #5b6780;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.atividade-extra-readonly-field.is-filled {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.atividade-extra-readonly-field.is-error {
+  border-color: #f0b8b4;
+  background: #fff8f8;
+  color: #b83a3a;
 }
 
 .atividade-extra-picker-input-wrap input.atividade-extra-picker-input {
@@ -2432,6 +2462,12 @@ small {
   color: #2b426c;
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.atividade-extra-preview-line span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .atividade-extra-form-actions {
@@ -2715,6 +2751,11 @@ small {
 
   .atividade-extra-editor-actions .btn {
     width: 100%;
+  }
+
+  .atividade-extra-editor-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
   }
 }
 
