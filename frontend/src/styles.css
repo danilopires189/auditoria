@@ -2412,7 +2412,9 @@ small {
   padding-right: 42px;
   font-variant-numeric: tabular-nums;
   color-scheme: light;
-  text-align: left;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: transparent;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -2423,7 +2425,28 @@ small {
 .atividade-extra-picker-input-wrap input[type="time"].atividade-extra-picker-input::-webkit-datetime-edit,
 .atividade-extra-picker-input-wrap input[type="date"].atividade-extra-picker-input::-webkit-datetime-edit-fields-wrapper,
 .atividade-extra-picker-input-wrap input[type="time"].atividade-extra-picker-input::-webkit-datetime-edit-fields-wrapper {
-  text-align: left;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.atividade-extra-picker-display {
+  position: absolute;
+  left: 14px;
+  right: 42px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #172640;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .atividade-extra-picker-input-wrap input.atividade-extra-picker-input::-webkit-calendar-picker-indicator {
