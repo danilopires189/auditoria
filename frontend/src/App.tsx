@@ -36,6 +36,7 @@ import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
 import type { IndicadoresModuleProfile } from "./modules/indicadores/types";
+import type { MetaMesModuleProfile } from "./modules/meta-mes/types";
 import type { ValidarEnderecamentoModuleProfile } from "./modules/validar-enderecamento/types";
 import type { ValidarEtiquetaPulmaoModuleProfile } from "./modules/validar-etiqueta-pulmao/types";
 import type { PedidoDiretoModuleProfile } from "./modules/conferencia-pedido-direto/types";
@@ -121,7 +122,7 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   "logisticacd.vercel.app": {
     appLabel: "Logística CDs",
     authCaption: "Logística CDs",
-    hiddenModuleKeys: ["atividade-extra", "produtividade", "meta-mes"],
+    hiddenModuleKeys: ["atividade-extra", "produtividade"],
     defaultRoute: null
   },
   "indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
@@ -2270,6 +2271,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const metaMesProfile = useMemo<MetaMesModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const indicadoresProfile = useMemo<IndicadoresModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2533,8 +2546,10 @@ export default function App() {
             element={
               hiddenModuleKeySet.has("meta-mes") ? (
                 <Navigate to="/inicio" replace />
+              ) : metaMesProfile ? (
+                <MetaMesPage isOnline={isOnline} profile={metaMesProfile} />
               ) : (
-                <MetaMesPage isOnline={isOnline} userName={displayContext.nome} />
+                <Navigate to="/inicio" replace />
               )
             }
           />

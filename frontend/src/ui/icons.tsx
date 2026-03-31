@@ -278,6 +278,19 @@ export function CalendarIcon() {
   );
 }
 
+export function HolidayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+      <path d="M4 10h16" />
+      <path d="M9 14l6 0" />
+      <path d="M12 13l0 6" />
+    </svg>
+  );
+}
+
 export function ClockIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
