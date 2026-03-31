@@ -43,6 +43,10 @@ export interface MetaMesSummary {
   days_holiday: number;
   days_without_target: number;
   balance_to_target: number;
+  daily_target_value: number | null;
+  target_reference_month: string | null;
+  month_workdays: number;
+  elapsed_workdays: number;
 }
 
 export interface MetaMesDailyRow {

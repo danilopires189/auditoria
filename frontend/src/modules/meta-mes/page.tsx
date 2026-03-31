@@ -9,7 +9,7 @@ import {
   fetchMetaMesDailyRows,
   fetchMetaMesMonthOptions,
   fetchMetaMesSummary,
-  setMetaMesDailyTarget,
+  setMetaMesMonthTarget,
   setMetaMesHoliday
 } from "./sync";
 import type {
@@ -128,11 +128,6 @@ function normalizeDraftValue(raw: string): string {
   return String(parsed);
 }
 
-function serializeRowTarget(row: MetaMesDailyRow): string {
-  if (row.target_kind !== "meta" || row.target_value == null) return "";
-  return String(row.target_value);
-}
-
 function targetInputStep(mode: MetaMesValueMode): string {
   return mode === "currency" ? "0.01" : "1";
 }
@@ -158,22 +153,30 @@ function statusClassName(status: MetaMesDailyRow["status"]): string {
   return `is-${status.replace("_", "-")}`;
 }
 
-function emptyDraftMap(rows: MetaMesDailyRow[]): Record<string, string> {
-  return Object.fromEntries(rows.map((row) => [row.date_ref, serializeRowTarget(row)]));
+function formatMonthYearPtBR(value: string | null): string {
+  if (!value) return "-";
+  const [yearRaw, monthRaw] = value.split("-");
+  const year = Number.parseInt(yearRaw ?? "", 10);
+  const month = Number.parseInt(monthRaw ?? "", 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric"
+  }).format(new Date(year, month - 1, 1));
 }
 
 function DailyTargetChart({ rows, valueMode }: { rows: MetaMesDailyRow[]; valueMode: MetaMesValueMode }) {
   const safeRows = Math.max(rows.length, 1);
-  const horizontalPadding = 34;
-  const slotWidth = 46;
+  const horizontalPadding = 40;
+  const slotWidth = 56;
   const chartWidth = Math.max(1220, horizontalPadding * 2 + safeRows * slotWidth);
-  const chartHeight = 352;
-  const plotTop = 28;
-  const plotBottom = 262;
+  const chartHeight = 430;
+  const plotTop = 34;
+  const plotBottom = 324;
   const plotHeight = plotBottom - plotTop;
-  const innerSlot = 24;
-  const targetWidth = 14;
-  const actualWidth = 14;
+  const innerSlot = 28;
+  const targetWidth = 16;
+  const actualWidth = 16;
   const maxValue = Math.max(
     1,
     ...rows.flatMap((row) => [row.actual_value, row.target_kind === "meta" ? row.target_value ?? 0 : 0])
@@ -221,14 +224,14 @@ function DailyTargetChart({ rows, valueMode }: { rows: MetaMesDailyRow[]; valueM
                 {row.actual_value > 0 ? (
                   <text
                     x={baseX + innerSlot / 2 - actualWidth / 2}
-                    y={Math.max(actualY - 10, 18)}
+                    y={Math.max(actualY - 12, 22)}
                     textAnchor="middle"
                     className="meta-mes-chart-value"
                   >
                     {formatCompactValue(row.actual_value, valueMode)}
                   </text>
                 ) : null}
-                <text x={baseX} y="292" textAnchor="middle" className="meta-mes-chart-label">
+                <text x={baseX} y="362" textAnchor="middle" className="meta-mes-chart-label">
                   {String(row.day_number).padStart(2, "0")}
                 </text>
               </g>
@@ -257,11 +260,12 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
 
   const [summary, setSummary] = useState<MetaMesSummary | null>(null);
   const [dailyRows, setDailyRows] = useState<MetaMesDailyRow[]>([]);
-  const [draftTargets, setDraftTargets] = useState<Record<string, string>>({});
+  const [monthTargetDraft, setMonthTargetDraft] = useState("");
 
   const [loadingFilters, setLoadingFilters] = useState(true);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [busyDayKey, setBusyDayKey] = useState<string | null>(null);
+  const [savingMonthTarget, setSavingMonthTarget] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -269,7 +273,7 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
     if (!activityKey || !monthStart) {
       setSummary(null);
       setDailyRows([]);
-      setDraftTargets({});
+      setMonthTargetDraft("");
       return;
     }
 
@@ -282,12 +286,11 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
       ]);
       setSummary(nextSummary);
       setDailyRows(nextRows);
-      setDraftTargets(emptyDraftMap(nextRows));
     } catch (error) {
       setErrorMessage(asErrorMessage(error));
       setSummary(null);
       setDailyRows([]);
-      setDraftTargets({});
+      setMonthTargetDraft("");
     } finally {
       setLoadingDashboard(false);
     }
@@ -337,6 +340,10 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
     void loadDashboard(selectedActivityKey, selectedMonthStart);
   }, [loadDashboard, selectedActivityKey, selectedMonthStart]);
 
+  useEffect(() => {
+    setMonthTargetDraft(summary?.daily_target_value != null ? String(summary.daily_target_value) : "");
+  }, [summary?.activity_key, summary?.daily_target_value, summary?.month_start]);
+
   const selectedActivity = useMemo(
     () => activities.find((item) => item.activity_key === selectedActivityKey) ?? null,
     [activities, selectedActivityKey]
@@ -348,14 +355,21 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
   );
 
   const valueMode = summary?.value_mode ?? selectedActivity?.value_mode ?? "integer";
-  const projectionPercent = summary && summary.total_target > 0
-    ? (summary.monthly_projection / summary.total_target) * 100
-    : null;
   const isCurrentMonthSelected = selectedMonthStart === monthStartIsoBrasilia();
+  const monthlyTargetOriginLabel = useMemo(() => {
+    if (!summary?.target_reference_month) return "Sem meta diária configurada.";
+    if (summary.target_reference_month === summary.month_start) return "Meta configurada neste mês.";
+    return `Meta replicada de ${formatMonthYearPtBR(summary.target_reference_month)}.`;
+  }, [summary?.month_start, summary?.target_reference_month]);
+  const normalizedMonthDraft = normalizeDraftValue(monthTargetDraft);
+  const normalizedSummaryMonthTarget = normalizeDraftValue(summary?.daily_target_value != null ? String(summary.daily_target_value) : "");
+  const isMonthTargetDirty = normalizedMonthDraft !== normalizedSummaryMonthTarget;
 
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
     return [
+      { label: "Meta por dia", value: summary.daily_target_value == null ? "-" : formatMetricValue(summary.daily_target_value, valueMode) },
+      { label: "Dias úteis no mês", value: String(summary.month_workdays) },
       { label: "Total do mês", value: formatMetricValue(summary.total_actual, valueMode) },
       { label: "Meta do mês", value: formatMetricValue(summary.total_target, valueMode) },
       {
@@ -365,51 +379,41 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
       },
       { label: "Média dia", value: formatMetricValue(summary.daily_average, valueMode) },
       { label: "Projeção mensal", value: formatMetricValue(summary.monthly_projection, valueMode), accent: "neutral" },
-      {
-        label: "Ritmo projetado",
-        value: formatPercent(projectionPercent),
-        accent: projectionPercent != null && projectionPercent >= 100 ? "success" : "warning"
-      },
-      { label: "Dias com meta", value: String(summary.days_with_target) },
       { label: "Dias atingidos", value: String(summary.days_hit), accent: summary.days_hit > 0 ? "success" : "neutral" }
     ];
-  }, [projectionPercent, summary, valueMode]);
+  }, [summary, valueMode]);
 
-  const onChangeDraft = useCallback((dateRef: string, value: string) => {
-    setDraftTargets((current) => ({
-      ...current,
-      [dateRef]: value
-    }));
-  }, []);
-
-  const onSaveTarget = useCallback(async (row: MetaMesDailyRow) => {
+  const onSaveMonthTarget = useCallback(async () => {
     if (!selectedActivityKey || !selectedMonthStart) return;
-    const draft = (draftTargets[row.date_ref] ?? "").trim();
-    const normalized = draft.replace(",", ".");
+    const normalized = monthTargetDraft.trim().replace(",", ".");
     const targetValue = normalized === "" ? null : Number.parseFloat(normalized);
     if (targetValue != null && !Number.isFinite(targetValue)) {
-      setErrorMessage("Informe uma meta válida antes de salvar.");
+      setErrorMessage("Informe uma meta diária válida antes de salvar.");
       return;
     }
 
-    setBusyDayKey(row.date_ref);
+    setSavingMonthTarget(true);
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      await setMetaMesDailyTarget({
+      await setMetaMesMonthTarget({
         cd: activeCd,
         activityKey: selectedActivityKey,
-        dateRef: row.date_ref,
-        targetValue
+        monthStart: selectedMonthStart,
+        dailyTargetValue: targetValue
       });
       await loadDashboard(selectedActivityKey, selectedMonthStart);
-      setStatusMessage(`Meta do dia ${formatDateOnlyPtBR(row.date_ref)} atualizada.`);
+      setStatusMessage(
+        targetValue == null
+          ? "Configuração mensal removida. O mês volta a usar a última meta anterior, se existir."
+          : "Meta diária do mês atualizada. A meta mensal foi recalculada automaticamente."
+      );
     } catch (error) {
       setErrorMessage(asErrorMessage(error));
     } finally {
-      setBusyDayKey(null);
+      setSavingMonthTarget(false);
     }
-  }, [activeCd, draftTargets, loadDashboard, selectedActivityKey, selectedMonthStart]);
+  }, [activeCd, loadDashboard, monthTargetDraft, selectedActivityKey, selectedMonthStart]);
 
   const onToggleHoliday = useCallback(async (row: MetaMesDailyRow) => {
     if (!selectedActivityKey || !selectedMonthStart) return;
@@ -515,7 +519,7 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
             <div className="meta-mes-hero-main">
               <strong>{summary?.activity_label ?? selectedActivity?.activity_label ?? "Selecione uma meta"}</strong>
               <p>
-                Um dia por linha, meta diária configurável no mês atual, domingos zerados automaticamente e feriados sem cobrança de meta.
+                A meta agora é definida por dia no nível do mês. O valor é aplicado automaticamente nos dias úteis, domingos ficam zerados e feriados retiram a cobrança daquele dia.
               </p>
             </div>
             <div className="meta-mes-hero-side">
@@ -524,7 +528,7 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
               </span>
               <small>
                 {isCurrentMonthSelected
-                  ? "Percentual só aparece quando houver meta definida."
+                  ? "Meta mensal calculada automaticamente pelos dias válidos do calendário."
                   : "Meses anteriores ficam travados para consulta histórica."}
               </small>
             </div>
@@ -532,6 +536,67 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
 
           {errorMessage ? <div className="indicadores-feedback is-error">{errorMessage}</div> : null}
           {statusMessage ? <div className="meta-mes-feedback">{statusMessage}</div> : null}
+
+          <section className="meta-mes-plan-grid">
+            <article className="indicadores-panel meta-mes-panel meta-mes-plan-card">
+              <div className="indicadores-panel-head">
+                <h3>Planejamento mensal</h3>
+                <span>Meta diária aplicada automaticamente aos dias úteis do mês.</span>
+              </div>
+              <div className="meta-mes-plan-body">
+                <label className="meta-mes-plan-field">
+                  <span>Meta diária</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step={targetInputStep(valueMode)}
+                    value={monthTargetDraft}
+                    onChange={(event) => setMonthTargetDraft(event.target.value)}
+                    disabled={!isAdmin || !isCurrentMonthSelected || savingMonthTarget}
+                    placeholder="Sem meta"
+                  />
+                </label>
+                <div className="meta-mes-plan-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => void onSaveMonthTarget()}
+                    disabled={!isAdmin || !isCurrentMonthSelected || savingMonthTarget || !isMonthTargetDirty}
+                  >
+                    {savingMonthTarget ? "Salvando..." : "Salvar meta diária"}
+                  </button>
+                  <span className="meta-mes-plan-note">
+                    {monthlyTargetOriginLabel}
+                  </span>
+                </div>
+                <div className="meta-mes-plan-hints">
+                  <span>Meta do mês = meta diária x dias úteis sem domingo e sem feriado.</span>
+                  <span>Ao virar o mês, a última meta configurada continua valendo até uma nova alteração.</span>
+                </div>
+              </div>
+            </article>
+
+            <article className="indicadores-panel meta-mes-panel meta-mes-plan-side">
+              <div className="indicadores-panel-head">
+                <h3>Regra de cálculo</h3>
+                <span>Como o módulo fecha a meta do mês.</span>
+              </div>
+              <div className="meta-mes-plan-summary">
+                <div>
+                  <span>Dias úteis do mês</span>
+                  <strong>{summary ? String(summary.month_workdays) : "-"}</strong>
+                </div>
+                <div>
+                  <span>Dias úteis já decorridos</span>
+                  <strong>{summary ? String(summary.elapsed_workdays) : "-"}</strong>
+                </div>
+                <div>
+                  <span>Meta ativa de referência</span>
+                  <strong>{summary?.target_reference_month ? formatMonthYearPtBR(summary.target_reference_month) : "-"}</strong>
+                </div>
+              </div>
+            </article>
+          </section>
 
           <div className="indicadores-metrics-grid meta-mes-metrics-grid">
             {metricCards.map((card) => (
@@ -576,7 +641,7 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
                   <strong>{summary ? String(summary.days_holiday) : "-"}</strong>
                 </article>
                 <article className="meta-mes-insight-card">
-                  <span>Dias sem meta</span>
+                  <span>Dias sem meta automática</span>
                   <strong>{summary ? String(summary.days_without_target) : "-"}</strong>
                 </article>
               </div>
@@ -617,8 +682,6 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
                     {dailyRows.map((row) => {
                       const rowBusy = busyDayKey === row.date_ref;
                       const canEditRow = isAdmin && isCurrentMonthSelected && !row.is_sunday;
-                      const draft = draftTargets[row.date_ref] ?? "";
-                      const isDirty = normalizeDraftValue(draft) !== normalizeDraftValue(serializeRowTarget(row));
                       const accumulatedLabel = `${formatMetricValue(row.cumulative_actual, valueMode)} / ${formatMetricValue(row.cumulative_target, valueMode)}`;
                       const deltaLabel = row.delta_value == null ? "-" : formatBalance(row.delta_value, valueMode);
 
@@ -635,23 +698,21 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
                           </td>
                           <td>
                             <div className="meta-mes-target-cell">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                step={targetInputStep(valueMode)}
-                                value={draft}
-                                onChange={(event) => onChangeDraft(row.date_ref, event.target.value)}
-                                disabled={!canEditRow || rowBusy}
-                                placeholder={row.is_sunday ? "0" : row.is_holiday ? "Feriado" : "Sem meta"}
-                              />
+                              <strong>
+                                {row.target_kind === "meta" && row.target_value != null
+                                  ? formatMetricValue(row.target_value, valueMode)
+                                  : row.is_sunday
+                                    ? formatMetricValue(0, valueMode)
+                                    : "-"}
+                              </strong>
                               <small>
                                 {row.is_sunday
                                   ? "Domingo = 0"
                                   : row.is_holiday
                                     ? "Dia sem meta"
                                     : row.target_kind === "sem_meta"
-                                      ? "Não definida"
-                                      : "Meta ativa"}
+                                      ? "Sem meta diária ativa"
+                                      : "Meta automática do mês"}
                               </small>
                             </div>
                           </td>
@@ -683,14 +744,6 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
                                 aria-label={row.is_holiday ? "Remover feriado" : "Marcar feriado"}
                               >
                                 <HolidayIcon />
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-primary meta-mes-save-btn"
-                                onClick={() => void onSaveTarget(row)}
-                                disabled={!canEditRow || rowBusy || !isDirty}
-                              >
-                                {rowBusy ? "Salvando..." : "Salvar"}
                               </button>
                             </div>
                           </td>
