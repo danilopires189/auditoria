@@ -114,6 +114,64 @@ export interface EntradaNotasContributor {
   last_action_at: string;
 }
 
+export interface EntradaNotasReportFilters {
+  dtIni: string;
+  dtFim: string;
+  cd: number;
+}
+
+export interface EntradaNotasReportCount {
+  total_conferencias: number;
+  total_itens: number;
+}
+
+export interface EntradaNotasReportRow {
+  conf_date: string;
+  cd: number;
+  seq_entrada: number;
+  nf: number;
+  transportadora: string;
+  fornecedor: string;
+  status: EntradaNotasConfStatus;
+  started_mat: string | null;
+  started_nome: string | null;
+  started_at: string | null;
+  finalized_at: string | null;
+  updated_at: string | null;
+  total_itens: number;
+  itens_conferidos: number;
+  itens_divergentes: number;
+  valor_total: number;
+  valor_conferido: number;
+  coddv: number;
+  descricao: string;
+  barras: string | null;
+  qtd_esperada: number;
+  qtd_conferida: number;
+  qtd_falta: number;
+  qtd_sobra: number;
+  divergencia_tipo: EntradaNotasDivergenciaTipo;
+  ocorrencia_avariado_qtd: number;
+  ocorrencia_vencido_qtd: number;
+  ocorrencia_avariado_updated_at: string | null;
+  ocorrencia_vencido_updated_at: string | null;
+  item_updated_at: string | null;
+}
+
+export interface EntradaNotasReportContributorRow {
+  conf_date: string;
+  cd: number;
+  seq_entrada: number;
+  nf: number;
+  transportadora: string;
+  fornecedor: string;
+  status: EntradaNotasConfStatus;
+  colaborador_mat: string | null;
+  colaborador_nome: string | null;
+  first_action_at: string | null;
+  last_action_at: string | null;
+}
+
 export interface EntradaNotasPartialReopenInfo {
   conf_id: string;
   seq_entrada: number;

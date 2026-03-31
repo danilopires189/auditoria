@@ -13,6 +13,10 @@ import type {
   EntradaNotasManifestItemRow,
   EntradaNotasManifestMeta,
   EntradaNotasPartialReopenInfo,
+  EntradaNotasReportContributorRow,
+  EntradaNotasReportCount,
+  EntradaNotasReportFilters,
+  EntradaNotasReportRow,
   EntradaNotasRouteOverviewRow,
   EntradaNotasVolumeRow
 } from "./types";
@@ -305,6 +309,70 @@ function mapPartialReopenInfo(raw: Record<string, unknown>): EntradaNotasPartial
     sobra_items: Math.max(parseInteger(raw.sobra_items), 0),
     can_reopen: raw.can_reopen === true,
     can_restart: raw.can_restart === true
+  };
+}
+
+function mapReportCount(raw: Record<string, unknown>): EntradaNotasReportCount {
+  return {
+    total_conferencias: Math.max(parseInteger(raw.total_conferencias), 0),
+    total_itens: Math.max(parseInteger(raw.total_itens), 0)
+  };
+}
+
+function mapReportRow(raw: Record<string, unknown>): EntradaNotasReportRow {
+  const tipoRaw = String(raw.divergencia_tipo ?? "correto").toLowerCase();
+  const divergencia_tipo =
+    tipoRaw === "nao_conferido" || tipoRaw === "falta" || tipoRaw === "sobra"
+      ? tipoRaw
+      : "correto";
+
+  return {
+    conf_date: String(raw.conf_date ?? ""),
+    cd: parseInteger(raw.cd),
+    seq_entrada: parseInteger(raw.seq_entrada),
+    nf: parseInteger(raw.nf),
+    transportadora: String(raw.transportadora ?? "SEM TRANSPORTADORA").trim() || "SEM TRANSPORTADORA",
+    fornecedor: String(raw.fornecedor ?? "SEM FORNECEDOR").trim() || "SEM FORNECEDOR",
+    status: normalizeConferenceStatus(raw.status),
+    started_mat: parseNullableString(raw.started_mat),
+    started_nome: parseNullableString(raw.started_nome),
+    started_at: parseNullableString(raw.started_at),
+    finalized_at: parseNullableString(raw.finalized_at),
+    updated_at: parseNullableString(raw.updated_at),
+    total_itens: Math.max(parseInteger(raw.total_itens), 0),
+    itens_conferidos: Math.max(parseInteger(raw.itens_conferidos), 0),
+    itens_divergentes: Math.max(parseInteger(raw.itens_divergentes), 0),
+    valor_total: Math.max(parseDecimal(raw.valor_total), 0),
+    valor_conferido: Math.max(parseDecimal(raw.valor_conferido), 0),
+    coddv: parseInteger(raw.coddv),
+    descricao: String(raw.descricao ?? "").trim(),
+    barras: parseNullableString(raw.barras),
+    qtd_esperada: Math.max(parseInteger(raw.qtd_esperada), 0),
+    qtd_conferida: Math.max(parseInteger(raw.qtd_conferida), 0),
+    qtd_falta: Math.max(parseInteger(raw.qtd_falta), 0),
+    qtd_sobra: Math.max(parseInteger(raw.qtd_sobra), 0),
+    divergencia_tipo,
+    ocorrencia_avariado_qtd: Math.max(parseInteger(raw.ocorrencia_avariado_qtd), 0),
+    ocorrencia_vencido_qtd: Math.max(parseInteger(raw.ocorrencia_vencido_qtd), 0),
+    ocorrencia_avariado_updated_at: parseNullableString(raw.ocorrencia_avariado_updated_at),
+    ocorrencia_vencido_updated_at: parseNullableString(raw.ocorrencia_vencido_updated_at),
+    item_updated_at: parseNullableString(raw.item_updated_at)
+  };
+}
+
+function mapReportContributorRow(raw: Record<string, unknown>): EntradaNotasReportContributorRow {
+  return {
+    conf_date: String(raw.conf_date ?? ""),
+    cd: parseInteger(raw.cd),
+    seq_entrada: parseInteger(raw.seq_entrada),
+    nf: parseInteger(raw.nf),
+    transportadora: String(raw.transportadora ?? "SEM TRANSPORTADORA").trim() || "SEM TRANSPORTADORA",
+    fornecedor: String(raw.fornecedor ?? "SEM FORNECEDOR").trim() || "SEM FORNECEDOR",
+    status: normalizeConferenceStatus(raw.status),
+    colaborador_mat: parseNullableString(raw.colaborador_mat),
+    colaborador_nome: parseNullableString(raw.colaborador_nome),
+    first_action_at: parseNullableString(raw.first_action_at),
+    last_action_at: parseNullableString(raw.last_action_at)
   };
 }
 
@@ -1012,4 +1080,68 @@ export async function syncPendingEntradaNotasVolumes(userId: string): Promise<{
     synced,
     failed
   };
+}
+
+export async function countEntradaNotasReportRows(
+  filters: EntradaNotasReportFilters
+): Promise<EntradaNotasReportCount> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_report_count", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd
+  });
+
+  if (error) {
+    throw new Error(toErrorMessage(error));
+  }
+
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) {
+    return { total_conferencias: 0, total_itens: 0 };
+  }
+  return mapReportCount(first);
+}
+
+export async function fetchEntradaNotasReportRows(
+  filters: EntradaNotasReportFilters,
+  offset = 0,
+  limit = 1000
+): Promise<EntradaNotasReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_report_rows", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd,
+    p_offset: Math.max(offset, 0),
+    p_limit: Math.max(1, limit)
+  });
+
+  if (error) {
+    throw new Error(toErrorMessage(error));
+  }
+
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapReportRow(row as Record<string, unknown>));
+}
+
+export async function fetchEntradaNotasReportContributors(
+  filters: EntradaNotasReportFilters
+): Promise<EntradaNotasReportContributorRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_conf_entrada_notas_report_contributors", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd
+  });
+
+  if (error) {
+    throw new Error(toErrorMessage(error));
+  }
+
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapReportContributorRow(row as Record<string, unknown>));
 }
