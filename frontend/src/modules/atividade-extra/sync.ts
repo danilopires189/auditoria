@@ -1,6 +1,9 @@
 import { supabase } from "../../lib/supabase";
 import type {
   AtividadeExtraApprovalStatus,
+  AtividadeExtraAdminPointsCreatePayload,
+  AtividadeExtraAssignableUserRow,
+  AtividadeExtraEntryMode,
   AtividadeExtraCollaboratorRow,
   AtividadeExtraCreatePayload,
   AtividadeExtraEntryRow,
@@ -34,6 +37,10 @@ function toErrorMessage(error: unknown): string {
     if (normalized.includes("SEM_PERMISSAO_VISUALIZAR_COLABORADOR")) {
       return "Você não tem permissão para visualizar este colaborador.";
     }
+    if (normalized.includes("COLABORADOR_OBRIGATORIO")) return "Selecione um colaborador.";
+    if (normalized.includes("COLABORADOR_SEM_ACESSO_CD")) return "O colaborador selecionado não pertence ao CD atual.";
+    if (normalized.includes("PONTOS_OBRIGATORIOS")) return "Informe a pontuação.";
+    if (normalized.includes("PONTOS_FORA_FAIXA")) return "A pontuação deve ficar entre 0,001 e 1,500.";
     if (normalized.includes("ID_OBRIGATORIO")) return "Identificador da atividade é obrigatório.";
     if (normalized.includes("ATIVIDADE_APROVADA_NAO_EDITAVEL")) return "Atividade já aprovada não pode ser editada.";
     return raw;
@@ -80,6 +87,10 @@ function parseApprovalStatus(value: unknown): AtividadeExtraApprovalStatus {
   return String(value) === "approved" ? "approved" : "pending";
 }
 
+function parseEntryMode(value: unknown): AtividadeExtraEntryMode {
+  return String(value) === "manual_points" ? "manual_points" : "timed";
+}
+
 function mapVisibilityRow(raw: Record<string, unknown>): AtividadeExtraVisibilityRow {
   return {
     cd: parseInteger(raw.cd),
@@ -101,6 +112,14 @@ function mapCollaboratorRow(raw: Record<string, unknown>): AtividadeExtraCollabo
   };
 }
 
+function mapAssignableUserRow(raw: Record<string, unknown>): AtividadeExtraAssignableUserRow {
+  return {
+    user_id: parseString(raw.user_id),
+    mat: parseString(raw.mat),
+    nome: parseString(raw.nome)
+  };
+}
+
 function mapEntryRow(raw: Record<string, unknown>): AtividadeExtraEntryRow {
   return {
     id: parseString(raw.id),
@@ -108,6 +127,7 @@ function mapEntryRow(raw: Record<string, unknown>): AtividadeExtraEntryRow {
     user_id: parseString(raw.user_id),
     mat: parseString(raw.mat),
     nome: parseString(raw.nome),
+    entry_mode: parseEntryMode(raw.entry_mode),
     data_inicio: parseString(raw.data_inicio),
     hora_inicio: parseString(raw.hora_inicio),
     data_fim: parseString(raw.data_fim),
@@ -184,6 +204,25 @@ export async function insertAtividadeExtra(payload: AtividadeExtraCreatePayload)
   return mapEntryRow(row);
 }
 
+export async function insertAtividadeExtraAdminPoints(
+  payload: AtividadeExtraAdminPointsCreatePayload
+): Promise<AtividadeExtraEntryRow> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_atividade_extra_insert_admin_points", {
+    p_cd: payload.cd,
+    p_target_user_id: payload.target_user_id,
+    p_data_atividade: payload.data_atividade,
+    p_pontos: payload.pontos,
+    p_descricao: payload.descricao
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  const row = firstRow(data);
+  if (!row) throw new Error("Falha ao registrar pontuação manual.");
+  return mapEntryRow(row);
+}
+
 export async function updateAtividadeExtra(payload: AtividadeExtraUpdatePayload): Promise<AtividadeExtraEntryRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
@@ -222,6 +261,18 @@ export async function fetchAtividadeExtraCollaborators(cd: number | null): Promi
   if (!Array.isArray(data)) return [];
 
   return data.map((row) => mapCollaboratorRow(row as Record<string, unknown>));
+}
+
+export async function fetchAtividadeExtraAssignableUsers(cd: number | null): Promise<AtividadeExtraAssignableUserRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_atividade_extra_assignable_users", {
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapAssignableUserRow(row as Record<string, unknown>));
 }
 
 export async function fetchAtividadeExtraEntries(params: {

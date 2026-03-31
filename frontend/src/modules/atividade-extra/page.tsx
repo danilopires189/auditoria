@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { BackIcon, CalendarIcon, ClockIcon, ModuleIcon } from "../../ui/icons";
 import {
   formatDateOnlyPtBR,
   formatDateTimeBrasilia,
@@ -13,15 +13,18 @@ import { getModuleByKeyOrThrow } from "../registry";
 import {
   approveAtividadeExtra,
   deleteAtividadeExtra,
+  fetchAtividadeExtraAssignableUsers,
   fetchAtividadeExtraCollaborators,
   fetchAtividadeExtraEntries,
   fetchAtividadeExtraPendingEntries,
   fetchAtividadeExtraVisibility,
   insertAtividadeExtra,
+  insertAtividadeExtraAdminPoints,
   setAtividadeExtraVisibility,
   updateAtividadeExtra
 } from "./sync";
 import type {
+  AtividadeExtraAssignableUserRow,
   AtividadeExtraCollaboratorRow,
   AtividadeExtraEntryRow,
   AtividadeExtraModuleProfile,
@@ -147,6 +150,13 @@ function formatPoints(value: number): string {
   }).format(value);
 }
 
+function parsePointsInput(value: string): number | null {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function visibilityModeLabel(mode: AtividadeExtraVisibilityMode): string {
   return mode === "owner_only" ? "Somente dono/admin" : "Público no CD";
 }
@@ -210,6 +220,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
 
   const [visibility, setVisibility] = useState<AtividadeExtraVisibilityRow | null>(null);
   const [collaborators, setCollaborators] = useState<AtividadeExtraCollaboratorRow[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<AtividadeExtraAssignableUserRow[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(profile.user_id);
   const [entries, setEntries] = useState<AtividadeExtraEntryRow[]>([]);
   const [pendingEntries, setPendingEntries] = useState<AtividadeExtraEntryRow[]>([]);
@@ -218,6 +229,8 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const [dataAtividade, setDataAtividade] = useState<string>(todayIsoBrasilia());
   const [horaInicio, setHoraInicio] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
   const [horaFim, setHoraFim] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
+  const [adminTargetUserId, setAdminTargetUserId] = useState<string>("");
+  const [manualPoints, setManualPoints] = useState<string>("");
   const [descricao, setDescricao] = useState<string>("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
@@ -227,6 +240,12 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     [collaborators, selectedUserId]
   );
   const pendingApprovalsCount = pendingEntries.length;
+  const selectedAssignableUser = useMemo(
+    () => assignableUsers.find((row) => row.user_id === adminTargetUserId) ?? null,
+    [adminTargetUserId, assignableUsers]
+  );
+  const isAdminManualCreate = isAdmin && !editingEntryId;
+  const manualPointsValue = useMemo(() => parsePointsInput(manualPoints), [manualPoints]);
 
   const previewDurationSeconds = useMemo(
     () => computeDurationSeconds({ dataAtividade, horaInicio, horaFim }),
@@ -241,6 +260,8 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     setDataAtividade(nowDate);
     setHoraInicio(nowTime);
     setHoraFim(nowTime);
+    setAdminTargetUserId("");
+    setManualPoints("");
     setDescricao("");
   }, []);
 
@@ -277,10 +298,11 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     setErrorMessage(null);
 
     try {
-      const [visibilityRow, collaboratorRows, pendingRows] = await Promise.all([
+      const [visibilityRow, collaboratorRows, pendingRows, assignableRows] = await Promise.all([
         fetchAtividadeExtraVisibility(activeCd),
         fetchAtividadeExtraCollaborators(activeCd),
-        isAdmin ? fetchAtividadeExtraPendingEntries(activeCd) : Promise.resolve<AtividadeExtraEntryRow[]>([])
+        isAdmin ? fetchAtividadeExtraPendingEntries(activeCd) : Promise.resolve<AtividadeExtraEntryRow[]>([]),
+        isAdmin ? fetchAtividadeExtraAssignableUsers(activeCd) : Promise.resolve<AtividadeExtraAssignableUserRow[]>([])
       ]);
 
       let nextSelectedUserId = targetPreferred;
@@ -299,7 +321,14 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
 
       setVisibility(visibilityRow);
       setCollaborators(collaboratorRows);
+      setAssignableUsers(assignableRows);
       setSelectedUserId(nextSelectedUserId);
+      setAdminTargetUserId((current) => {
+        if (!isAdmin || assignableRows.length === 0) return "";
+        if (current && assignableRows.some((row) => row.user_id === current)) return current;
+        if (nextSelectedUserId && assignableRows.some((row) => row.user_id === nextSelectedUserId)) return nextSelectedUserId;
+        return assignableRows[0].user_id;
+      });
       setEntries(detailRows);
       setPendingEntries(pendingRows);
     } catch (error) {
@@ -329,6 +358,8 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     setDataAtividade(entry.data_inicio);
     setHoraInicio(toTimeInputValue(entry.hora_inicio));
     setHoraFim(toTimeInputValue(entry.hora_fim));
+    setAdminTargetUserId(entry.user_id);
+    setManualPoints(formatPoints(entry.pontos));
     setDescricao(entry.descricao);
     setEditorOpen(true);
     setStatusMessage(null);
@@ -337,10 +368,16 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
 
   const openCreateModal = useCallback(() => {
     resetForm();
+    if (isAdmin && assignableUsers.length > 0) {
+      const fallbackUserId =
+        (selectedUserId && assignableUsers.some((row) => row.user_id === selectedUserId) ? selectedUserId : null)
+        ?? assignableUsers[0].user_id;
+      setAdminTargetUserId(fallbackUserId);
+    }
     setEditorOpen(true);
     setStatusMessage(null);
     setErrorMessage(null);
-  }, [resetForm]);
+  }, [assignableUsers, isAdmin, resetForm, selectedUserId]);
 
   const closeEditorModal = useCallback(() => {
     setEditorOpen(false);
@@ -485,6 +522,26 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
           descricao: cleanDescription
         });
         setStatusMessage("Atividade atualizada e mantida como aguardando aprovação.");
+      } else if (isAdmin) {
+        if (!adminTargetUserId) {
+          setErrorMessage("Selecione um colaborador.");
+          return;
+        }
+        if (manualPointsValue == null || manualPointsValue <= 0) {
+          setErrorMessage("Informe a pontuação.");
+          return;
+        }
+
+        await insertAtividadeExtraAdminPoints({
+          cd: activeCd,
+          target_user_id: adminTargetUserId,
+          data_atividade: dataAtividade,
+          pontos: manualPointsValue,
+          descricao: cleanDescription
+        });
+        setStatusMessage(
+          `Pontuação lançada para ${selectedAssignableUser?.nome ?? "o colaborador"} e somada imediatamente.`
+        );
       } else {
         await insertAtividadeExtra({
           cd: activeCd,
@@ -497,9 +554,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
         setStatusMessage("Atividade registrada e enviada para aprovação.");
       }
 
+      const nextDetailUserId = !editingEntryId && isAdmin ? adminTargetUserId : selectedUserId ?? profile.user_id;
       resetForm();
       setEditorOpen(false);
-      await loadModuleData(selectedUserId ?? profile.user_id);
+      await loadModuleData(nextDetailUserId);
     } catch (error) {
       setErrorMessage(asUnknownErrorMessage(error));
     } finally {
@@ -601,12 +659,21 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                       <article key={`pending:${entry.id}`} className="atividade-extra-pending-card">
                         <div className="atividade-extra-entry-head">
                           <strong>{entry.nome} ({entry.mat})</strong>
-                          <span>{formatDate(entry.data_inicio)} | {entry.tempo_gasto_hms}</span>
+                          <span>
+                            {formatDate(entry.data_inicio)}
+                            {entry.entry_mode === "manual_points" ? " | Lançamento manual" : ` | ${entry.tempo_gasto_hms}`}
+                          </span>
                         </div>
                         <p className="atividade-extra-entry-description">{entry.descricao}</p>
                         <div className="atividade-extra-entry-meta">
-                          <span>Início: {toTimeInputValue(entry.hora_inicio)}</span>
-                          <span>Final: {toTimeInputValue(entry.hora_fim)}</span>
+                          {entry.entry_mode === "manual_points" ? (
+                            <span>Pontuação manual: {formatPoints(entry.pontos)}</span>
+                          ) : (
+                            <>
+                              <span>Início: {toTimeInputValue(entry.hora_inicio)}</span>
+                              <span>Final: {toTimeInputValue(entry.hora_fim)}</span>
+                            </>
+                          )}
                           <span>Criado em: {formatDateTime(entry.created_at)}</span>
                         </div>
                         <div className="atividade-extra-entry-actions">
@@ -706,7 +773,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                     {entries.map((entry) => (
                       <article key={entry.id} className="atividade-extra-entry-card">
                         <div className="atividade-extra-entry-head">
-                          <strong>{formatDate(entry.data_inicio)} | {entry.tempo_gasto_hms}</strong>
+                          <strong>
+                            {formatDate(entry.data_inicio)}
+                            {entry.entry_mode === "manual_points" ? " | Lançamento manual" : ` | ${entry.tempo_gasto_hms}`}
+                          </strong>
                           <div className="atividade-extra-entry-head-side">
                             <span>{formatCountLabel(entry.pontos, "ponto", "pontos", { formatValue: formatPoints })}</span>
                             <span className={`atividade-extra-status-badge is-${entry.approval_status}`}>
@@ -716,8 +786,14 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                         </div>
                         <p className="atividade-extra-entry-description">{entry.descricao}</p>
                         <div className="atividade-extra-entry-meta">
-                          <span>Início: {toTimeInputValue(entry.hora_inicio)}</span>
-                          <span>Final: {toTimeInputValue(entry.hora_fim)}</span>
+                          {entry.entry_mode === "manual_points" ? (
+                            <span>Pontuação informada manualmente pelo admin.</span>
+                          ) : (
+                            <>
+                              <span>Início: {toTimeInputValue(entry.hora_inicio)}</span>
+                              <span>Final: {toTimeInputValue(entry.hora_fim)}</span>
+                            </>
+                          )}
                           <span>Informado em: {formatDateTime(entry.created_at)}</span>
                           {entry.approval_status === "approved" ? (
                             <>
@@ -769,40 +845,110 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             >
               <div className="confirm-dialog atividade-extra-editor-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="atividade-extra-editor-title">{editingEntryId ? "Editar atividade" : "Nova atividade"}</h3>
-                <p>Informe os horários e a descrição da atividade.</p>
+                <p>
+                  {isAdminManualCreate
+                    ? "Selecione o colaborador e informe data, pontuação e descrição da atividade."
+                    : "Informe os horários e a descrição da atividade."}
+                </p>
                 <form className="atividade-extra-form" onSubmit={onSubmit}>
                   <div className="atividade-extra-form-grid">
-                    <label>
-                      Data da atividade
-                      <input
-                        type="date"
-                        value={dataAtividade}
-                        onChange={(event) => setDataAtividade(event.target.value)}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Hora inicial
-                      <input
-                        type="time"
-                        value={horaInicio}
-                        onChange={(event) => setHoraInicio(clampTimeToWindow(event.target.value))}
-                        min="06:00"
-                        max="21:30"
-                        required
-                      />
-                    </label>
-                    <label>
-                      Hora final
-                      <input
-                        type="time"
-                        value={horaFim}
-                        onChange={(event) => setHoraFim(clampTimeToWindow(event.target.value))}
-                        min="06:00"
-                        max="21:30"
-                        required
-                      />
-                    </label>
+                    {isAdminManualCreate ? (
+                      <>
+                        <label>
+                          Colaborador
+                          <select
+                            value={adminTargetUserId}
+                            onChange={(event) => setAdminTargetUserId(event.target.value)}
+                            required
+                          >
+                            {assignableUsers.length === 0 ? <option value="">Nenhum colaborador disponível</option> : null}
+                            {assignableUsers.map((row) => (
+                              <option key={row.user_id} value={row.user_id}>
+                                {row.nome} ({row.mat})
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Data da atividade
+                          <div className="input-icon-wrap atividade-extra-picker-input-wrap">
+                            <input
+                              className="atividade-extra-picker-input"
+                              type="date"
+                              value={dataAtividade}
+                              onChange={(event) => setDataAtividade(event.target.value)}
+                              required
+                            />
+                            <span className="atividade-extra-picker-hint" aria-hidden="true">
+                              <CalendarIcon />
+                            </span>
+                          </div>
+                        </label>
+                        <label>
+                          Pontuação
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={manualPoints}
+                            onChange={(event) => setManualPoints(event.target.value)}
+                            placeholder="Ex.: 1,250"
+                            required
+                          />
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <label>
+                          Data da atividade
+                          <div className="input-icon-wrap atividade-extra-picker-input-wrap">
+                            <input
+                              className="atividade-extra-picker-input"
+                              type="date"
+                              value={dataAtividade}
+                              onChange={(event) => setDataAtividade(event.target.value)}
+                              required
+                            />
+                            <span className="atividade-extra-picker-hint" aria-hidden="true">
+                              <CalendarIcon />
+                            </span>
+                          </div>
+                        </label>
+                        <label>
+                          Hora inicial
+                          <div className="input-icon-wrap atividade-extra-picker-input-wrap">
+                            <input
+                              className="atividade-extra-picker-input"
+                              type="time"
+                              value={horaInicio}
+                              onChange={(event) => setHoraInicio(clampTimeToWindow(event.target.value))}
+                              min="06:00"
+                              max="21:30"
+                              required
+                            />
+                            <span className="atividade-extra-picker-hint" aria-hidden="true">
+                              <ClockIcon />
+                            </span>
+                          </div>
+                        </label>
+                        <label>
+                          Hora final
+                          <div className="input-icon-wrap atividade-extra-picker-input-wrap">
+                            <input
+                              className="atividade-extra-picker-input"
+                              type="time"
+                              value={horaFim}
+                              onChange={(event) => setHoraFim(clampTimeToWindow(event.target.value))}
+                              min="06:00"
+                              max="21:30"
+                              required
+                            />
+                            <span className="atividade-extra-picker-hint" aria-hidden="true">
+                              <ClockIcon />
+                            </span>
+                          </div>
+                        </label>
+                      </>
+                    )}
                     <label className="atividade-extra-form-description">
                       Descrição da atividade
                       <input
@@ -815,14 +961,31 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                     </label>
                   </div>
                   <div className="atividade-extra-preview-line">
-                    <span>Tempo: {previewDurationSeconds != null && previewDurationSeconds > 0 ? secondsToHms(previewDurationSeconds) : "--:--:--"}</span>
-                    <span>Pontuação: {formatPoints(previewPoints)}</span>
+                    {isAdminManualCreate ? (
+                      <>
+                        <span>Colaborador: {selectedAssignableUser ? `${selectedAssignableUser.nome} (${selectedAssignableUser.mat})` : "--"}</span>
+                        <span>Pontuação: {formatPoints(manualPointsValue ?? 0)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Tempo: {previewDurationSeconds != null && previewDurationSeconds > 0 ? secondsToHms(previewDurationSeconds) : "--:--:--"}</span>
+                        <span>Pontuação: {formatPoints(previewPoints)}</span>
+                      </>
+                    )}
                   </div>
                   <div className="confirm-actions atividade-extra-editor-actions">
                     <button className="btn btn-muted" type="button" onClick={closeEditorModal} disabled={busySubmit}>
                       Cancelar
                     </button>
-                    <button className="btn btn-primary" type="submit" disabled={busySubmit || activeCd == null}>
+                    <button
+                      className="btn btn-primary"
+                      type="submit"
+                      disabled={
+                        busySubmit
+                        || activeCd == null
+                        || (isAdminManualCreate && (assignableUsers.length === 0 || !adminTargetUserId))
+                      }
+                    >
                       {busySubmit ? "Salvando..." : editingEntryId ? "Salvar alteração" : "Registrar atividade"}
                     </button>
                   </div>
