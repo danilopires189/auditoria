@@ -10526,3 +10526,513 @@ small {
     animation: none;
   }
 }
+
+.meta-mes-shell {
+  max-width: min(1380px, 100%);
+}
+
+.meta-mes-screen {
+  width: min(1320px, 100%);
+  display: grid;
+  gap: 14px;
+}
+
+.meta-mes-filters {
+  align-items: end;
+}
+
+.meta-mes-hero {
+  border: 1px solid #d7e1f2;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(232, 177, 64, 0.24), transparent 32%),
+    linear-gradient(145deg, #fffef8 0%, #ffffff 54%, #f7fbff 100%);
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  box-shadow: 0 12px 30px rgba(24, 44, 82, 0.08);
+}
+
+.meta-mes-hero-main {
+  display: grid;
+  gap: 6px;
+}
+
+.meta-mes-hero-main strong {
+  color: #17335d;
+  font-size: 1.04rem;
+}
+
+.meta-mes-hero-main p {
+  margin: 0;
+  color: #4d6488;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  max-width: 760px;
+}
+
+.meta-mes-hero-side {
+  min-width: 220px;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.meta-mes-hero-side small {
+  color: #536987;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.meta-mes-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #d6deec;
+  background: #f6f9ff;
+  color: #294b79;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.meta-mes-hero-pill.is-admin {
+  border-color: #e8c981;
+  background: #fff6dd;
+  color: #8a5b05;
+}
+
+.meta-mes-feedback {
+  border-radius: 12px;
+  border: 1px solid #bfe0c4;
+  background: #eef9f0;
+  color: #215d31;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 11px 13px;
+}
+
+.meta-mes-metrics-grid {
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+}
+
+.meta-mes-metric-card {
+  min-height: 88px;
+}
+
+.meta-mes-metric-card.accent-success {
+  border-color: #bdd9c0;
+  background: linear-gradient(160deg, #f4fbf4, #ffffff 86%);
+}
+
+.meta-mes-metric-card.accent-neutral {
+  border-color: #d7dfef;
+  background: linear-gradient(160deg, #f8fbff, #ffffff 84%);
+}
+
+.meta-mes-layout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.95fr);
+  gap: 14px;
+}
+
+.meta-mes-panel {
+  border-radius: 18px;
+  box-shadow: 0 10px 26px rgba(20, 43, 85, 0.08);
+}
+
+.meta-mes-panel-chart,
+.meta-mes-panel-insights {
+  min-height: 100%;
+}
+
+.meta-mes-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.meta-mes-insight-card {
+  border: 1px solid #d9e2f2;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ffffff, #f8fbff);
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.meta-mes-insight-card span {
+  color: #5b7194;
+  font-size: 0.73rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.meta-mes-insight-card strong {
+  color: #17345f;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.meta-mes-insight-card strong.is-positive {
+  color: #1d6f3e;
+}
+
+.meta-mes-insight-card strong.is-negative {
+  color: #a23b47;
+}
+
+.meta-mes-legend-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.meta-mes-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #49617f;
+  font-size: 0.79rem;
+  font-weight: 600;
+}
+
+.meta-mes-legend-item i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #ccd7ea;
+  flex: 0 0 auto;
+}
+
+.meta-mes-legend-item .is-atingiu {
+  background: #4b8a6f;
+}
+
+.meta-mes-legend-item .is-acima {
+  background: #1b6f8b;
+}
+
+.meta-mes-legend-item .is-abaixo {
+  background: #ca6a42;
+}
+
+.meta-mes-legend-item .is-feriado {
+  background: #b9791b;
+}
+
+.meta-mes-chart-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.meta-mes-chart-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+  padding-bottom: 2px;
+}
+
+.meta-mes-chart-svg {
+  width: 100%;
+  min-height: 352px;
+}
+
+.meta-mes-chart-axis {
+  stroke: #ced8ea;
+  stroke-width: 1.5;
+}
+
+.meta-mes-chart-target {
+  fill: rgba(185, 121, 27, 0.18);
+  stroke: #b9791b;
+  stroke-width: 1.4;
+}
+
+.meta-mes-chart-actual {
+  fill: #2d66b6;
+  stroke: rgba(15, 48, 101, 0.12);
+  stroke-width: 1;
+}
+
+.meta-mes-chart-value,
+.meta-mes-chart-label {
+  fill: #476486;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.meta-mes-chart-value {
+  fill: #153862;
+}
+
+.meta-mes-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  color: #4b6384;
+  font-size: 0.77rem;
+  font-weight: 700;
+}
+
+.meta-mes-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.meta-mes-chart-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.meta-mes-chart-legend .is-target {
+  border: 2px solid #b9791b;
+  background: rgba(185, 121, 27, 0.16);
+}
+
+.meta-mes-chart-legend .is-actual {
+  background: #2d66b6;
+}
+
+.meta-mes-panel-table {
+  overflow: hidden;
+}
+
+.meta-mes-table-wrap {
+  overflow: auto;
+  border: 1px solid #dbe4f2;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.meta-mes-table {
+  width: 100%;
+  min-width: 1020px;
+  border-collapse: collapse;
+}
+
+.meta-mes-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, #f8fbff, #f3f7fd);
+  color: #264b77;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-align: left;
+  padding: 12px 12px;
+  border-bottom: 1px solid #d9e3f2;
+}
+
+.meta-mes-table tbody td {
+  padding: 12px;
+  border-bottom: 1px solid #ebf0f8;
+  color: #21426c;
+  font-size: 0.82rem;
+  vertical-align: middle;
+}
+
+.meta-mes-row.is-highlight {
+  background: linear-gradient(90deg, rgba(45, 102, 182, 0.03), transparent 68%);
+}
+
+.meta-mes-day-cell,
+.meta-mes-acc-cell,
+.meta-mes-target-cell {
+  display: grid;
+  gap: 3px;
+}
+
+.meta-mes-day-cell strong,
+.meta-mes-acc-cell strong {
+  color: #14345f;
+  font-size: 0.84rem;
+}
+
+.meta-mes-day-cell small,
+.meta-mes-acc-cell small,
+.meta-mes-target-cell small {
+  color: #5c7190;
+  font-size: 0.72rem;
+}
+
+.meta-mes-target-cell input {
+  width: 112px;
+  min-width: 0;
+  border: 1px solid #cad8ed;
+  border-radius: 10px;
+  background: #f9fbff;
+  color: #15355f;
+  font: inherit;
+  font-weight: 700;
+  padding: 9px 11px;
+}
+
+.meta-mes-target-cell input:disabled {
+  background: #f3f5f8;
+  color: #7a8ca9;
+}
+
+.meta-mes-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.meta-mes-status.is-acima {
+  background: #eaf7fb;
+  border-color: #b5dcea;
+  color: #0f5b74;
+}
+
+.meta-mes-status.is-atingiu {
+  background: #edf8f1;
+  border-color: #bfe0c6;
+  color: #21613b;
+}
+
+.meta-mes-status.is-abaixo {
+  background: #fff2ea;
+  border-color: #f0c6b4;
+  color: #9c5333;
+}
+
+.meta-mes-status.is-feriado,
+.meta-mes-status.is-domingo,
+.meta-mes-status.is-sem-meta {
+  background: #f5f7fb;
+  border-color: #d6deec;
+  color: #5f7190;
+}
+
+.meta-mes-balance {
+  font-weight: 800;
+}
+
+.meta-mes-balance.is-positive {
+  color: #1f6b3d;
+}
+
+.meta-mes-balance.is-negative {
+  color: #9f4b57;
+}
+
+.meta-mes-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meta-mes-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid #d3dced;
+  background: #f7faff;
+  color: #385c87;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.meta-mes-icon-btn:hover:not(:disabled) {
+  border-color: #b8cbe9;
+  background: #eef4ff;
+}
+
+.meta-mes-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.meta-mes-icon-btn.is-active {
+  border-color: #e3be68;
+  background: #fff4d7;
+  color: #9a6606;
+  box-shadow: 0 0 0 1px rgba(191, 137, 21, 0.14);
+}
+
+.meta-mes-icon-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.meta-mes-save-btn {
+  min-width: 88px;
+  justify-content: center;
+}
+
+@media (max-width: 1080px) {
+  .meta-mes-layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-mes-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .meta-mes-hero-side {
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .meta-mes-hero-side small {
+    text-align: left;
+  }
+}
+
+@media (max-width: 720px) {
+  .meta-mes-insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-mes-target-cell input {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .meta-mes-screen {
+    gap: 12px;
+  }
+
+  .meta-mes-hero {
+    padding: 14px;
+  }
+
+  .meta-mes-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .meta-mes-row-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .meta-mes-save-btn {
+    width: 100%;
+  }
+}
