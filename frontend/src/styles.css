@@ -2380,7 +2380,7 @@ small {
 }
 
 .atividade-extra-form-date-wide {
-  grid-column: span 2;
+  grid-column: span 1;
 }
 
 .atividade-extra-mat-input {
