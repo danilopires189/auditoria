@@ -40,7 +40,7 @@ function toErrorMessage(error: unknown): string {
     if (normalized.includes("COLABORADOR_OBRIGATORIO")) return "Selecione um colaborador.";
     if (normalized.includes("COLABORADOR_SEM_ACESSO_CD")) return "O colaborador selecionado não pertence ao CD atual.";
     if (normalized.includes("PONTOS_OBRIGATORIOS")) return "Informe a pontuação.";
-    if (normalized.includes("PONTOS_FORA_FAIXA")) return "A pontuação deve ficar entre 0,001 e 1,500.";
+    if (normalized.includes("PONTOS_FORA_FAIXA")) return "A pontuação deve ser maior que zero.";
     if (normalized.includes("ID_OBRIGATORIO")) return "Identificador da atividade é obrigatório.";
     if (normalized.includes("ATIVIDADE_APROVADA_NAO_EDITAVEL")) return "Atividade já aprovada não pode ser editada.";
     return raw;

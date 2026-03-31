@@ -2412,6 +2412,18 @@ small {
   padding-right: 42px;
   font-variant-numeric: tabular-nums;
   color-scheme: light;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.atividade-extra-picker-input-wrap input[type="date"].atividade-extra-picker-input::-webkit-date-and-time-value,
+.atividade-extra-picker-input-wrap input[type="time"].atividade-extra-picker-input::-webkit-date-and-time-value,
+.atividade-extra-picker-input-wrap input[type="date"].atividade-extra-picker-input::-webkit-datetime-edit,
+.atividade-extra-picker-input-wrap input[type="time"].atividade-extra-picker-input::-webkit-datetime-edit,
+.atividade-extra-picker-input-wrap input[type="date"].atividade-extra-picker-input::-webkit-datetime-edit-fields-wrapper,
+.atividade-extra-picker-input-wrap input[type="time"].atividade-extra-picker-input::-webkit-datetime-edit-fields-wrapper {
+  text-align: left;
 }
 
 .atividade-extra-picker-input-wrap input.atividade-extra-picker-input::-webkit-calendar-picker-indicator {
