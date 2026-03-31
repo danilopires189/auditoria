@@ -38,6 +38,12 @@ const COMPACT_FORMATTER = new Intl.NumberFormat("pt-BR", {
   compactDisplay: "short",
   maximumFractionDigits: 1
 });
+const COMPACT_CURRENCY_FORMATTER = new Intl.NumberFormat("pt-BR", {
+  notation: "compact",
+  compactDisplay: "short",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -104,6 +110,14 @@ function formatCompactValue(value: number, mode: MetaMesValueMode): string {
   const safe = Number.isFinite(value) ? value : 0;
   if (mode === "currency") return `R$ ${COMPACT_FORMATTER.format(safe)}`;
   return COMPACT_FORMATTER.format(safe);
+}
+
+function formatHeaderMetricValue(value: number, mode: MetaMesValueMode): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  if (mode === "currency") {
+    return `R$ ${COMPACT_CURRENCY_FORMATTER.format(safe)}`;
+  }
+  return formatMetricValue(safe, mode);
 }
 
 function formatPercent(value: number | null): string {
@@ -368,17 +382,17 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
     return [
-      { label: "Meta por dia", value: summary.daily_target_value == null ? "-" : formatMetricValue(summary.daily_target_value, valueMode) },
+      { label: "Meta por dia", value: summary.daily_target_value == null ? "-" : formatHeaderMetricValue(summary.daily_target_value, valueMode) },
       { label: "Dias úteis no mês", value: String(summary.month_workdays) },
-      { label: "Total do mês", value: formatMetricValue(summary.total_actual, valueMode) },
-      { label: "Meta do mês", value: formatMetricValue(summary.total_target, valueMode) },
+      { label: "Total do mês", value: formatHeaderMetricValue(summary.total_actual, valueMode) },
+      { label: "Meta do mês", value: formatHeaderMetricValue(summary.total_target, valueMode) },
       {
         label: "% de atingimento",
         value: formatPercent(summary.achievement_percent),
         accent: summary.achievement_percent != null && summary.achievement_percent >= 100 ? "success" : "danger"
       },
-      { label: "Média dia", value: formatMetricValue(summary.daily_average, valueMode) },
-      { label: "Projeção mensal", value: formatMetricValue(summary.monthly_projection, valueMode), accent: "neutral" },
+      { label: "Média dia", value: formatHeaderMetricValue(summary.daily_average, valueMode) },
+      { label: "Projeção mensal", value: formatHeaderMetricValue(summary.monthly_projection, valueMode), accent: "neutral" },
       { label: "Dias atingidos", value: String(summary.days_hit), accent: summary.days_hit > 0 ? "success" : "neutral" }
     ];
   }, [summary, valueMode]);

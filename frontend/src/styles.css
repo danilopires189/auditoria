@@ -10716,6 +10716,11 @@ small {
   min-height: 88px;
 }
 
+.meta-mes-metric-card strong {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .meta-mes-metric-card.accent-success {
   border-color: #bdd9c0;
   background: linear-gradient(160deg, #f4fbf4, #ffffff 86%);
