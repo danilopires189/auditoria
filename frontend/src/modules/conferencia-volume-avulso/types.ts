@@ -87,6 +87,49 @@ export interface VolumeAvulsoItemRow {
   updated_at: string;
 }
 
+export interface VolumeAvulsoReportFilters {
+  dtIni: string;
+  dtFim: string;
+  cd: number;
+}
+
+export interface VolumeAvulsoReportCount {
+  total_conferencias: number;
+  total_itens: number;
+}
+
+export interface VolumeAvulsoReportRow {
+  conf_date: string;
+  cd: number;
+  nr_volume: string;
+  caixa: string | null;
+  pedido: number | null;
+  filial: number | null;
+  filial_nome: string | null;
+  rota: string | null;
+  status: VolumeAvulsoConfStatus;
+  started_mat: string | null;
+  started_nome: string | null;
+  started_at: string | null;
+  finalized_at: string | null;
+  updated_at: string | null;
+  total_itens: number;
+  itens_conferidos: number;
+  itens_divergentes: number;
+  falta_motivo: string | null;
+  coddv: number;
+  descricao: string;
+  barras: string | null;
+  qtd_esperada: number;
+  qtd_conferida: number;
+  qtd_falta: number;
+  qtd_sobra: number;
+  divergencia_tipo: VolumeAvulsoDivergenciaTipo;
+  lotes: string | null;
+  validades: string | null;
+  item_updated_at: string | null;
+}
+
 export interface VolumeAvulsoVolumeRow {
   conf_id: string;
   conf_date: string;
