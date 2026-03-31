@@ -281,6 +281,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     [dataAtividade, horaInicio, horaFim]
   );
   const previewPoints = useMemo(() => computePoints(previewDurationSeconds), [previewDurationSeconds]);
+  const createActionTitle = isAdmin ? "Lançar atividade manual" : "Adicionar atividade";
 
   const resetForm = useCallback(() => {
     const nowDate = todayIsoBrasilia();
@@ -632,7 +633,8 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                   className="btn btn-primary atividade-extra-add-btn"
                   onClick={openCreateModal}
                   disabled={busySubmit || activeCd == null}
-                  title="Adicionar atividade"
+                  aria-label={createActionTitle}
+                  title={createActionTitle}
                 >
                   <span aria-hidden="true">{addIcon()}</span>
                   <span className="atividade-extra-add-label">Adicionar</span>
@@ -920,6 +922,9 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                               onChange={(event) => setDataAtividade(event.target.value)}
                               required
                             />
+                            <span className="atividade-extra-picker-display" aria-hidden="true">
+                              {formatDate(dataAtividade)}
+                            </span>
                             <span className="atividade-extra-picker-hint" aria-hidden="true">
                               <CalendarIcon />
                             </span>
@@ -949,6 +954,9 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                               onChange={(event) => setDataAtividade(event.target.value)}
                               required
                             />
+                            <span className="atividade-extra-picker-display" aria-hidden="true">
+                              {formatDate(dataAtividade)}
+                            </span>
                             <span className="atividade-extra-picker-hint" aria-hidden="true">
                               <CalendarIcon />
                             </span>
@@ -966,6 +974,9 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                               max="21:30"
                               required
                             />
+                            <span className="atividade-extra-picker-display" aria-hidden="true">
+                              {horaInicio || "--:--"}
+                            </span>
                             <span className="atividade-extra-picker-hint" aria-hidden="true">
                               <ClockIcon />
                             </span>
@@ -983,6 +994,9 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                               max="21:30"
                               required
                             />
+                            <span className="atividade-extra-picker-display" aria-hidden="true">
+                              {horaFim || "--:--"}
+                            </span>
                             <span className="atividade-extra-picker-hint" aria-hidden="true">
                               <ClockIcon />
                             </span>
