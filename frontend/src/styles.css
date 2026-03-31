@@ -2379,6 +2379,10 @@ small {
   min-width: 0;
 }
 
+.atividade-extra-form-date-wide {
+  grid-column: span 2;
+}
+
 .atividade-extra-mat-input {
   font-variant-numeric: tabular-nums;
 }
@@ -2734,6 +2738,10 @@ small {
 @media (max-width: 1000px) {
   .atividade-extra-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .atividade-extra-form-date-wide {
+    grid-column: span 1;
   }
 
   .atividade-extra-entry-meta {
