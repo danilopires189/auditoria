@@ -352,28 +352,40 @@ begin
 
         union
 
-        select date_trunc('month', coalesce(c.finalized_at, c.updated_at, c.created_at))::date
+        select date_trunc(
+            'month',
+            coalesce(timezone('America/Sao_Paulo', c.finalized_at)::date, c.conf_date)
+        )::date
         from app.conf_entrada_notas c
         where c.cd = v_cd
           and c.status in ('finalizado_ok', 'finalizado_divergencia', 'finalizado_parcial', 'finalizado_falta')
 
         union
 
-        select date_trunc('month', coalesce(c.finalized_at, c.updated_at, c.created_at))::date
+        select date_trunc(
+            'month',
+            coalesce(timezone('America/Sao_Paulo', c.finalized_at)::date, c.conf_date)
+        )::date
         from app.conf_termo c
         where c.cd = v_cd
           and c.status in ('finalizado_ok', 'finalizado_falta')
 
         union
 
-        select date_trunc('month', coalesce(c.finalized_at, c.updated_at, c.created_at))::date
+        select date_trunc(
+            'month',
+            coalesce(timezone('America/Sao_Paulo', c.finalized_at)::date, c.conf_date)
+        )::date
         from app.conf_pedido_direto c
         where c.cd = v_cd
           and c.status in ('finalizado_ok', 'finalizado_falta')
 
         union
 
-        select date_trunc('month', coalesce(c.finalized_at, c.updated_at, c.created_at))::date
+        select date_trunc(
+            'month',
+            coalesce(timezone('America/Sao_Paulo', c.finalized_at)::date, c.conf_date)
+        )::date
         from app.conf_volume_avulso c
         where c.cd = v_cd
           and c.status in ('finalizado_ok', 'finalizado_falta')
