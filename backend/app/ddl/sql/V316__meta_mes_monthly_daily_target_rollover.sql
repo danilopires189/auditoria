@@ -653,7 +653,7 @@ begin
             coalesce(nullif(trim(coalesce(v_profile.mat, '')), ''), 'SEM_MATRICULA'),
             coalesce(nullif(trim(coalesce(v_profile.nome, '')), ''), 'USUARIO')
         )
-        on conflict (cd, activity_key, month_start)
+        on conflict on constraint uq_meta_mes_month_targets
         do update set
             daily_target_value = excluded.daily_target_value,
             updated_by = excluded.updated_by,
@@ -664,25 +664,33 @@ begin
 
     return query
     select
-        v_effective_month_start as month_start,
-        v_activity.activity_key,
-        mt.daily_target_value,
-        mt.month_start as target_reference_month,
-        mt.updated_at
-    from app.meta_mes_effective_month_target(v_cd, v_activity.activity_key, v_effective_month_start) mt
+        result.month_start,
+        result.activity_key,
+        result.daily_target_value,
+        result.target_reference_month,
+        result.updated_at
+    from (
+        select
+            v_effective_month_start as month_start,
+            v_activity.activity_key as activity_key,
+            mt.daily_target_value,
+            mt.month_start as target_reference_month,
+            mt.updated_at
+        from app.meta_mes_effective_month_target(v_cd, v_activity.activity_key, v_effective_month_start) mt
 
-    union all
+        union all
 
-    select
-        v_effective_month_start,
-        v_activity.activity_key,
-        null::numeric(18, 3),
-        null::date,
-        null::timestamptz
-    where not exists (
-        select 1
-        from app.meta_mes_effective_month_target(v_cd, v_activity.activity_key, v_effective_month_start)
-    );
+        select
+            v_effective_month_start as month_start,
+            v_activity.activity_key as activity_key,
+            null::numeric(18, 3) as daily_target_value,
+            null::date as target_reference_month,
+            null::timestamptz as updated_at
+        where not exists (
+            select 1
+            from app.meta_mes_effective_month_target(v_cd, v_activity.activity_key, v_effective_month_start)
+        )
+    ) result;
 end;
 $$;
 
