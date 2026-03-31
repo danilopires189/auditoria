@@ -8,7 +8,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
-import { formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
+import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { formatCountLabel } from "../../shared/inflection";
 import { shouldTriggerQueuedBackgroundSync, shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
@@ -48,6 +48,7 @@ import {
   cancelAvulsaVolume,
   cancelVolumeBatch,
   cancelVolume,
+  countEntradaNotasReportRows,
   fetchCdOptions,
   fetchActiveAvulsaVolume,
   fetchActiveVolume,
@@ -55,6 +56,8 @@ import {
   fetchManifestBundle,
   fetchManifestMeta,
   fetchPartialReopenInfo,
+  fetchEntradaNotasReportContributors,
+  fetchEntradaNotasReportRows,
   fetchRouteOverview,
   fetchVolumeContributors,
   fetchVolumeItems,
@@ -83,6 +86,10 @@ import type {
   EntradaNotasLocalItem,
   EntradaNotasLocalVolume,
   EntradaNotasManifestItemRow,
+  EntradaNotasReportContributorRow,
+  EntradaNotasReportCount,
+  EntradaNotasReportFilters,
+  EntradaNotasReportRow,
   EntradaNotasRouteOverviewRow,
   EntradaNotasVolumeRow,
   EntradaNotasModuleProfile
@@ -176,6 +183,11 @@ const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+const REPORT_PAGE_SIZE = 1000;
+const REPORT_CURRENCY_FORMATTER = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL"
+});
 
 type ScannerInputTarget = "etiqueta" | "barras";
 
@@ -701,6 +713,17 @@ function listIcon() {
   );
 }
 
+function reportIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
+    </svg>
+  );
+}
+
 function closeIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -775,7 +798,17 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("SEM_SEQ_NF_DISPONIVEL")) return "Produto sem recebimento disponível neste CD.";
   if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
+  if (value.includes("APENAS_ADMIN")) return "Relatório disponível apenas para administrador.";
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
+  if (value.includes("CD_OBRIGATORIO") || value.includes("CD_NAO_DEFINIDO_USUARIO")) {
+    return "Selecione o CD antes de gerar o relatório.";
+  }
+  if (value.includes("DATA_INICIAL_OBRIGATORIA") || value.includes("DATA_FINAL_OBRIGATORIA")) {
+    return "Informe data inicial e final.";
+  }
+  if (value.includes("PERIODO_INVALIDO")) {
+    return "A data final não pode ser menor que a data inicial.";
+  }
   if (value.includes("BASE_AVULSO_VAZIA") || value.includes("BASE_ENTRADA_NOTAS_VAZIA")) {
     return "A base da Entrada de Notas está vazia para este CD.";
   }
@@ -889,6 +922,36 @@ function formatPercent(value: number): string {
   })}%`;
 }
 
+function formatReportDate(value: string | null | undefined): string {
+  return formatDateOnlyPtBR(value ?? null, "-");
+}
+
+function formatConferenceStatusLabel(value: string | null | undefined): string {
+  if (value === "finalizado_ok") return "Finalizado OK";
+  if (value === "finalizado_divergencia") return "Finalizado com divergência";
+  if (value === "finalizado_parcial") return "Finalizado parcial";
+  if (value === "finalizado_falta") return "Finalizado com falta";
+  return "Em conferência";
+}
+
+function formatDivergenciaLabel(value: string | null | undefined): string {
+  if (value === "nao_conferido") return "Não conferido";
+  if (value === "falta") return "Falta";
+  if (value === "sobra") return "Sobra";
+  return "Correto";
+}
+
+function formatCurrency(value: number): string {
+  return REPORT_CURRENCY_FORMATTER.format(Number.isFinite(value) ? value : 0);
+}
+
+function buildConferenceReportKey(
+  value: Pick<EntradaNotasReportRow, "conf_date" | "cd" | "seq_entrada" | "nf">
+    | Pick<EntradaNotasReportContributorRow, "conf_date" | "cd" | "seq_entrada" | "nf">
+): string {
+  return `${value.conf_date}|${value.cd}|${value.seq_entrada}|${value.nf}`;
+}
+
 function isBrowserDesktop(): boolean {
   if (typeof window === "undefined") return true;
   return window.matchMedia("(min-width: 980px)").matches;
@@ -977,6 +1040,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [routeContributorsMap, setRouteContributorsMap] = useState<Record<string, RouteContributorsState>>({});
   const [routeBatchSelectionByGroup, setRouteBatchSelectionByGroup] = useState<Record<string, string[]>>({});
   const [routeBatchQueue, setRouteBatchQueue] = useState<string[]>([]);
+  const [showReportPanel, setShowReportPanel] = useState(false);
+  const [reportDtIni, setReportDtIni] = useState("");
+  const [reportDtFim, setReportDtFim] = useState("");
+  const [reportCount, setReportCount] = useState<EntradaNotasReportCount | null>(null);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportBusySearch, setReportBusySearch] = useState(false);
+  const [reportBusyExport, setReportBusyExport] = useState(false);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
@@ -993,6 +1064,12 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
+  const canSeeReportTools = isDesktop && profile.role === "admin";
+  const currentCdLabel = useMemo(() => {
+    if (currentCd == null) return "CD não definido";
+    const option = cdOptions.find((item) => item.cd === currentCd);
+    return option?.cd_nome || `CD ${String(currentCd).padStart(2, "0")}`;
+  }, [cdOptions, currentCd]);
   const routeRowBySeqNfKey = useMemo(() => {
     const map = new Map<string, EntradaNotasRouteOverviewRow>();
     for (const row of routeRows) {
@@ -1206,6 +1283,383 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
     return labels.join(", ");
   }, [activeVolume?.contributors]);
+
+  const validateReportFilters = useCallback((): EntradaNotasReportFilters | null => {
+    if (!reportDtIni || !reportDtFim) {
+      setReportError("Informe data inicial e final.");
+      return null;
+    }
+
+    const dtIni = new Date(`${reportDtIni}T00:00:00`);
+    const dtFim = new Date(`${reportDtFim}T00:00:00`);
+    if (Number.isNaN(dtIni.getTime()) || Number.isNaN(dtFim.getTime())) {
+      setReportError("Período inválido.");
+      return null;
+    }
+
+    if (dtFim < dtIni) {
+      setReportError("A data final não pode ser menor que a data inicial.");
+      return null;
+    }
+
+    if (currentCd == null) {
+      setReportError("Selecione o CD antes de gerar o relatório.");
+      return null;
+    }
+
+    return {
+      dtIni: reportDtIni,
+      dtFim: reportDtFim,
+      cd: currentCd
+    };
+  }, [currentCd, reportDtFim, reportDtIni]);
+
+  const runReportSearch = useCallback(async () => {
+    if (!canSeeReportTools) return;
+    setReportError(null);
+    setReportMessage(null);
+    setReportCount(null);
+
+    const filters = validateReportFilters();
+    if (!filters) return;
+
+    setReportBusySearch(true);
+    try {
+      const count = await countEntradaNotasReportRows(filters);
+      setReportCount(count);
+      if (count.total_conferencias > 0) {
+        setReportMessage(
+          `Foram encontradas ${count.total_conferencias} conferência(s) e ${count.total_itens} item(ns) no período.`
+        );
+      } else {
+        setReportMessage("Nenhuma conferência encontrada no período informado.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao buscar dados do relatório.";
+      setReportError(normalizeRpcErrorMessage(message));
+    } finally {
+      setReportBusySearch(false);
+    }
+  }, [canSeeReportTools, validateReportFilters]);
+
+  const runReportExport = useCallback(async () => {
+    if (!canSeeReportTools) return;
+    setReportError(null);
+    setReportMessage(null);
+
+    const filters = validateReportFilters();
+    if (!filters) return;
+
+    if ((reportCount?.total_itens ?? 0) <= 0 || (reportCount?.total_conferencias ?? 0) <= 0) {
+      setReportError("Busque um período com registros antes de exportar o Excel.");
+      return;
+    }
+
+    setReportBusyExport(true);
+    try {
+      const expectedItems = Math.max(reportCount?.total_itens ?? 0, 0);
+      const itemRows: EntradaNotasReportRow[] = [];
+      let offset = 0;
+
+      while (offset < expectedItems) {
+        const batch = await fetchEntradaNotasReportRows(filters, offset, REPORT_PAGE_SIZE);
+        if (!batch.length) break;
+        itemRows.push(...batch);
+        offset += batch.length;
+        setReportMessage(`Baixando itens do relatório: ${itemRows.length}/${expectedItems}.`);
+        if (batch.length < REPORT_PAGE_SIZE) break;
+      }
+
+      if (expectedItems > 0 && itemRows.length !== expectedItems) {
+        throw new Error(`RELATORIO_INCOMPLETO: esperado ${expectedItems} item(ns), carregado ${itemRows.length}.`);
+      }
+
+      if (itemRows.length === 0) {
+        setReportMessage("Nenhum item disponível para exportação no período informado.");
+        return;
+      }
+
+      setReportMessage("Carregando colaboradores do relatório...");
+      const contributorRows = await fetchEntradaNotasReportContributors(filters);
+
+      type ConferenceAggregate = {
+        conf_date: string;
+        cd: number;
+        seq_entrada: number;
+        nf: number;
+        transportadora: string;
+        fornecedor: string;
+        status: string;
+        started_nome: string | null;
+        started_mat: string | null;
+        started_at: string | null;
+        finalized_at: string | null;
+        updated_at: string | null;
+        total_itens: number;
+        itens_conferidos: number;
+        itens_divergentes: number;
+        valor_total: number;
+        valor_conferido: number;
+        qtd_esperada: number;
+        qtd_conferida: number;
+        qtd_falta: number;
+        qtd_sobra: number;
+        qtd_avariado: number;
+        qtd_vencido: number;
+      };
+
+      const conferenceMap = new Map<string, ConferenceAggregate>();
+      for (const row of itemRows) {
+        const key = buildConferenceReportKey(row);
+        const existing = conferenceMap.get(key);
+        if (existing) {
+          existing.qtd_esperada += row.qtd_esperada;
+          existing.qtd_conferida += row.qtd_conferida;
+          existing.qtd_falta += row.qtd_falta;
+          existing.qtd_sobra += row.qtd_sobra;
+          existing.qtd_avariado += row.ocorrencia_avariado_qtd;
+          existing.qtd_vencido += row.ocorrencia_vencido_qtd;
+          continue;
+        }
+
+        conferenceMap.set(key, {
+          conf_date: row.conf_date,
+          cd: row.cd,
+          seq_entrada: row.seq_entrada,
+          nf: row.nf,
+          transportadora: row.transportadora,
+          fornecedor: row.fornecedor,
+          status: row.status,
+          started_nome: row.started_nome,
+          started_mat: row.started_mat,
+          started_at: row.started_at,
+          finalized_at: row.finalized_at,
+          updated_at: row.updated_at,
+          total_itens: row.total_itens,
+          itens_conferidos: row.itens_conferidos,
+          itens_divergentes: row.itens_divergentes,
+          valor_total: row.valor_total,
+          valor_conferido: row.valor_conferido,
+          qtd_esperada: row.qtd_esperada,
+          qtd_conferida: row.qtd_conferida,
+          qtd_falta: row.qtd_falta,
+          qtd_sobra: row.qtd_sobra,
+          qtd_avariado: row.ocorrencia_avariado_qtd,
+          qtd_vencido: row.ocorrencia_vencido_qtd
+        });
+      }
+
+      const contributorMap = new Map<string, EntradaNotasReportContributorRow[]>();
+      for (const row of contributorRows) {
+        const key = buildConferenceReportKey(row);
+        const current = contributorMap.get(key) ?? [];
+        current.push(row);
+        contributorMap.set(key, current);
+      }
+
+      const conferenceRows = Array.from(conferenceMap.values()).map((row) => {
+        const key = buildConferenceReportKey(row);
+        const contributors = contributorMap.get(key) ?? [];
+        const summary = contributors
+          .map((entry) => formatCollaboratorName({
+            nome: entry.colaborador_nome,
+            mat: entry.colaborador_mat
+          }))
+          .filter(Boolean)
+          .join(" | ");
+
+        return {
+          Data: formatReportDate(row.conf_date),
+          CD: row.cd,
+          Seq_Entrada: row.seq_entrada,
+          NF: row.nf,
+          Transportadora: row.transportadora,
+          Fornecedor: row.fornecedor,
+          Status: formatConferenceStatusLabel(row.status),
+          Conferente_Principal: row.started_nome ?? "",
+          Matricula: row.started_mat ?? "",
+          Iniciado_Em: formatDateTime(row.started_at),
+          Finalizado_Em: formatDateTime(row.finalized_at),
+          Ultima_Atualizacao: formatDateTime(row.updated_at),
+          Total_Itens: row.total_itens,
+          Itens_Conferidos: row.itens_conferidos,
+          Itens_Divergentes: row.itens_divergentes,
+          Valor_Total: row.valor_total,
+          Valor_Conferido: row.valor_conferido,
+          Conferentes: summary
+        };
+      });
+
+      const itemSheetRows = itemRows.map((row) => ({
+        Data: formatReportDate(row.conf_date),
+        CD: row.cd,
+        Seq_Entrada: row.seq_entrada,
+        NF: row.nf,
+        Transportadora: row.transportadora,
+        Fornecedor: row.fornecedor,
+        Status: formatConferenceStatusLabel(row.status),
+        CODDV: row.coddv,
+        Descricao: row.descricao,
+        Barras: row.barras ?? "",
+        Qtd_Esperada: row.qtd_esperada,
+        Qtd_Conferida: row.qtd_conferida,
+        Qtd_Falta: row.qtd_falta,
+        Qtd_Sobra: row.qtd_sobra,
+        Divergencia: formatDivergenciaLabel(row.divergencia_tipo),
+        Qtd_Avariado: row.ocorrencia_avariado_qtd,
+        Qtd_Vencido: row.ocorrencia_vencido_qtd,
+        Atualizado_Em: formatDateTime(row.item_updated_at ?? row.updated_at)
+      }));
+
+      const occurrenceSheetRows = itemRows.flatMap((row) => {
+        const rows: Array<Record<string, string | number>> = [];
+        if (row.ocorrencia_avariado_qtd > 0) {
+          rows.push({
+            Data: formatReportDate(row.conf_date),
+            CD: row.cd,
+            Seq_Entrada: row.seq_entrada,
+            NF: row.nf,
+            Transportadora: row.transportadora,
+            Fornecedor: row.fornecedor,
+            CODDV: row.coddv,
+            Descricao: row.descricao,
+            Tipo: "Avariado",
+            Quantidade: row.ocorrencia_avariado_qtd,
+            Atualizado_Em: formatDateTime(row.ocorrencia_avariado_updated_at ?? row.item_updated_at ?? row.updated_at)
+          });
+        }
+        if (row.ocorrencia_vencido_qtd > 0) {
+          rows.push({
+            Data: formatReportDate(row.conf_date),
+            CD: row.cd,
+            Seq_Entrada: row.seq_entrada,
+            NF: row.nf,
+            Transportadora: row.transportadora,
+            Fornecedor: row.fornecedor,
+            CODDV: row.coddv,
+            Descricao: row.descricao,
+            Tipo: "Vencido",
+            Quantidade: row.ocorrencia_vencido_qtd,
+            Atualizado_Em: formatDateTime(row.ocorrencia_vencido_updated_at ?? row.item_updated_at ?? row.updated_at)
+          });
+        }
+        return rows;
+      });
+
+      const contributorSheetRows = contributorRows.map((row) => ({
+        Data: formatReportDate(row.conf_date),
+        CD: row.cd,
+        Seq_Entrada: row.seq_entrada,
+        NF: row.nf,
+        Transportadora: row.transportadora,
+        Fornecedor: row.fornecedor,
+        Status: formatConferenceStatusLabel(row.status),
+        Colaborador: row.colaborador_nome ?? "",
+        Matricula: row.colaborador_mat ?? "",
+        Primeira_Acao: formatDateTime(row.first_action_at),
+        Ultima_Acao: formatDateTime(row.last_action_at)
+      }));
+
+      const totalQtdEsperada = itemRows.reduce((sum, row) => sum + row.qtd_esperada, 0);
+      const totalQtdConferida = itemRows.reduce((sum, row) => sum + row.qtd_conferida, 0);
+      const totalQtdFalta = itemRows.reduce((sum, row) => sum + row.qtd_falta, 0);
+      const totalQtdSobra = itemRows.reduce((sum, row) => sum + row.qtd_sobra, 0);
+      const totalQtdAvariado = itemRows.reduce((sum, row) => sum + row.ocorrencia_avariado_qtd, 0);
+      const totalQtdVencido = itemRows.reduce((sum, row) => sum + row.ocorrencia_vencido_qtd, 0);
+      const totalItensDivergentes = Array.from(conferenceMap.values()).reduce((sum, row) => sum + row.itens_divergentes, 0);
+      const totalValor = Array.from(conferenceMap.values()).reduce((sum, row) => sum + row.valor_total, 0);
+      const totalValorConferido = Array.from(conferenceMap.values()).reduce((sum, row) => sum + row.valor_conferido, 0);
+      const statusCounts = Array.from(conferenceMap.values()).reduce<Record<string, number>>((acc, row) => {
+        acc[row.status] = (acc[row.status] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      setReportMessage("Montando arquivo Excel...");
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+
+      const summarySheet = XLSX.utils.aoa_to_sheet([
+        ["Relatório de Conferência de Entrada de Notas"],
+        ["Período inicial", formatReportDate(filters.dtIni)],
+        ["Período final", formatReportDate(filters.dtFim)],
+        ["CD", currentCdLabel],
+        [],
+        ["Indicador", "Valor"],
+        ["Total de conferências", conferenceRows.length],
+        ["Total de itens", itemRows.length],
+        ["Itens divergentes", totalItensDivergentes],
+        ["Quantidade esperada", totalQtdEsperada],
+        ["Quantidade conferida", totalQtdConferida],
+        ["Quantidade falta", totalQtdFalta],
+        ["Quantidade sobra", totalQtdSobra],
+        ["Quantidade avariado", totalQtdAvariado],
+        ["Quantidade vencido", totalQtdVencido],
+        ["Valor total", formatCurrency(totalValor)],
+        ["Valor conferido", formatCurrency(totalValorConferido)],
+        [],
+        ["Status", "Quantidade"],
+        ["Em conferência", statusCounts.em_conferencia ?? 0],
+        ["Finalizado OK", statusCounts.finalizado_ok ?? 0],
+        ["Finalizado com divergência", statusCounts.finalizado_divergencia ?? 0],
+        ["Finalizado parcial", statusCounts.finalizado_parcial ?? 0],
+        ["Finalizado com falta", statusCounts.finalizado_falta ?? 0]
+      ]);
+
+      const conferencesSheet = XLSX.utils.json_to_sheet(
+        conferenceRows.length ? conferenceRows : [{ Mensagem: "Nenhuma conferência encontrada no período." }]
+      );
+      const itemsSheet = XLSX.utils.json_to_sheet(
+        itemSheetRows.length ? itemSheetRows : [{ Mensagem: "Nenhum item encontrado no período." }]
+      );
+      const occurrencesSheet = XLSX.utils.json_to_sheet(
+        occurrenceSheetRows.length ? occurrenceSheetRows : [{ Mensagem: "Nenhuma ocorrência encontrada no período." }]
+      );
+      const contributorsSheet = XLSX.utils.json_to_sheet(
+        contributorSheetRows.length ? contributorSheetRows : [{ Mensagem: "Nenhum colaborador encontrado no período." }]
+      );
+
+      summarySheet["!cols"] = [{ wch: 28 }, { wch: 24 }];
+      conferencesSheet["!cols"] = [
+        { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 24 }, { wch: 26 },
+        { wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 22 }, { wch: 12 }, { wch: 14 },
+        { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 36 }
+      ];
+      itemsSheet["!cols"] = [
+        { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 24 }, { wch: 26 },
+        { wch: 10 }, { wch: 42 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+        { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 22 }
+      ];
+      occurrencesSheet["!cols"] = [
+        { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 24 }, { wch: 10 },
+        { wch: 42 }, { wch: 12 }, { wch: 12 }, { wch: 22 }
+      ];
+      contributorsSheet["!cols"] = [
+        { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 24 }, { wch: 26 },
+        { wch: 26 }, { wch: 14 }, { wch: 20 }, { wch: 20 }
+      ];
+
+      XLSX.utils.book_append_sheet(workbook, summarySheet, "Resumo");
+      XLSX.utils.book_append_sheet(workbook, conferencesSheet, "Conferencias");
+      XLSX.utils.book_append_sheet(workbook, itemsSheet, "Itens");
+      XLSX.utils.book_append_sheet(workbook, occurrencesSheet, "Ocorrencias");
+      XLSX.utils.book_append_sheet(workbook, contributorsSheet, "Colaboradores");
+
+      XLSX.writeFile(
+        workbook,
+        `relatorio-conferencia-entrada-notas-${filters.dtIni}-${filters.dtFim}-cd${String(filters.cd).padStart(2, "0")}.xlsx`,
+        { compression: true }
+      );
+
+      setReportMessage(
+        `Relatório gerado com sucesso (${conferenceRows.length} conferência(s) e ${itemRows.length} item(ns)).`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao gerar o relatório Excel.";
+      setReportError(normalizeRpcErrorMessage(message));
+    } finally {
+      setReportBusyExport(false);
+    }
+  }, [canSeeReportTools, currentCdLabel, reportCount, validateReportFilters]);
 
   const renderCombinedBreakdown = useCallback((item: EntradaNotasLocalItem) => {
     if (!isCombinedRouteMode) return null;
@@ -4340,6 +4794,17 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   }, []);
 
   useEffect(() => {
+    if (isDesktop) return;
+    setShowReportPanel(false);
+  }, [isDesktop]);
+
+  useEffect(() => {
+    setReportCount(null);
+    setReportMessage(null);
+    setReportError(null);
+  }, [currentCd]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadInitial = async () => {
@@ -5228,7 +5693,110 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
             <span aria-hidden="true">{listIcon()}</span>
             Transportadora/Fornecedor
           </button>
+
+          {canSeeReportTools ? (
+            <button
+              type="button"
+              className={`btn btn-muted termo-report-toggle${showReportPanel ? " is-active" : ""}`}
+              aria-pressed={showReportPanel}
+              onClick={() => {
+                setShowReportPanel((value) => {
+                  const next = !value;
+                  if (next && (!reportDtIni || !reportDtFim)) {
+                    const today = todayIsoBrasilia();
+                    setReportDtIni((current) => current || today);
+                    setReportDtFim((current) => current || today);
+                  }
+                  return next;
+                });
+                setReportCount(null);
+                setReportMessage(null);
+                setReportError(null);
+              }}
+              title="Abrir relatório em Excel"
+            >
+              <span className="termo-report-toggle-icon" aria-hidden="true">{reportIcon()}</span>
+              Relatório
+            </button>
+          ) : null}
         </div>
+
+        {showReportPanel && canSeeReportTools ? (
+          <section className="termo-report-panel">
+            <div className="termo-report-head">
+              <h3>Relatório de Conferência de Entrada de Notas</h3>
+              <p>Busca por período para exportação em Excel com foco em auditoria futura.</p>
+            </div>
+
+            {reportError ? <div className="alert error">{reportError}</div> : null}
+            {reportMessage ? <div className="alert success">{reportMessage}</div> : null}
+
+            <div className="termo-report-grid">
+              <label>
+                Data inicial
+                <input
+                  type="date"
+                  autoComplete="off"
+                  value={reportDtIni}
+                  onChange={(event) => {
+                    setReportDtIni(event.target.value);
+                    setReportCount(null);
+                    setReportMessage(null);
+                    setReportError(null);
+                  }}
+                  required
+                />
+              </label>
+
+              <label>
+                Data final
+                <input
+                  type="date"
+                  autoComplete="off"
+                  value={reportDtFim}
+                  onChange={(event) => {
+                    setReportDtFim(event.target.value);
+                    setReportCount(null);
+                    setReportMessage(null);
+                    setReportError(null);
+                  }}
+                  required
+                />
+              </label>
+
+              <label>
+                CD
+                <input type="text" value={currentCdLabel} disabled />
+              </label>
+            </div>
+
+            <div className="termo-report-actions">
+              <button
+                type="button"
+                className="btn btn-muted"
+                onClick={() => void runReportSearch()}
+                disabled={reportBusySearch}
+              >
+                {reportBusySearch ? "Buscando..." : "Buscar"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary termo-export-btn"
+                onClick={() => void runReportExport()}
+                disabled={reportBusyExport || (reportCount?.total_itens ?? 0) <= 0}
+              >
+                <span aria-hidden="true">{reportIcon()}</span>
+                {reportBusyExport ? "Gerando Excel..." : "Exportar Excel"}
+              </button>
+            </div>
+
+            {reportCount ? (
+              <p className="termo-report-count">
+                Conferências encontradas: {reportCount.total_conferencias} | Itens encontrados: {reportCount.total_itens}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
 
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
