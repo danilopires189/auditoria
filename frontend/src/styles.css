@@ -10617,6 +10617,97 @@ small {
   padding: 11px 13px;
 }
 
+.meta-mes-plan-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+  gap: 14px;
+}
+
+.meta-mes-plan-card,
+.meta-mes-plan-side {
+  min-height: 100%;
+}
+
+.meta-mes-plan-body {
+  display: grid;
+  gap: 14px;
+}
+
+.meta-mes-plan-field {
+  display: grid;
+  gap: 7px;
+}
+
+.meta-mes-plan-field span {
+  color: #496382;
+  font-size: 0.79rem;
+  font-weight: 800;
+}
+
+.meta-mes-plan-field input {
+  width: min(220px, 100%);
+  border: 1px solid #cad8ed;
+  border-radius: 12px;
+  background: #f9fbff;
+  color: #15355f;
+  font: inherit;
+  font-weight: 800;
+  padding: 11px 12px;
+}
+
+.meta-mes-plan-field input:disabled {
+  background: #f3f5f8;
+  color: #7a8ca9;
+}
+
+.meta-mes-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.meta-mes-plan-note {
+  color: #536987;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.meta-mes-plan-hints {
+  display: grid;
+  gap: 7px;
+  color: #5b7194;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.meta-mes-plan-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.meta-mes-plan-summary div {
+  border: 1px solid #d9e2f2;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ffffff, #f8fbff);
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.meta-mes-plan-summary span {
+  color: #5b7194;
+  font-size: 0.73rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.meta-mes-plan-summary strong {
+  color: #17345f;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
 .meta-mes-metrics-grid {
   grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
 }
@@ -10649,6 +10740,10 @@ small {
 .meta-mes-panel-chart,
 .meta-mes-panel-insights {
   min-height: 100%;
+}
+
+.meta-mes-panel-chart {
+  min-height: 520px;
 }
 
 .meta-mes-insights-grid {
@@ -10728,19 +10823,31 @@ small {
 
 .meta-mes-chart-shell {
   display: grid;
-  gap: 10px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  height: 100%;
+  min-width: 0;
+  width: 100%;
 }
 
 .meta-mes-chart-scroll {
-  overflow-x: auto;
+  align-self: end;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: scroll;
   overflow-y: hidden;
+  padding-bottom: 0;
   scrollbar-gutter: stable;
-  padding-bottom: 2px;
 }
 
 .meta-mes-chart-svg {
   width: 100%;
-  min-height: 352px;
+  min-width: 1220px;
+  height: auto;
+  display: block;
 }
 
 .meta-mes-chart-axis {
@@ -10763,12 +10870,13 @@ small {
 .meta-mes-chart-value,
 .meta-mes-chart-label {
   fill: #476486;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .meta-mes-chart-value {
   fill: #153862;
+  font-size: 14px;
 }
 
 .meta-mes-chart-legend {
@@ -10801,6 +10909,20 @@ small {
 
 .meta-mes-chart-legend .is-actual {
   background: #2d66b6;
+}
+
+.meta-mes-chart-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+
+.meta-mes-chart-scroll::-webkit-scrollbar-thumb {
+  background: #c8d7eb;
+  border-radius: 999px;
+}
+
+.meta-mes-chart-scroll::-webkit-scrollbar-track {
+  background: #eef3fb;
+  border-radius: 999px;
 }
 
 .meta-mes-panel-table {
@@ -10855,6 +10977,11 @@ small {
 
 .meta-mes-day-cell strong,
 .meta-mes-acc-cell strong {
+  color: #14345f;
+  font-size: 0.84rem;
+}
+
+.meta-mes-target-cell strong {
   color: #14345f;
   font-size: 0.84rem;
 }
@@ -10985,6 +11112,7 @@ small {
 }
 
 @media (max-width: 1080px) {
+  .meta-mes-plan-grid,
   .meta-mes-layout-grid {
     grid-template-columns: 1fr;
   }
@@ -11030,6 +11158,11 @@ small {
   .meta-mes-row-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .meta-mes-plan-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .meta-mes-save-btn {

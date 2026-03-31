@@ -20,6 +20,7 @@ function toErrorMessage(error: unknown): string {
     if (normalized.includes("APENAS_MES_ATUAL")) return "A edição de metas é permitida somente no mês atual.";
     if (normalized.includes("DOMINGO_META_ZERO")) return "Domingos permanecem com meta zero e não podem ser editados.";
     if (normalized.includes("META_INVALIDA")) return "Informe uma meta válida.";
+    if (normalized.includes("META_DIARIA_INVALIDA")) return "Informe uma meta diária válida.";
     if (normalized.includes("DATA_OBRIGATORIA")) return "Selecione um dia válido.";
     return raw;
   };
@@ -114,7 +115,11 @@ function mapSummary(raw: Record<string, unknown>): MetaMesSummary {
     days_over: parseInteger(raw.days_over),
     days_holiday: parseInteger(raw.days_holiday),
     days_without_target: parseInteger(raw.days_without_target),
-    balance_to_target: parseNumber(raw.balance_to_target)
+    balance_to_target: parseNumber(raw.balance_to_target),
+    daily_target_value: parseNullableNumber(raw.daily_target_value),
+    target_reference_month: parseNullableString(raw.target_reference_month),
+    month_workdays: parseInteger(raw.month_workdays),
+    elapsed_workdays: parseInteger(raw.elapsed_workdays)
   };
 }
 
@@ -209,6 +214,25 @@ export async function setMetaMesDailyTarget(params: {
 
   const row = firstRow(data);
   return row ? mapDailyRow(row) : null;
+}
+
+export async function setMetaMesMonthTarget(params: {
+  cd: number | null;
+  activityKey: string;
+  monthStart: string;
+  dailyTargetValue: number | null;
+}): Promise<Record<string, unknown> | null> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_meta_mes_set_month_target", {
+    p_cd: params.cd,
+    p_activity_key: params.activityKey,
+    p_month_start: params.monthStart,
+    p_daily_target_value: params.dailyTargetValue
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  return firstRow(data);
 }
 
 export async function setMetaMesHoliday(params: {
