@@ -308,6 +308,7 @@ begin
 end;
 $$;
 
+drop function if exists public.rpc_atividade_extra_entries_v2(integer, uuid);
 create or replace function public.rpc_atividade_extra_entries_v2(
     p_cd integer default null,
     p_target_user_id uuid default null
@@ -426,6 +427,7 @@ begin
 end;
 $$;
 
+drop function if exists public.rpc_atividade_extra_pending_entries(integer);
 create or replace function public.rpc_atividade_extra_pending_entries(
     p_cd integer default null
 )
