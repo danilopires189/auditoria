@@ -405,8 +405,8 @@ declare
 begin
     select *
     into v_activity
-    from app.meta_mes_activity_catalog()
-    where activity_key = nullif(trim(coalesce(p_activity_key, '')), '')
+    from app.meta_mes_activity_catalog() catalog
+    where catalog.activity_key = nullif(trim(coalesce(p_activity_key, '')), '')
     limit 1;
 
     if v_activity.activity_key is null then
@@ -741,8 +741,8 @@ begin
 
     select *
     into v_activity
-    from app.meta_mes_activity_catalog()
-    where activity_key = nullif(trim(coalesce(p_activity_key, '')), '')
+    from app.meta_mes_activity_catalog() catalog
+    where catalog.activity_key = nullif(trim(coalesce(p_activity_key, '')), '')
     limit 1;
 
     if v_activity.activity_key is null then
@@ -931,8 +931,8 @@ begin
 
     select *
     into v_activity
-    from app.meta_mes_activity_catalog()
-    where activity_key = nullif(trim(coalesce(p_activity_key, '')), '')
+    from app.meta_mes_activity_catalog() catalog
+    where catalog.activity_key = nullif(trim(coalesce(p_activity_key, '')), '')
     limit 1;
 
     if v_activity.activity_key is null then
@@ -1069,8 +1069,8 @@ begin
 
     select *
     into v_activity
-    from app.meta_mes_activity_catalog()
-    where activity_key = nullif(trim(coalesce(p_activity_key, '')), '')
+    from app.meta_mes_activity_catalog() catalog
+    where catalog.activity_key = nullif(trim(coalesce(p_activity_key, '')), '')
     limit 1;
 
     if v_activity.activity_key is null then
