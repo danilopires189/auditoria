@@ -150,6 +150,30 @@ function formatPoints(value: number): string {
   }).format(value);
 }
 
+function normalizeMat(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function canonicalMat(value: string): string {
+  const normalized = normalizeMat(value);
+  const stripped = normalized.replace(/^0+(?=\d)/, "");
+  return stripped || normalized;
+}
+
+function findAssignableUserByMat(
+  users: AtividadeExtraAssignableUserRow[],
+  rawMat: string
+): AtividadeExtraAssignableUserRow | null {
+  const normalized = normalizeMat(rawMat);
+  const canonical = canonicalMat(rawMat);
+  if (!normalized || !canonical) return null;
+
+  return (
+    users.find((row) => canonicalMat(row.mat) === canonical || normalizeMat(row.mat) === normalized)
+    ?? null
+  );
+}
+
 function parsePointsInput(value: string): number | null {
   const normalized = value.trim().replace(",", ".");
   if (!normalized) return null;
@@ -229,6 +253,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const [dataAtividade, setDataAtividade] = useState<string>(todayIsoBrasilia());
   const [horaInicio, setHoraInicio] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
   const [horaFim, setHoraFim] = useState<string>(clampTimeToWindow(nowHourMinuteBrasilia()));
+  const [adminTargetMat, setAdminTargetMat] = useState<string>("");
   const [adminTargetUserId, setAdminTargetUserId] = useState<string>("");
   const [manualPoints, setManualPoints] = useState<string>("");
   const [descricao, setDescricao] = useState<string>("");
@@ -243,6 +268,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const selectedAssignableUser = useMemo(
     () => assignableUsers.find((row) => row.user_id === adminTargetUserId) ?? null,
     [adminTargetUserId, assignableUsers]
+  );
+  const adminResolvedUser = useMemo(
+    () => findAssignableUserByMat(assignableUsers, adminTargetMat),
+    [adminTargetMat, assignableUsers]
   );
   const isAdminManualCreate = isAdmin && !editingEntryId;
   const manualPointsValue = useMemo(() => parsePointsInput(manualPoints), [manualPoints]);
@@ -260,6 +289,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     setDataAtividade(nowDate);
     setHoraInicio(nowTime);
     setHoraFim(nowTime);
+    setAdminTargetMat("");
     setAdminTargetUserId("");
     setManualPoints("");
     setDescricao("");
@@ -326,8 +356,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       setAdminTargetUserId((current) => {
         if (!isAdmin || assignableRows.length === 0) return "";
         if (current && assignableRows.some((row) => row.user_id === current)) return current;
-        if (nextSelectedUserId && assignableRows.some((row) => row.user_id === nextSelectedUserId)) return nextSelectedUserId;
-        return assignableRows[0].user_id;
+        return "";
       });
       setEntries(detailRows);
       setPendingEntries(pendingRows);
@@ -368,16 +397,16 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
 
   const openCreateModal = useCallback(() => {
     resetForm();
-    if (isAdmin && assignableUsers.length > 0) {
-      const fallbackUserId =
-        (selectedUserId && assignableUsers.some((row) => row.user_id === selectedUserId) ? selectedUserId : null)
-        ?? assignableUsers[0].user_id;
-      setAdminTargetUserId(fallbackUserId);
-    }
     setEditorOpen(true);
     setStatusMessage(null);
     setErrorMessage(null);
-  }, [assignableUsers, isAdmin, resetForm, selectedUserId]);
+  }, [resetForm]);
+
+  const onAdminMatChange = useCallback((value: string) => {
+    setAdminTargetMat(value);
+    const matchedUser = findAssignableUserByMat(assignableUsers, value);
+    setAdminTargetUserId(matchedUser?.user_id ?? "");
+  }, [assignableUsers]);
 
   const closeEditorModal = useCallback(() => {
     setEditorOpen(false);
@@ -524,7 +553,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
         setStatusMessage("Atividade atualizada e mantida como aguardando aprovação.");
       } else if (isAdmin) {
         if (!adminTargetUserId) {
-          setErrorMessage("Selecione um colaborador.");
+          setErrorMessage("Informe uma matrícula válida do colaborador.");
           return;
         }
         if (manualPointsValue == null || manualPointsValue <= 0) {
@@ -847,7 +876,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                 <h3 id="atividade-extra-editor-title">{editingEntryId ? "Editar atividade" : "Nova atividade"}</h3>
                 <p>
                   {isAdminManualCreate
-                    ? "Selecione o colaborador e informe data, pontuação e descrição da atividade."
+                    ? "Informe a matrícula do colaborador. Depois de carregar o nome, preencha data, pontuação e descrição da atividade."
                     : "Informe os horários e a descrição da atividade."}
                 </p>
                 <form className="atividade-extra-form" onSubmit={onSubmit}>
@@ -855,19 +884,31 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                     {isAdminManualCreate ? (
                       <>
                         <label>
-                          Colaborador
-                          <select
-                            value={adminTargetUserId}
-                            onChange={(event) => setAdminTargetUserId(event.target.value)}
+                          Matrícula do colaborador
+                          <input
+                            className="atividade-extra-mat-input"
+                            type="text"
+                            inputMode="numeric"
+                            value={adminTargetMat}
+                            onChange={(event) => onAdminMatChange(event.target.value)}
+                            placeholder="Ex.: 77619"
+                            autoComplete="off"
                             required
+                          />
+                        </label>
+                        <label className="atividade-extra-form-description">
+                          Nome do colaborador
+                          <div
+                            className={`atividade-extra-readonly-field${adminResolvedUser ? " is-filled" : adminTargetMat.trim() ? " is-error" : ""}`}
                           >
-                            {assignableUsers.length === 0 ? <option value="">Nenhum colaborador disponível</option> : null}
-                            {assignableUsers.map((row) => (
-                              <option key={row.user_id} value={row.user_id}>
-                                {row.nome} ({row.mat})
-                              </option>
-                            ))}
-                          </select>
+                            {assignableUsers.length === 0
+                              ? "Nenhum colaborador disponível neste CD."
+                              : adminResolvedUser
+                              ? `${adminResolvedUser.nome} (${adminResolvedUser.mat})`
+                              : adminTargetMat.trim()
+                                ? "Matrícula não encontrada neste CD."
+                                : "Digite a matrícula para carregar o nome do colaborador."}
+                          </div>
                         </label>
                         <label>
                           Data da atividade
@@ -963,7 +1004,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                   <div className="atividade-extra-preview-line">
                     {isAdminManualCreate ? (
                       <>
-                        <span>Colaborador: {selectedAssignableUser ? `${selectedAssignableUser.nome} (${selectedAssignableUser.mat})` : "--"}</span>
+                        <span>Colaborador: {adminResolvedUser ? `${adminResolvedUser.nome} (${adminResolvedUser.mat})` : "--"}</span>
                         <span>Pontuação: {formatPoints(manualPointsValue ?? 0)}</span>
                       </>
                     ) : (
