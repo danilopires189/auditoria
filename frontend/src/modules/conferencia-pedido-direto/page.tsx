@@ -1040,7 +1040,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       XLSX.utils.book_append_sheet(workbook, summarySheet, "Resumo");
       XLSX.utils.book_append_sheet(workbook, conferencesSheet, "Conferencias");
       XLSX.utils.book_append_sheet(workbook, itemsSheet, "Itens");
-      XLSX.utils.book_append_sheet(workbook, collaboratorsSheet, "Colaboratore");
+      XLSX.utils.book_append_sheet(workbook, collaboratorsSheet, "Colaboradores");
 
       XLSX.writeFile(
         workbook,
