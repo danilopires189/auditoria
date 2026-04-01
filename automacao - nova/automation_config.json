@@ -1,0 +1,11 @@
+{
+  "automation_enabled": false,
+  "interval_minutes": 30,
+  "window_start": "06:00",
+  "window_end": "19:00",
+  "timezone": "America/Sao_Paulo",
+  "exclude_sunday": true,
+  "task_name": "AUDITORIA_SYNC_AUTO",
+  "last_full_run_date": null,
+  "failed_tables_queue": []
+}

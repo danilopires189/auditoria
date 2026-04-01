@@ -30,11 +30,39 @@ def _drop_db_usuario_empty_cd_duplicates(
     )
 
 
+def _prepare_db_prod_vol_compat_columns(
+    frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    work = frame.copy()
+    populated_aud_from_usuario = 0
+
+    if "usuario" in work.columns:
+        usuario = work["usuario"].astype("string").str.strip().replace({"": pd.NA})
+        work["usuario"] = usuario
+
+        if "aud" not in work.columns:
+            work["aud"] = usuario
+            populated_aud_from_usuario = int(usuario.notna().sum())
+        else:
+            aud = work["aud"].astype("string").str.strip().replace({"": pd.NA})
+            fill_mask = aud.isna() & usuario.notna()
+            populated_aud_from_usuario = int(fill_mask.sum())
+            aud.loc[fill_mask] = usuario.loc[fill_mask]
+            work["aud"] = aud
+
+    if "aud" in work.columns:
+        work["aud"] = work["aud"].astype("string").str.strip().replace({"": pd.NA})
+
+    return work, {"populated_aud_from_usuario": populated_aud_from_usuario}
+
+
 def apply_table_specific_rules(
     table_name: str,
     frame: pd.DataFrame,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     if table_name == "db_usuario":
         return _drop_db_usuario_empty_cd_duplicates(frame)
+    if table_name == "db_prod_vol":
+        return _prepare_db_prod_vol_compat_columns(frame)
 
     return frame, {}

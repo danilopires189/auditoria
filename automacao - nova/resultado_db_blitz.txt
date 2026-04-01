@@ -1,0 +1,49 @@
+=== EXAMINANDO DB_BLITZ.xlsx ===
+
+Abas encontradas: 2
+1. DB_CONF_BLITZ
+   Linhas: 2541
+   Colunas: 12
+   Colunas:
+     - CD
+     - FILIAL
+     - PEDIDO
+     - SEQ
+     - TT_UN
+     - CONFERENTE
+     - DT_CONF
+     - TT_VOL
+     - QTD_AVARIA
+     - QTD_VENCIDO
+     - QTD_FALTA
+     - QTD_SOBRA
+   Primeiras 3 linhas de dados:
+     2 | 559 | 2026066 | 2 | 1117 | 
+     9 | 933 | 2026066 | 9 | 1374 | 
+     3 | 968 | 2026066 | 3 | 821 | 
+
+2. DB_DIV_BLITZ
+   Linhas: 2492
+   Colunas: 15
+   Colunas:
+     - CD
+     - PEDIDO
+     - SEQ
+     - FILIAL
+     - CODDV
+     - DESCRICAO
+     - QTD_NFO
+     - CONF
+     - VL_DIV
+     - CONFERENTE
+     - DATA_CONF
+     - QTD_VENC
+     - CAIXA
+     - ENDERECO
+     - ZONA
+   Primeiras 3 linhas de dados:
+     2 | 2026066 | 2 | 559 | 72044 | 
+     2 | 2026066 | 2 | 559 | 479470 | 
+     2 | 2026066 | 2 | 559 | 756920 | 
+
+Análise concluída!

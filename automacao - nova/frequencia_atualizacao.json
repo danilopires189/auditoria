@@ -1,0 +1,47 @@
+{
+  "regras_frequencia": {
+    "sempre": {
+      "intervalo_minutos": 0,
+      "descricao": "Atualiza toda vez que abrir o arquivo",
+      "arquivos": [
+        "DB_ENTRADA_NOTAS.xlsx",
+        "DB_DEVOLUCAO.xlsx"
+      ]
+    },
+    "1_vez_por_dia": {
+      "intervalo_minutos": 1440,
+      "descricao": "Atualiza apenas 1 vez por dia (24 horas)",
+      "arquivos": [
+        "DB_BARRAS.xlsx",
+        "BD_AVULSO.xlsx", 
+        "BD_ROTAS.xlsx",
+        "DB_LOG_END.xlsx",
+        "DB_USUARIO.xlsx",
+        "DB_PROD_VOL.xlsx"
+      ]
+    },
+    "a_cada_6_horas": {
+      "intervalo_minutos": 360,
+      "descricao": "Atualiza a cada 6 horas",
+      "arquivos": [
+        "BD_END.xlsx"
+      ]
+    },
+    "a_cada_1_hora": {
+      "intervalo_minutos": 60,
+      "descricao": "Atualiza a cada 1 hora",
+      "arquivos": [
+        "DB_TERMO.xlsx",
+        "DB_PEDIDO_DIRETO.xlsx",
+        "DB_PROD_BLITZ.xlsx",
+        "DB_ESTQ_ENTR.xlsx",
+        "DB_BLITZ.xlsx"
+      ]
+    }
+  },
+  "observacoes": {
+    "criterio_verificacao": "Data de salvamento do arquivo Excel",
+    "logica": "Se arquivo foi modificado dentro do intervalo, pula para próximo. Senão, atualiza e envia para Supabase"
+  },
+  "ultima_atualizacao": {}
+}

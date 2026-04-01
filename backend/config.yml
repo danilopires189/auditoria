@@ -210,11 +210,22 @@ tables:
   db_prod_vol:
     file: "DB_PROD_VOL.xlsx"
     sheet: "DB_PROD_VOL"
-    mode: "full_replace"
-    unique_keys: ["cd", "aud"]
-    required_columns: ["cd", "aud"]
+    mode: "insert_new"
+    unique_keys: []
+    required_columns: ["cd", "seq_ped", "filial", "usuario", "vol_conf"]
     refresh_before_load: false
     types:
       cd: "integer"
+      seq_ped: "text"
+      filial: "bigint"
+      fili_nm_fantasia: "text"
+      vol_exp: "integer"
       aud: "text"
+      usuario: "text"
       vol_conf: "integer"
+      dt_ped: "timestamp"
+      dt_lib: "timestamp"
+      placa: "text"
+      rota: "integer"
+      descricao: "text"
+      encerramento: "timestamp"
