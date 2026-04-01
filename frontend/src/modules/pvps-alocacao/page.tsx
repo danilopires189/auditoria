@@ -326,6 +326,7 @@ function applyPendingEventsToOfflineData(input: {
   const pvpsRows = [...input.pvpsRows];
   const alocRows = [...input.alocRows];
   const pulBySepKey: Record<string, PvpsPulItemRow[]> = {};
+  const localPulByRowKey = new Map<string, Set<string>>();
   for (const [sepKey, items] of Object.entries(input.pulBySepKey)) {
     pulBySepKey[normalizePulCacheKey(sepKey)] = Array.isArray(items) ? [...items] : [];
   }
@@ -355,6 +356,9 @@ function applyPendingEventsToOfflineData(input: {
     if (event.kind === "pul") {
       if (!event.end_sep || !event.end_pul) continue;
       const rowKey = keyOfPvpsByValues(event.coddv, event.end_sep);
+      const localPulSet = localPulByRowKey.get(rowKey) ?? new Set<string>();
+      localPulSet.add(event.end_pul.trim().toUpperCase());
+      localPulByRowKey.set(rowKey, localPulSet);
       const cachedPul = pulBySepKey[rowKey];
       if (Array.isArray(cachedPul) && cachedPul.length > 0) {
         const normalizedValPul = formatMmaaDigits(event.val_pul);
@@ -370,7 +374,12 @@ function applyPendingEventsToOfflineData(input: {
       if (rowIndex >= 0) {
         const row = pvpsRows[rowIndex];
         const currentPul = pulBySepKey[rowKey] ?? [];
-        const auditedCount = currentPul.filter((item) => item.auditado).length;
+        const auditedCountFromCache = currentPul.length
+          ? currentPul.filter((item) => item.auditado).length
+          : null;
+        const auditedCount = auditedCountFromCache == null
+          ? Math.min(Math.max(row.pul_auditados, 0) + localPulSet.size, Math.max(row.pul_total, 0))
+          : auditedCountFromCache;
         if (auditedCount >= Math.max(row.pul_total, 1)) {
           pvpsRows.splice(rowIndex, 1);
           delete pulBySepKey[rowKey];
@@ -1330,19 +1339,31 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         return;
       }
 
+      const pendingEvents = activeCd == null
+        ? []
+        : await listPendingOfflineEvents(profile.user_id, activeCd).catch(() => []);
+
       if (tab === "pvps") {
         const [rows, completed] = await Promise.all([
           fetchPvpsManifest({ p_cd: activeCd, zona: null }),
           fetchPvpsCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt })
         ]);
+        const projected = applyPendingEventsToOfflineData({
+          pvpsRows: rows,
+          alocRows: [],
+          pulBySepKey: feedPulBySepKey,
+          events: pendingEvents
+        });
+        let nextPulBySepKey = projected.pulBySepKey;
         setLastPendingReviewAt((current) => ({ ...current, pvps: new Date().toISOString() }));
-        if (!silent && feedView === "pendentes") {
-          const updates = await hydratePulCacheForRows(rows);
+        if (feedView === "pendentes") {
+          const updates = await hydratePulCacheForRows(projected.pvpsRows);
           if (Object.keys(updates).length > 0) {
-            setFeedPulBySepKey((current) => ({ ...current, ...updates }));
+            nextPulBySepKey = { ...nextPulBySepKey, ...updates };
           }
         }
-        setPvpsRows(rows);
+        setFeedPulBySepKey((current) => ({ ...current, ...nextPulBySepKey }));
+        setPvpsRows(projected.pvpsRows);
         setPvpsCompletedRows(completed);
         setSepConcludedDayByKey((current) => {
           const next = { ...current };
@@ -1353,21 +1374,27 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           }
           return next;
         });
-        if (!showPvpsPopup && !rows.some((row) => keyOfPvps(row) === activePvpsKey)) {
-          setActivePvpsKey(rows[0] ? keyOfPvps(rows[0]) : null);
-          if (!rows[0]) closePvpsPopup();
+        if (!showPvpsPopup && !projected.pvpsRows.some((row) => keyOfPvps(row) === activePvpsKey)) {
+          setActivePvpsKey(projected.pvpsRows[0] ? keyOfPvps(projected.pvpsRows[0]) : null);
+          if (!projected.pvpsRows[0]) closePvpsPopup();
         }
       } else {
         const [rows, completed] = await Promise.all([
           fetchAlocacaoManifest({ p_cd: activeCd, zona: null }),
           fetchAlocacaoCompletedItemsDayAll({ p_cd: activeCd, p_ref_date_brt: todayBrt })
         ]);
+        const projected = applyPendingEventsToOfflineData({
+          pvpsRows: [],
+          alocRows: rows,
+          pulBySepKey: {},
+          events: pendingEvents
+        });
         setLastPendingReviewAt((current) => ({ ...current, alocacao: new Date().toISOString() }));
-        setAlocRows(rows);
+        setAlocRows(projected.alocRows);
         setAlocCompletedRows(completed);
-        if (!showAlocPopup && !rows.some((row) => row.queue_id === activeAlocQueue)) {
-          setActiveAlocQueue(rows[0]?.queue_id ?? null);
-          if (!rows[0]) {
+        if (!showAlocPopup && !projected.alocRows.some((row) => row.queue_id === activeAlocQueue)) {
+          setActiveAlocQueue(projected.alocRows[0]?.queue_id ?? null);
+          if (!projected.alocRows[0]) {
             setAlocPopupRow(null);
             setShowAlocPopup(false);
           }
@@ -3118,6 +3145,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         openPvpsPulPopup(row, firstPendingPul.end_pul, options);
         return;
       }
+      setStatusMessage("Este endereço já avançou para Pulmão. Atualizando a fila para evitar repetir a validade da Separação.");
+      void loadCurrent({ silent: true });
+      return;
     }
     setEditingPvpsCompleted(null);
     setPvpsPopupRow({ ...row });
