@@ -800,12 +800,31 @@ export async function submitAlocacao(params: {
   val_conf?: string | null;
 }): Promise<AlocacaoSubmitResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_alocacao_submit", {
+  const rpcParams = {
     p_cd: params.p_cd ?? null,
     p_queue_id: params.queue_id,
     p_end_sit: params.end_sit ?? null,
     p_val_conf: params.val_conf ?? null
-  });
+  };
+  let data: unknown = null;
+  let error: unknown = null;
+
+  const primary = await supabase.rpc("rpc_alocacao_submit_v2", rpcParams);
+  data = primary.data;
+  error = primary.error;
+
+  if (error) {
+    const rawMessage = extractRawErrorMessage(error).toLowerCase();
+    const canFallback = rawMessage.includes("rpc_alocacao_submit_v2")
+      || rawMessage.includes("schema cache")
+      || rawMessage.includes("function public.rpc_alocacao_submit_v2");
+    if (canFallback) {
+      const legacy = await supabase.rpc("rpc_alocacao_submit", rpcParams);
+      data = legacy.data;
+      error = legacy.error;
+    }
+  }
+
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) throw new Error("Falha ao salvar auditoria de alocação.");
