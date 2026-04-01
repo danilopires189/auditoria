@@ -47,6 +47,7 @@ import {
   hasOfflineSepCache,
   listPendingOfflineEvents,
   loadOfflineSnapshot,
+  removeOfflineAlocacaoEvent,
   saveOfflineAlocacaoEvent,
   saveOfflineSnapshot,
   savePvpsAlocPrefs,
@@ -3469,6 +3470,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           end_sit: "vazio",
           val_conf: null
         });
+        await removeOfflineAlocacaoEvent(profile.user_id, activeCd ?? row.cd, row.queue_id).catch(() => {
+          // Se não existir evento offline correspondente, segue normalmente.
+        });
+        await refreshPendingState();
         setAlocRows((current) => current.filter((currentRow) => currentRow.queue_id !== row.queue_id));
         setStatusMessage("Alocação marcada como vazio e enviada ao banco.");
         void loadCurrent({ silent: true });
@@ -4135,6 +4140,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           end_sit: alocEndSit || null,
           val_conf: hasOcorrencia ? null : normalizedValConf
         });
+      if (!isEditingCompleted) {
+        await removeOfflineAlocacaoEvent(profile.user_id, activeCd ?? activeAloc.cd, activeAloc.queue_id).catch(() => {
+          // Se não existir evento offline correspondente, segue normalmente.
+        });
+        await refreshPendingState();
+      }
       setAlocResult(result);
       let feedbackText = "";
       if (result.aud_sit === "conforme") {
