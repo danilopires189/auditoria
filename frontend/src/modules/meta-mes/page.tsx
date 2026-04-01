@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, HolidayIcon, ModuleIcon } from "../../ui/icons";
-import { formatDateOnlyPtBR, formatDateTimeBrasilia, monthStartIsoBrasilia } from "../../shared/brasilia-datetime";
+import { formatDateOnlyPtBR, formatDateTimeBrasilia, monthStartIsoBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   fetchMetaMesActivities,
@@ -165,6 +165,18 @@ function statusLabel(status: MetaMesDailyRow["status"]): string {
 
 function statusClassName(status: MetaMesDailyRow["status"]): string {
   return `is-${status.replace("_", "-")}`;
+}
+
+function visibleStatusLabel(row: MetaMesDailyRow, todayIso: string): string | null {
+  if (row.status === "domingo" || row.status === "feriado") {
+    return statusLabel(row.status);
+  }
+
+  if (row.date_ref > todayIso) {
+    return null;
+  }
+
+  return statusLabel(row.status);
 }
 
 function formatMonthYearPtBR(value: string | null): string {
@@ -370,6 +382,7 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
 
   const valueMode = summary?.value_mode ?? selectedActivity?.value_mode ?? "integer";
   const isCurrentMonthSelected = selectedMonthStart === monthStartIsoBrasilia();
+  const todayIso = todayIsoBrasilia();
   const monthlyTargetOriginLabel = useMemo(() => {
     if (!summary?.target_reference_month) return "Sem meta diária configurada.";
     if (summary.target_reference_month === summary.month_start) return "Meta configurada neste mês.";
@@ -698,6 +711,7 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
                       const canEditRow = isAdmin && isCurrentMonthSelected && !row.is_sunday;
                       const accumulatedLabel = `${formatMetricValue(row.cumulative_actual, valueMode)} / ${formatMetricValue(row.cumulative_target, valueMode)}`;
                       const deltaLabel = row.delta_value == null ? "-" : formatBalance(row.delta_value, valueMode);
+                      const statusText = visibleStatusLabel(row, todayIso);
 
                       return (
                         <tr key={row.date_ref} className={`meta-mes-row ${row.status === "acima" ? "is-highlight" : ""}`}>
@@ -708,7 +722,9 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
                             </div>
                           </td>
                           <td>
-                            <span className={`meta-mes-status ${statusClassName(row.status)}`}>{statusLabel(row.status)}</span>
+                            {statusText ? (
+                              <span className={`meta-mes-status ${statusClassName(row.status)}`}>{statusText}</span>
+                            ) : null}
                           </td>
                           <td>
                             <div className="meta-mes-target-cell">
