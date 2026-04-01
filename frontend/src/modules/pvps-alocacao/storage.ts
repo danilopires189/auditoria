@@ -448,6 +448,11 @@ export async function saveOfflineAlocacaoEvent(params: {
   });
 }
 
+export async function removeOfflineAlocacaoEvent(userId: string, cd: number, queueId: string): Promise<void> {
+  const eventId = alocEventKey(userId, cd, queueId);
+  await removeOfflineEvent(eventId);
+}
+
 export async function upsertOfflineSepCache(params: {
   user_id: string;
   cd: number;
