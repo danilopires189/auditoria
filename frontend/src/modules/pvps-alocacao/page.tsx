@@ -405,6 +405,78 @@ function applyPendingEventsToOfflineData(input: {
   return { pvpsRows, alocRows, pulBySepKey };
 }
 
+function isSyntheticAlocCompletedAuditId(auditId: string): boolean {
+  return auditId.startsWith("aloc-offline:");
+}
+
+function buildSyntheticAlocCompletedRow(params: {
+  row: AlocacaoManifestRow;
+  event: PvpsAlocOfflineEventRow;
+  auditorId: string;
+  auditorNome: string;
+}): AlocacaoCompletedRow {
+  const endSit = params.event.end_sit === "vazio" || params.event.end_sit === "obstruido"
+    ? params.event.end_sit
+    : null;
+  const valSist = formatMmaaDigits(params.row.val_sist) ?? params.row.val_sist ?? "-";
+  const valConfDigits = formatMmaaDigits(params.event.val_conf);
+  const audSit = endSit
+    ? "ocorrencia"
+    : (normalizeMmaa(params.row.val_sist) === normalizeMmaa(params.event.val_conf) ? "conforme" : "nao_conforme");
+
+  return {
+    audit_id: `aloc-offline:${params.row.queue_id}`,
+    auditor_id: params.auditorId,
+    queue_id: params.row.queue_id,
+    cd: params.row.cd,
+    zona: params.row.zona,
+    coddv: params.row.coddv,
+    descricao: params.row.descricao,
+    endereco: params.row.endereco,
+    nivel: params.row.nivel,
+    end_sit: endSit,
+    val_sist: valSist,
+    val_conf: endSit ? null : valConfDigits,
+    aud_sit: audSit,
+    dt_hr: params.event.updated_at || params.event.created_at,
+    auditor_nome: params.auditorNome
+  };
+}
+
+function mergeLocalAlocCompletedRows(params: {
+  completedRows: AlocacaoCompletedRow[];
+  manifestRows: AlocacaoManifestRow[];
+  events: PvpsAlocOfflineEventRow[];
+  auditorId: string;
+  auditorNome: string;
+}): AlocacaoCompletedRow[] {
+  const byQueueId = new Map<string, AlocacaoCompletedRow>();
+  for (const row of params.completedRows) {
+    byQueueId.set(row.queue_id, row);
+  }
+
+  const manifestByQueueId = new Map<string, AlocacaoManifestRow>();
+  for (const row of params.manifestRows) {
+    manifestByQueueId.set(row.queue_id, row);
+  }
+
+  for (const event of params.events) {
+    if (event.kind !== "alocacao" || !event.queue_id) continue;
+    const existing = byQueueId.get(event.queue_id);
+    if (existing && !isSyntheticAlocCompletedAuditId(existing.audit_id)) continue;
+    const manifestRow = manifestByQueueId.get(event.queue_id);
+    if (!manifestRow) continue;
+    byQueueId.set(event.queue_id, buildSyntheticAlocCompletedRow({
+      row: manifestRow,
+      event,
+      auditorId: params.auditorId,
+      auditorNome: params.auditorNome
+    }));
+  }
+
+  return Array.from(byQueueId.values());
+}
+
 function formatDate(value: string): string {
   const normalized = value.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
@@ -1324,7 +1396,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         setPvpsRows(localData.pvpsRows);
         setAlocRows(localData.alocRows);
         setPvpsCompletedRows([]);
-        setAlocCompletedRows([]);
+        setAlocCompletedRows(mergeLocalAlocCompletedRows({
+          completedRows: [],
+          manifestRows: snapshot.aloc_rows,
+          events: pendingEvents,
+          auditorId: profile.user_id,
+          auditorNome: profile.nome || "USUARIO"
+        }));
         if (!showPvpsPopup && !localData.pvpsRows.some((row) => keyOfPvps(row) === activePvpsKey)) {
           setActivePvpsKey(localData.pvpsRows[0] ? keyOfPvps(localData.pvpsRows[0]) : null);
           if (!localData.pvpsRows[0]) closePvpsPopup();
@@ -1389,9 +1467,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           pulBySepKey: {},
           events: pendingEvents
         });
+        const mergedCompleted = mergeLocalAlocCompletedRows({
+          completedRows: completed,
+          manifestRows: rows,
+          events: pendingEvents,
+          auditorId: profile.user_id,
+          auditorNome: profile.nome || "USUARIO"
+        });
         setLastPendingReviewAt((current) => ({ ...current, alocacao: new Date().toISOString() }));
         setAlocRows(projected.alocRows);
-        setAlocCompletedRows(completed);
+        setAlocCompletedRows(mergedCompleted);
         if (!showAlocPopup && !projected.alocRows.some((row) => row.queue_id === activeAlocQueue)) {
           setActiveAlocQueue(projected.alocRows[0]?.queue_id ?? null);
           if (!projected.alocRows[0]) {
@@ -3374,6 +3459,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   async function handlePendingAlocSwipeEmpty(row: AlocacaoManifestRow): Promise<void> {
     closePendingSwipe();
     const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
+    const nowIso = new Date().toISOString();
     setBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
@@ -3388,6 +3474,33 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         val_conf: null
       });
       await refreshPendingState();
+      setAlocCompletedRows((current) => mergeLocalAlocCompletedRows({
+        completedRows: current,
+        manifestRows: [row],
+        events: [{
+          event_id: `alocacao|${profile.user_id}|${Math.trunc(activeCd ?? row.cd)}|${row.queue_id}`,
+          user_id: profile.user_id,
+          cd: activeCd ?? row.cd,
+          kind: "alocacao",
+          status: "pending",
+          attempt_count: 0,
+          error_message: null,
+          coddv: row.coddv,
+          zona: row.zona,
+          end_sep: null,
+          end_pul: null,
+          queue_id: row.queue_id,
+          end_sit: "vazio",
+          val_sep: null,
+          val_pul: null,
+          val_conf: null,
+          audit_id: null,
+          created_at: nowIso,
+          updated_at: nowIso
+        }],
+        auditorId: profile.user_id,
+        auditorNome: profile.nome || "USUARIO"
+      }));
       setAlocRows((current) => current.filter((currentRow) => currentRow.queue_id !== row.queue_id));
       setStatusMessage(`Alocação marcada como vazio na fila e será sincronizada ${syncTail}`);
       if (shouldTriggerQueuedBackgroundSync(isOnline)) {
@@ -3517,7 +3630,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       is_window_active: true
     };
     setShowAlocOccurrence(false);
-    setEditingAlocCompleted(row);
+    setEditingAlocCompleted(isSyntheticAlocCompletedAuditId(row.audit_id) ? null : row);
     setAlocEndSit(row.end_sit ?? "");
     setAlocValConf(row.val_conf?.replace("/", "") ?? "");
     setAlocResult(null);
@@ -3900,6 +4013,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const hasOcorrencia = alocEndSit === "vazio" || alocEndSit === "obstruido";
     const normalizedValConf = alocValConf.trim();
     const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
+    const nowIso = new Date().toISOString();
     if (!hasOcorrencia && normalizedValConf.length !== 4) {
       setErrorMessage("Validade do Produto obrigatória (MMAA) quando não houver ocorrência.");
       return;
@@ -3920,6 +4034,33 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           val_conf: hasOcorrencia ? null : normalizedValConf
         });
         await refreshPendingState();
+        setAlocCompletedRows((current) => mergeLocalAlocCompletedRows({
+          completedRows: current,
+          manifestRows: [activeAloc],
+          events: [{
+            event_id: `alocacao|${profile.user_id}|${Math.trunc(activeCd ?? activeAloc.cd)}|${activeAloc.queue_id}`,
+            user_id: profile.user_id,
+            cd: activeCd ?? activeAloc.cd,
+            kind: "alocacao",
+            status: "pending",
+            attempt_count: 0,
+            error_message: null,
+            coddv: activeAloc.coddv,
+            zona: activeAloc.zona,
+            end_sep: null,
+            end_pul: null,
+            queue_id: activeAloc.queue_id,
+            end_sit: hasOcorrencia ? alocEndSit : null,
+            val_sep: null,
+            val_pul: null,
+            val_conf: hasOcorrencia ? null : normalizedValConf,
+            audit_id: null,
+            created_at: nowIso,
+            updated_at: nowIso
+          }],
+          auditorId: profile.user_id,
+          auditorNome: profile.nome || "USUARIO"
+        }));
         setAlocRows((current) => current.filter((row) => row.queue_id !== currentQueueId));
         setStatusMessage(
           hasOcorrencia
