@@ -3458,6 +3458,33 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   async function handlePendingAlocSwipeEmpty(row: AlocacaoManifestRow): Promise<void> {
     closePendingSwipe();
+    if (isOnline && !preferOfflineMode) {
+      setBusy(true);
+      setErrorMessage(null);
+      setStatusMessage(null);
+      try {
+        await submitAlocacao({
+          p_cd: activeCd ?? row.cd,
+          queue_id: row.queue_id,
+          end_sit: "vazio",
+          val_conf: null
+        });
+        setAlocRows((current) => current.filter((currentRow) => currentRow.queue_id !== row.queue_id));
+        setStatusMessage("Alocação marcada como vazio e enviada ao banco.");
+        void loadCurrent({ silent: true });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Falha ao salvar Alocação.";
+        setErrorMessage(message);
+        if (shouldRefreshAfterAlreadyAudited(message)) {
+          await loadCurrent({ silent: true });
+          setStatusMessage("Item já auditado. Lista atualizada.");
+        }
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
     const nowIso = new Date().toISOString();
     setBusy(true);
@@ -4013,13 +4040,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     const hasOcorrencia = alocEndSit === "vazio" || alocEndSit === "obstruido";
     const normalizedValConf = alocValConf.trim();
     const syncTail = shouldTriggerQueuedBackgroundSync(isOnline) ? "em segundo plano." : "ao reconectar.";
+    const shouldQueueOffline = !isOnline || preferOfflineMode;
     const nowIso = new Date().toISOString();
     if (!hasOcorrencia && normalizedValConf.length !== 4) {
       setErrorMessage("Validade do Produto obrigatória (MMAA) quando não houver ocorrência.");
       return;
     }
 
-    if (!isEditingCompleted) {
+    if (!isEditingCompleted && shouldQueueOffline) {
       setBusy(true);
       setErrorMessage(null);
       setStatusMessage(null);
