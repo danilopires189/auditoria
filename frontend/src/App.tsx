@@ -60,6 +60,7 @@ const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e núm
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
 const DEFAULT_GLOBAL_CD = 2;
 const SHARED_CD_SCOPE_10_11 = [10, 11] as const;
+const SHARED_CD_SCOPE_10_11_EXCEPTION_MATS = new Set(["126719"]);
 const HOME_MODULES_VIEW_STORAGE_KEY = "auditoria.home.modules_view.v1";
 const SESSION_DEVICE_STORAGE_KEY = "auditoria.session_device_id.v1";
 const SESSION_ACTIVITY_STORAGE_PREFIX = "auditoria.last_activity.v1:";
@@ -223,6 +224,12 @@ function canonicalMat(value: string): string {
   const normalized = normalizeMat(value);
   const stripped = normalized.replace(/^0+(?=\d)/, "");
   return stripped || normalized;
+}
+
+function hasSharedCd10And11ProfileScope(profile: Pick<ProfileContext, "cd_default" | "mat"> | null | undefined): boolean {
+  if (!profile) return false;
+  if (isSharedCd10Or11(profile.cd_default)) return true;
+  return profile.mat != null && SHARED_CD_SCOPE_10_11_EXCEPTION_MATS.has(canonicalMat(profile.mat));
 }
 
 type RequestTimeoutError = Error & { code: "REQUEST_TIMEOUT" };
@@ -1937,7 +1944,7 @@ export default function App() {
 
   const hasSharedCd10And11Scope = useMemo(() => {
     if (!effectiveProfile || isGlobalProfile) return false;
-    return isSharedCd10Or11(effectiveProfile.cd_default) && listIncludesAllCds(globalCdOptions, SHARED_CD_SCOPE_10_11);
+    return hasSharedCd10And11ProfileScope(effectiveProfile) && listIncludesAllCds(globalCdOptions, SHARED_CD_SCOPE_10_11);
   }, [effectiveProfile, globalCdOptions, isGlobalProfile]);
 
   const runtimeCdOptions = useMemo(() => {
@@ -2065,6 +2072,11 @@ export default function App() {
     };
   }, [canUseRuntimeCdSwitcher, effectiveProfile, globalCdSelection, runtimeCdOptions]);
 
+  const unifiedCd10And11ModuleProfile = useMemo<ProfileContext | null>(() => {
+    if (!hasSharedCd10And11Scope) return effectiveProfileWithCd;
+    return effectiveProfile;
+  }, [effectiveProfile, effectiveProfileWithCd, hasSharedCd10And11Scope]);
+
   const handleHomeModulesViewModeChange = useCallback(async (nextMode: HomeModulesViewMode) => {
     if (!session) return;
 
@@ -2128,16 +2140,16 @@ export default function App() {
   }, [effectiveProfileWithCd, session]);
 
   const atividadeExtraProfile = useMemo<AtividadeExtraModuleProfile | null>(() => {
-    if (!session || !effectiveProfileWithCd) return null;
+    if (!session || !unifiedCd10And11ModuleProfile) return null;
     return {
-      user_id: effectiveProfileWithCd.user_id || session.user.id,
-      nome: effectiveProfileWithCd.nome || "Usuário",
-      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
-      role: effectiveProfileWithCd.role || "auditor",
-      cd_default: effectiveProfileWithCd.cd_default,
-      cd_nome: effectiveProfileWithCd.cd_nome
+      user_id: unifiedCd10And11ModuleProfile.user_id || session.user.id,
+      nome: unifiedCd10And11ModuleProfile.nome || "Usuário",
+      mat: normalizeMat(unifiedCd10And11ModuleProfile.mat || extractMatFromLoginEmail(session.user.email)),
+      role: unifiedCd10And11ModuleProfile.role || "auditor",
+      cd_default: unifiedCd10And11ModuleProfile.cd_default,
+      cd_nome: unifiedCd10And11ModuleProfile.cd_nome
     };
-  }, [effectiveProfileWithCd, session]);
+  }, [session, unifiedCd10And11ModuleProfile]);
 
   const buscaProdutoProfile = useMemo<BuscaProdutoModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
@@ -2272,16 +2284,16 @@ export default function App() {
   }, [effectiveProfileWithCd, session]);
 
   const metaMesProfile = useMemo<MetaMesModuleProfile | null>(() => {
-    if (!session || !effectiveProfileWithCd) return null;
+    if (!session || !unifiedCd10And11ModuleProfile) return null;
     return {
-      user_id: effectiveProfileWithCd.user_id || session.user.id,
-      nome: effectiveProfileWithCd.nome || "Usuário",
-      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
-      role: effectiveProfileWithCd.role || "auditor",
-      cd_default: effectiveProfileWithCd.cd_default,
-      cd_nome: effectiveProfileWithCd.cd_nome
+      user_id: unifiedCd10And11ModuleProfile.user_id || session.user.id,
+      nome: unifiedCd10And11ModuleProfile.nome || "Usuário",
+      mat: normalizeMat(unifiedCd10And11ModuleProfile.mat || extractMatFromLoginEmail(session.user.email)),
+      role: unifiedCd10And11ModuleProfile.role || "auditor",
+      cd_default: unifiedCd10And11ModuleProfile.cd_default,
+      cd_nome: unifiedCd10And11ModuleProfile.cd_nome
     };
-  }, [effectiveProfileWithCd, session]);
+  }, [session, unifiedCd10And11ModuleProfile]);
 
   const indicadoresProfile = useMemo<IndicadoresModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
