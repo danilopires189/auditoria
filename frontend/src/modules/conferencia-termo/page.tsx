@@ -446,6 +446,7 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("SOBRA_PENDENTE")) return "Existem sobras. Corrija antes de finalizar.";
   if (value.includes("FALTA_MOTIVO_OBRIGATORIO")) return "Informe o motivo da falta para finalizar.";
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
+  if (value.includes("APENAS_ADMIN")) return "";
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
   if (value.includes("BASE_TERMO_VAZIA")) return "A base do termo está vazia para este CD.";
   if (value.includes("CONFERENCIA_EM_ABERTO_OUTRA_ETIQUETA")) {

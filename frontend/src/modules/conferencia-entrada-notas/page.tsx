@@ -798,7 +798,7 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("SEM_SEQ_NF_DISPONIVEL")) return "Produto sem recebimento disponível neste CD.";
   if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
-  if (value.includes("APENAS_ADMIN")) return "Relatório disponível apenas para administrador.";
+  if (value.includes("APENAS_ADMIN")) return "";
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
   if (value.includes("CD_OBRIGATORIO") || value.includes("CD_NAO_DEFINIDO_USUARIO")) {
     return "Selecione o CD antes de gerar o relatório.";
