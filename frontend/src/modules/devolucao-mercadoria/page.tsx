@@ -1529,7 +1529,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const openVolumeFromEtiqueta = useCallback(async (rawEtiqueta: string) => {
     const etiqueta = rawEtiqueta.trim();
     if (!etiqueta) {
-      setErrorMessage("Informe a NFD ou a Chave para abrir o volume.");
+      setErrorMessage("Informe a NFD ou Chave para abrir o volume.");
       return;
     }
     if (currentCd == null) {
@@ -3314,7 +3314,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
-                  placeholder="Informe a NFD ou a Chave"
+                  placeholder="Informe a NFD ou Chave"
                   required
                 />
                 <button
