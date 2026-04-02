@@ -5,6 +5,15 @@ from typing import Any
 import pandas as pd
 
 
+def _relocalize_utc_series_to_brasilia(series: pd.Series) -> tuple[pd.Series, int]:
+    non_null_count = int(series.notna().sum())
+    if non_null_count == 0:
+        return series, 0
+
+    adjusted = series.dt.tz_localize(None).dt.tz_localize("America/Sao_Paulo")
+    return adjusted, non_null_count
+
+
 def _drop_db_usuario_empty_cd_duplicates(
     frame: pd.DataFrame,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
@@ -35,6 +44,7 @@ def _prepare_db_prod_vol_compat_columns(
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     work = frame.copy()
     populated_aud_from_usuario = 0
+    relocalized_timestamp_columns: dict[str, int] = {}
 
     if "usuario" in work.columns:
         usuario = work["usuario"].astype("string").str.strip().replace({"": pd.NA})
@@ -53,7 +63,19 @@ def _prepare_db_prod_vol_compat_columns(
     if "aud" in work.columns:
         work["aud"] = work["aud"].astype("string").str.strip().replace({"": pd.NA})
 
-    return work, {"populated_aud_from_usuario": populated_aud_from_usuario}
+    for column in ("dt_ped", "dt_lib", "encerramento"):
+        if column not in work.columns:
+            continue
+        series = work[column]
+        if not pd.api.types.is_datetime64tz_dtype(series):
+            continue
+        work[column], adjusted_count = _relocalize_utc_series_to_brasilia(series)
+        relocalized_timestamp_columns[column] = adjusted_count
+
+    return work, {
+        "populated_aud_from_usuario": populated_aud_from_usuario,
+        "relocalized_timestamp_columns": relocalized_timestamp_columns,
+    }
 
 
 def apply_table_specific_rules(
