@@ -20,6 +20,10 @@ const IRREGULAR_UNIT_FORMS: Record<string, UnitForms> = {
   skus: { singular: "sku", plural: "skus" },
   nfd: { singular: "nfd", plural: "nfds" },
   nfds: { singular: "nfd", plural: "nfds" },
+  devolucao: { singular: "devolução", plural: "devoluções" },
+  devolucoes: { singular: "devolução", plural: "devoluções" },
+  "devolução": { singular: "devolução", plural: "devoluções" },
+  "devoluções": { singular: "devolução", plural: "devoluções" },
   volume: { singular: "volume", plural: "volumes" },
   volumes: { singular: "volume", plural: "volumes" }
 };

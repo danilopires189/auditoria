@@ -700,7 +700,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       formatRankingPdfPointsAndCount(row.zerados_pontos, row.zerados_qtd, "end", "ends"),
       formatRankingPdfPointsAndCount(row.atividade_extra_pontos, row.atividade_extra_qtd, "Regist.", "Regist."),
       formatRankingPdfPointsAndCount(row.alocacao_pontos, row.alocacao_qtd, "end", "ends"),
-      formatRankingPdfPointsAndCount(row.devolucao_pontos, row.devolucao_qtd, "nf", "nfs"),
+      formatRankingPdfPointsAndCount(row.devolucao_pontos, row.devolucao_qtd, "devol.", "devol."),
       formatRankingPdfPointsAndCount(row.conf_termo_pontos, row.conf_termo_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_avulso_pontos, row.conf_avulso_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_entrada_pontos, row.conf_entrada_qtd, "sku", "skus"),
@@ -1094,8 +1094,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                           value: formatRankingPointsAndCount(
                                             row.devolucao_pontos,
                                             row.devolucao_qtd,
-                                            "nf",
-                                            "nfs"
+                                            "devol.",
+                                            "devol."
                                           )
                                         },
                                         {
