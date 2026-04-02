@@ -70,7 +70,7 @@ function toErrorMessage(error: unknown): string {
       return "ITEM_ALOCACAO_AUDITADO_POR_OUTRO_USUARIO: Endereço já concluído por outro usuário.";
     }
     if (normalized.includes("APENAS_ADMIN")) {
-      return "Apenas admin pode gerar este relatório.";
+      return "";
     }
     if (normalized.includes("PERIODO_OBRIGATORIO")) {
       return "Informe data inicial e final para gerar o relatório.";
