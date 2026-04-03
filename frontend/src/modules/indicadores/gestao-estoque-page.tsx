@@ -426,7 +426,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           fetchIndicadoresGestaoEstoqueLossDimension({
             cd: activeCd,
             monthStart: selectedMonthStart,
-            dimension: "categoria_n1",
+            dimension: "categoria_n2",
             movementFilter,
             limit: INSIGHT_ROWS_LIMIT
           })
@@ -678,7 +678,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
             />
 
             <LossDimensionList
-              title="Maiores perdas por categoria N1"
+              title="Maiores perdas por categoria N2"
               subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
               rows={categoryLossRows}
               emptyMessage="Nenhuma perda positiva por categoria encontrada no filtro selecionado."

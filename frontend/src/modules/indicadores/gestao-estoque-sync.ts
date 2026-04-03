@@ -263,7 +263,7 @@ export async function fetchIndicadoresGestaoEstoqueYearReentryItems(
 export async function fetchIndicadoresGestaoEstoqueLossDimension(params: {
   cd: number | null;
   monthStart: string;
-  dimension: "fornecedor" | "categoria_n1";
+  dimension: "fornecedor" | "categoria_n1" | "categoria_n2";
   movementFilter: IndicadoresGestaoEstoqueMovementFilter;
   limit?: number;
 }): Promise<IndicadoresGestaoEstoqueLossDimensionItem[]> {
