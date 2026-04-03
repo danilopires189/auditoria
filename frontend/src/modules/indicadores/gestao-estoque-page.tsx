@@ -8,6 +8,7 @@ import type { IndicadoresModuleProfile } from "./types";
 import {
   fetchIndicadoresGestaoEstoqueDailySeries,
   fetchIndicadoresGestaoEstoqueDetails,
+  fetchIndicadoresGestaoEstoqueLossDimension,
   fetchIndicadoresGestaoEstoqueMonthOptions,
   fetchIndicadoresGestaoEstoqueSummary,
   fetchIndicadoresGestaoEstoqueTopItems,
@@ -16,6 +17,7 @@ import {
 import type {
   IndicadoresGestaoEstoqueDailyRow,
   IndicadoresGestaoEstoqueDetailRow,
+  IndicadoresGestaoEstoqueLossDimensionItem,
   IndicadoresGestaoEstoqueMonthOption,
   IndicadoresGestaoEstoqueMovementFilter,
   IndicadoresGestaoEstoqueReentryItem,
@@ -36,6 +38,9 @@ interface MetricCardDefinition {
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
 const ALL_DAYS_VALUE = "__ALL_DAYS__";
+const DETAIL_ROWS_LIMIT = 150;
+const INSIGHT_ROWS_LIMIT = 12;
+const REENTRY_ROWS_LIMIT = 20;
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -243,6 +248,46 @@ function TopList({
   );
 }
 
+function LossDimensionList({
+  title,
+  subtitle,
+  rows,
+  emptyMessage
+}: {
+  title: string;
+  subtitle: string;
+  rows: IndicadoresGestaoEstoqueLossDimensionItem[];
+  emptyMessage: string;
+}) {
+  return (
+    <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-loss">
+      <div className="indicadores-panel-head">
+        <h3>{title}</h3>
+        <span>{subtitle}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="indicadores-empty-box"><p>{emptyMessage}</p></div>
+      ) : (
+        <div className="gestao-estq-loss-list">
+          {rows.map((row, index) => (
+            <article key={`${row.dimension_key}:${index}`} className="gestao-estq-loss-item">
+              <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
+              <div className="gestao-estq-loss-main">
+                <strong>{row.dimension_key}</strong>
+                <small>{row.produtos_distintos_mes} prod. no mês · {row.produtos_distintos_ano} no ano</small>
+              </div>
+              <div className="gestao-estq-loss-metrics">
+                <strong>{formatSigned(row.perda_acumulada_ano)}</strong>
+                <small>Mês {formatSigned(row.perda_mes)}</small>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: IndicadoresGestaoEstoquePageProps) {
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
@@ -259,9 +304,12 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [topSaidas, setTopSaidas] = useState<IndicadoresGestaoEstoqueTopItem[]>([]);
   const [detailRows, setDetailRows] = useState<IndicadoresGestaoEstoqueDetailRow[]>([]);
   const [reentryRows, setReentryRows] = useState<IndicadoresGestaoEstoqueReentryItem[]>([]);
+  const [supplierLossRows, setSupplierLossRows] = useState<IndicadoresGestaoEstoqueLossDimensionItem[]>([]);
+  const [categoryLossRows, setCategoryLossRows] = useState<IndicadoresGestaoEstoqueLossDimensionItem[]>([]);
 
   const [loadingMonths, setLoadingMonths] = useState(true);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
+  const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -299,6 +347,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       setTopEntradas([]);
       setTopSaidas([]);
       setReentryRows([]);
+      setSupplierLossRows([]);
+      setCategoryLossRows([]);
       return;
     }
 
@@ -309,7 +359,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       setErrorMessage(null);
       try {
         const activeDay = selectedDay === ALL_DAYS_VALUE ? null : selectedDay;
-        const [nextSummary, nextDaily, nextEntradas, nextSaidas, nextReentries] = await Promise.all([
+        const [nextSummary, nextDaily, nextEntradas, nextSaidas] = await Promise.all([
           fetchIndicadoresGestaoEstoqueSummary(activeCd, selectedMonthStart, movementFilter),
           fetchIndicadoresGestaoEstoqueDailySeries(activeCd, selectedMonthStart, movementFilter),
           fetchIndicadoresGestaoEstoqueTopItems({
@@ -325,15 +375,13 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
             day: activeDay,
             rankGroup: "saida",
             movementFilter
-          }),
-          fetchIndicadoresGestaoEstoqueYearReentryItems(activeCd, selectedMonthStart)
+          })
         ]);
         if (cancelled) return;
         setSummary(nextSummary);
         setDailySeries(nextDaily);
         setTopEntradas(nextEntradas);
         setTopSaidas(nextSaidas);
-        setReentryRows(nextReentries);
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(asErrorMessage(error));
@@ -341,7 +389,6 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           setDailySeries([]);
           setTopEntradas([]);
           setTopSaidas([]);
-          setReentryRows([]);
         }
       } finally {
         if (!cancelled) setLoadingDashboard(false);
@@ -353,6 +400,58 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       cancelled = true;
     };
   }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
+
+  useEffect(() => {
+    if (!selectedMonthStart) {
+      setReentryRows([]);
+      setSupplierLossRows([]);
+      setCategoryLossRows([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadInsights() {
+      setLoadingInsights(true);
+      try {
+        const [nextReentries, nextSupplierLoss, nextCategoryLoss] = await Promise.all([
+          fetchIndicadoresGestaoEstoqueYearReentryItems(activeCd, selectedMonthStart, REENTRY_ROWS_LIMIT),
+          fetchIndicadoresGestaoEstoqueLossDimension({
+            cd: activeCd,
+            monthStart: selectedMonthStart,
+            dimension: "fornecedor",
+            movementFilter,
+            limit: INSIGHT_ROWS_LIMIT
+          }),
+          fetchIndicadoresGestaoEstoqueLossDimension({
+            cd: activeCd,
+            monthStart: selectedMonthStart,
+            dimension: "categoria_n1",
+            movementFilter,
+            limit: INSIGHT_ROWS_LIMIT
+          })
+        ]);
+        if (cancelled) return;
+        setReentryRows(nextReentries);
+        setSupplierLossRows(nextSupplierLoss);
+        setCategoryLossRows(nextCategoryLoss);
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(asErrorMessage(error));
+          setReentryRows([]);
+          setSupplierLossRows([]);
+          setCategoryLossRows([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingInsights(false);
+      }
+    }
+
+    void loadInsights();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCd, movementFilter, selectedMonthStart]);
 
   useEffect(() => {
     if (!selectedMonthStart) {
@@ -370,7 +469,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           activeCd,
           selectedMonthStart,
           selectedDay === ALL_DAYS_VALUE ? null : selectedDay,
-          movementFilter
+          movementFilter,
+          DETAIL_ROWS_LIMIT
         );
         if (!cancelled) setDetailRows(rows);
       } catch (error) {
@@ -528,11 +628,13 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                 <h3>Saída seguida de entrada</h3>
                 <span>Acumulado do ano do CD ativo.</span>
               </div>
-              {reentryRows.length === 0 ? (
+              {loadingInsights && reentryRows.length === 0 ? (
+                <div className="indicadores-empty-box"><p>Carregando insights do ano...</p></div>
+              ) : reentryRows.length === 0 ? (
                 <div className="indicadores-empty-box"><p>Nenhum produto com saída seguida de entrada encontrado no ano.</p></div>
               ) : (
                 <div className="gestao-estq-reentry-list">
-                  {reentryRows.slice(0, 30).map((row, index) => (
+                  {reentryRows.map((row, index) => (
                     <article key={`${row.coddv}:${index}`} className="gestao-estq-reentry-item">
                       <div className="gestao-estq-reentry-main">
                         <strong>{row.descricao}</strong>
@@ -568,10 +670,28 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
               className="gestao-estq-panel-top"
             />
 
+            <LossDimensionList
+              title="Maiores perdas por fornecedor"
+              subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
+              rows={supplierLossRows}
+              emptyMessage="Nenhuma perda positiva por fornecedor encontrada no filtro selecionado."
+            />
+
+            <LossDimensionList
+              title="Maiores perdas por categoria N1"
+              subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
+              rows={categoryLossRows}
+              emptyMessage="Nenhuma perda positiva por categoria encontrada no filtro selecionado."
+            />
+
             <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-details">
               <div className="indicadores-panel-head">
                 <h3>{selectedDay === ALL_DAYS_VALUE ? "Movimentações do mês" : "Movimentações do dia"}</h3>
-                <span>{selectedDay === ALL_DAYS_VALUE ? selectedMonthLabel : formatDate(selectedDay)}</span>
+                <span>
+                  {selectedDay === ALL_DAYS_VALUE ? selectedMonthLabel : formatDate(selectedDay)}
+                  {" · "}
+                  {`até ${DETAIL_ROWS_LIMIT} linhas mais relevantes`}
+                </span>
               </div>
               {loadingDetails ? (
                 <div className="indicadores-empty-box"><p>Carregando movimentações...</p></div>

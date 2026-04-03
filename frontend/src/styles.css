@@ -10559,6 +10559,10 @@ small {
     min-height: 360px;
   }
 
+  .gestao-estq-panel-loss {
+    min-height: 320px;
+  }
+
   .gestao-estq-panel-details {
     grid-column: 1 / -1;
     overflow: hidden;
@@ -10615,7 +10619,8 @@ small {
   }
 
   .gestao-estq-top-list,
-  .gestao-estq-reentry-list {
+  .gestao-estq-reentry-list,
+  .gestao-estq-loss-list {
     display: grid;
     gap: 10px;
     overflow: auto;
@@ -10623,7 +10628,8 @@ small {
   }
 
   .gestao-estq-top-item,
-  .gestao-estq-reentry-item {
+  .gestao-estq-reentry-item,
+  .gestao-estq-loss-item {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 12px;
@@ -10650,7 +10656,9 @@ small {
   .gestao-estq-reentry-main,
   .gestao-estq-top-value,
   .gestao-estq-reentry-balance,
-  .gestao-estq-reentry-dates {
+  .gestao-estq-reentry-dates,
+  .gestao-estq-loss-main,
+  .gestao-estq-loss-metrics {
     display: grid;
     gap: 4px;
     min-width: 0;
@@ -10659,7 +10667,9 @@ small {
   .gestao-estq-top-main strong,
   .gestao-estq-reentry-main strong,
   .gestao-estq-top-value strong,
-  .gestao-estq-reentry-balance strong {
+  .gestao-estq-reentry-balance strong,
+  .gestao-estq-loss-main strong,
+  .gestao-estq-loss-metrics strong {
     color: #14345f;
   }
 
@@ -10667,13 +10677,16 @@ small {
   .gestao-estq-reentry-main small,
   .gestao-estq-top-value small,
   .gestao-estq-reentry-balance small,
-  .gestao-estq-reentry-dates span {
+  .gestao-estq-reentry-dates span,
+  .gestao-estq-loss-main small,
+  .gestao-estq-loss-metrics small {
     color: #5b7296;
     font-size: 0.76rem;
   }
 
   .gestao-estq-top-value,
-  .gestao-estq-reentry-balance {
+  .gestao-estq-reentry-balance,
+  .gestao-estq-loss-metrics {
     text-align: right;
   }
 
@@ -10760,12 +10773,14 @@ small {
     }
 
     .gestao-estq-top-item,
-    .gestao-estq-reentry-item {
+    .gestao-estq-reentry-item,
+    .gestao-estq-loss-item {
       grid-template-columns: 1fr;
     }
 
     .gestao-estq-top-value,
-    .gestao-estq-reentry-balance {
+    .gestao-estq-reentry-balance,
+    .gestao-estq-loss-metrics {
       text-align: left;
     }
   }
