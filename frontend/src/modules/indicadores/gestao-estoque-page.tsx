@@ -186,7 +186,9 @@ function CurrencyMetricValue({ value, signed = false }: { value: number; signed?
 function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
   const safeRows = Math.max(rows.length, 1);
   const horizontalPadding = 40;
-  const slotWidth = 82;
+  const slotWidth = 110;
+  const entryBarWidth = 24;
+  const exitBarWidth = 24;
   const chartWidth = Math.max(1480, horizontalPadding * 2 + safeRows * slotWidth);
   const chartHeight = 430;
   const barsTop = 28;
@@ -223,10 +225,24 @@ function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
             const lossValueY = row.perda_total >= 0 ? lossY - 10 : lossY + 16;
             return (
               <g key={row.date_ref}>
-                <rect x={baseX - 23} y={entryY} width="18" height={entryHeight} rx="6" className="indicadores-chart-bar gestao-estq-chart-entry">
+                <rect
+                  x={baseX - entryBarWidth - 7}
+                  y={entryY}
+                  width={entryBarWidth}
+                  height={entryHeight}
+                  rx="6"
+                  className="indicadores-chart-bar gestao-estq-chart-entry"
+                >
                   <title>{`${formatDate(row.date_ref)} · Entradas ${formatCurrency(row.entrada_total)}`}</title>
                 </rect>
-                <rect x={baseX + 5} y={exitY} width="18" height={exitHeight} rx="6" className="indicadores-chart-bar gestao-estq-chart-exit">
+                <rect
+                  x={baseX + 7}
+                  y={exitY}
+                  width={exitBarWidth}
+                  height={exitHeight}
+                  rx="6"
+                  className="indicadores-chart-bar gestao-estq-chart-exit"
+                >
                   <title>{`${formatDate(row.date_ref)} · Saídas ${formatCurrency(row.saida_total)}`}</title>
                 </rect>
                 <circle cx={baseX} cy={lossY} r="4.4" className="gestao-estq-chart-loss-point">
