@@ -34,7 +34,7 @@ interface MetricCardDefinition {
   label: string;
   value: number;
   kind: "currency" | "signed-currency" | "integer";
-  accent?: "danger" | "warning" | "neutral";
+  accent?: "danger" | "warning" | "neutral" | "entry" | "exit";
   natureBadge?: "falta" | "sobra" | null;
 }
 
@@ -577,8 +577,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
     return [
-      { label: "Entradas no Mês", value: summary.total_entradas_mes, kind: "currency", accent: "neutral" },
-      { label: "Saídas no Mês", value: summary.total_saidas_mes, kind: "currency", accent: "warning" },
+      { label: "Entradas no Mês", value: summary.total_entradas_mes, kind: "currency", accent: "entry" },
+      { label: "Saídas no Mês", value: summary.total_saidas_mes, kind: "currency", accent: "exit" },
       {
         label: "Perda do Mês Atual",
         value: summary.perda_mes_atual,
