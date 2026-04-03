@@ -9956,7 +9956,6 @@ small {
     linear-gradient(165deg, #ffffff 0%, #eef6ff 100%);
 }
 
-.indicadores-metric-card.accent-entry > span,
 .indicadores-metric-card.accent-entry strong,
 .indicadores-metric-card.accent-entry .gestao-estq-metric-value small,
 .indicadores-metric-card.accent-entry .gestao-estq-metric-value span {
@@ -9969,7 +9968,6 @@ small {
     linear-gradient(165deg, #ffffff 0%, #fff3ec 100%);
 }
 
-.indicadores-metric-card.accent-exit > span,
 .indicadores-metric-card.accent-exit strong,
 .indicadores-metric-card.accent-exit .gestao-estq-metric-value small,
 .indicadores-metric-card.accent-exit .gestao-estq-metric-value span {
