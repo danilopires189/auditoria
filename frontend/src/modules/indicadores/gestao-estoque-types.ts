@@ -48,7 +48,8 @@ export interface IndicadoresGestaoEstoqueDetailRow {
   movement_group: "entrada" | "saida" | "outros";
   natureza: "sobra" | "falta" | "neutro";
   valor_total: number;
-  valor_assinado: number;
+  responsavel: string;
+  cargo: string;
   ocorrencias: number;
 }
 
