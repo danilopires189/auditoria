@@ -2,6 +2,7 @@ import { supabase } from "../../lib/supabase";
 import type {
   IndicadoresGestaoEstoqueDailyRow,
   IndicadoresGestaoEstoqueDetailRow,
+  IndicadoresGestaoEstoqueLossDimensionItem,
   IndicadoresGestaoEstoqueMonthOption,
   IndicadoresGestaoEstoqueMovementFilter,
   IndicadoresGestaoEstoqueReentryItem,
@@ -134,6 +135,20 @@ function mapReentryItem(raw: Record<string, unknown>): IndicadoresGestaoEstoqueR
   };
 }
 
+function mapLossDimensionItem(raw: Record<string, unknown>): IndicadoresGestaoEstoqueLossDimensionItem {
+  return {
+    dimension_key: parseString(raw.dimension_key, "Sem informação"),
+    perda_mes: parseNumber(raw.perda_mes),
+    perda_acumulada_ano: parseNumber(raw.perda_acumulada_ano),
+    total_faltas_mes: parseNumber(raw.total_faltas_mes),
+    total_sobras_mes: parseNumber(raw.total_sobras_mes),
+    total_faltas_ano: parseNumber(raw.total_faltas_ano),
+    total_sobras_ano: parseNumber(raw.total_sobras_ano),
+    produtos_distintos_mes: parseInteger(raw.produtos_distintos_mes),
+    produtos_distintos_ano: parseInteger(raw.produtos_distintos_ano)
+  };
+}
+
 export async function fetchIndicadoresGestaoEstoqueMonthOptions(cd: number | null): Promise<IndicadoresGestaoEstoqueMonthOption[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
@@ -209,7 +224,8 @@ export async function fetchIndicadoresGestaoEstoqueDetails(
   cd: number | null,
   monthStart: string,
   day: string | null,
-  movementFilter: IndicadoresGestaoEstoqueMovementFilter
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter,
+  limit = 150
 ): Promise<IndicadoresGestaoEstoqueDetailRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
@@ -217,7 +233,8 @@ export async function fetchIndicadoresGestaoEstoqueDetails(
     p_cd: cd,
     p_month_start: monthStart,
     p_day: day,
-    p_movement_filter: movementFilter
+    p_movement_filter: movementFilter,
+    p_limit: limit
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -227,16 +244,40 @@ export async function fetchIndicadoresGestaoEstoqueDetails(
 
 export async function fetchIndicadoresGestaoEstoqueYearReentryItems(
   cd: number | null,
-  monthStart: string
+  monthStart: string,
+  limit = 30
 ): Promise<IndicadoresGestaoEstoqueReentryItem[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_year_reentry_items", {
     p_cd: cd,
-    p_month_start: monthStart
+    p_month_start: monthStart,
+    p_limit: limit
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
 
   return data.map((row) => mapReentryItem(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueLossDimension(params: {
+  cd: number | null;
+  monthStart: string;
+  dimension: "fornecedor" | "categoria_n1";
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+  limit?: number;
+}): Promise<IndicadoresGestaoEstoqueLossDimensionItem[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_loss_dimension", {
+    p_cd: params.cd,
+    p_month_start: params.monthStart,
+    p_dimension: params.dimension,
+    p_movement_filter: params.movementFilter,
+    p_limit: params.limit ?? 15
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapLossDimensionItem(row as Record<string, unknown>));
 }

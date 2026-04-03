@@ -61,3 +61,15 @@ export interface IndicadoresGestaoEstoqueReentryItem {
   total_entrada_ano: number;
   saldo_ano: number;
 }
+
+export interface IndicadoresGestaoEstoqueLossDimensionItem {
+  dimension_key: string;
+  perda_mes: number;
+  perda_acumulada_ano: number;
+  total_faltas_mes: number;
+  total_sobras_mes: number;
+  total_faltas_ano: number;
+  total_sobras_ano: number;
+  produtos_distintos_mes: number;
+  produtos_distintos_ano: number;
+}

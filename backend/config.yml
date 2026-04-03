@@ -243,4 +243,6 @@ tables:
       coddv: "integer"
       descricao: "text"
       tipo_movimentacao: "text"
+      categoria_n1: "text"
+      fornecedor: "text"
       valor_mov: "numeric"
