@@ -9956,22 +9956,10 @@ small {
     linear-gradient(165deg, #ffffff 0%, #eef6ff 100%);
 }
 
-.indicadores-metric-card.accent-entry strong,
-.indicadores-metric-card.accent-entry .gestao-estq-metric-value small,
-.indicadores-metric-card.accent-entry .gestao-estq-metric-value span {
-  color: #1f78d1;
-}
-
 .indicadores-metric-card.accent-exit {
   background:
     radial-gradient(circle at top right, rgba(199, 57, 83, 0.18), transparent 32%),
     linear-gradient(165deg, #ffffff 0%, #fff1f5 100%);
-}
-
-.indicadores-metric-card.accent-exit strong,
-.indicadores-metric-card.accent-exit .gestao-estq-metric-value small,
-.indicadores-metric-card.accent-exit .gestao-estq-metric-value span {
-  color: #c73953;
 }
 
 .indicadores-metric-card.accent-loss {
@@ -9980,10 +9968,16 @@ small {
     linear-gradient(165deg, #ffffff 0%, #fff3ec 100%);
 }
 
-.indicadores-metric-card.accent-loss strong,
-.indicadores-metric-card.accent-loss .gestao-estq-metric-value small,
-.indicadores-metric-card.accent-loss .gestao-estq-metric-value span {
-  color: #dc6a39;
+.gestao-estq-metric-tone-entry strong,
+.gestao-estq-metric-tone-entry .gestao-estq-metric-value small,
+.gestao-estq-metric-tone-entry .gestao-estq-metric-value span {
+  color: #1f78d1;
+}
+
+.gestao-estq-metric-tone-exit strong,
+.gestao-estq-metric-tone-exit .gestao-estq-metric-value small,
+.gestao-estq-metric-tone-exit .gestao-estq-metric-value span {
+  color: #c73953;
 }
 
 .indicadores-metric-card.accent-warning {
@@ -10673,6 +10667,20 @@ small {
   .gestao-estq-chart-day-label {
     font-size: 15px;
     font-weight: 800;
+  }
+
+  .gestao-estq-chart-bar-value {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+
+  .gestao-estq-chart-entry-value {
+    fill: #1f78d1;
+  }
+
+  .gestao-estq-chart-exit-value {
+    fill: #c73953;
   }
 
   .gestao-estq-chart-section-label {
