@@ -36,6 +36,7 @@ interface MetricCardDefinition {
   kind: "currency" | "signed-currency" | "integer";
   accent?: "danger" | "warning" | "neutral" | "entry" | "exit" | "loss";
   natureBadge?: "falta" | "sobra" | null;
+  valueTone?: "default" | "entry" | "exit";
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
@@ -130,6 +131,15 @@ function formatCompactSignedDifference(value: number): string {
     maximumFractionDigits: 1
   }).format(Math.abs(safe));
   return `${signal}${formatted}`;
+}
+
+function formatCompactValue(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return new Intl.NumberFormat("pt-BR", {
+    notation: "compact",
+    minimumFractionDigits: Math.abs(safe) >= 1000 ? 1 : 0,
+    maximumFractionDigits: 1
+  }).format(Math.abs(safe));
 }
 
 function buildCalendarDays(monthStart: string, monthEnd: string): string[] {
@@ -227,10 +237,20 @@ function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
             const exitHeight = (row.saida_total / maxVolume) * barsHeight;
             const entryY = barsBottom - entryHeight;
             const exitY = barsBottom - exitHeight;
+            const entryValueY = Math.max(entryY - 10, 18);
+            const exitValueY = Math.max(exitY - 10, 18);
             const lossY = lossMid - (row.perda_total / maxLossAbs) * (lossHalf - 10);
             const lossValueY = row.perda_total >= 0 ? lossY - 10 : lossY + 16;
             return (
               <g key={row.date_ref}>
+                <text
+                  x={baseX - entryBarWidth / 2 - 7}
+                  y={entryValueY}
+                  textAnchor="middle"
+                  className="gestao-estq-chart-bar-value gestao-estq-chart-entry-value"
+                >
+                  {formatCompactValue(row.entrada_total)}
+                </text>
                 <rect
                   x={baseX - entryBarWidth - 7}
                   y={entryY}
@@ -241,6 +261,14 @@ function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
                 >
                   <title>{`${formatDate(row.date_ref)} · Entradas ${formatCurrency(row.entrada_total)}`}</title>
                 </rect>
+                <text
+                  x={baseX + exitBarWidth / 2 + 7}
+                  y={exitValueY}
+                  textAnchor="middle"
+                  className="gestao-estq-chart-bar-value gestao-estq-chart-exit-value"
+                >
+                  {formatCompactValue(row.saida_total)}
+                </text>
                 <rect
                   x={baseX + 7}
                   y={exitY}
@@ -623,24 +651,26 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
     return [
-      { label: "Entradas no Mês", value: summary.total_entradas_mes, kind: "currency", accent: "entry" },
-      { label: "Saídas no Mês", value: summary.total_saidas_mes, kind: "currency", accent: "exit" },
+      { label: "Entradas no Mês", value: summary.total_entradas_mes, kind: "currency", accent: "entry", valueTone: "entry" },
+      { label: "Saídas no Mês", value: summary.total_saidas_mes, kind: "currency", accent: "exit", valueTone: "exit" },
       {
         label: "Perda no Mês Atual",
         value: summary.perda_mes_atual,
         kind: "signed-currency",
         accent: "loss",
-        natureBadge: lossNatureBadge(summary.perda_mes_atual)
+        natureBadge: lossNatureBadge(summary.perda_mes_atual),
+        valueTone: "default"
       },
       {
         label: "Perda Acum. Ano",
         value: summary.perda_acumulada_ano,
         kind: "signed-currency",
         accent: "loss",
-        natureBadge: lossNatureBadge(summary.perda_acumulada_ano)
+        natureBadge: lossNatureBadge(summary.perda_acumulada_ano),
+        valueTone: "default"
       },
       { label: "Acumulado Entradas Ano", value: summary.acumulado_entradas_ano, kind: "currency", accent: "neutral" },
-      { label: "Acumulado Saídas Ano", value: summary.acumulado_saidas_ano, kind: "currency", accent: "exit" },
+      { label: "Acumulado Saídas Ano", value: summary.acumulado_saidas_ano, kind: "currency", accent: "exit", valueTone: "default" },
       { label: "Produtos Distintos", value: summary.produtos_distintos_mes, kind: "integer" }
     ];
   }, [summary]);
@@ -730,7 +760,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
             {metricCards.map((card) => (
               <article
                 key={card.label}
-                className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""} ${card.natureBadge ? "gestao-estq-metric-card-has-badge" : ""}`}
+                className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""} ${card.valueTone ? `gestao-estq-metric-tone-${card.valueTone}` : ""} ${card.natureBadge ? "gestao-estq-metric-card-has-badge" : ""}`}
               >
                 {card.natureBadge ? (
                   <span className={`indicadores-status-badge gestao-estq-metric-badge ${natureClassName(card.natureBadge)}`}>
