@@ -9886,6 +9886,7 @@ small {
 }
 
 .indicadores-metric-card {
+  position: relative;
   border-radius: 18px;
   border: 1px solid #d7e2f4;
   background:
@@ -9896,6 +9897,20 @@ small {
   gap: 10px;
   min-height: 118px;
   box-shadow: 0 16px 30px rgba(27, 67, 129, 0.08);
+}
+
+.gestao-estq-metric-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 26px;
+  padding: 0 9px;
+  font-size: 0.68rem;
+  z-index: 1;
+}
+
+.gestao-estq-metric-card-has-badge {
+  padding-right: 96px;
 }
 
 .indicadores-metric-card span {
