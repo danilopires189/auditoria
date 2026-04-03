@@ -13,6 +13,9 @@ import type {
 function toErrorMessage(error: unknown): string {
   const mapCode = (raw: string): string => {
     const normalized = raw.trim().toUpperCase();
+    if (normalized.includes("STATEMENT TIMEOUT") || normalized.includes("CANCELING STATEMENT DUE TO STATEMENT TIMEOUT")) {
+      return "A consulta demorou mais que o permitido. Tente um mês mais recente ou abra o detalhamento só quando precisar.";
+    }
     if (normalized.includes("AUTH_REQUIRED")) return "Sessão inválida. Faça login novamente.";
     if (normalized.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Faça login novamente.";
     if (normalized.includes("CD_NAO_DEFINIDO_USUARIO")) return "CD não definido para este usuário.";
