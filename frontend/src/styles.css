@@ -9910,6 +9910,25 @@ small {
   line-height: 1.05;
 }
 
+.gestao-estq-metric-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gestao-estq-metric-value small {
+  font-size: 0.5em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #476592;
+}
+
+.gestao-estq-metric-value span {
+  font-size: 1em;
+  line-height: 1.05;
+}
+
 .indicadores-metric-card.accent-danger {
   background:
     radial-gradient(circle at top right, rgba(207, 57, 57, 0.16), transparent 32%),
@@ -10695,6 +10714,23 @@ small {
     border: 1px solid #dbe4f2;
     border-radius: 16px;
     background: #fff;
+  }
+
+  .gestao-estq-details-button {
+    appearance: none;
+    border: 1px solid #bdd0eb;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #edf4ff 100%);
+    color: #173a68;
+    font: inherit;
+    font-weight: 800;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+
+  .gestao-estq-details-button:hover {
+    border-color: #91add8;
+    background: linear-gradient(180deg, #ffffff 0%, #e5efff 100%);
   }
 
   .gestao-estq-details-table {
