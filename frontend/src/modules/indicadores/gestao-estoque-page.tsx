@@ -34,7 +34,7 @@ interface MetricCardDefinition {
   label: string;
   value: number;
   kind: "currency" | "signed-currency" | "integer";
-  accent?: "danger" | "warning" | "neutral" | "entry" | "exit";
+  accent?: "danger" | "warning" | "neutral" | "entry" | "exit" | "loss";
   natureBadge?: "falta" | "sobra" | null;
 }
 
@@ -629,18 +629,18 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
         label: "Perda no Mês Atual",
         value: summary.perda_mes_atual,
         kind: "signed-currency",
-        accent: "danger",
+        accent: "loss",
         natureBadge: lossNatureBadge(summary.perda_mes_atual)
       },
       {
         label: "Perda Acum. Ano",
         value: summary.perda_acumulada_ano,
         kind: "signed-currency",
-        accent: "danger",
+        accent: "loss",
         natureBadge: lossNatureBadge(summary.perda_acumulada_ano)
       },
       { label: "Acumulado Entradas Ano", value: summary.acumulado_entradas_ano, kind: "currency", accent: "neutral" },
-      { label: "Acumulado Saídas Ano", value: summary.acumulado_saidas_ano, kind: "currency", accent: "warning" },
+      { label: "Acumulado Saídas Ano", value: summary.acumulado_saidas_ano, kind: "currency", accent: "exit" },
       { label: "Produtos Distintos", value: summary.produtos_distintos_mes, kind: "integer" }
     ];
   }, [summary]);

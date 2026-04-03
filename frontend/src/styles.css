@@ -9964,13 +9964,25 @@ small {
 
 .indicadores-metric-card.accent-exit {
   background:
-    radial-gradient(circle at top right, rgba(220, 106, 57, 0.18), transparent 32%),
-    linear-gradient(165deg, #ffffff 0%, #fff3ec 100%);
+    radial-gradient(circle at top right, rgba(199, 57, 83, 0.18), transparent 32%),
+    linear-gradient(165deg, #ffffff 0%, #fff1f5 100%);
 }
 
 .indicadores-metric-card.accent-exit strong,
 .indicadores-metric-card.accent-exit .gestao-estq-metric-value small,
 .indicadores-metric-card.accent-exit .gestao-estq-metric-value span {
+  color: #c73953;
+}
+
+.indicadores-metric-card.accent-loss {
+  background:
+    radial-gradient(circle at top right, rgba(220, 106, 57, 0.18), transparent 32%),
+    linear-gradient(165deg, #ffffff 0%, #fff3ec 100%);
+}
+
+.indicadores-metric-card.accent-loss strong,
+.indicadores-metric-card.accent-loss .gestao-estq-metric-value small,
+.indicadores-metric-card.accent-loss .gestao-estq-metric-value span {
   color: #dc6a39;
 }
 
@@ -10636,8 +10648,8 @@ small {
   }
 
   .gestao-estq-chart-exit {
-    fill: #dc6a39;
-    filter: drop-shadow(0 8px 14px rgba(220, 106, 57, 0.16));
+    fill: #c73953;
+    filter: drop-shadow(0 8px 14px rgba(199, 57, 83, 0.16));
   }
 
   .gestao-estq-chart-loss-axis {
@@ -10646,14 +10658,14 @@ small {
 
   .gestao-estq-chart-loss-line {
     fill: none;
-    stroke: #c73953;
+    stroke: #dc6a39;
     stroke-width: 2.8;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
 
   .gestao-estq-chart-loss-point {
-    fill: #c73953;
+    fill: #dc6a39;
     stroke: #fff;
     stroke-width: 2;
   }
@@ -10675,7 +10687,7 @@ small {
   }
 
   .gestao-estq-chart-loss-value.is-falta {
-    fill: #ad3a2b;
+    fill: #dc6a39;
   }
 
   .gestao-estq-chart-loss-value.is-sobra {
@@ -10697,11 +10709,11 @@ small {
   }
 
   .gestao-estq-legend-exit {
-    background: #dc6a39;
+    background: #c73953;
   }
 
   .gestao-estq-legend-loss {
-    background: #c73953;
+    background: #dc6a39;
   }
 
   .gestao-estq-top-list,
