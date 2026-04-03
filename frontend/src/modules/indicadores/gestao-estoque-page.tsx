@@ -212,7 +212,13 @@ function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
   return (
     <div className="indicadores-chart-shell gestao-estq-chart-shell">
       <div className="indicadores-chart-scroll">
-        <svg className="indicadores-chart-svg" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Entradas, saídas e perda por dia do mês">
+        <svg
+          className="indicadores-chart-svg"
+          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          style={{ width: `${chartWidth}px`, minWidth: `${chartWidth}px` }}
+          role="img"
+          aria-label="Entradas, saídas e perda por dia do mês"
+        >
           <line x1="16" y1={barsBottom} x2={chartWidth - 12} y2={barsBottom} className="indicadores-chart-axis" />
           <line x1="16" y1={lossMid} x2={chartWidth - 12} y2={lossMid} className="indicadores-chart-axis gestao-estq-chart-loss-axis" />
           {rows.map((row, index) => {
