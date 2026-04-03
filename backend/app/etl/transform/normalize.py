@@ -9,6 +9,26 @@ ALIAS_MAP = {
     "desc": "descricao",
     "descricao": "descricao",
     "vl_tt": "vl_tt",
+    "data": "data_mov",
+    "dt_mov": "data_mov",
+    "data_ref": "data_mov",
+    "data_movimentacao": "data_mov",
+    "dt_movimentacao": "data_mov",
+    "tipo": "tipo_movimentacao",
+    "tipo_mov": "tipo_movimentacao",
+    "tp_mov": "tipo_movimentacao",
+    "movimentacao": "tipo_movimentacao",
+    "tipo_de_movimentacao": "tipo_movimentacao",
+    "qtd": "quantidade_mov",
+    "quantidade": "quantidade_mov",
+    "qtd_mov": "quantidade_mov",
+    "qtd_movimentacao": "quantidade_mov",
+    "valor": "valor_mov",
+    "valor_movimentacao": "valor_mov",
+    "valor_mov": "valor_mov",
+    "tt_cmpc": "valor_mov",
+    "vl_total": "valor_mov",
+    "valor_total": "valor_mov",
 }
 
 
@@ -58,7 +78,7 @@ def normalize_headers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
 def normalize_text_values(frame: pd.DataFrame) -> pd.DataFrame:
     normalized = frame.copy()
-    object_cols = normalized.select_dtypes(include=["object"]).columns
+    object_cols = normalized.select_dtypes(include=["object", "string"]).columns
     for col in object_cols:
         normalized[col] = (
             normalized[col]

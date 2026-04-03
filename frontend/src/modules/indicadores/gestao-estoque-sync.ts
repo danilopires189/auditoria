@@ -1,0 +1,242 @@
+import { supabase } from "../../lib/supabase";
+import type {
+  IndicadoresGestaoEstoqueDailyRow,
+  IndicadoresGestaoEstoqueDetailRow,
+  IndicadoresGestaoEstoqueMonthOption,
+  IndicadoresGestaoEstoqueMovementFilter,
+  IndicadoresGestaoEstoqueReentryItem,
+  IndicadoresGestaoEstoqueSummary,
+  IndicadoresGestaoEstoqueTopItem
+} from "./gestao-estoque-types";
+
+function toErrorMessage(error: unknown): string {
+  const mapCode = (raw: string): string => {
+    const normalized = raw.trim().toUpperCase();
+    if (normalized.includes("AUTH_REQUIRED")) return "Sessão inválida. Faça login novamente.";
+    if (normalized.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Faça login novamente.";
+    if (normalized.includes("CD_NAO_DEFINIDO_USUARIO")) return "CD não definido para este usuário.";
+    if (normalized.includes("CD_SEM_ACESSO")) return "Sem acesso ao CD selecionado.";
+    if (normalized.includes("PROFILE_NAO_ENCONTRADO")) return "Perfil do usuário não encontrado.";
+    return raw;
+  };
+
+  if (error instanceof Error) return mapCode(error.message);
+  if (typeof error === "string") return mapCode(error);
+  if (error && typeof error === "object") {
+    const candidate = error as Record<string, unknown>;
+    if (typeof candidate.message === "string") return mapCode(candidate.message);
+    if (typeof candidate.error_description === "string") return mapCode(candidate.error_description);
+    if (typeof candidate.details === "string") return mapCode(candidate.details);
+  }
+  return "Erro inesperado.";
+}
+
+function parseInteger(value: unknown, fallback = 0): number {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseNumber(value: unknown, fallback = 0): number {
+  const parsed = Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseString(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (value == null) return fallback;
+  return String(value);
+}
+
+function parseNullableString(value: unknown): string | null {
+  if (value == null) return null;
+  const parsed = String(value).trim();
+  return parsed ? parsed : null;
+}
+
+function firstRow(data: unknown): Record<string, unknown> | null {
+  if (!Array.isArray(data)) return null;
+  const row = data[0];
+  if (!row || typeof row !== "object") return null;
+  return row as Record<string, unknown>;
+}
+
+function mapMonthOption(raw: Record<string, unknown>): IndicadoresGestaoEstoqueMonthOption {
+  return {
+    month_start: parseString(raw.month_start),
+    month_label: parseString(raw.month_label)
+  };
+}
+
+function mapSummary(raw: Record<string, unknown>): IndicadoresGestaoEstoqueSummary {
+  return {
+    month_start: parseString(raw.month_start),
+    month_end: parseString(raw.month_end),
+    available_day_start: parseNullableString(raw.available_day_start),
+    available_day_end: parseNullableString(raw.available_day_end),
+    updated_at: parseNullableString(raw.updated_at),
+    total_entradas_mes: parseNumber(raw.total_entradas_mes),
+    total_saidas_mes: parseNumber(raw.total_saidas_mes),
+    total_sobras_mes: parseNumber(raw.total_sobras_mes),
+    total_faltas_mes: parseNumber(raw.total_faltas_mes),
+    perda_mes_atual: parseNumber(raw.perda_mes_atual),
+    perda_acumulada_ano: parseNumber(raw.perda_acumulada_ano),
+    acumulado_entradas_ano: parseNumber(raw.acumulado_entradas_ano),
+    acumulado_saidas_ano: parseNumber(raw.acumulado_saidas_ano),
+    produtos_distintos_mes: parseInteger(raw.produtos_distintos_mes)
+  };
+}
+
+function mapDailyRow(raw: Record<string, unknown>): IndicadoresGestaoEstoqueDailyRow {
+  return {
+    date_ref: parseString(raw.date_ref),
+    entrada_total: parseNumber(raw.entrada_total),
+    saida_total: parseNumber(raw.saida_total),
+    perda_total: parseNumber(raw.perda_total)
+  };
+}
+
+function mapTopItem(raw: Record<string, unknown>): IndicadoresGestaoEstoqueTopItem {
+  return {
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    movement_group: parseString(raw.movement_group, "entrada") as IndicadoresGestaoEstoqueTopItem["movement_group"],
+    total_valor: parseNumber(raw.total_valor),
+    movimentacoes: parseInteger(raw.movimentacoes),
+    dias_distintos: parseInteger(raw.dias_distintos),
+    first_date: parseNullableString(raw.first_date),
+    last_date: parseNullableString(raw.last_date)
+  };
+}
+
+function mapDetailRow(raw: Record<string, unknown>): IndicadoresGestaoEstoqueDetailRow {
+  return {
+    data_mov: parseString(raw.data_mov),
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    tipo_movimentacao: parseString(raw.tipo_movimentacao, "-"),
+    movement_group: parseString(raw.movement_group, "outros") as IndicadoresGestaoEstoqueDetailRow["movement_group"],
+    natureza: parseString(raw.natureza, "neutro") as IndicadoresGestaoEstoqueDetailRow["natureza"],
+    valor_total: parseNumber(raw.valor_total),
+    valor_assinado: parseNumber(raw.valor_assinado),
+    ocorrencias: parseInteger(raw.ocorrencias)
+  };
+}
+
+function mapReentryItem(raw: Record<string, unknown>): IndicadoresGestaoEstoqueReentryItem {
+  return {
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    first_saida_date: parseNullableString(raw.first_saida_date),
+    first_entrada_after_saida_date: parseNullableString(raw.first_entrada_after_saida_date),
+    total_saida_ano: parseNumber(raw.total_saida_ano),
+    total_entrada_ano: parseNumber(raw.total_entrada_ano),
+    saldo_ano: parseNumber(raw.saldo_ano)
+  };
+}
+
+export async function fetchIndicadoresGestaoEstoqueMonthOptions(cd: number | null): Promise<IndicadoresGestaoEstoqueMonthOption[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_month_options", {
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapMonthOption(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueSummary(
+  cd: number | null,
+  monthStart: string,
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter
+): Promise<IndicadoresGestaoEstoqueSummary> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_summary", {
+    p_cd: cd,
+    p_month_start: monthStart,
+    p_movement_filter: movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  const row = firstRow(data);
+  if (!row) throw new Error("Falha ao carregar o resumo da gestão de estoque.");
+  return mapSummary(row);
+}
+
+export async function fetchIndicadoresGestaoEstoqueDailySeries(
+  cd: number | null,
+  monthStart: string,
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter
+): Promise<IndicadoresGestaoEstoqueDailyRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_daily_series", {
+    p_cd: cd,
+    p_month_start: monthStart,
+    p_movement_filter: movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapDailyRow(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueTopItems(params: {
+  cd: number | null;
+  monthStart: string;
+  day: string | null;
+  rankGroup: "entrada" | "saida";
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueTopItem[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_top_items", {
+    p_cd: params.cd,
+    p_month_start: params.monthStart,
+    p_day: params.day,
+    p_rank_group: params.rankGroup,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapTopItem(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueDetails(
+  cd: number | null,
+  monthStart: string,
+  day: string | null,
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter
+): Promise<IndicadoresGestaoEstoqueDetailRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_details", {
+    p_cd: cd,
+    p_month_start: monthStart,
+    p_day: day,
+    p_movement_filter: movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapDetailRow(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueYearReentryItems(
+  cd: number | null,
+  monthStart: string
+): Promise<IndicadoresGestaoEstoqueReentryItem[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_year_reentry_items", {
+    p_cd: cd,
+    p_month_start: monthStart
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapReentryItem(row as Record<string, unknown>));
+}

@@ -400,6 +400,26 @@ TABLE_SPECS: dict[str, TableSpec] = {
         },
         has_cd=True,
     ),
+    "db_gestao_estq": TableSpec(
+        name="db_gestao_estq",
+        business_columns=[
+            "cd",
+            "data_mov",
+            "coddv",
+            "descricao",
+            "tipo_movimentacao",
+            "valor_mov",
+        ],
+        sql_types={
+            "cd": "integer",
+            "data_mov": "date",
+            "coddv": "integer",
+            "descricao": "text",
+            "tipo_movimentacao": "text",
+            "valor_mov": "numeric",
+        },
+        has_cd=True,
+    ),
 }
 
 
