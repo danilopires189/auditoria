@@ -791,7 +791,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
             <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-reentry">
               <div className="indicadores-panel-head">
                 <h3>Saída seguida de entrada</h3>
-                <span>Acumulado do ano do CD ativo.</span>
+                <span>Acumulado do ano.</span>
               </div>
               {loadingInsights && reentryRows.length === 0 ? (
                 <div className="indicadores-empty-box"><p>Carregando insights do ano...</p></div>
