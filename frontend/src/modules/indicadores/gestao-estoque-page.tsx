@@ -32,15 +32,16 @@ interface IndicadoresGestaoEstoquePageProps {
 
 interface MetricCardDefinition {
   label: string;
-  value: string;
+  value: number;
+  kind: "currency" | "signed-currency" | "integer";
   accent?: "danger" | "warning" | "neutral";
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
 const ALL_DAYS_VALUE = "__ALL_DAYS__";
-const DETAIL_ROWS_LIMIT = 150;
-const INSIGHT_ROWS_LIMIT = 12;
-const REENTRY_ROWS_LIMIT = 20;
+const DETAIL_ROWS_LIMIT = 100;
+const INSIGHT_ROWS_LIMIT = 10;
+const REENTRY_ROWS_LIMIT = 12;
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -109,6 +110,16 @@ function formatSigned(value: number): string {
   return `${signal}${formatNumber(safe)}`;
 }
 
+function formatCurrency(value: number): string {
+  return `R$ ${formatNumber(value)}`;
+}
+
+function formatSignedCurrency(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  const signal = safe > 0 ? "+" : safe < 0 ? "-" : "";
+  return `${signal}R$ ${formatNumber(Math.abs(safe))}`;
+}
+
 function buildCalendarDays(monthStart: string, monthEnd: string): string[] {
   if (!monthStart || !monthEnd) return [];
   const current = new Date(`${monthStart}T00:00:00`);
@@ -136,6 +147,17 @@ function natureClassName(value: IndicadoresGestaoEstoqueDetailRow["natureza"]): 
   if (value === "falta") return "is-falta";
   if (value === "sobra") return "is-sobra";
   return "is-neutro";
+}
+
+function CurrencyMetricValue({ value, signed = false }: { value: number; signed?: boolean }) {
+  const safe = Number.isFinite(value) ? value : 0;
+  const signal = signed ? (safe > 0 ? "+" : safe < 0 ? "-" : "") : "";
+  return (
+    <strong className="gestao-estq-metric-value">
+      <small>{`${signal}R$`}</small>
+      <span>{formatNumber(Math.abs(safe))}</span>
+    </strong>
+  );
 }
 
 function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
@@ -178,13 +200,13 @@ function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
             return (
               <g key={row.date_ref}>
                 <rect x={baseX - 16} y={entryY} width="12" height={entryHeight} rx="5" className="indicadores-chart-bar gestao-estq-chart-entry">
-                  <title>{`${formatDate(row.date_ref)} · Entradas ${formatNumber(row.entrada_total)}`}</title>
+                  <title>{`${formatDate(row.date_ref)} · Entradas ${formatCurrency(row.entrada_total)}`}</title>
                 </rect>
                 <rect x={baseX + 4} y={exitY} width="12" height={exitHeight} rx="5" className="indicadores-chart-bar gestao-estq-chart-exit">
-                  <title>{`${formatDate(row.date_ref)} · Saídas ${formatNumber(row.saida_total)}`}</title>
+                  <title>{`${formatDate(row.date_ref)} · Saídas ${formatCurrency(row.saida_total)}`}</title>
                 </rect>
                 <circle cx={baseX} cy={lossY} r="4.4" className="gestao-estq-chart-loss-point">
-                  <title>{`${formatDate(row.date_ref)} · Perda ${formatSigned(row.perda_total)}`}</title>
+                  <title>{`${formatDate(row.date_ref)} · Perda ${formatSignedCurrency(row.perda_total)}`}</title>
                 </circle>
                 <text x={baseX} y="232" textAnchor="middle" className="indicadores-chart-label">
                   {row.date_ref.slice(8, 10)}
@@ -234,10 +256,10 @@ function TopList({
               <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
               <div className="gestao-estq-top-main">
                 <strong>{row.descricao}</strong>
-                <small>COD {formatInteger(row.coddv)} · {row.movimentacoes} mov. · {row.dias_distintos} dias</small>
+                <small>CODDV {formatInteger(row.coddv)} · {row.movimentacoes} mov. · {row.dias_distintos} dias</small>
               </div>
               <div className="gestao-estq-top-value">
-                <strong>{formatNumber(row.total_valor)}</strong>
+                <strong>{formatCurrency(row.total_valor)}</strong>
                 <small>{row.last_date ? formatDate(row.last_date) : "-"}</small>
               </div>
             </article>
@@ -277,8 +299,8 @@ function LossDimensionList({
                 <small>{row.produtos_distintos_mes} prod. no mês · {row.produtos_distintos_ano} no ano</small>
               </div>
               <div className="gestao-estq-loss-metrics">
-                <strong>{formatSigned(row.perda_acumulada_ano)}</strong>
-                <small>Mês {formatSigned(row.perda_mes)}</small>
+                <strong>{formatSignedCurrency(row.perda_acumulada_ano)}</strong>
+                <small>Mês {formatSignedCurrency(row.perda_mes)}</small>
               </div>
             </article>
           ))}
@@ -311,6 +333,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -349,6 +372,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       setReentryRows([]);
       setSupplierLossRows([]);
       setCategoryLossRows([]);
+      setShowDetails(false);
       return;
     }
 
@@ -402,6 +426,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
 
   useEffect(() => {
+    if (loadingDashboard) return;
     if (!selectedMonthStart) {
       setReentryRows([]);
       setSupplierLossRows([]);
@@ -451,10 +476,10 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return () => {
       cancelled = true;
     };
-  }, [activeCd, movementFilter, selectedMonthStart]);
+  }, [activeCd, movementFilter, selectedMonthStart, loadingDashboard]);
 
   useEffect(() => {
-    if (!selectedMonthStart) {
+    if (!selectedMonthStart || !showDetails || loadingDashboard) {
       setDetailRows([]);
       return;
     }
@@ -487,7 +512,17 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return () => {
       cancelled = true;
     };
-  }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
+  }, [activeCd, movementFilter, selectedDay, selectedMonthStart, showDetails, loadingDashboard]);
+
+  useEffect(() => {
+    if (selectedDay !== ALL_DAYS_VALUE) {
+      setShowDetails(true);
+    }
+  }, [selectedDay]);
+
+  useEffect(() => {
+    setShowDetails(false);
+  }, [selectedMonthStart, movementFilter]);
 
   const selectedMonthLabel = useMemo(
     () => monthOptions.find((option) => option.month_start === selectedMonthStart)?.month_label ?? "-",
@@ -508,15 +543,15 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
     return [
-      { label: "Entradas do Mês", value: formatNumber(summary.total_entradas_mes), accent: "neutral" },
-      { label: "Saídas do Mês", value: formatNumber(summary.total_saidas_mes), accent: "warning" },
-      { label: "Sobras do Mês", value: formatNumber(summary.total_sobras_mes), accent: "neutral" },
-      { label: "Faltas do Mês", value: formatNumber(summary.total_faltas_mes), accent: "warning" },
-      { label: "Perda do Mês Atual", value: formatSigned(summary.perda_mes_atual), accent: "danger" },
-      { label: "Perda Acumulada", value: formatSigned(summary.perda_acumulada_ano), accent: "danger" },
-      { label: "Acumulado Entradas Ano", value: formatNumber(summary.acumulado_entradas_ano), accent: "neutral" },
-      { label: "Acumulado Saídas Ano", value: formatNumber(summary.acumulado_saidas_ano), accent: "warning" },
-      { label: "Produtos Distintos", value: formatInteger(summary.produtos_distintos_mes) }
+      { label: "Entradas do Mês", value: summary.total_entradas_mes, kind: "currency", accent: "neutral" },
+      { label: "Saídas do Mês", value: summary.total_saidas_mes, kind: "currency", accent: "warning" },
+      { label: "Sobras do Mês", value: summary.total_sobras_mes, kind: "currency", accent: "neutral" },
+      { label: "Faltas do Mês", value: summary.total_faltas_mes, kind: "currency", accent: "warning" },
+      { label: "Perda do Mês Atual", value: summary.perda_mes_atual, kind: "signed-currency", accent: "danger" },
+      { label: "Perda Acumulada", value: summary.perda_acumulada_ano, kind: "signed-currency", accent: "danger" },
+      { label: "Acumulado Entradas Ano", value: summary.acumulado_entradas_ano, kind: "currency", accent: "neutral" },
+      { label: "Acumulado Saídas Ano", value: summary.acumulado_saidas_ano, kind: "currency", accent: "warning" },
+      { label: "Produtos Distintos", value: summary.produtos_distintos_mes, kind: "integer" }
     ];
   }, [summary]);
 
@@ -605,7 +640,9 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
             {metricCards.map((card) => (
               <article key={card.label} className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""}`}>
                 <span>{card.label}</span>
-                <strong>{card.value}</strong>
+                {card.kind === "integer" ? <strong>{formatInteger(card.value)}</strong> : null}
+                {card.kind === "currency" ? <CurrencyMetricValue value={card.value} /> : null}
+                {card.kind === "signed-currency" ? <CurrencyMetricValue value={card.value} signed /> : null}
               </article>
             ))}
           </div>
@@ -638,15 +675,15 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                     <article key={`${row.coddv}:${index}`} className="gestao-estq-reentry-item">
                       <div className="gestao-estq-reentry-main">
                         <strong>{row.descricao}</strong>
-                        <small>COD {formatInteger(row.coddv)}</small>
+                        <small>CODDV {formatInteger(row.coddv)}</small>
                       </div>
                       <div className="gestao-estq-reentry-dates">
                         <span>Saída {formatDate(row.first_saida_date)}</span>
                         <span>Entrada {formatDate(row.first_entrada_after_saida_date)}</span>
                       </div>
                       <div className="gestao-estq-reentry-balance">
-                        <strong>{formatSigned(row.saldo_ano)}</strong>
-                        <small>{formatNumber(row.total_saida_ano)} / {formatNumber(row.total_entrada_ano)}</small>
+                        <strong>{formatSignedCurrency(row.saldo_ano)}</strong>
+                        <small>{formatCurrency(row.total_saida_ano)} / {formatCurrency(row.total_entrada_ano)}</small>
                       </div>
                     </article>
                   ))}
@@ -693,7 +730,14 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                   {`até ${DETAIL_ROWS_LIMIT} linhas mais relevantes`}
                 </span>
               </div>
-              {loadingDetails ? (
+              {!showDetails ? (
+                <div className="indicadores-empty-box">
+                  <p>O detalhamento completo fica sob demanda para reduzir processamento.</p>
+                  <button type="button" className="gestao-estq-details-button" onClick={() => setShowDetails(true)}>
+                    Mostrar detalhamento
+                  </button>
+                </div>
+              ) : loadingDetails ? (
                 <div className="indicadores-empty-box"><p>Carregando movimentações...</p></div>
               ) : detailRows.length === 0 ? (
                 <div className="indicadores-empty-box"><p>Nenhuma movimentação encontrada para o filtro selecionado.</p></div>
@@ -707,8 +751,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                         <th>Tipo</th>
                         <th>Mov.</th>
                         <th>Natureza</th>
-                        <th>Total</th>
-                        <th>Assinado</th>
+                        <th>Total (R$)</th>
+                        <th>Assinado (R$)</th>
                         <th>Ocorrências</th>
                       </tr>
                     </thead>
@@ -719,7 +763,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                           <td>
                             <div className="gestao-estq-product-cell">
                               <strong>{row.descricao}</strong>
-                              <small>COD {formatInteger(row.coddv)}</small>
+                              <small>CODDV {formatInteger(row.coddv)}</small>
                             </div>
                           </td>
                           <td>{row.tipo_movimentacao}</td>
@@ -727,9 +771,9 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                           <td>
                             <span className={`indicadores-status-badge ${natureClassName(row.natureza)}`}>{row.natureza}</span>
                           </td>
-                          <td>{formatNumber(row.valor_total)}</td>
+                          <td>{formatCurrency(row.valor_total)}</td>
                           <td className={row.valor_assinado > 0 ? "gestao-estq-value-positive" : row.valor_assinado < 0 ? "gestao-estq-value-negative" : ""}>
-                            {formatSigned(row.valor_assinado)}
+                            {formatSignedCurrency(row.valor_assinado)}
                           </td>
                           <td>{formatInteger(row.ocorrencias)}</td>
                         </tr>
