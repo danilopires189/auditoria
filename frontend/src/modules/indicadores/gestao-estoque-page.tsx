@@ -587,7 +587,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
         natureBadge: lossNatureBadge(summary.perda_mes_atual)
       },
       {
-        label: "Perda Acumulada Ano",
+        label: "Perda Acum. Ano",
         value: summary.perda_acumulada_ano,
         kind: "signed-currency",
         accent: "danger",
