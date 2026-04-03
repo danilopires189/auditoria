@@ -229,3 +229,18 @@ tables:
       rota: "integer"
       descricao: "text"
       encerramento: "timestamp"
+
+  db_gestao_estq:
+    file: "DB_GESTAO_ESTQ.xlsx"
+    sheet: "DB_GESTAO_ESTQ"
+    mode: "full_replace"
+    unique_keys: []
+    required_columns: ["cd", "data_mov", "coddv", "tipo_movimentacao", "valor_mov"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      data_mov: "date"
+      coddv: "integer"
+      descricao: "text"
+      tipo_movimentacao: "text"
+      valor_mov: "numeric"

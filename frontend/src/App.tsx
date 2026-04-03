@@ -12,6 +12,7 @@ import AtividadeExtraPage from "./modules/atividade-extra/page";
 import BuscaProdutoPage from "./modules/busca-produto/page";
 import IndicadoresPage from "./modules/indicadores/page";
 import IndicadoresBlitzPage from "./modules/indicadores/blitz-page";
+import IndicadoresGestaoEstoquePage from "./modules/indicadores/gestao-estoque-page";
 import ValidarEnderecamentoPage from "./modules/validar-enderecamento/page";
 import ValidarEtiquetaPulmaoPage from "./modules/validar-etiqueta-pulmao/page";
 import CheckListPage from "./modules/check-list/page";
@@ -2439,6 +2440,16 @@ export default function App() {
             element={
               indicadoresProfile ? (
                 <IndicadoresBlitzPage isOnline={isOnline} profile={indicadoresProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/indicadores/gestao-estoque"
+            element={
+              indicadoresProfile ? (
+                <IndicadoresGestaoEstoquePage isOnline={isOnline} profile={indicadoresProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )
