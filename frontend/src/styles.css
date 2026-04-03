@@ -9950,6 +9950,32 @@ small {
     linear-gradient(165deg, #ffffff 0%, #fff2f2 100%);
 }
 
+.indicadores-metric-card.accent-entry {
+  background:
+    radial-gradient(circle at top right, rgba(31, 120, 209, 0.18), transparent 32%),
+    linear-gradient(165deg, #ffffff 0%, #eef6ff 100%);
+}
+
+.indicadores-metric-card.accent-entry > span,
+.indicadores-metric-card.accent-entry strong,
+.indicadores-metric-card.accent-entry .gestao-estq-metric-value small,
+.indicadores-metric-card.accent-entry .gestao-estq-metric-value span {
+  color: #1f78d1;
+}
+
+.indicadores-metric-card.accent-exit {
+  background:
+    radial-gradient(circle at top right, rgba(220, 106, 57, 0.18), transparent 32%),
+    linear-gradient(165deg, #ffffff 0%, #fff3ec 100%);
+}
+
+.indicadores-metric-card.accent-exit > span,
+.indicadores-metric-card.accent-exit strong,
+.indicadores-metric-card.accent-exit .gestao-estq-metric-value small,
+.indicadores-metric-card.accent-exit .gestao-estq-metric-value span {
+  color: #dc6a39;
+}
+
 .indicadores-metric-card.accent-warning {
   background:
     radial-gradient(circle at top right, rgba(238, 152, 31, 0.18), transparent 32%),
