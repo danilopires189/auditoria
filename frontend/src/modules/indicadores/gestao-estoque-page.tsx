@@ -802,16 +802,29 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                   {reentryRows.map((row, index) => (
                     <article key={`${row.coddv}:${index}`} className="gestao-estq-reentry-item">
                       <div className="gestao-estq-reentry-main">
-                        <strong>{row.descricao}</strong>
-                        <small>CODDV {formatInteger(row.coddv)}</small>
+                        <strong className="gestao-estq-reentry-title">
+                          <span className="gestao-estq-reentry-coddv">CODDV {formatInteger(row.coddv)}</span>
+                          <span className="gestao-estq-reentry-description">{row.descricao}</span>
+                        </strong>
                       </div>
-                      <div className="gestao-estq-reentry-dates">
-                        <span>Saída {formatDate(row.first_saida_date)}</span>
-                        <span>Entrada {formatDate(row.first_entrada_after_saida_date)}</span>
-                      </div>
-                      <div className="gestao-estq-reentry-balance">
-                        <strong>{formatSignedCurrency(row.saldo_ano)}</strong>
-                        <small>{formatCurrency(row.total_saida_ano)} / {formatCurrency(row.total_entrada_ano)}</small>
+                      <div className="gestao-estq-reentry-stats">
+                        <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-saida">
+                          <span className="gestao-estq-reentry-stat-label">Saída</span>
+                          <strong>{formatCurrency(row.total_saida_ano)}</strong>
+                          <small>Data {formatDate(row.first_saida_date)}</small>
+                        </section>
+                        <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-entrada">
+                          <span className="gestao-estq-reentry-stat-label">Entrada</span>
+                          <strong>{formatCurrency(row.total_entrada_ano)}</strong>
+                          <small>Data {formatDate(row.first_entrada_after_saida_date)}</small>
+                        </section>
+                        <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-diff">
+                          <span className="gestao-estq-reentry-stat-label">Diferença</span>
+                          <strong className={row.saldo_ano >= 0 ? "gestao-estq-value-positive" : "gestao-estq-value-negative"}>
+                            {formatSignedCurrency(row.saldo_ano)}
+                          </strong>
+                          <small>Entrada - saída</small>
+                        </section>
                       </div>
                     </article>
                   ))}
