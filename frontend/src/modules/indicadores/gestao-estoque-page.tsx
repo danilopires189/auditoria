@@ -331,6 +331,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
   const [loadingMonths, setLoadingMonths] = useState(true);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
+  const [loadingTopLists, setLoadingTopLists] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -382,30 +383,13 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       setLoadingDashboard(true);
       setErrorMessage(null);
       try {
-        const activeDay = selectedDay === ALL_DAYS_VALUE ? null : selectedDay;
-        const [nextSummary, nextDaily, nextEntradas, nextSaidas] = await Promise.all([
-          fetchIndicadoresGestaoEstoqueSummary(activeCd, selectedMonthStart, movementFilter),
-          fetchIndicadoresGestaoEstoqueDailySeries(activeCd, selectedMonthStart, movementFilter),
-          fetchIndicadoresGestaoEstoqueTopItems({
-            cd: activeCd,
-            monthStart: selectedMonthStart,
-            day: activeDay,
-            rankGroup: "entrada",
-            movementFilter
-          }),
-          fetchIndicadoresGestaoEstoqueTopItems({
-            cd: activeCd,
-            monthStart: selectedMonthStart,
-            day: activeDay,
-            rankGroup: "saida",
-            movementFilter
-          })
-        ]);
+        const nextSummary = await fetchIndicadoresGestaoEstoqueSummary(activeCd, selectedMonthStart, movementFilter);
         if (cancelled) return;
         setSummary(nextSummary);
+
+        const nextDaily = await fetchIndicadoresGestaoEstoqueDailySeries(activeCd, selectedMonthStart, movementFilter);
+        if (cancelled) return;
         setDailySeries(nextDaily);
-        setTopEntradas(nextEntradas);
-        setTopSaidas(nextSaidas);
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(asErrorMessage(error));
@@ -423,7 +407,56 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return () => {
       cancelled = true;
     };
-  }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
+  }, [activeCd, movementFilter, selectedMonthStart]);
+
+  useEffect(() => {
+    if (!selectedMonthStart || loadingDashboard) {
+      setTopEntradas([]);
+      setTopSaidas([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadTopLists() {
+      setLoadingTopLists(true);
+      try {
+        const activeDay = selectedDay === ALL_DAYS_VALUE ? null : selectedDay;
+        const nextEntradas = await fetchIndicadoresGestaoEstoqueTopItems({
+          cd: activeCd,
+          monthStart: selectedMonthStart,
+          day: activeDay,
+          rankGroup: "entrada",
+          movementFilter
+        });
+        if (cancelled) return;
+        setTopEntradas(nextEntradas);
+
+        const nextSaidas = await fetchIndicadoresGestaoEstoqueTopItems({
+          cd: activeCd,
+          monthStart: selectedMonthStart,
+          day: activeDay,
+          rankGroup: "saida",
+          movementFilter
+        });
+        if (cancelled) return;
+        setTopSaidas(nextSaidas);
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(asErrorMessage(error));
+          setTopEntradas([]);
+          setTopSaidas([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingTopLists(false);
+      }
+    }
+
+    void loadTopLists();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCd, movementFilter, selectedDay, selectedMonthStart, loadingDashboard]);
 
   useEffect(() => {
     if (loadingDashboard) return;
@@ -439,26 +472,28 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     async function loadInsights() {
       setLoadingInsights(true);
       try {
-        const [nextReentries, nextSupplierLoss, nextCategoryLoss] = await Promise.all([
-          fetchIndicadoresGestaoEstoqueYearReentryItems(activeCd, selectedMonthStart, REENTRY_ROWS_LIMIT),
-          fetchIndicadoresGestaoEstoqueLossDimension({
-            cd: activeCd,
-            monthStart: selectedMonthStart,
-            dimension: "fornecedor",
-            movementFilter,
-            limit: INSIGHT_ROWS_LIMIT
-          }),
-          fetchIndicadoresGestaoEstoqueLossDimension({
-            cd: activeCd,
-            monthStart: selectedMonthStart,
-            dimension: "categoria_n2",
-            movementFilter,
-            limit: INSIGHT_ROWS_LIMIT
-          })
-        ]);
+        const nextReentries = await fetchIndicadoresGestaoEstoqueYearReentryItems(activeCd, selectedMonthStart, REENTRY_ROWS_LIMIT);
         if (cancelled) return;
         setReentryRows(nextReentries);
+
+        const nextSupplierLoss = await fetchIndicadoresGestaoEstoqueLossDimension({
+          cd: activeCd,
+          monthStart: selectedMonthStart,
+          dimension: "fornecedor",
+          movementFilter,
+          limit: INSIGHT_ROWS_LIMIT
+        });
+        if (cancelled) return;
         setSupplierLossRows(nextSupplierLoss);
+
+        const nextCategoryLoss = await fetchIndicadoresGestaoEstoqueLossDimension({
+          cd: activeCd,
+          monthStart: selectedMonthStart,
+          dimension: "categoria_n2",
+          movementFilter,
+          limit: INSIGHT_ROWS_LIMIT
+        });
+        if (cancelled) return;
         setCategoryLossRows(nextCategoryLoss);
       } catch (error) {
         if (!cancelled) {
@@ -693,7 +728,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
             <TopList
               title="Top 30 Entradas"
-              subtitle={selectedDay === ALL_DAYS_VALUE ? "Acumulado do mês no filtro ativo." : `Data ${formatDate(selectedDay)}`}
+              subtitle={loadingTopLists ? "Atualizando ranking..." : selectedDay === ALL_DAYS_VALUE ? "Acumulado do mês no filtro ativo." : `Data ${formatDate(selectedDay)}`}
               rows={topEntradas}
               emptyMessage="Nenhuma entrada encontrada para o filtro selecionado."
               className="gestao-estq-panel-top"
@@ -701,7 +736,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
             <TopList
               title="Top 30 Saídas"
-              subtitle={selectedDay === ALL_DAYS_VALUE ? "Acumulado do mês no filtro ativo." : `Data ${formatDate(selectedDay)}`}
+              subtitle={loadingTopLists ? "Atualizando ranking..." : selectedDay === ALL_DAYS_VALUE ? "Acumulado do mês no filtro ativo." : `Data ${formatDate(selectedDay)}`}
               rows={topSaidas}
               emptyMessage="Nenhuma saída encontrada para o filtro selecionado."
               className="gestao-estq-panel-top"
