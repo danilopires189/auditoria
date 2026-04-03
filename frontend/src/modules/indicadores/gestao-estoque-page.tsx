@@ -578,10 +578,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
     return [
-      { label: "Entradas do Mês", value: summary.total_entradas_mes, kind: "currency", accent: "neutral" },
-      { label: "Saídas do Mês", value: summary.total_saidas_mes, kind: "currency", accent: "warning" },
-      { label: "Sobras do Mês", value: summary.total_sobras_mes, kind: "currency", accent: "neutral" },
-      { label: "Faltas do Mês", value: summary.total_faltas_mes, kind: "currency", accent: "warning" },
+      { label: "Entradas no Mês", value: summary.total_entradas_mes, kind: "currency", accent: "neutral" },
+      { label: "Saídas no Mês", value: summary.total_saidas_mes, kind: "currency", accent: "warning" },
       { label: "Perda do Mês Atual", value: summary.perda_mes_atual, kind: "signed-currency", accent: "danger" },
       { label: "Perda Acumulada", value: summary.perda_acumulada_ano, kind: "signed-currency", accent: "danger" },
       { label: "Acumulado Entradas Ano", value: summary.acumulado_entradas_ano, kind: "currency", accent: "neutral" },
