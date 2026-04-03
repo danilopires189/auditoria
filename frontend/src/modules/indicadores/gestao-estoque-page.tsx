@@ -247,7 +247,6 @@ function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
             );
           })}
           {rows.length > 1 ? <path d={lossPath} className="gestao-estq-chart-loss-line" /> : null}
-          <text x="18" y={lossTop - 10} className="indicadores-chart-label gestao-estq-chart-section-label">Perda diária</text>
         </svg>
       </div>
       <div className="indicadores-chart-legend">
