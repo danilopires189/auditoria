@@ -121,6 +121,17 @@ function formatSignedCurrency(value: number): string {
   return `${signal}R$ ${formatNumber(Math.abs(safe))}`;
 }
 
+function formatCompactSignedDifference(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  const signal = safe > 0 ? "+" : safe < 0 ? "-" : "";
+  const formatted = new Intl.NumberFormat("pt-BR", {
+    notation: "compact",
+    minimumFractionDigits: Math.abs(safe) >= 1000 ? 1 : 0,
+    maximumFractionDigits: 1
+  }).format(Math.abs(safe));
+  return `${signal}${formatted}`;
+}
+
 function buildCalendarDays(monthStart: string, monthEnd: string): string[] {
   if (!monthStart || !monthEnd) return [];
   const current = new Date(`${monthStart}T00:00:00`);
@@ -147,6 +158,12 @@ function formatMovementLabel(value: IndicadoresGestaoEstoqueMovementFilter): str
 function natureClassName(value: IndicadoresGestaoEstoqueDetailRow["natureza"]): string {
   if (value === "falta") return "is-falta";
   if (value === "sobra") return "is-sobra";
+  return "is-neutro";
+}
+
+function signedDifferenceClassName(value: number): string {
+  if (value > 0) return "is-falta";
+  if (value < 0) return "is-sobra";
   return "is-neutro";
 }
 
@@ -203,6 +220,7 @@ function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
             const entryY = barsBottom - entryHeight;
             const exitY = barsBottom - exitHeight;
             const lossY = lossMid - (row.perda_total / maxLossAbs) * (lossHalf - 10);
+            const lossValueY = row.perda_total >= 0 ? lossY - 10 : lossY + 16;
             return (
               <g key={row.date_ref}>
                 <rect x={baseX - 16} y={entryY} width="12" height={entryHeight} rx="5" className="indicadores-chart-bar gestao-estq-chart-entry">
@@ -214,6 +232,14 @@ function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
                 <circle cx={baseX} cy={lossY} r="4.4" className="gestao-estq-chart-loss-point">
                   <title>{`${formatDate(row.date_ref)} · Perda ${formatSignedCurrency(row.perda_total)}`}</title>
                 </circle>
+                <text
+                  x={baseX}
+                  y={lossValueY}
+                  textAnchor="middle"
+                  className={`gestao-estq-chart-loss-value ${signedDifferenceClassName(row.perda_total)}`}
+                >
+                  {formatCompactSignedDifference(row.perda_total)}
+                </text>
                 <text x={baseX} y="232" textAnchor="middle" className="indicadores-chart-label">
                   {row.date_ref.slice(8, 10)}
                 </text>
