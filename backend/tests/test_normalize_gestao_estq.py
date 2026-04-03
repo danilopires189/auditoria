@@ -22,7 +22,9 @@ class NormalizeGestaoEstqTests(unittest.TestCase):
                     "Desc": "Produto teste",
                     "Tipo": "EA",
                     "CATEGORIA N1": "Bebidas",
+                    "CATEGORIA N2": "Refrigerante",
                     "FORNECEDOR": "Fornecedor XPTO",
+                    "Usuario": "Maria",
                     "Quantidade": "7",
                     "TT_CMPC": "-123.45",
                 }
@@ -41,14 +43,18 @@ class NormalizeGestaoEstqTests(unittest.TestCase):
                 "descricao",
                 "tipo_movimentacao",
                 "categoria_n1",
+                "categoria_n2",
                 "fornecedor",
+                "usuario",
                 "quantidade_mov",
                 "valor_mov",
             ],
         )
         self.assertEqual(normalized.loc[0, "tipo_movimentacao"], "EA")
         self.assertEqual(normalized.loc[0, "categoria_n1"], "Bebidas")
+        self.assertEqual(normalized.loc[0, "categoria_n2"], "Refrigerante")
         self.assertEqual(normalized.loc[0, "fornecedor"], "Fornecedor XPTO")
+        self.assertEqual(normalized.loc[0, "usuario"], "Maria")
         self.assertEqual(normalized.loc[0, "quantidade_mov"], "7")
         self.assertEqual(normalized.loc[0, "valor_mov"], "-123.45")
 
