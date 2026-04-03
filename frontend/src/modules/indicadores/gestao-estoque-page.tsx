@@ -35,6 +35,7 @@ interface MetricCardDefinition {
   value: number;
   kind: "currency" | "signed-currency" | "integer";
   accent?: "danger" | "warning" | "neutral";
+  natureBadge?: "falta" | "sobra" | null;
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
@@ -147,6 +148,11 @@ function natureClassName(value: IndicadoresGestaoEstoqueDetailRow["natureza"]): 
   if (value === "falta") return "is-falta";
   if (value === "sobra") return "is-sobra";
   return "is-neutro";
+}
+
+function lossNatureBadge(value: number): MetricCardDefinition["natureBadge"] {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.000001) return null;
+  return value > 0 ? "falta" : "sobra";
 }
 
 function CurrencyMetricValue({ value, signed = false }: { value: number; signed?: boolean }) {
@@ -335,14 +341,14 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadMonths() {
       setLoadingMonths(true);
-      setErrorMessage(null);
+      setDashboardErrorMessage(null);
       try {
         const nextMonths = await fetchIndicadoresGestaoEstoqueMonthOptions(activeCd);
         if (cancelled) return;
@@ -350,7 +356,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
         setSelectedMonthStart((current) => current || nextMonths[0]?.month_start || "");
       } catch (error) {
         if (!cancelled) {
-          setErrorMessage(asErrorMessage(error));
+          setDashboardErrorMessage(asErrorMessage(error));
           setMonthOptions([]);
         }
       } finally {
@@ -381,18 +387,18 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
     async function loadDashboard() {
       setLoadingDashboard(true);
-      setErrorMessage(null);
+      setDashboardErrorMessage(null);
       try {
-        const nextSummary = await fetchIndicadoresGestaoEstoqueSummary(activeCd, selectedMonthStart, movementFilter);
+        const [nextSummary, nextDaily] = await Promise.all([
+          fetchIndicadoresGestaoEstoqueSummary(activeCd, selectedMonthStart, movementFilter),
+          fetchIndicadoresGestaoEstoqueDailySeries(activeCd, selectedMonthStart, movementFilter)
+        ]);
         if (cancelled) return;
         setSummary(nextSummary);
-
-        const nextDaily = await fetchIndicadoresGestaoEstoqueDailySeries(activeCd, selectedMonthStart, movementFilter);
-        if (cancelled) return;
         setDailySeries(nextDaily);
       } catch (error) {
         if (!cancelled) {
-          setErrorMessage(asErrorMessage(error));
+          setDashboardErrorMessage(asErrorMessage(error));
           setSummary(null);
           setDailySeries([]);
           setTopEntradas([]);
@@ -410,7 +416,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   }, [activeCd, movementFilter, selectedMonthStart]);
 
   useEffect(() => {
-    if (!selectedMonthStart || loadingDashboard) {
+    if (!selectedMonthStart) {
       setTopEntradas([]);
       setTopSaidas([]);
       return;
@@ -422,28 +428,27 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       setLoadingTopLists(true);
       try {
         const activeDay = selectedDay === ALL_DAYS_VALUE ? null : selectedDay;
-        const nextEntradas = await fetchIndicadoresGestaoEstoqueTopItems({
-          cd: activeCd,
-          monthStart: selectedMonthStart,
-          day: activeDay,
-          rankGroup: "entrada",
-          movementFilter
-        });
+        const [nextEntradas, nextSaidas] = await Promise.all([
+          fetchIndicadoresGestaoEstoqueTopItems({
+            cd: activeCd,
+            monthStart: selectedMonthStart,
+            day: activeDay,
+            rankGroup: "entrada",
+            movementFilter
+          }),
+          fetchIndicadoresGestaoEstoqueTopItems({
+            cd: activeCd,
+            monthStart: selectedMonthStart,
+            day: activeDay,
+            rankGroup: "saida",
+            movementFilter
+          })
+        ]);
         if (cancelled) return;
         setTopEntradas(nextEntradas);
-
-        const nextSaidas = await fetchIndicadoresGestaoEstoqueTopItems({
-          cd: activeCd,
-          monthStart: selectedMonthStart,
-          day: activeDay,
-          rankGroup: "saida",
-          movementFilter
-        });
-        if (cancelled) return;
         setTopSaidas(nextSaidas);
       } catch (error) {
         if (!cancelled) {
-          setErrorMessage(asErrorMessage(error));
           setTopEntradas([]);
           setTopSaidas([]);
         }
@@ -456,10 +461,9 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return () => {
       cancelled = true;
     };
-  }, [activeCd, movementFilter, selectedDay, selectedMonthStart, loadingDashboard]);
+  }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
 
   useEffect(() => {
-    if (loadingDashboard) return;
     if (!selectedMonthStart) {
       setReentryRows([]);
       setSupplierLossRows([]);
@@ -472,32 +476,29 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     async function loadInsights() {
       setLoadingInsights(true);
       try {
-        const nextReentries = await fetchIndicadoresGestaoEstoqueYearReentryItems(activeCd, selectedMonthStart, REENTRY_ROWS_LIMIT);
+        const [nextReentries, nextSupplierLoss, nextCategoryLoss] = await Promise.all([
+          fetchIndicadoresGestaoEstoqueYearReentryItems(activeCd, selectedMonthStart, REENTRY_ROWS_LIMIT),
+          fetchIndicadoresGestaoEstoqueLossDimension({
+            cd: activeCd,
+            monthStart: selectedMonthStart,
+            dimension: "fornecedor",
+            movementFilter,
+            limit: INSIGHT_ROWS_LIMIT
+          }),
+          fetchIndicadoresGestaoEstoqueLossDimension({
+            cd: activeCd,
+            monthStart: selectedMonthStart,
+            dimension: "categoria_n2",
+            movementFilter,
+            limit: INSIGHT_ROWS_LIMIT
+          })
+        ]);
         if (cancelled) return;
         setReentryRows(nextReentries);
-
-        const nextSupplierLoss = await fetchIndicadoresGestaoEstoqueLossDimension({
-          cd: activeCd,
-          monthStart: selectedMonthStart,
-          dimension: "fornecedor",
-          movementFilter,
-          limit: INSIGHT_ROWS_LIMIT
-        });
-        if (cancelled) return;
         setSupplierLossRows(nextSupplierLoss);
-
-        const nextCategoryLoss = await fetchIndicadoresGestaoEstoqueLossDimension({
-          cd: activeCd,
-          monthStart: selectedMonthStart,
-          dimension: "categoria_n2",
-          movementFilter,
-          limit: INSIGHT_ROWS_LIMIT
-        });
-        if (cancelled) return;
         setCategoryLossRows(nextCategoryLoss);
       } catch (error) {
         if (!cancelled) {
-          setErrorMessage(asErrorMessage(error));
           setReentryRows([]);
           setSupplierLossRows([]);
           setCategoryLossRows([]);
@@ -511,10 +512,10 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return () => {
       cancelled = true;
     };
-  }, [activeCd, movementFilter, selectedMonthStart, loadingDashboard]);
+  }, [activeCd, movementFilter, selectedMonthStart]);
 
   useEffect(() => {
-    if (!selectedMonthStart || !showDetails || loadingDashboard) {
+    if (!selectedMonthStart || !showDetails) {
       setDetailRows([]);
       return;
     }
@@ -523,7 +524,6 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
     async function loadDetails() {
       setLoadingDetails(true);
-      setErrorMessage(null);
       try {
         const rows = await fetchIndicadoresGestaoEstoqueDetails(
           activeCd,
@@ -535,7 +535,6 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
         if (!cancelled) setDetailRows(rows);
       } catch (error) {
         if (!cancelled) {
-          setErrorMessage(asErrorMessage(error));
           setDetailRows([]);
         }
       } finally {
@@ -547,7 +546,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return () => {
       cancelled = true;
     };
-  }, [activeCd, movementFilter, selectedDay, selectedMonthStart, showDetails, loadingDashboard]);
+  }, [activeCd, movementFilter, selectedDay, selectedMonthStart, showDetails]);
 
   useEffect(() => {
     if (selectedDay !== ALL_DAYS_VALUE) {
@@ -580,8 +579,20 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return [
       { label: "Entradas no Mês", value: summary.total_entradas_mes, kind: "currency", accent: "neutral" },
       { label: "Saídas no Mês", value: summary.total_saidas_mes, kind: "currency", accent: "warning" },
-      { label: "Perda do Mês Atual", value: summary.perda_mes_atual, kind: "signed-currency", accent: "danger" },
-      { label: "Perda Acumulada", value: summary.perda_acumulada_ano, kind: "signed-currency", accent: "danger" },
+      {
+        label: "Perda do Mês Atual",
+        value: summary.perda_mes_atual,
+        kind: "signed-currency",
+        accent: "danger",
+        natureBadge: lossNatureBadge(summary.perda_mes_atual)
+      },
+      {
+        label: "Perda Acumulada",
+        value: summary.perda_acumulada_ano,
+        kind: "signed-currency",
+        accent: "danger",
+        natureBadge: lossNatureBadge(summary.perda_acumulada_ano)
+      },
       { label: "Acumulado Entradas Ano", value: summary.acumulado_entradas_ano, kind: "currency", accent: "neutral" },
       { label: "Acumulado Saídas Ano", value: summary.acumulado_saidas_ano, kind: "currency", accent: "warning" },
       { label: "Produtos Distintos", value: summary.produtos_distintos_mes, kind: "integer" }
@@ -667,11 +678,19 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
             </div>
           </div>
 
-          {errorMessage ? <div className="indicadores-feedback is-error">{errorMessage}</div> : null}
+          {dashboardErrorMessage ? <div className="indicadores-feedback is-error">{dashboardErrorMessage}</div> : null}
 
           <div className="indicadores-metrics-grid gestao-estq-metrics-grid">
             {metricCards.map((card) => (
-              <article key={card.label} className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""}`}>
+              <article
+                key={card.label}
+                className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""} ${card.natureBadge ? "gestao-estq-metric-card-has-badge" : ""}`}
+              >
+                {card.natureBadge ? (
+                  <span className={`indicadores-status-badge gestao-estq-metric-badge ${natureClassName(card.natureBadge)}`}>
+                    {card.natureBadge === "falta" ? "Falta" : "Sobra"}
+                  </span>
+                ) : null}
                 <span>{card.label}</span>
                 {card.kind === "integer" ? <strong>{formatInteger(card.value)}</strong> : null}
                 {card.kind === "currency" ? <CurrencyMetricValue value={card.value} /> : null}
