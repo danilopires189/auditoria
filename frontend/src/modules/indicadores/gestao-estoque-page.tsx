@@ -804,7 +804,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                         <th>Mov.</th>
                         <th>Natureza</th>
                         <th>Total (R$)</th>
-                        <th>Assinado (R$)</th>
+                        <th>Responsável</th>
+                        <th>Cargo</th>
                         <th>Ocorrências</th>
                       </tr>
                     </thead>
@@ -824,9 +825,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                             <span className={`indicadores-status-badge ${natureClassName(row.natureza)}`}>{row.natureza}</span>
                           </td>
                           <td>{formatCurrency(row.valor_total)}</td>
-                          <td className={row.valor_assinado > 0 ? "gestao-estq-value-positive" : row.valor_assinado < 0 ? "gestao-estq-value-negative" : ""}>
-                            {formatSignedCurrency(row.valor_assinado)}
-                          </td>
+                          <td>{row.responsavel}</td>
+                          <td>{row.cargo}</td>
                           <td>{formatInteger(row.ocorrencias)}</td>
                         </tr>
                       ))}

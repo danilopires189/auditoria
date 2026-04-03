@@ -121,7 +121,8 @@ function mapDetailRow(raw: Record<string, unknown>): IndicadoresGestaoEstoqueDet
     movement_group: parseString(raw.movement_group, "outros") as IndicadoresGestaoEstoqueDetailRow["movement_group"],
     natureza: parseString(raw.natureza, "neutro") as IndicadoresGestaoEstoqueDetailRow["natureza"],
     valor_total: parseNumber(raw.valor_total),
-    valor_assinado: parseNumber(raw.valor_assinado),
+    responsavel: parseString(raw.responsavel, "-"),
+    cargo: parseString(raw.cargo, "-"),
     ocorrencias: parseInteger(raw.ocorrencias)
   };
 }
