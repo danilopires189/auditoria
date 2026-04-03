@@ -580,7 +580,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       { label: "Entradas no Mês", value: summary.total_entradas_mes, kind: "currency", accent: "entry" },
       { label: "Saídas no Mês", value: summary.total_saidas_mes, kind: "currency", accent: "exit" },
       {
-        label: "Perda do Mês Atual",
+        label: "Perda no Mês Atual",
         value: summary.perda_mes_atual,
         kind: "signed-currency",
         accent: "danger",
