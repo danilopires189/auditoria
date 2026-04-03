@@ -10658,6 +10658,24 @@ small {
     stroke-width: 2;
   }
 
+  .gestao-estq-chart-loss-value {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+
+  .gestao-estq-chart-loss-value.is-falta {
+    fill: #ad3a2b;
+  }
+
+  .gestao-estq-chart-loss-value.is-sobra {
+    fill: #155ab4;
+  }
+
+  .gestao-estq-chart-loss-value.is-neutro {
+    fill: #5e7393;
+  }
+
   .gestao-estq-legend-entry,
   .gestao-estq-legend-exit,
   .gestao-estq-legend-loss {
