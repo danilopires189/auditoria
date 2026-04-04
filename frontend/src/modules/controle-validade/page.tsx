@@ -1236,12 +1236,30 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const monthFilterOptions = useMemo(() => {
     return buildValidadeMonthWindow();
   }, []);
+  const preferredMonthFilterOptions = useMemo(() => {
+    if (statusFilter === "concluido") return [defaultMonthFilter];
+    const sourceRows = mainTab === "pulmao" ? pulRows : linhaRows;
+    const filteredRows = sourceRows.filter((row) => {
+      if (statusFilter === "todos") return true;
+      return row.status === statusFilter;
+    });
+    const availableMonths = monthFilterOptions.filter((month) =>
+      filteredRows.some((row) => row.val_mmaa === month)
+    );
+    return availableMonths.length > 0 ? availableMonths : monthFilterOptions;
+  }, [defaultMonthFilter, linhaRows, mainTab, monthFilterOptions, pulRows, statusFilter]);
   const displayedMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
 
   useEffect(() => {
-    if (monthFilterOptions.includes(monthFilter)) return;
-    setMonthFilter(defaultMonthFilter);
-  }, [defaultMonthFilter, monthFilter, monthFilterOptions]);
+    if (statusFilter === "concluido") {
+      if (monthFilter !== defaultMonthFilter) {
+        setMonthFilter(defaultMonthFilter);
+      }
+      return;
+    }
+    if (preferredMonthFilterOptions.includes(monthFilter)) return;
+    setMonthFilter(preferredMonthFilterOptions[0] ?? defaultMonthFilter);
+  }, [defaultMonthFilter, monthFilter, preferredMonthFilterOptions, statusFilter]);
 
   return (
     <>
