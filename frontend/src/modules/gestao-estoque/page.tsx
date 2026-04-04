@@ -102,6 +102,12 @@ function formatCurrency(value: number | null): string {
   return `R$ ${formatNumber(value)}`;
 }
 
+function formatInputCoddv(value: number): string {
+  const digits = String(Math.trunc(value)).trim();
+  if (digits.length <= 1) return digits;
+  return `${digits.slice(0, -1)}-${digits.slice(-1)}`;
+}
+
 function formatDate(value: string | null): string {
   return formatDateOnlyPtBR(value, "-", "value");
 }
@@ -879,10 +885,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         QuantidadeTotal: totalQuantidade,
         ValorTotal: totalValor
       }];
+      const inputRows = rows.map((row) => [formatInputCoddv(row.coddv), row.quantidade]);
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(itemRows), "Itens");
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), "Resumo");
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(inputRows), "Input");
       XLSX.writeFile(workbook, `gestao-estoque-${movementType}-${selectedDate}.xlsx`, { compression: true });
       setStatusMessage("Excel gerado com sucesso.");
       setErrorMessage(null);
