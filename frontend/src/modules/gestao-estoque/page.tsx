@@ -200,6 +200,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const currentCdLabel = useMemo(() => resolveCdLabel(profile, activeCd), [activeCd, profile]);
   const dayOptions = useMemo(() => buildDayOptions(today, availableDays), [availableDays, today]);
+  const selectedDayOption = useMemo(
+    () => dayOptions.find((day) => day.movement_date === selectedDate) ?? null,
+    [dayOptions, selectedDate]
+  );
   const totalUnique = rows.length;
   const totalQuantidade = useMemo(() => rows.reduce((acc, row) => acc + row.quantidade, 0), [rows]);
   const totalValor = useMemo(() => rows.reduce((acc, row) => acc + row.custo_total, 0), [rows]);
@@ -208,9 +212,15 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       .map((row) => row.estoque_updated_at)
       .filter((value): value is string => Boolean(value));
 
-    if (candidates.length === 0) {
-      return preview?.estoque_updated_at ?? null;
+    if (preview?.estoque_updated_at) {
+      candidates.push(preview.estoque_updated_at);
     }
+
+    if (selectedDayOption?.updated_at) {
+      candidates.push(selectedDayOption.updated_at);
+    }
+
+    if (candidates.length === 0) return null;
 
     let latest: string | null = null;
     let latestMs = Number.NEGATIVE_INFINITY;
@@ -223,7 +233,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       }
     }
     return latest ?? candidates[0] ?? null;
-  }, [preview, rows]);
+  }, [preview, rows, selectedDayOption]);
   const listSearchQuery = useMemo(() => normalizeSearchText(listSearchInput), [listSearchInput]);
   const filteredRows = useMemo(() => {
     if (!listSearchQuery) return rows;
