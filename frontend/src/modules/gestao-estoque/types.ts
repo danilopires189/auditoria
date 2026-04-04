@@ -28,6 +28,7 @@ export interface GestaoEstoqueItemRow {
   endereco_pul: string | null;
   qtd_est_atual: number;
   qtd_est_disp: number;
+  estoque_updated_at: string | null;
   dat_ult_compra: string | null;
   custo_unitario: number | null;
   custo_total: number;
