@@ -1092,39 +1092,34 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Trabalhar offline".</div>
             ) : null}
 
-            <div className="controle-validade-tabs">
-              <button
-                type="button"
-                className={`btn btn-muted${mainTab === "linha" ? " is-active" : ""}`}
-                onClick={() => setMainTab("linha")}
+            <label className="controle-validade-tabs" htmlFor="controle-validade-tipo">
+              <span>Tipo de validade</span>
+              <select
+                id="controle-validade-tipo"
+                value={mainTab}
+                onChange={(event) => setMainTab(event.target.value as MainTab)}
               >
-                Validade Linha
-              </button>
-              <button
-                type="button"
-                className={`btn btn-muted${mainTab === "pulmao" ? " is-active" : ""}`}
-                onClick={() => setMainTab("pulmao")}
-              >
-                Validade Pulmão
-              </button>
-            </div>
+                <option value="linha">Validade Linha</option>
+                <option value="pulmao">Validade Pulmão</option>
+              </select>
+            </label>
 
             {mainTab === "linha" ? (
               <div className="controle-validade-pane">
-                <div className="controle-validade-subtabs">
+                <div className="gestao-op-segmented controle-validade-subtabs" role="tablist" aria-label="Fluxo da Linha">
                   <button
                     type="button"
-                    className={`btn btn-muted${linhaSubTab === "coleta" ? " is-active" : ""}`}
+                    className={`controle-validade-subtab-btn is-coleta${linhaSubTab === "coleta" ? " is-active" : ""}`}
                     onClick={() => setLinhaSubTab("coleta")}
                   >
-                    Opção (Coleta)
+                    Coleta
                   </button>
                   <button
                     type="button"
-                    className={`btn btn-muted${linhaSubTab === "retirada" ? " is-active" : ""}`}
+                    className={`controle-validade-subtab-btn is-retirada${linhaSubTab === "retirada" ? " is-active" : ""}`}
                     onClick={() => setLinhaSubTab("retirada")}
                   >
-                    Opção (Retirada)
+                    Retirada
                   </button>
                 </div>
 
