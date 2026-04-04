@@ -12229,6 +12229,10 @@ small {
   font-weight: 700;
 }
 
+.gestao-op-row-title-code-mobile {
+  display: none;
+}
+
 .gestao-op-row-expand {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
@@ -12521,19 +12525,78 @@ small {
   }
 
   .gestao-op-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px;
+    gap: 8px;
   }
 
   .gestao-op-row-main-table {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .gestao-op-row-expand {
+    grid-column: 1 / -1;
+    gap: 12px;
+  }
+
+  .gestao-op-row-expand-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .gestao-op-row-title {
+    gap: 2px;
+  }
+
+  .gestao-op-row-title strong {
+    font-size: 0.98rem;
+    line-height: 1.22;
+  }
+
+  .gestao-op-row-title span {
+    font-size: 0.8rem;
+  }
+
+  .gestao-op-row-title-code-desktop {
+    display: none;
+  }
+
+  .gestao-op-row-title-code-mobile {
+    display: inline;
   }
 
   .gestao-op-row-cell {
+    gap: 2px;
     padding: 9px 10px;
+    min-height: 0;
+  }
+
+  .gestao-op-row-cell--purchase,
+  .gestao-op-row-cell--unit,
+  .gestao-op-row-cell--stock {
+    display: none;
+  }
+
+  .gestao-op-row-cell-label {
+    font-size: 0.68rem;
+  }
+
+  .gestao-op-row-cell-value {
+    font-size: 0.95rem;
   }
 
   .gestao-op-row-actions {
-    justify-content: flex-start;
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    align-self: flex-start;
+    margin-top: -2px;
+  }
+
+  .gestao-op-row-more-btn {
+    width: 32px;
+    height: 32px;
   }
 
   .gestao-op-date-pill {
