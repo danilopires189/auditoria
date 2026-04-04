@@ -215,14 +215,26 @@ export async function listPendingOfflineEvents(userId: string, cd: number): Prom
   const db = await getDb();
   const tx = db.transaction(STORE_EVENTS, "readonly");
   const index = tx.objectStore(STORE_EVENTS).index(INDEX_EVENTS_BY_USER_CD);
-  const raw = await requestToPromise(index.getAll(IDBKeyRange.only([userId, normalizeCd(cd)])));
+  const request = index.openCursor(IDBKeyRange.only([userId, normalizeCd(cd)]));
+  const rows = await new Promise<EventStoreRow[]>((resolve, reject) => {
+    const collected: EventStoreRow[] = [];
+    request.onerror = () => reject(request.error ?? new Error("Falha ao listar eventos offline."));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(collected);
+        return;
+      }
+      collected.push(cursor.value as EventStoreRow);
+      cursor.continue();
+    };
+  });
   await transactionDone(tx);
-
-  const rows = ((raw as EventStoreRow[] | undefined) ?? []).filter(
+  const pendingRows = rows.filter(
     (row) => row.status === "pending" || row.status === "error"
   );
-  rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
-  return rows;
+  pendingRows.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return pendingRows;
 }
 
 export async function countPendingOfflineEvents(userId: string, cd: number): Promise<number> {
@@ -241,20 +253,22 @@ export async function updateOfflineEventStatus(params: {
   increment_attempt?: boolean;
 }): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(STORE_EVENTS, "readwrite");
-  const store = tx.objectStore(STORE_EVENTS);
-  const raw = await requestToPromise(store.get(params.event_id));
+  const readTx = db.transaction(STORE_EVENTS, "readonly");
+  const raw = await requestToPromise(readTx.objectStore(STORE_EVENTS).get(params.event_id));
+  await transactionDone(readTx);
   const row = (raw as EventStoreRow | undefined) ?? null;
-  if (row) {
-    row.status = params.status;
-    row.error_message = params.error_message ?? null;
-    row.updated_at = new Date().toISOString();
-    if (params.increment_attempt) {
-      row.attempt_count = Math.max(0, row.attempt_count) + 1;
-    }
-    store.put(row);
+  if (!row) return;
+
+  row.status = params.status;
+  row.error_message = params.error_message ?? null;
+  row.updated_at = new Date().toISOString();
+  if (params.increment_attempt) {
+    row.attempt_count = Math.max(0, row.attempt_count) + 1;
   }
-  await transactionDone(tx);
+
+  const writeTx = db.transaction(STORE_EVENTS, "readwrite");
+  writeTx.objectStore(STORE_EVENTS).put(row);
+  await transactionDone(writeTx);
 }
 
 export async function removeOfflineEvent(eventId: string): Promise<void> {
