@@ -954,8 +954,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                 title={selectedDay === ALL_DAYS_VALUE ? "Movimentações do mês" : "Movimentações do dia"}
                 subtitle={
                   selectedDay === ALL_DAYS_VALUE
-                    ? `${selectedMonthLabel} · acumulado do mês no filtro ativo · top ${DETAIL_ROWS_LIMIT}`
-                    : `${formatDate(selectedDay)} · filtro ${formatMovementLabel(movementFilter)} · top ${DETAIL_ROWS_LIMIT}`
+                    ? `${selectedMonthLabel} · maiores valores do mês no filtro ativo · top ${DETAIL_ROWS_LIMIT}`
+                    : `${formatDate(selectedDay)} · maiores valores no filtro ${formatMovementLabel(movementFilter)} · top ${DETAIL_ROWS_LIMIT}`
                 }
                 mobileAccordion={mobileAccordionControl("details", "gestao-estq-details-body")}
               />
