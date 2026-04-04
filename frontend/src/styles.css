@@ -10623,6 +10623,7 @@ small {
 
   .gestao-estq-panel-top {
     min-height: 360px;
+    align-content: start;
   }
 
   .gestao-estq-panel-loss {
@@ -10731,6 +10732,7 @@ small {
   .gestao-estq-loss-list {
     display: grid;
     gap: 10px;
+    align-content: start;
     overflow: auto;
     padding-right: 4px;
   }
