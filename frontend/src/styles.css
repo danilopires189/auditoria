@@ -11017,7 +11017,7 @@ small {
   .gestao-estq-panel-top,
   .gestao-estq-panel-loss,
   .gestao-estq-panel-details {
-    min-height: 0;
+    min-height: 154px;
     height: auto;
     max-height: none;
   }
@@ -11032,9 +11032,11 @@ small {
     align-items: start;
     gap: 14px;
     width: 100%;
+    min-height: 104px;
   }
 
   .indicadores-panel-head.is-mobile-accordion .indicadores-panel-head-copy {
+    align-content: start;
     min-width: 0;
   }
 
@@ -11095,6 +11097,19 @@ small {
     touch-action: pan-x;
     overscroll-behavior-x: contain;
     scrollbar-gutter: stable both-edges;
+  }
+
+  .gestao-estq-panel-details {
+    overflow: visible;
+  }
+
+  .gestao-estq-panel-details > :last-child,
+  #gestao-estq-details-body {
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
   }
 
   .gestao-estq-details-table {
