@@ -170,6 +170,14 @@ function searchIcon() {
   );
 }
 
+function checkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 12.5l4.2 4.2L19 7" />
+    </svg>
+  );
+}
+
 export default function ControleValidadePage({ isOnline, profile }: ControleValidadePageProps) {
   const barcodeRef = useRef<HTMLInputElement | null>(null);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -1022,6 +1030,20 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     return pulRows.filter((row) => row.status === statusFilter);
   }, [pulRows, statusFilter]);
 
+  const hasBarcodeInput = barcodeInput.trim().length > 0;
+  const offlineModeToneClass = isOfflineModeActive ? "is-revisado" : "is-pendente";
+  const offlineModeValue = preferOfflineMode ? "Offline ativo" : isOnline ? "Online" : "Sem rede";
+  const offlineModeHint = busyOfflineBase
+    ? "Baixando base local..."
+    : offlineSnapshotReady
+      ? "Snapshot local pronto"
+      : "Usando dados ao vivo";
+  const syncActionLabel = busyFlush
+    ? "Sincronizando..."
+    : pendingCount > 0
+      ? `Sincronizar fila (${pendingCount})`
+      : "Sincronizar fila";
+
   return (
     <>
       <header className="module-topbar module-topbar-fixed">
@@ -1066,19 +1088,26 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               <div className="controle-validade-head-actions">
                 <button
                   type="button"
-                  className={`btn btn-muted${preferOfflineMode ? " is-active" : ""}`}
+                  className={`gestao-op-review-trigger controle-validade-mode-trigger ${offlineModeToneClass}`}
                   onClick={() => void onToggleOfflineMode()}
                   disabled={busyOfflineBase}
                 >
-                  {busyOfflineBase ? "Baixando base..." : preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
+                  <span className="gestao-op-review-trigger-icon" aria-hidden="true">
+                    {checkIcon()}
+                  </span>
+                  <span className="gestao-op-review-trigger-copy">
+                    <span className="gestao-op-review-trigger-label">Modo</span>
+                    <span className="gestao-op-review-trigger-value">{offlineModeValue}</span>
+                    <span className="controle-validade-mode-helper">{offlineModeHint}</span>
+                  </span>
                 </button>
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn btn-primary controle-validade-sync-trigger"
                   onClick={() => void flushQueue(true)}
                   disabled={!isOnline || busyFlush}
                 >
-                  {busyFlush ? "Sincronizando..." : "Sincronizar"}
+                  {syncActionLabel}
                 </button>
               </div>
             </div>
@@ -1092,17 +1121,17 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Trabalhar offline".</div>
             ) : null}
 
-            <div className="controle-validade-tabs">
+            <div className="gestao-op-segmented controle-validade-tabs" role="tablist" aria-label="Tipo de operação">
               <button
                 type="button"
-                className={`btn btn-muted${mainTab === "linha" ? " is-active" : ""}`}
+                className={mainTab === "linha" ? "is-active" : ""}
                 onClick={() => setMainTab("linha")}
               >
                 Validade Linha
               </button>
               <button
                 type="button"
-                className={`btn btn-muted${mainTab === "pulmao" ? " is-active" : ""}`}
+                className={mainTab === "pulmao" ? "is-active" : ""}
                 onClick={() => setMainTab("pulmao")}
               >
                 Validade Pulmão
@@ -1111,29 +1140,29 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
             {mainTab === "linha" ? (
               <div className="controle-validade-pane">
-                <div className="controle-validade-subtabs">
+                <div className="gestao-op-segmented controle-validade-subtabs" role="tablist" aria-label="Fluxo da Linha">
                   <button
                     type="button"
-                    className={`btn btn-muted${linhaSubTab === "coleta" ? " is-active" : ""}`}
+                    className={linhaSubTab === "coleta" ? "is-active" : ""}
                     onClick={() => setLinhaSubTab("coleta")}
                   >
-                    Opção (Coleta)
+                    Coleta
                   </button>
                   <button
                     type="button"
-                    className={`btn btn-muted${linhaSubTab === "retirada" ? " is-active" : ""}`}
+                    className={linhaSubTab === "retirada" ? "is-active" : ""}
                     onClick={() => setLinhaSubTab("retirada")}
                   >
-                    Opção (Retirada)
+                    Retirada
                   </button>
                 </div>
 
                 {linhaSubTab === "coleta" ? (
-                  <form className="controle-validade-form" onSubmit={onSubmitColeta}>
-                    <label>
+                  <form className="controle-validade-form module-card module-card-static controle-validade-panel" onSubmit={onSubmitColeta}>
+                    <label className="gestao-op-field controle-validade-field">
                       Código de barras
                       <div className="controle-validade-inline-field">
-                        <div className="input-icon-wrap with-action">
+                        <div className="input-icon-wrap with-action controle-validade-search-field">
                           <span className={barcodeIconClassName} aria-hidden="true">
                             {barcodeIcon()}
                           </span>
@@ -1157,33 +1186,24 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                           />
                           <button
                             type="button"
-                            className="input-action-btn"
-                            onClick={openCameraScanner}
-                            title="Ler código pela câmera"
-                            aria-label="Ler código pela câmera"
-                            disabled={!cameraSupported || coletaLookupBusy}
+                            className="input-action-btn controle-validade-search-action"
+                            onClick={hasBarcodeInput ? () => void onLookupProduto() : openCameraScanner}
+                            title={hasBarcodeInput ? "Buscar produto" : "Ler código pela câmera"}
+                            aria-label={hasBarcodeInput ? "Buscar produto" : "Ler código pela câmera"}
+                            disabled={hasBarcodeInput ? coletaLookupBusy || activeCd == null : !cameraSupported || coletaLookupBusy}
                           >
-                            {cameraIcon()}
+                            {hasBarcodeInput ? searchIcon() : cameraIcon()}
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          className="btn btn-muted controle-validade-search-btn"
-                          onClick={() => void onLookupProduto()}
-                          disabled={coletaLookupBusy || activeCd == null}
-                        >
-                          <span aria-hidden="true">{searchIcon()}</span>
-                          {coletaLookupBusy ? "Buscando..." : "Buscar"}
-                        </button>
                       </div>
                     </label>
 
                     {coletaLookup ? (
-                      <div className="controle-validade-lookup-card">
+                      <div className="module-card module-card-static controle-validade-lookup-card">
                         <strong>{coletaLookup.descricao}</strong>
                         <span>CODDV: {coletaLookup.coddv}</span>
                         <span>Barras: {coletaLookup.barras}</span>
-                        <label>
+                        <label className="gestao-op-field controle-validade-field">
                           Endereço Linha (SEP)
                           <select
                             value={selectedEnderecoSep}
@@ -1200,7 +1220,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                       </div>
                     ) : null}
 
-                    <label>
+                    <label className="gestao-op-field controle-validade-field">
                       Validade (MMAA)
                       <input
                         type="text"
@@ -1223,17 +1243,17 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   </form>
                 ) : (
                   <div className="controle-validade-list-area">
-                    <div className="controle-validade-status-tabs">
+                    <div className="gestao-op-segmented controle-validade-status-tabs" role="tablist" aria-label="Status das retiradas da Linha">
                       <button
                         type="button"
-                        className={`btn btn-muted${statusFilter === "pendente" ? " is-active" : ""}`}
+                        className={statusFilter === "pendente" ? "is-active" : ""}
                         onClick={() => setStatusFilter("pendente")}
                       >
                         Pendentes
                       </button>
                       <button
                         type="button"
-                        className={`btn btn-muted${statusFilter === "concluido" ? " is-active" : ""}`}
+                        className={statusFilter === "concluido" ? "is-active" : ""}
                         onClick={() => setStatusFilter("concluido")}
                       >
                         Concluídos
@@ -1297,17 +1317,17 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               </div>
             ) : (
               <div className="controle-validade-pane">
-                <div className="controle-validade-status-tabs">
+                <div className="gestao-op-segmented controle-validade-status-tabs" role="tablist" aria-label="Status das retiradas do Pulmão">
                   <button
                     type="button"
-                    className={`btn btn-muted${statusFilter === "pendente" ? " is-active" : ""}`}
+                    className={statusFilter === "pendente" ? "is-active" : ""}
                     onClick={() => setStatusFilter("pendente")}
                   >
                     Pendentes
                   </button>
                   <button
                     type="button"
-                    className={`btn btn-muted${statusFilter === "concluido" ? " is-active" : ""}`}
+                    className={statusFilter === "concluido" ? "is-active" : ""}
                     onClick={() => setStatusFilter("concluido")}
                   >
                     Concluídos
