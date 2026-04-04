@@ -83,6 +83,17 @@ tables:
       descricao: "text"
       barras: "text"
 
+  db_custo:
+    file: "DB_CUSTO.xlsx"
+    sheet: "BD_CUSTO"
+    mode: "upsert"
+    unique_keys: ["coddv"]
+    required_columns: ["coddv", "custo"]
+    refresh_before_load: false
+    types:
+      coddv: "integer"
+      custo: "numeric"
+
   db_devolucao:
     file: "DB_DEVOLUCAO.xlsx"
     sheet: "DB_DEVOLUCAO"

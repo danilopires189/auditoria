@@ -123,6 +123,7 @@ function mapDetailRow(raw: Record<string, unknown>): IndicadoresGestaoEstoqueDet
     valor_total: parseNumber(raw.valor_total),
     responsavel: parseString(raw.responsavel, "-"),
     cargo: parseString(raw.cargo, "-"),
+    quantidade: parseInteger(raw.quantidade, parseInteger(raw.ocorrencias)),
     ocorrencias: parseInteger(raw.ocorrencias)
   };
 }

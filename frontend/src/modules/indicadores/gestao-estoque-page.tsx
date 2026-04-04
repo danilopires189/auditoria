@@ -975,7 +975,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                             <th>Tipo</th>
                             <th>Mov.</th>
                             <th>Natureza</th>
-                            <th>Ocorrências</th>
+                            <th>Quantidade</th>
                             <th>Total (R$)</th>
                             <th>Responsável</th>
                             <th>Cargo</th>
@@ -996,7 +996,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                               <td>
                                 <span className={`indicadores-status-badge ${natureClassName(row.natureza)}`}>{row.natureza}</span>
                               </td>
-                              <td>{formatInteger(row.ocorrencias)}</td>
+                              <td>{formatInteger(row.quantidade)}</td>
                               <td>{formatCurrency(row.valor_total)}</td>
                               <td>{row.responsavel}</td>
                               <td>{row.cargo}</td>

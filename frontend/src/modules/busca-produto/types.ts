@@ -28,6 +28,7 @@ export interface BuscaProdutoLookupResult {
   qtd_est_atual: number;
   estoque_updated_at: string | null;
   dat_ult_compra: string | null;
+  custo_unitario: number | null;
   enderecos_sep: BuscaProdutoAddressRow[];
   enderecos_pul: BuscaProdutoAddressRow[];
   enderecos_excluidos: BuscaProdutoExcludedAddressRow[];

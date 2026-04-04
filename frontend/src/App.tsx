@@ -10,6 +10,7 @@ import { findModuleByPath } from "./modules/registry";
 import ControleValidadePage from "./modules/controle-validade/page";
 import AtividadeExtraPage from "./modules/atividade-extra/page";
 import BuscaProdutoPage from "./modules/busca-produto/page";
+import GestaoEstoquePage from "./modules/gestao-estoque/page";
 import IndicadoresPage from "./modules/indicadores/page";
 import IndicadoresBlitzPage from "./modules/indicadores/blitz-page";
 import IndicadoresGestaoEstoquePage from "./modules/indicadores/gestao-estoque-page";
@@ -36,6 +37,7 @@ import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
+import type { GestaoEstoqueModuleProfile } from "./modules/gestao-estoque/types";
 import type { IndicadoresModuleProfile } from "./modules/indicadores/types";
 import type { MetaMesModuleProfile } from "./modules/meta-mes/types";
 import type { ValidarEnderecamentoModuleProfile } from "./modules/validar-enderecamento/types";
@@ -2159,6 +2161,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const gestaoEstoqueProfile = useMemo<GestaoEstoqueModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const validarEnderecamentoProfile = useMemo<ValidarEnderecamentoModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2420,6 +2434,16 @@ export default function App() {
             element={
               pvpsAlocacaoProfile ? (
                 <PvpsAlocacaoPage isOnline={isOnline} profile={pvpsAlocacaoProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/gestao-estoque"
+            element={
+              gestaoEstoqueProfile ? (
+                <GestaoEstoquePage isOnline={isOnline} profile={gestaoEstoqueProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )

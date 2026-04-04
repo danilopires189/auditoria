@@ -50,6 +50,7 @@ export interface IndicadoresGestaoEstoqueDetailRow {
   valor_total: number;
   responsavel: string;
   cargo: string;
+  quantidade: number;
   ocorrencias: number;
 }
 
