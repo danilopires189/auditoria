@@ -841,6 +841,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       return;
     }
     const qtd = parsed;
+    let queued = false;
 
     try {
       await enqueueLinhaRetirada({
@@ -857,15 +858,19 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           data_hr: new Date().toISOString()
         }
       });
+      queued = true;
       await refreshQueueStats();
       setStatusMessage(`Retirada da Linha registrada (${qtd}).`);
       setLinhaQtyInputs((current) => ({ ...current, [key]: "" }));
       if (isOnline) {
         await flushQueue(false);
       }
-      await loadRows();
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
+    } finally {
+      if (queued) {
+        await loadRows();
+      }
     }
   }, [activeCd, flushQueue, isOnline, linhaQtyInputs, loadRows, profile.user_id, refreshQueueStats]);
 
@@ -878,6 +883,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       return;
     }
     const qtd = parsed;
+    let queued = false;
 
     try {
       await enqueuePulRetirada({
@@ -893,14 +899,18 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           data_hr: new Date().toISOString()
         }
       });
+      queued = true;
       await refreshQueueStats();
       setStatusMessage(`Retirada do Pulmão registrada (${qtd}).`);
       if (isOnline) {
         await flushQueue(false);
       }
-      await loadRows();
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
+    } finally {
+      if (queued) {
+        await loadRows();
+      }
     }
   }, [activeCd, flushQueue, isOnline, loadRows, profile.user_id, pulQtyInputs, refreshQueueStats]);
 
