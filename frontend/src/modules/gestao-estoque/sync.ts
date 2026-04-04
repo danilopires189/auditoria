@@ -149,6 +149,16 @@ export async function fetchGestaoEstoqueList(params: {
     .map(mapItemRow);
 }
 
+export async function fetchGestaoEstoqueStockUpdatedAt(cd: number | null): Promise<string | null> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_gestao_estoque_stock_updated_at", {
+    p_cd: cd
+  });
+  if (error) throw new Error(normalizeGestaoEstoqueError(error));
+  const first = firstRecord(data);
+  return parseNullableString(first?.updated_at);
+}
+
 export async function addGestaoEstoqueItem(params: {
   cd: number | null;
   date: string;

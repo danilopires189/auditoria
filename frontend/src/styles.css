@@ -12087,6 +12087,33 @@ small {
   gap: 10px;
 }
 
+.gestao-op-mobile-search-wrap {
+  min-width: 0;
+}
+
+.gestao-op-mobile-search-wrap input {
+  padding-left: 42px;
+  padding-right: 44px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.gestao-op-mobile-search-wrap input:focus,
+.gestao-op-mobile-search-wrap input:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.gestao-op-mobile-camera-btn {
+  display: none;
+}
+
+.gestao-op-search-btn {
+  white-space: nowrap;
+}
+
 .gestao-op-add-btn {
   justify-self: start;
   min-width: 180px;
@@ -12451,6 +12478,14 @@ small {
 
   .gestao-op-inline-field {
     grid-template-columns: 1fr;
+  }
+
+  .gestao-op-mobile-camera-btn {
+    display: grid;
+  }
+
+  .gestao-op-search-btn {
+    display: none;
   }
 
   .gestao-op-add-btn {
