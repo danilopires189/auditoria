@@ -1022,6 +1022,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     return pulRows.filter((row) => row.status === statusFilter);
   }, [pulRows, statusFilter]);
 
+  const hasBarcodeInput = barcodeInput.trim().length > 0;
+
   return (
     <>
       <header className="module-topbar module-topbar-fixed">
@@ -1128,7 +1130,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     <label>
                       Código de barras
                       <div className="controle-validade-inline-field">
-                        <div className="input-icon-wrap with-action">
+                        <div className="input-icon-wrap with-action controle-validade-mobile-search-wrap">
                           <span className={barcodeIconClassName} aria-hidden="true">
                             {barcodeIcon()}
                           </span>
@@ -1152,13 +1154,13 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                           />
                           <button
                             type="button"
-                            className="input-action-btn"
-                            onClick={openCameraScanner}
-                            title="Ler código pela câmera"
-                            aria-label="Ler código pela câmera"
-                            disabled={!cameraSupported || coletaLookupBusy}
+                            className="input-action-btn controle-validade-mobile-search-btn"
+                            onClick={hasBarcodeInput ? () => void onLookupProduto() : openCameraScanner}
+                            title={hasBarcodeInput ? "Buscar produto" : "Ler código pela câmera"}
+                            aria-label={hasBarcodeInput ? "Buscar produto" : "Ler código pela câmera"}
+                            disabled={hasBarcodeInput ? coletaLookupBusy || activeCd == null : !cameraSupported || coletaLookupBusy}
                           >
-                            {cameraIcon()}
+                            {hasBarcodeInput ? searchIcon() : cameraIcon()}
                           </button>
                         </div>
                         <button
