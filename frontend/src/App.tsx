@@ -129,6 +129,20 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     hiddenModuleKeys: ["atividade-extra", "produtividade"],
     defaultRoute: null
   },
+  "gestaoestoquecd.vercel.app": {
+    appLabel: "Logística CDs",
+    authCaption: "Logística CDs",
+    hiddenModuleKeys: [],
+    allowedModuleKeys: ["gestao-estoque"],
+    defaultRoute: null
+  },
+  "www.gestaoestoquecd.vercel.app": {
+    appLabel: "Logística CDs",
+    authCaption: "Logística CDs",
+    hiddenModuleKeys: [],
+    allowedModuleKeys: ["gestao-estoque"],
+    defaultRoute: null
+  },
   "indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
   "www.indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
   "indicadorescd.vercel.app": INDICADORES_AUTH_BRANDING,
