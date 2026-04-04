@@ -418,7 +418,6 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [loadingTopLists, setLoadingTopLists] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -457,7 +456,6 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       setReentryRows([]);
       setSupplierLossRows([]);
       setCategoryLossRows([]);
-      setShowDetails(false);
       return;
     }
 
@@ -593,7 +591,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   }, [activeCd, movementFilter, selectedMonthStart]);
 
   useEffect(() => {
-    if (!selectedMonthStart || !showDetails) {
+    if (!selectedMonthStart) {
       setDetailRows([]);
       return;
     }
@@ -624,17 +622,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return () => {
       cancelled = true;
     };
-  }, [activeCd, movementFilter, selectedDay, selectedMonthStart, showDetails]);
-
-  useEffect(() => {
-    if (selectedDay !== ALL_DAYS_VALUE) {
-      setShowDetails(true);
-    }
-  }, [selectedDay]);
-
-  useEffect(() => {
-    setShowDetails(false);
-  }, [selectedMonthStart, movementFilter]);
+  }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
 
   const selectedMonthLabel = useMemo(
     () => monthOptions.find((option) => option.month_start === selectedMonthStart)?.month_label ?? "-",
@@ -870,19 +858,14 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
               <div className="indicadores-panel-head">
                 <h3>{selectedDay === ALL_DAYS_VALUE ? "Movimentações do mês" : "Movimentações do dia"}</h3>
                 <span>
-                  {selectedDay === ALL_DAYS_VALUE ? selectedMonthLabel : formatDate(selectedDay)}
+                  {selectedDay === ALL_DAYS_VALUE
+                    ? `${selectedMonthLabel} · acumulado do mês no filtro ativo`
+                    : `${formatDate(selectedDay)} · filtro ${formatMovementLabel(movementFilter)}`}
                   {" · "}
-                  {`até ${DETAIL_ROWS_LIMIT} linhas mais relevantes`}
+                  {`top ${DETAIL_ROWS_LIMIT}`}
                 </span>
               </div>
-              {!showDetails ? (
-                <div className="indicadores-empty-box">
-                  <p>O detalhamento completo fica sob demanda para reduzir processamento.</p>
-                  <button type="button" className="gestao-estq-details-button" onClick={() => setShowDetails(true)}>
-                    Mostrar detalhamento
-                  </button>
-                </div>
-              ) : loadingDetails ? (
+              {loadingDetails ? (
                 <div className="indicadores-empty-box"><p>Carregando movimentações...</p></div>
               ) : detailRows.length === 0 ? (
                 <div className="indicadores-empty-box"><p>Nenhuma movimentação encontrada para o filtro selecionado.</p></div>
