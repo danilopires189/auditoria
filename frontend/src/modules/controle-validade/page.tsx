@@ -1095,34 +1095,55 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
             ) : null}
 
             <label className="controle-validade-tabs" htmlFor="controle-validade-tipo">
-              <span>Tipo de validade</span>
+              <span>Tipo de Validade</span>
               <select
                 id="controle-validade-tipo"
                 value={mainTab}
                 onChange={(event) => setMainTab(event.target.value as MainTab)}
               >
-                <option value="linha">Validade Linha</option>
-                <option value="pulmao">Validade Pulmão</option>
+                <option value="Separação">Separação</option>
+                <option value="Pulmão">Pulmão</option>
               </select>
             </label>
 
             {mainTab === "linha" ? (
               <div className="controle-validade-pane">
-                <div className="gestao-op-segmented controle-validade-subtabs" role="tablist" aria-label="Fluxo da Linha">
-                  <button
-                    type="button"
-                    className={`controle-validade-subtab-btn is-coleta${linhaSubTab === "coleta" ? " is-active" : ""}`}
-                    onClick={() => setLinhaSubTab("coleta")}
-                  >
-                    Coleta
-                  </button>
-                  <button
-                    type="button"
-                    className={`controle-validade-subtab-btn is-retirada${linhaSubTab === "retirada" ? " is-active" : ""}`}
-                    onClick={() => setLinhaSubTab("retirada")}
-                  >
-                    Retirada
-                  </button>
+                <div className="controle-validade-linha-controls">
+                  <div className="gestao-op-segmented controle-validade-subtabs" role="tablist" aria-label="Fluxo da Linha">
+                    <button
+                      type="button"
+                      className={`controle-validade-subtab-btn is-coleta${linhaSubTab === "coleta" ? " is-active" : ""}`}
+                      onClick={() => setLinhaSubTab("coleta")}
+                    >
+                      Coleta
+                    </button>
+                    <button
+                      type="button"
+                      className={`controle-validade-subtab-btn is-retirada${linhaSubTab === "retirada" ? " is-active" : ""}`}
+                      onClick={() => setLinhaSubTab("retirada")}
+                    >
+                      Retirada
+                    </button>
+                  </div>
+
+                  {linhaSubTab === "retirada" ? (
+                    <div className="controle-validade-status-tabs">
+                      <button
+                        type="button"
+                        className={`btn btn-muted${statusFilter === "pendente" ? " is-active" : ""}`}
+                        onClick={() => setStatusFilter("pendente")}
+                      >
+                        Pendentes
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-muted${statusFilter === "concluido" ? " is-active" : ""}`}
+                        onClick={() => setStatusFilter("concluido")}
+                      >
+                        Concluídos
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 {linhaSubTab === "coleta" ? (
@@ -1220,23 +1241,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   </form>
                 ) : (
                   <div className="controle-validade-list-area">
-                    <div className="controle-validade-status-tabs">
-                      <button
-                        type="button"
-                        className={`btn btn-muted${statusFilter === "pendente" ? " is-active" : ""}`}
-                        onClick={() => setStatusFilter("pendente")}
-                      >
-                        Pendentes
-                      </button>
-                      <button
-                        type="button"
-                        className={`btn btn-muted${statusFilter === "concluido" ? " is-active" : ""}`}
-                        onClick={() => setStatusFilter("concluido")}
-                      >
-                        Concluídos
-                      </button>
-                    </div>
-
                     {busyLoadRows ? <p>Carregando retiradas da Linha...</p> : null}
                     {!busyLoadRows && linhaRowsFiltered.length === 0 ? (
                       <p>Nenhum item na Linha para o filtro atual.</p>
