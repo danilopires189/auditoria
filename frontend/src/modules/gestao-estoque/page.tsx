@@ -300,7 +300,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [availableDays, setAvailableDays] = useState<GestaoEstoqueAvailableDay[]>([]);
   const [rows, setRows] = useState<GestaoEstoqueItemRow[]>([]);
   const [searchInput, setSearchInput] = useState("");
-  const [quantidadeInput, setQuantidadeInput] = useState("1");
+  const [quantidadeInput, setQuantidadeInput] = useState("");
   const [preview, setPreview] = useState<BuscaProdutoLookupResult | null>(null);
   const [busyLookup, setBusyLookup] = useState(false);
   const [busyList, setBusyList] = useState(false);
@@ -505,7 +505,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const clearPreview = useCallback(() => {
     setPreview(null);
     setSearchInput("");
-    setQuantidadeInput("1");
+    setQuantidadeInput("");
   }, []);
 
   const executeLookup = useCallback(async (rawOverride?: string) => {
@@ -556,7 +556,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
 
       setPreview(found);
       setStatusMessage("Produto localizado com sucesso.");
-      setQuantidadeInput("1");
+      setQuantidadeInput("");
       focusSearch();
     } catch (error) {
       setPreview(null);
