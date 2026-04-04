@@ -12322,6 +12322,13 @@ small {
   stroke-width: 1.9;
 }
 
+.gestao-op-row-expand[aria-expanded="true"] .gestao-op-row-expand-icon {
+  color: #1f8a57;
+  background: rgba(230, 247, 238, 0.98);
+  border-color: rgba(144, 213, 174, 0.92);
+  box-shadow: 0 0 0 3px rgba(31, 138, 87, 0.08);
+}
+
 .gestao-op-row-cell {
   display: block;
   color: #27425f;
