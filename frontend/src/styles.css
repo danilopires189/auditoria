@@ -11018,11 +11018,26 @@ small {
   }
 
   .indicadores-panel-head.is-mobile-accordion {
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 14px;
+    width: 100%;
   }
 
   .indicadores-panel-head.is-mobile-accordion .indicadores-panel-head-copy {
-    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .indicadores-panel-head.is-mobile-accordion .gestao-estq-mobile-toggle {
+    justify-self: end;
+    align-self: start;
+    min-width: 126px;
+    min-height: 54px;
+    padding: 0 18px;
+    font-size: 0.98rem;
+    line-height: 1;
+    text-align: center;
   }
 
   .gestao-estq-metric-badge {
@@ -11058,6 +11073,21 @@ small {
 
   .gestao-estq-reentry-stat strong {
     white-space: normal;
+  }
+
+  .gestao-estq-details-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  .gestao-estq-details-table {
+    width: max-content;
+    min-width: 980px;
   }
 
   .gestao-estq-top-value,
