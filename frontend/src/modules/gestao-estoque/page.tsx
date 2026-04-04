@@ -16,6 +16,7 @@ import {
   deleteGestaoEstoqueItem,
   fetchGestaoEstoqueAvailableDays,
   fetchGestaoEstoqueList,
+  fetchGestaoEstoqueStockUpdatedAt,
   normalizeGestaoEstoqueError,
   updateGestaoEstoqueQuantity
 } from "./sync";
@@ -293,6 +294,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [estoqueUpdatedAt, setEstoqueUpdatedAt] = useState<string | null>(null);
 
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const today = todayIsoBrasilia();
@@ -300,40 +302,9 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const currentCdLabel = useMemo(() => resolveCdLabel(profile, activeCd), [activeCd, profile]);
   const dayOptions = useMemo(() => buildDayOptions(today, availableDays), [availableDays, today]);
-  const selectedDayOption = useMemo(
-    () => dayOptions.find((day) => day.movement_date === selectedDate) ?? null,
-    [dayOptions, selectedDate]
-  );
   const totalUnique = rows.length;
   const totalQuantidade = useMemo(() => rows.reduce((acc, row) => acc + row.quantidade, 0), [rows]);
   const totalValor = useMemo(() => rows.reduce((acc, row) => acc + row.custo_total, 0), [rows]);
-  const estoqueUpdatedAt = useMemo(() => {
-    const candidates = rows
-      .map((row) => row.estoque_updated_at)
-      .filter((value): value is string => Boolean(value));
-
-    if (preview?.estoque_updated_at) {
-      candidates.push(preview.estoque_updated_at);
-    }
-
-    if (selectedDayOption?.updated_at) {
-      candidates.push(selectedDayOption.updated_at);
-    }
-
-    if (candidates.length === 0) return null;
-
-    let latest: string | null = null;
-    let latestMs = Number.NEGATIVE_INFINITY;
-    for (const candidate of candidates) {
-      const timestamp = Date.parse(candidate);
-      if (!Number.isFinite(timestamp)) continue;
-      if (timestamp > latestMs) {
-        latestMs = timestamp;
-        latest = candidate;
-      }
-    }
-    return latest ?? candidates[0] ?? null;
-  }, [preview, rows, selectedDayOption]);
   const listSearchQuery = useMemo(() => normalizeSearchText(listSearchInput), [listSearchInput]);
   const filteredRows = useMemo(() => {
     if (!listSearchQuery) return rows;
@@ -493,9 +464,18 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     }
   }, [activeCd, movementType, selectedDate]);
 
+  const refreshStockUpdatedAt = useCallback(async () => {
+    if (activeCd == null) {
+      setEstoqueUpdatedAt(null);
+      return;
+    }
+    const nextUpdatedAt = await fetchGestaoEstoqueStockUpdatedAt(activeCd);
+    setEstoqueUpdatedAt(nextUpdatedAt);
+  }, [activeCd]);
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshDays(), refreshRows()]);
-  }, [refreshDays, refreshRows]);
+    await Promise.all([refreshDays(), refreshRows(), refreshStockUpdatedAt()]);
+  }, [refreshDays, refreshRows, refreshStockUpdatedAt]);
 
   const clearPreview = useCallback(() => {
     setPreview(null);
@@ -503,8 +483,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setQuantidadeInput("1");
   }, []);
 
-  const executeLookup = useCallback(async () => {
-    const rawValue = searchInput.trim();
+  const executeLookup = useCallback(async (rawOverride?: string) => {
+    const rawValue = (rawOverride ?? searchInput).trim();
     const normalized = normalizeBarcode(rawValue);
     if (!normalized) {
       setErrorMessage("Informe código de barras ou CODDV.");
@@ -561,6 +541,99 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       setBusyLookup(false);
     }
   }, [activeCd, focusSearch, searchInput]);
+
+  const clearScannerInputTimer = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current;
+    if (state.timerId != null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+  }, []);
+
+  const commitScannerInput = useCallback(async (rawValue: string) => {
+    const normalized = normalizeBarcode(rawValue);
+    if (!normalized) return;
+
+    const state = scannerInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (state.lastSubmittedValue === normalized && now - state.lastSubmittedAt < SCANNER_INPUT_SUBMIT_COOLDOWN_MS) {
+      return;
+    }
+
+    clearScannerInputTimer();
+    state.lastSubmittedValue = normalized;
+    state.lastSubmittedAt = now;
+    state.lastInputAt = 0;
+    state.lastLength = 0;
+    state.burstChars = 0;
+
+    setSearchInput(normalized);
+    setPreview(null);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    await executeLookup(normalized);
+  }, [clearScannerInputTimer, executeLookup]);
+
+  const scheduleScannerInputAutoSubmit = useCallback((value: string) => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current;
+    clearScannerInputTimer();
+    state.timerId = window.setTimeout(() => {
+      state.timerId = null;
+      void commitScannerInput(value);
+    }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+  }, [clearScannerInputTimer, commitScannerInput]);
+
+  const onSearchInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+    setSearchInput(nextValue);
+    setPreview(null);
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    const state = scannerInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const elapsed = state.lastInputAt > 0 ? now - state.lastInputAt : Number.POSITIVE_INFINITY;
+    const lengthDelta = Math.max(nextValue.length - state.lastLength, 0);
+
+    if (lengthDelta > 0 && elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+      state.burstChars += lengthDelta;
+    } else {
+      state.burstChars = lengthDelta;
+    }
+    state.lastInputAt = now;
+    state.lastLength = nextValue.length;
+
+    if (!nextValue) {
+      state.burstChars = 0;
+      clearScannerInputTimer();
+      return;
+    }
+
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+      scheduleScannerInputAutoSubmit(nextValue);
+      return;
+    }
+
+    clearScannerInputTimer();
+  }, [clearScannerInputTimer, scheduleScannerInputAutoSubmit]);
+
+  const shouldHandleScannerTab = useCallback((value: string): boolean => {
+    if (!value.trim()) return false;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const state = scannerInputStateRef.current;
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) return true;
+    if (state.lastInputAt <= 0) return false;
+    return now - state.lastInputAt <= SCANNER_INPUT_MAX_INTERVAL_MS * 2;
+  }, []);
+
+  const onSearchKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Tab" && !shouldHandleScannerTab(searchInput)) return;
+    if (event.key !== "Enter" && event.key !== "Tab") return;
+    event.preventDefault();
+    void commitScannerInput(searchInput);
+  }, [commitScannerInput, searchInput, shouldHandleScannerTab]);
 
   const startEditingRow = useCallback((row: GestaoEstoqueItemRow) => {
     setEditingItemId(row.id);
@@ -806,7 +879,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
 
     const refreshIfVisible = () => {
       if (document.visibilityState !== "visible") return;
-      void refreshRows().catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
+      void Promise.all([refreshRows(), refreshStockUpdatedAt()]).catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
     };
 
     const timerId = window.setInterval(refreshIfVisible, REFRESH_INTERVAL_MS);
@@ -815,11 +888,209 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       window.clearInterval(timerId);
       document.removeEventListener("visibilitychange", refreshIfVisible);
     };
-  }, [isHistorical, isOnline, refreshRows]);
+  }, [isHistorical, isOnline, refreshRows, refreshStockUpdatedAt]);
 
   useEffect(() => {
     focusSearch();
   }, [focusSearch]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      const state = scannerInputStateRef.current;
+      if (state.timerId != null) {
+        window.clearTimeout(state.timerId);
+        state.timerId = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+
+    let cancelled = false;
+    let nativeFrameId: number | null = null;
+    let nativeStream: MediaStream | null = null;
+    let torchProbeTimer: number | null = null;
+    let torchProbeAttempts = 0;
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTorchModeRef.current = "none";
+
+    const startScanner = async () => {
+      try {
+        const videoEl = scannerVideoRef.current;
+        if (!videoEl) {
+          setScannerError("Falha ao abrir visualização da câmera.");
+          return;
+        }
+
+        const nativeBarcodeDetectorCtor = (window as Window & {
+          BarcodeDetector?: new (options?: { formats?: string[] }) => {
+            detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>;
+          };
+        }).BarcodeDetector;
+
+        if (nativeBarcodeDetectorCtor && typeof navigator.mediaDevices?.getUserMedia === "function") {
+          try {
+            const detector = new nativeBarcodeDetectorCtor({
+              formats: ["code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "codabar"]
+            });
+            nativeStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
+            });
+            if (cancelled) {
+              nativeStream.getTracks().forEach((track) => track.stop());
+              nativeStream = null;
+              return;
+            }
+
+            videoEl.srcObject = nativeStream;
+            await videoEl.play().catch(() => undefined);
+            const track = nativeStream.getVideoTracks()[0] ?? null;
+            if (track) scannerTrackRef.current = track;
+
+            const runNativeDetect = async () => {
+              if (cancelled) return;
+              try {
+                const detections = await detector.detect(videoEl);
+                const first = detections[0];
+                const scanned = normalizeBarcode(first?.rawValue ?? "");
+                if (scanned) {
+                  setSearchInput(scanned);
+                  setScannerOpen(false);
+                  stopCameraScanner();
+                  setTorchEnabled(false);
+                  setTorchSupported(false);
+                  void commitScannerInput(scanned);
+                  return;
+                }
+              } catch {
+                // Mantem polling silencioso enquanto a camera busca foco.
+              }
+              nativeFrameId = window.requestAnimationFrame(() => {
+                void runNativeDetect();
+              });
+            };
+
+            nativeFrameId = window.requestAnimationFrame(() => {
+              void runNativeDetect();
+            });
+
+            const probeTorchAvailabilityNative = () => {
+              if (cancelled) return;
+              const trackFromVideo = resolveScannerTrack();
+              if (trackFromVideo) scannerTrackRef.current = trackFromVideo;
+              if (supportsTrackTorch(trackFromVideo)) {
+                scannerTorchModeRef.current = "track";
+                setTorchSupported(true);
+              } else {
+                scannerTorchModeRef.current = "none";
+                setTorchSupported(false);
+              }
+            };
+            probeTorchAvailabilityNative();
+            return;
+          } catch {
+            if (nativeStream) {
+              nativeStream.getTracks().forEach((track) => track.stop());
+              nativeStream = null;
+            }
+          }
+        }
+
+        const zxing = await import("@zxing/browser");
+        if (cancelled) return;
+
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: "environment" }
+            }
+          },
+          videoEl,
+          (scanResult, error) => {
+            if (cancelled) return;
+
+            if (scanResult) {
+              const formatName = scanResult.getBarcodeFormat?.().toString?.() ?? "";
+              if (/QR_CODE/i.test(formatName)) return;
+              const scanned = normalizeBarcode(scanResult.getText() ?? "");
+              if (!scanned) return;
+
+              setSearchInput(scanned);
+              setScannerOpen(false);
+              stopCameraScanner();
+              setTorchEnabled(false);
+              setTorchSupported(false);
+              void commitScannerInput(scanned);
+              return;
+            }
+
+            const errorName = (error as { name?: string } | null)?.name;
+            if (error && errorName !== "NotFoundException" && errorName !== "ChecksumException" && errorName !== "FormatException") {
+              setScannerError("Não foi possível ler o código. Aproxime a câmera e tente novamente.");
+            }
+          }
+        );
+
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+        scannerControlsRef.current = controls;
+        const probeTorchAvailability = () => {
+          if (cancelled) return;
+          const track = resolveScannerTrack();
+          if (track) scannerTrackRef.current = track;
+          if (supportsTrackTorch(track)) {
+            scannerTorchModeRef.current = "track";
+            setTorchSupported(true);
+            return;
+          }
+          if (typeof controls.switchTorch === "function") {
+            scannerTorchModeRef.current = "controls";
+            setTorchSupported(true);
+            return;
+          }
+          if (torchProbeAttempts < 10) {
+            torchProbeAttempts += 1;
+            torchProbeTimer = window.setTimeout(probeTorchAvailability, 120);
+            return;
+          }
+          scannerTorchModeRef.current = "none";
+          setTorchSupported(false);
+        };
+
+        probeTorchAvailability();
+      } catch (error) {
+        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera para leitura.");
+      }
+    };
+
+    void startScanner();
+
+    return () => {
+      cancelled = true;
+      if (nativeFrameId != null) window.cancelAnimationFrame(nativeFrameId);
+      if (nativeStream) {
+        nativeStream.getTracks().forEach((track) => track.stop());
+        nativeStream = null;
+      }
+      if (torchProbeTimer != null) {
+        window.clearTimeout(torchProbeTimer);
+      }
+      stopCameraScanner();
+    };
+  }, [commitScannerInput, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch]);
 
   return (
     <>
@@ -931,24 +1202,41 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
               <div className="gestao-op-field">
                 <label htmlFor="gestao-op-search">Barras ou CODDV</label>
                 <div className="gestao-op-inline-field">
-                  <input
-                    id="gestao-op-search"
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchInput}
-                    onChange={(event) => {
-                      setSearchInput(event.target.value);
-                      setPreview(null);
-                      setErrorMessage(null);
-                      setStatusMessage(null);
-                    }}
-                    placeholder="Bipar ou digitar código"
-                    autoComplete="off"
-                    spellCheck={false}
-                    inputMode="numeric"
-                    disabled={isHistorical}
-                  />
-                  <button className="btn btn-muted" type="button" onClick={() => void executeLookup()} disabled={busyLookup || isHistorical}>
+                  <div className="input-icon-wrap with-action gestao-op-mobile-search-wrap">
+                    <span className={barcodeIconClassName} aria-hidden="true">
+                      {barcodeIcon()}
+                    </span>
+                    <input
+                      id="gestao-op-search"
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchInput}
+                      onChange={onSearchInputChange}
+                      onKeyDown={onSearchKeyDown}
+                      onFocus={enableSearchSoftKeyboard}
+                      onPointerDown={enableSearchSoftKeyboard}
+                      onBlur={disableSearchSoftKeyboard}
+                      placeholder="Bipe, digite ou use câmera"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      inputMode={searchInputMode}
+                      enterKeyHint="search"
+                      disabled={isHistorical}
+                    />
+                    <button
+                      type="button"
+                      className="input-action-btn gestao-op-mobile-camera-btn"
+                      onClick={openCameraScanner}
+                      title="Ler código pela câmera"
+                      aria-label="Ler código pela câmera"
+                      disabled={!cameraSupported || busyLookup || isHistorical}
+                    >
+                      {cameraIcon()}
+                    </button>
+                  </div>
+                  <button className="btn btn-muted gestao-op-search-btn" type="button" onClick={() => void executeLookup()} disabled={busyLookup || isHistorical}>
                     {busyLookup ? "Buscando..." : "Buscar"}
                   </button>
                 </div>
@@ -1174,6 +1462,46 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           )}
         </article>
       </section>
+      {scannerOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="gestao-estoque-scanner-title" onClick={closeCameraScanner}>
+              <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="scanner-head">
+                  <h3 id="gestao-estoque-scanner-title">Scanner de barras</h3>
+                  <div className="scanner-head-actions">
+                    <button
+                      type="button"
+                      className={`scanner-flash-btn${torchEnabled ? " is-on" : ""}`}
+                      onClick={() => void toggleTorch()}
+                      aria-label={torchEnabled ? "Desligar flash" : "Ligar flash"}
+                      title={torchSupported ? (torchEnabled ? "Desligar flash" : "Ligar flash") : "Flash indisponível"}
+                      disabled={!torchSupported}
+                    >
+                      {flashIcon({ on: torchEnabled })}
+                      <span>{torchEnabled ? "Flash on" : "Flash"}</span>
+                    </button>
+                    <button className="scanner-close-btn" type="button" onClick={closeCameraScanner} aria-label="Fechar scanner">
+                      {closeIcon()}
+                    </button>
+                  </div>
+                </div>
+                <div className="scanner-video-wrap">
+                  <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+                  <div className="scanner-frame" aria-hidden="true">
+                    <div className="scanner-frame-corner top-left" />
+                    <div className="scanner-frame-corner top-right" />
+                    <div className="scanner-frame-corner bottom-left" />
+                    <div className="scanner-frame-corner bottom-right" />
+                    <div className="scanner-frame-line" />
+                  </div>
+                </div>
+                <p className="scanner-hint">Aponte a câmera para o código de barras para leitura automática.</p>
+                {scannerError ? <div className="alert error">{scannerError}</div> : null}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       {confirmDeleteRow && typeof document !== "undefined"
         ? createPortal(
             <div
