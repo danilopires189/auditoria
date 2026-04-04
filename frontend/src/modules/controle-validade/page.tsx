@@ -289,6 +289,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [expandedLinhaCardKey, setExpandedLinhaCardKey] = useState<string | null>(null);
+  const [expandedPulCardKey, setExpandedPulCardKey] = useState<string | null>(null);
 
   const [linhaRows, setLinhaRows] = useState<LinhaRetiradaRow[]>([]);
   const [pulRows, setPulRows] = useState<PulRetiradaRow[]>([]);
@@ -1112,11 +1113,21 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
   const pulRowsFiltered = useMemo(() => {
     const effectiveMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
-    return pulRows.filter((row) => {
-      if (statusFilter !== "todos" && row.status !== statusFilter) return false;
-      if (row.val_mmaa !== effectiveMonthFilter) return false;
-      return true;
-    });
+    return pulRows
+      .filter((row) => {
+        if (statusFilter !== "todos" && row.status !== statusFilter) return false;
+        if (row.val_mmaa !== effectiveMonthFilter) return false;
+        return true;
+      })
+      .sort((left, right) => {
+        const zoneCompare = compareUiText(left.zona, right.zona);
+        if (zoneCompare !== 0) return zoneCompare;
+        const addressCompare = compareUiText(left.endereco_pul, right.endereco_pul);
+        if (addressCompare !== 0) return addressCompare;
+        const coddvCompare = compareUiText(left.coddv, right.coddv);
+        if (coddvCompare !== 0) return coddvCompare;
+        return compareUiText(left.descricao, right.descricao);
+      });
   }, [defaultMonthFilter, monthFilter, pulRows, statusFilter]);
 
   const hasBarcodeInput = barcodeInput.trim().length > 0;
@@ -1412,16 +1423,15 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                               </div>
 
                               {isExpanded ? (
-                                <div className="controle-validade-linha-details">
-                                  <div className="controle-validade-linha-detail-grid">
-                                    <span><b>Validade:</b> {row.val_mmaa}</span>
-                                    <span><b>Coleta:</b> {formatDateTime(row.dt_ultima_coleta)}</span>
-                                    <span><b>Usuário coleta:</b> {formatLinhaCollector(row)}</span>
-                                    <span><b>Regra:</b> {row.regra_aplicada === "al_lt_3m" ? "AL < 3 meses" : "Até 5 meses"}</span>
-                                    <span><b>Coletado:</b> {row.qtd_coletada}</span>
-                                    <span><b>Retirado:</b> {row.qtd_retirada}</span>
-                                    <span><b>Pendente:</b> {row.qtd_pendente}</span>
-                                  </div>
+                                  <div className="controle-validade-linha-details">
+                                    <div className="controle-validade-linha-detail-grid">
+                                      <span><b>Validade:</b> {row.val_mmaa}</span>
+                                      <span><b>Coleta:</b> {formatDateTime(row.dt_ultima_coleta)}</span>
+                                      <span><b>Usuário coleta:</b> {formatLinhaCollector(row)}</span>
+                                      <span><b>Coletado:</b> {row.qtd_coletada}</span>
+                                      <span><b>Retirado:</b> {row.qtd_retirada}</span>
+                                      <span><b>Pendente:</b> {row.qtd_pendente}</span>
+                                    </div>
 
                                   {isPending ? (
                                     <div className="controle-validade-row-actions controle-validade-linha-actions">
@@ -1486,53 +1496,75 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     const prev = index > 0 ? pulRowsFiltered[index - 1] : null;
                     const showZoneHeader = !prev || prev.zona !== row.zona;
                     const isPending = row.status === "pendente";
+                    const isExpanded = expandedPulCardKey === key;
                     const qtyValue = pulQtyInputs[key] ?? "";
                     const parsedQty = Number.parseInt(qtyValue.replace(/\D/g, ""), 10);
                     const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0;
                     return (
                       <div key={key} className="pvps-zone-group">
                         {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
-                        <article className="controle-validade-row-card">
-                          <div className="controle-validade-row-head">
-                            <strong>{row.descricao}</strong>
+                        <article className="controle-validade-row-card controle-validade-linha-card">
+                          <div className="controle-validade-linha-card-main">
+                            <button
+                              className="gestao-op-row-expand controle-validade-linha-expand"
+                              type="button"
+                              onClick={() => setExpandedPulCardKey((current) => (current === key ? null : key))}
+                              aria-expanded={isExpanded}
+                            >
+                              <span className="gestao-op-row-expand-icon" aria-hidden="true">
+                                <EyeIcon open={isExpanded} />
+                              </span>
+                              <span className="controle-validade-linha-summary">
+                                <strong>{row.endereco_pul}</strong>
+                                <span>{`${row.coddv} - ${row.descricao}`}</span>
+                              </span>
+                            </button>
                             <span className={`controle-validade-status ${row.status}`}>
                               {row.status === "pendente" ? "Pendente" : "Concluído"}
                             </span>
                           </div>
-                          <div className="controle-validade-row-grid">
-                            <span>CODDV: {row.coddv}</span>
-                            <span>Endereço PUL: {row.endereco_pul}</span>
-                            <span>Andar: {row.andar ?? "-"}</span>
-                            <span>Validade: {row.val_mmaa}</span>
-                            <span>Estoque disponível: {row.qtd_est_disp}</span>
-                            <span>Alvo: {row.qtd_alvo}</span>
-                            <span>Retirado: {row.qtd_retirada}</span>
-                            <span>Pendente: {row.qtd_pendente}</span>
-                            {!isPending ? <span>Usuário retirada: {row.auditor_nome_ultima_retirada ?? "Aguardando sincronização"}</span> : null}
-                            {!isPending ? <span>Data/hora local: {formatDateTime(row.dt_ultima_retirada)}</span> : null}
-                          </div>
-                          {isPending ? (
-                            <div className="controle-validade-row-actions">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="Qtd"
-                                value={qtyValue}
-                                onChange={(event) =>
-                                  setPulQtyInputs((current) => ({
-                                    ...current,
-                                    [key]: event.target.value.replace(/\D/g, "").slice(0, 4)
-                                  }))
-                                }
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-primary"
-                                onClick={() => void submitPulRetirada(row)}
-                                disabled={!canSubmit}
-                              >
-                                Registrar retirada
-                              </button>
+
+                          {isExpanded ? (
+                            <div className="controle-validade-linha-details">
+                              <div className="controle-validade-linha-detail-grid">
+                                <span><b>Validade:</b> {row.val_mmaa}</span>
+                                <span><b>Andar:</b> {row.andar ?? "-"}</span>
+                                <span><b>Estoque disponível:</b> {row.qtd_est_disp}</span>
+                                <span><b>Alvo:</b> {row.qtd_alvo}</span>
+                                <span><b>Retirado:</b> {row.qtd_retirada}</span>
+                                <span><b>Pendente:</b> {row.qtd_pendente}</span>
+                                {!isPending ? (
+                                  <span><b>Data/hora retirada:</b> {formatDateTime(row.dt_ultima_retirada)}</span>
+                                ) : null}
+                                {!isPending ? (
+                                  <span><b>Usuário retirada:</b> {row.auditor_nome_ultima_retirada ?? "Aguardando sincronizacao"}</span>
+                                ) : null}
+                              </div>
+
+                              {isPending ? (
+                                <div className="controle-validade-row-actions controle-validade-linha-actions">
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder="Qtd"
+                                    value={qtyValue}
+                                    onChange={(event) =>
+                                      setPulQtyInputs((current) => ({
+                                        ...current,
+                                        [key]: event.target.value.replace(/\D/g, "").slice(0, 4)
+                                      }))
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={() => void submitPulRetirada(row)}
+                                    disabled={!canSubmit}
+                                  >
+                                    Registrar retirada
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                         </article>
