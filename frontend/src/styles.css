@@ -10637,15 +10637,15 @@ small {
   }
 
   .gestao-estq-panel-chart {
-    min-height: 430px;
-    height: 430px;
-    max-height: 430px;
+    min-height: 540px;
+    height: 540px;
+    max-height: 540px;
   }
 
   .gestao-estq-panel-reentry {
-    min-height: 430px;
-    height: 430px;
-    max-height: 430px;
+    min-height: 540px;
+    height: 540px;
+    max-height: 540px;
     grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
   }
@@ -10672,6 +10672,7 @@ small {
   }
 
   .gestao-estq-chart-shell .indicadores-chart-scroll {
+    align-self: stretch;
     padding-bottom: 6px;
   }
 
