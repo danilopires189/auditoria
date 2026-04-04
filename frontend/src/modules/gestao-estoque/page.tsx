@@ -79,8 +79,23 @@ function formatDate(value: string | null): string {
   return formatDateOnlyPtBR(value, "-", "value");
 }
 
+function normalizeUtcTimestamp(value: string | null): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}[ t]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/i.test(raw)) {
+    return `${raw.replace(" ", "T")}Z`;
+  }
+
+  return raw;
+}
+
 function formatDateTime(value: string | null): string {
-  return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "value" });
+  return formatDateTimeBrasilia(normalizeUtcTimestamp(value), {
+    includeSeconds: true,
+    emptyFallback: "-",
+    invalidFallback: "value"
+  });
 }
 
 function movementLabel(value: GestaoEstoqueMovementType): string {
@@ -123,7 +138,6 @@ function buildRowSearchBlob(row: GestaoEstoqueItemRow): string {
     row.created_mat,
     row.updated_nome,
     row.updated_mat,
-    formatDateTime(row.estoque_updated_at),
     formatDate(row.dat_ult_compra)
   ].join(" "));
 }
@@ -177,6 +191,27 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const totalUnique = rows.length;
   const totalQuantidade = useMemo(() => rows.reduce((acc, row) => acc + row.quantidade, 0), [rows]);
   const totalValor = useMemo(() => rows.reduce((acc, row) => acc + row.custo_total, 0), [rows]);
+  const estoqueUpdatedAt = useMemo(() => {
+    const candidates = rows
+      .map((row) => row.estoque_updated_at)
+      .filter((value): value is string => Boolean(value));
+
+    if (candidates.length === 0) {
+      return preview?.estoque_updated_at ?? null;
+    }
+
+    let latest: string | null = null;
+    let latestMs = Number.NEGATIVE_INFINITY;
+    for (const candidate of candidates) {
+      const timestamp = Date.parse(candidate);
+      if (!Number.isFinite(timestamp)) continue;
+      if (timestamp > latestMs) {
+        latestMs = timestamp;
+        latest = candidate;
+      }
+    }
+    return latest ?? candidates[0] ?? null;
+  }, [preview, rows]);
   const listSearchQuery = useMemo(() => normalizeSearchText(listSearchInput), [listSearchInput]);
   const filteredRows = useMemo(() => {
     if (!listSearchQuery) return rows;
@@ -580,6 +615,9 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
             <span className="gestao-op-date-pill">
               Data ativa: {formatDate(selectedDate)} {isHistorical ? "(somente leitura)" : "(dia atual)"}
             </span>
+            <span className="gestao-op-date-pill">
+              Dados atualizados em: {formatDateTime(estoqueUpdatedAt)}
+            </span>
           </div>
         </div>
 
@@ -727,10 +765,6 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     <dd>{formatInteger(preview.qtd_est_disp)}</dd>
                   </div>
                   <div>
-                    <dt>Atualização estq</dt>
-                    <dd>{formatDateTime(preview.estoque_updated_at)}</dd>
-                  </div>
-                  <div>
                     <dt>Últ. compra</dt>
                     <dd>{formatDate(preview.dat_ult_compra)}</dd>
                   </div>
@@ -797,7 +831,6 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         <span><b>Qtd:</b> {formatInteger(row.quantidade)}</span>
                         <span><b>SEP:</b> {row.endereco_sep ?? "-"}</span>
                         <span><b>Últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
-                        <span><b>db_estq_entr:</b> {formatDateTime(row.estoque_updated_at)}</span>
                         <span><b>Custo unit.:</b> {formatCurrency(row.custo_unitario)}</span>
                         <span><b>Custo total:</b> {formatCurrency(row.custo_total)}</span>
                         <span><b>Estoque:</b> {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>

@@ -11836,6 +11836,9 @@ small {
 .gestao-op-header-meta {
   display: flex;
   justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .gestao-op-date-pill {
