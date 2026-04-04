@@ -10033,6 +10033,12 @@ small {
   flex-wrap: wrap;
 }
 
+.indicadores-panel-head-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .indicadores-panel-head h3 {
   margin: 0;
   color: #102b58;
@@ -10043,6 +10049,26 @@ small {
   color: #536f98;
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.gestao-estq-mobile-toggle {
+  appearance: none;
+  border: 1px solid #c5d6ef;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #eef5ff 100%);
+  color: #224675;
+  font: inherit;
+  font-size: 0.77rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 8px 12px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.gestao-estq-mobile-toggle:hover {
+  border-color: #9db9e2;
+  background: linear-gradient(180deg, #ffffff 0%, #e8f1ff 100%);
 }
 
 .indicadores-empty-box {
@@ -10612,12 +10638,14 @@ small {
 
   .gestao-estq-panel-chart {
     min-height: 430px;
+    height: 100%;
   }
 
   .gestao-estq-panel-reentry {
     min-height: 430px;
-    height: 430px;
-    max-height: 430px;
+    height: 100%;
+    max-height: none;
+    grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
   }
 
@@ -10733,6 +10761,7 @@ small {
     display: grid;
     gap: 10px;
     align-content: start;
+    min-height: 0;
     overflow: auto;
     padding-right: 4px;
   }
@@ -10970,6 +10999,14 @@ small {
 @media (max-width: 720px) {
   .gestao-estq-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .indicadores-panel-head.is-mobile-accordion {
+    align-items: flex-start;
+  }
+
+  .indicadores-panel-head.is-mobile-accordion .indicadores-panel-head-copy {
+    flex: 1 1 0;
   }
 
   .gestao-estq-metric-badge {
