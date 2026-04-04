@@ -22,17 +22,20 @@ import {
   enqueueLinhaColeta,
   enqueueLinhaRetirada,
   enqueuePulRetirada,
+  fetchLinhaColetaHistoryList,
   fetchLinhaRetiradaList,
   fetchPulRetiradaList,
   flushControleValidadeOfflineQueue,
   getOfflineQueueStats,
   loadProjectedOfflineRows,
   normalizeControleValidadeError,
-  resolveLinhaColetaProduto
+  resolveLinhaColetaProduto,
+  searchLinhaLastColeta
 } from "./sync";
 import type {
   ControleValidadeModuleProfile,
   LinhaColetaLookupResult,
+  LinhaColetaHistoryRow,
   LinhaRetiradaRow,
   PulRetiradaRow,
   RetiradaStatusFilter
@@ -162,13 +165,30 @@ function linhaZone(value: string): string {
   return matched?.[1] ?? (normalized.slice(0, 4) || "SEM ZONA");
 }
 
-function formatLinhaCollector(row: LinhaRetiradaRow): string {
-  const mat = String(row.auditor_mat_ultima_coleta ?? "").trim();
-  const nome = String(row.auditor_nome_ultima_coleta ?? "").trim();
+function formatActorDisplay(matValue: string | null | undefined, nomeValue: string | null | undefined): string {
+  const mat = String(matValue ?? "").trim();
+  const nome = String(nomeValue ?? "").trim();
   if (mat && nome) return `${mat} - ${nome}`;
   if (nome) return nome;
   if (mat) return mat;
   return "Aguardando sincronizacao";
+}
+
+function formatLinhaCollector(row: LinhaRetiradaRow): string {
+  return formatActorDisplay(row.auditor_mat_ultima_coleta, row.auditor_nome_ultima_coleta);
+}
+
+function formatLinhaHistoryCollector(row: LinhaColetaHistoryRow): string {
+  return formatActorDisplay(row.auditor_mat, row.auditor_nome);
+}
+
+function normalizeLinhaColetaSearchTerm(value: string): { raw: string; upper: string; digits: string } {
+  const raw = String(value ?? "").trim();
+  return {
+    raw,
+    upper: raw.toUpperCase(),
+    digits: raw.replace(/\D/g, "")
+  };
 }
 
 function currentValidadeMonthValue(baseDate = new Date()): string {
@@ -289,12 +309,17 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [expandedLinhaCardKey, setExpandedLinhaCardKey] = useState<string | null>(null);
+  const [expandedLinhaColetaHistoryKey, setExpandedLinhaColetaHistoryKey] = useState<string | null>(null);
   const [expandedPulCardKey, setExpandedPulCardKey] = useState<string | null>(null);
 
+  const [linhaColetaHistoryRows, setLinhaColetaHistoryRows] = useState<LinhaColetaHistoryRow[]>([]);
   const [linhaRows, setLinhaRows] = useState<LinhaRetiradaRow[]>([]);
   const [pulRows, setPulRows] = useState<PulRetiradaRow[]>([]);
   const [linhaQtyInputs, setLinhaQtyInputs] = useState<Record<string, string>>({});
   const [pulQtyInputs, setPulQtyInputs] = useState<Record<string, string>>({});
+  const [lastColetaSearchTerm, setLastColetaSearchTerm] = useState("");
+  const [lastColetaSearchBusy, setLastColetaSearchBusy] = useState(false);
+  const [lastColetaSearchResult, setLastColetaSearchResult] = useState<LinhaColetaHistoryRow | null>(null);
 
   const flushBusyRef = useRef(false);
   const isOfflineModeActive = preferOfflineMode || !isOnline;
@@ -331,6 +356,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
   const loadRows = useCallback(async () => {
     if (activeCd == null) {
+      setLinhaColetaHistoryRows([]);
       setLinhaRows([]);
       setPulRows([]);
       return;
@@ -344,15 +370,18 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           userId: profile.user_id,
           cd: activeCd
         });
+        setLinhaColetaHistoryRows(projected.linha_coleta_history);
         setLinhaRows(projected.linha_rows);
         setPulRows(projected.pul_rows);
         return;
       }
 
-      const [linhaOnline, pulOnline] = await Promise.all([
+      const [linhaOnline, linhaColetaHistoryOnline, pulOnline] = await Promise.all([
         fetchLinhaRetiradaList({ cd: activeCd, status: "todos" }),
+        fetchLinhaColetaHistoryList({ cd: activeCd, limit: 1000 }),
         fetchPulRetiradaList({ cd: activeCd, status: "todos" })
       ]);
+      setLinhaColetaHistoryRows(linhaColetaHistoryOnline);
       setLinhaRows(linhaOnline);
       setPulRows(pulOnline);
 
@@ -360,6 +389,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         user_id: profile.user_id,
         cd: activeCd,
         linha_rows: linhaOnline,
+        linha_coleta_history: linhaColetaHistoryOnline,
         pul_rows: pulOnline
       });
       setOfflineSnapshotReady(true);
@@ -431,7 +461,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         setProgressMessage(`db_end: ${progress.rowsFetched} registros (${progress.percent}%)`);
       }, { allowFullReconcile: true });
 
-      setProgressMessage("Atualizando snapshot de retiradas...");
+      setProgressMessage("Atualizando snapshot de coletas e retiradas...");
       await downloadOfflineSnapshot(profile.user_id, activeCd);
       setOfflineSnapshotReady(true);
       await refreshOfflineMeta();
@@ -753,8 +783,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           client_event_id: safeUuid(),
           cd: activeCd,
           barras: coletaLookup.barras,
+          coddv: coletaLookup.coddv,
+          descricao: coletaLookup.descricao,
           endereco_sep: selectedEnderecoSep,
           val_mmaa: valMmaa,
+          auditor_mat: profile.mat,
+          auditor_nome: profile.nome,
           data_hr: new Date().toISOString()
         }
       });
@@ -795,6 +829,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           coddv: row.coddv,
           endereco_sep: row.endereco_sep,
           val_mmaa: row.val_mmaa,
+          ref_coleta_mes: row.ref_coleta_mes,
           qtd_retirada: qtd,
           data_hr: new Date().toISOString()
         }
@@ -1092,6 +1127,73 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     };
   }, [commitScannerInput, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch]);
 
+  const onSearchLastColeta = useCallback(async () => {
+    if (activeCd == null) {
+      setErrorMessage("CD não definido para este usuário.");
+      return;
+    }
+    const normalizedTerm = normalizeLinhaColetaSearchTerm(lastColetaSearchTerm);
+    if (!normalizedTerm.raw) {
+      setErrorMessage("Informe endereço, CODDV ou barras para buscar a última coleta.");
+      return;
+    }
+
+    setLastColetaSearchBusy(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      if (isOnline) {
+        const result = await searchLinhaLastColeta({
+          cd: activeCd,
+          term: normalizedTerm.raw
+        });
+        setLastColetaSearchResult(result);
+        if (result) {
+          setStatusMessage("Última coleta localizada.");
+          setExpandedLinhaColetaHistoryKey("last-search-result");
+        } else {
+          setStatusMessage("Nenhuma coleta encontrada para o termo informado.");
+          setExpandedLinhaColetaHistoryKey(null);
+        }
+        return;
+      }
+
+      const localResult = [...linhaColetaHistoryRows]
+        .filter((row) => {
+          const barrasDigits = normalizeBarcode(row.barras);
+          return row.endereco_sep.toUpperCase() === normalizedTerm.upper
+            || String(row.coddv) === normalizedTerm.digits
+            || (normalizedTerm.digits !== "" && barrasDigits === normalizedTerm.digits);
+        })
+        .sort((left, right) => compareUiText(String(right.data_coleta ?? ""), String(left.data_coleta ?? "")))[0] ?? null;
+      setLastColetaSearchResult(localResult);
+      if (localResult) {
+        setStatusMessage("Última coleta localizada no histórico local.");
+        setExpandedLinhaColetaHistoryKey("last-search-result");
+      } else {
+        setStatusMessage("Nenhuma coleta encontrada no histórico local.");
+        setExpandedLinhaColetaHistoryKey(null);
+      }
+    } catch (error) {
+      setLastColetaSearchResult(null);
+      setErrorMessage(normalizeControleValidadeError(error));
+    } finally {
+      setLastColetaSearchBusy(false);
+    }
+  }, [activeCd, isOnline, lastColetaSearchTerm, linhaColetaHistoryRows]);
+
+  const linhaColetaHistoryGrouped = useMemo(() => {
+    return [...linhaColetaHistoryRows].sort((left, right) => {
+      const zoneCompare = compareUiText(left.zona, right.zona);
+      if (zoneCompare !== 0) return zoneCompare;
+      const dateCompare = compareUiText(String(right.data_coleta ?? ""), String(left.data_coleta ?? ""));
+      if (dateCompare !== 0) return dateCompare;
+      const addressCompare = compareUiText(left.endereco_sep, right.endereco_sep);
+      if (addressCompare !== 0) return addressCompare;
+      return compareUiText(left.coddv, right.coddv);
+    });
+  }, [linhaColetaHistoryRows]);
+
   const linhaRowsFiltered = useMemo(() => {
     const effectiveMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
     return linhaRows
@@ -1288,98 +1390,235 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 </div>
 
                 {linhaSubTab === "coleta" ? (
-                  <form className="controle-validade-form" onSubmit={onSubmitColeta}>
-                    <label>
-                      Código de barras
-                      <div className="controle-validade-inline-field">
-                        <div className="input-icon-wrap with-action controle-validade-mobile-search-wrap">
-                          <span className={barcodeIconClassName} aria-hidden="true">
-                            {barcodeIcon()}
-                          </span>
-                          <input
-                            ref={barcodeRef}
-                            type="text"
-                            inputMode={barcodeInputMode}
-                            value={barcodeInput}
-                            onChange={(event) => onBarcodeInputChange(event.target.value)}
-                            onKeyDown={onBarcodeKeyDown}
-                            onFocus={enableBarcodeSoftKeyboard}
-                            onPointerDown={enableBarcodeSoftKeyboard}
-                            onBlur={disableBarcodeSoftKeyboard}
-                            autoComplete="off"
-                            autoCapitalize="none"
-                            autoCorrect="off"
-                            spellCheck={false}
-                            enterKeyHint="search"
-                            placeholder="Bipe, digite ou use câmera"
-                            required
-                          />
+                  <>
+                    <form className="controle-validade-form" onSubmit={onSubmitColeta}>
+                      <label>
+                        Código de barras
+                        <div className="controle-validade-inline-field">
+                          <div className="input-icon-wrap with-action controle-validade-mobile-search-wrap">
+                            <span className={barcodeIconClassName} aria-hidden="true">
+                              {barcodeIcon()}
+                            </span>
+                            <input
+                              ref={barcodeRef}
+                              type="text"
+                              inputMode={barcodeInputMode}
+                              value={barcodeInput}
+                              onChange={(event) => onBarcodeInputChange(event.target.value)}
+                              onKeyDown={onBarcodeKeyDown}
+                              onFocus={enableBarcodeSoftKeyboard}
+                              onPointerDown={enableBarcodeSoftKeyboard}
+                              onBlur={disableBarcodeSoftKeyboard}
+                              autoComplete="off"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              enterKeyHint="search"
+                              placeholder="Bipe, digite ou use câmera"
+                              required
+                            />
+                            <button
+                              type="button"
+                              className="input-action-btn controle-validade-mobile-search-btn"
+                              onClick={hasBarcodeInput ? () => void onLookupProduto() : openCameraScanner}
+                              title={hasBarcodeInput ? "Buscar produto" : "Ler código pela câmera"}
+                              aria-label={hasBarcodeInput ? "Buscar produto" : "Ler código pela câmera"}
+                              disabled={hasBarcodeInput ? coletaLookupBusy || activeCd == null : !cameraSupported || coletaLookupBusy}
+                            >
+                              {hasBarcodeInput ? searchIcon() : cameraIcon()}
+                            </button>
+                          </div>
                           <button
                             type="button"
-                            className="input-action-btn controle-validade-mobile-search-btn"
-                            onClick={hasBarcodeInput ? () => void onLookupProduto() : openCameraScanner}
-                            title={hasBarcodeInput ? "Buscar produto" : "Ler código pela câmera"}
-                            aria-label={hasBarcodeInput ? "Buscar produto" : "Ler código pela câmera"}
-                            disabled={hasBarcodeInput ? coletaLookupBusy || activeCd == null : !cameraSupported || coletaLookupBusy}
+                            className="btn btn-muted controle-validade-search-btn"
+                            onClick={() => void onLookupProduto()}
+                            disabled={coletaLookupBusy || activeCd == null}
                           >
-                            {hasBarcodeInput ? searchIcon() : cameraIcon()}
+                            <span aria-hidden="true">{searchIcon()}</span>
+                            {coletaLookupBusy ? "Buscando..." : "Buscar"}
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          className="btn btn-muted controle-validade-search-btn"
-                          onClick={() => void onLookupProduto()}
-                          disabled={coletaLookupBusy || activeCd == null}
-                        >
-                          <span aria-hidden="true">{searchIcon()}</span>
-                          {coletaLookupBusy ? "Buscando..." : "Buscar"}
-                        </button>
-                      </div>
-                    </label>
+                      </label>
 
-                    {coletaLookup ? (
-                      <div className="controle-validade-lookup-card">
-                        <strong>{coletaLookup.descricao}</strong>
-                        <span>CODDV: {coletaLookup.coddv}</span>
-                        <span>Barras: {coletaLookup.barras}</span>
+                      {coletaLookup ? (
+                        <div className="controle-validade-lookup-card">
+                          <strong>{coletaLookup.descricao}</strong>
+                          <span>CODDV: {coletaLookup.coddv}</span>
+                          <span>Barras: {coletaLookup.barras}</span>
+                          <label>
+                            Endereço Linha (SEP)
+                            <select
+                              value={selectedEnderecoSep}
+                              onChange={(event) => setSelectedEnderecoSep(event.target.value)}
+                              required
+                            >
+                              {coletaLookup.enderecos_sep.map((endereco) => (
+                                <option key={endereco} value={endereco}>
+                                  {endereco}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      ) : null}
+
+                      <label>
+                        Validade (MMAA)
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={4}
+                          value={validadeInput}
+                          onChange={(event) => setValidadeInput(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                          placeholder="Ex.: 0426"
+                          required
+                        />
+                      </label>
+
+                      <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={activeCd == null || !coletaLookup || !selectedEnderecoSep}
+                      >
+                        Salvar coleta
+                      </button>
+                    </form>
+
+                    <section className="controle-validade-coleta-extras">
+                      <div className="controle-validade-lookup-card controle-validade-coleta-search-card">
                         <label>
-                          Endereço Linha (SEP)
-                          <select
-                            value={selectedEnderecoSep}
-                            onChange={(event) => setSelectedEnderecoSep(event.target.value)}
-                            required
-                          >
-                            {coletaLookup.enderecos_sep.map((endereco) => (
-                              <option key={endereco} value={endereco}>
-                                {endereco}
-                              </option>
-                            ))}
-                          </select>
+                          Buscar última coleta
+                          <div className="controle-validade-inline-field controle-validade-search-inline-field">
+                            <div className="input-icon-wrap with-action controle-validade-last-search-wrap">
+                              <input
+                                type="text"
+                                value={lastColetaSearchTerm}
+                                onChange={(event) => setLastColetaSearchTerm(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key !== "Enter") return;
+                                  event.preventDefault();
+                                  void onSearchLastColeta();
+                                }}
+                                autoComplete="off"
+                                autoCapitalize="characters"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                placeholder="Endereço, CODDV ou barras"
+                              />
+                              <button
+                                type="button"
+                                className="input-action-btn controle-validade-last-search-btn"
+                                onClick={() => void onSearchLastColeta()}
+                                aria-label="Buscar última coleta"
+                                title="Buscar última coleta"
+                                disabled={lastColetaSearchBusy || activeCd == null}
+                              >
+                                {searchIcon()}
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-muted controle-validade-search-btn"
+                              onClick={() => void onSearchLastColeta()}
+                              disabled={lastColetaSearchBusy || activeCd == null}
+                            >
+                              <span aria-hidden="true">{searchIcon()}</span>
+                              {lastColetaSearchBusy ? "Buscando..." : "Buscar"}
+                            </button>
+                          </div>
                         </label>
                       </div>
-                    ) : null}
 
-                    <label>
-                      Validade (MMAA)
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={4}
-                        value={validadeInput}
-                        onChange={(event) => setValidadeInput(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                        placeholder="Ex.: 0426"
-                        required
-                      />
-                    </label>
+                      {lastColetaSearchResult ? (
+                        <div className="controle-validade-list-area">
+                          <div className="controle-validade-section-title">Última coleta encontrada</div>
+                          <article className="controle-validade-row-card controle-validade-linha-card">
+                            <div className="controle-validade-linha-card-main">
+                              <button
+                                className="gestao-op-row-expand controle-validade-linha-expand"
+                                type="button"
+                                onClick={() =>
+                                  setExpandedLinhaColetaHistoryKey((current) =>
+                                    current === "last-search-result" ? null : "last-search-result"
+                                  )
+                                }
+                                aria-expanded={expandedLinhaColetaHistoryKey === "last-search-result"}
+                              >
+                                <span className="gestao-op-row-expand-icon" aria-hidden="true">
+                                  <EyeIcon open={expandedLinhaColetaHistoryKey === "last-search-result"} />
+                                </span>
+                                <span className="controle-validade-linha-summary">
+                                  <strong>{lastColetaSearchResult.endereco_sep}</strong>
+                                  <span>{`${lastColetaSearchResult.coddv} - ${lastColetaSearchResult.descricao}`}</span>
+                                </span>
+                              </button>
+                              <span className="controle-validade-history-zone-badge">{lastColetaSearchResult.zona}</span>
+                            </div>
 
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={activeCd == null || !coletaLookup || !selectedEnderecoSep}
-                    >
-                      Salvar coleta
-                    </button>
-                  </form>
+                            {expandedLinhaColetaHistoryKey === "last-search-result" ? (
+                              <div className="controle-validade-linha-details">
+                                <div className="controle-validade-linha-detail-grid">
+                                  <span><b>Validade:</b> {lastColetaSearchResult.val_mmaa}</span>
+                                  <span><b>Coleta:</b> {formatDateTime(lastColetaSearchResult.data_coleta)}</span>
+                                  <span><b>Usuário coleta:</b> {formatLinhaHistoryCollector(lastColetaSearchResult)}</span>
+                                  <span><b>Barras:</b> {lastColetaSearchResult.barras || "-"}</span>
+                                </div>
+                              </div>
+                            ) : null}
+                          </article>
+                        </div>
+                      ) : null}
+
+                      <div className="controle-validade-list-area">
+                        <div className="controle-validade-section-title">Últimos 1.000 endereços coletados</div>
+                        {!busyLoadRows && linhaColetaHistoryGrouped.length === 0 ? (
+                          <p>Nenhuma coleta registrada para este CD.</p>
+                        ) : null}
+                        <div className="controle-validade-list">
+                          {linhaColetaHistoryGrouped.map((row, index) => {
+                            const key = `${row.endereco_sep}|${row.coddv}|${row.val_mmaa}|${row.data_coleta ?? "sem-data"}|${index}`;
+                            const previousRow = index > 0 ? linhaColetaHistoryGrouped[index - 1] : null;
+                            const showZoneHeader = !previousRow || previousRow.zona !== row.zona;
+                            const isExpanded = expandedLinhaColetaHistoryKey === key;
+                            return (
+                              <div key={key} className="pvps-zone-group">
+                                {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
+                                <article className="controle-validade-row-card controle-validade-linha-card">
+                                  <div className="controle-validade-linha-card-main">
+                                    <button
+                                      className="gestao-op-row-expand controle-validade-linha-expand"
+                                      type="button"
+                                      onClick={() => setExpandedLinhaColetaHistoryKey((current) => (current === key ? null : key))}
+                                      aria-expanded={isExpanded}
+                                    >
+                                      <span className="gestao-op-row-expand-icon" aria-hidden="true">
+                                        <EyeIcon open={isExpanded} />
+                                      </span>
+                                      <span className="controle-validade-linha-summary">
+                                        <strong>{row.endereco_sep}</strong>
+                                        <span>{`${row.coddv} - ${row.descricao}`}</span>
+                                      </span>
+                                    </button>
+                                  </div>
+
+                                  {isExpanded ? (
+                                    <div className="controle-validade-linha-details">
+                                      <div className="controle-validade-linha-detail-grid">
+                                        <span><b>Validade:</b> {row.val_mmaa}</span>
+                                        <span><b>Coleta:</b> {formatDateTime(row.data_coleta)}</span>
+                                        <span><b>Usuário coleta:</b> {formatLinhaHistoryCollector(row)}</span>
+                                        <span><b>Barras:</b> {row.barras || "-"}</span>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </article>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </section>
+                  </>
                 ) : (
                   <div className="controle-validade-list-area">
                     {busyLoadRows ? <p>Carregando retiradas da Linha...</p> : null}

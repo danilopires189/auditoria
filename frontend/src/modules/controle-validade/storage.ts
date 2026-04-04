@@ -31,6 +31,7 @@ interface SnapshotStoreRow {
   user_id: string;
   cd: number;
   linha_rows: ControleValidadeOfflineSnapshot["linha_rows"];
+  linha_coleta_history: ControleValidadeOfflineSnapshot["linha_coleta_history"];
   pul_rows: ControleValidadeOfflineSnapshot["pul_rows"];
   cached_at: string;
 }
@@ -145,6 +146,7 @@ export async function saveOfflineSnapshot(params: {
   user_id: string;
   cd: number;
   linha_rows: ControleValidadeOfflineSnapshot["linha_rows"];
+  linha_coleta_history: ControleValidadeOfflineSnapshot["linha_coleta_history"];
   pul_rows: ControleValidadeOfflineSnapshot["pul_rows"];
 }): Promise<void> {
   const db = await getDb();
@@ -154,6 +156,7 @@ export async function saveOfflineSnapshot(params: {
     user_id: params.user_id,
     cd: normalizeCd(params.cd),
     linha_rows: Array.isArray(params.linha_rows) ? params.linha_rows : [],
+    linha_coleta_history: Array.isArray(params.linha_coleta_history) ? params.linha_coleta_history : [],
     pul_rows: Array.isArray(params.pul_rows) ? params.pul_rows : [],
     cached_at: new Date().toISOString()
   } satisfies SnapshotStoreRow);
@@ -171,6 +174,7 @@ export async function loadOfflineSnapshot(userId: string, cd: number): Promise<C
     user_id: row.user_id,
     cd: row.cd,
     linha_rows: Array.isArray(row.linha_rows) ? row.linha_rows : [],
+    linha_coleta_history: Array.isArray(row.linha_coleta_history) ? row.linha_coleta_history : [],
     pul_rows: Array.isArray(row.pul_rows) ? row.pul_rows : [],
     cached_at: row.cached_at ?? new Date().toISOString()
   };
@@ -355,8 +359,12 @@ export function normalizeOfflinePayload<T extends ControleValidadeOfflinePayload
       client_event_id: normalizeText(payload.client_event_id),
       cd: parseInteger(payload.cd, 0),
       barras: normalizeText(payload.barras),
+      coddv: parseInteger(payload.coddv, 0),
+      descricao: normalizeText(payload.descricao),
       endereco_sep: normalizeText(payload.endereco_sep).toUpperCase(),
       val_mmaa: normalizeText(payload.val_mmaa),
+      auditor_mat: payload.auditor_mat ? normalizeText(payload.auditor_mat) : null,
+      auditor_nome: payload.auditor_nome ? normalizeText(payload.auditor_nome) : null,
       data_hr: payload.data_hr ? normalizeText(payload.data_hr) : null
     } as T;
   }
@@ -369,6 +377,7 @@ export function normalizeOfflinePayload<T extends ControleValidadeOfflinePayload
       coddv: parseInteger(payload.coddv, 0),
       endereco_sep: normalizeText(payload.endereco_sep).toUpperCase(),
       val_mmaa: normalizeText(payload.val_mmaa),
+      ref_coleta_mes: normalizeText(payload.ref_coleta_mes),
       qtd_retirada: parseInteger(payload.qtd_retirada, 1),
       data_hr: payload.data_hr ? normalizeText(payload.data_hr) : null
     } as T;
