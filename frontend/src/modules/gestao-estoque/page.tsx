@@ -820,7 +820,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                 type="text"
                 value={listSearchInput}
                 onChange={(event) => setListSearchInput(event.target.value)}
-                placeholder="Filtrar por descrição, CODDV, SEP, usuário..."
+                placeholder="Filtrar por descrição, CODDV, usuário..."
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -835,7 +835,6 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
               <div className="gestao-op-table-head" role="row">
                 <span>Produto</span>
                 <span>Qtd</span>
-                <span>SEP</span>
                 <span>Últ. compra</span>
                 <span>Custo unit.</span>
                 <span>Custo total</span>
@@ -871,7 +870,6 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         </span>
                       </button>
                       <span className="gestao-op-row-cell">{formatInteger(row.quantidade)}</span>
-                      <span className="gestao-op-row-cell">{row.endereco_sep ?? "-"}</span>
                       <span className="gestao-op-row-cell">{formatDate(row.dat_ult_compra)}</span>
                       <span className="gestao-op-row-cell">{formatCurrency(row.custo_unitario)}</span>
                       <span className="gestao-op-row-cell">{formatCurrency(row.custo_total)}</span>
@@ -896,10 +894,11 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     {isExpanded ? (
                       <div className="gestao-op-row-details">
                         <div className="gestao-op-row-detail-grid">
+                          <span><b>Endereço SEP:</b> {row.endereco_sep ?? "-"}</span>
+                          <span><b>Endereço PUL:</b> {row.endereco_pul ?? "-"}</span>
                           <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
                           <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span>
                           <span><b>Dados atualizados:</b> {formatDateTime(row.estoque_updated_at)}</span>
-                          <span><b>Endereço PUL:</b> {row.endereco_pul ?? "-"}</span>
                         </div>
                         {isHistorical ? null : isEditing ? (
                           <div className="gestao-op-row-inline-editor">
