@@ -1,10 +1,12 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { normalizeBarcode } from "../../shared/db-barras/sync";
+import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { BackIcon, CalendarIcon, EyeIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
 import { lookupProduto } from "../busca-produto/sync";
@@ -31,6 +33,30 @@ interface GestaoEstoquePageProps {
 
 const MODULE_DEF = getModuleByKeyOrThrow("gestao-estoque");
 const REFRESH_INTERVAL_MS = 15000;
+const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
+const SCANNER_INPUT_MIN_BURST_CHARS = 5;
+const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
+const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+
+interface ScannerInputState {
+  lastInputAt: number;
+  lastLength: number;
+  burstChars: number;
+  timerId: number | null;
+  lastSubmittedValue: string;
+  lastSubmittedAt: number;
+}
+
+function createScannerInputState(): ScannerInputState {
+  return {
+    lastInputAt: 0,
+    lastLength: 0,
+    burstChars: 0,
+    timerId: null,
+    lastSubmittedValue: "",
+    lastSubmittedAt: 0
+  };
+}
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -170,6 +196,48 @@ function MoreIcon() {
   );
 }
 
+function barcodeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 6v12" />
+      <path d="M7 6v12" />
+      <path d="M10 6v12" />
+      <path d="M14 6v12" />
+      <path d="M18 6v12" />
+      <path d="M20 6v12" />
+      <path d="M3 4h18" />
+      <path d="M3 20h18" />
+    </svg>
+  );
+}
+
+function cameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h4l1.5-2h5L16 7h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+function closeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
+function flashIcon({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 2h10l-4 7h5l-9 13 2-9H6z" />
+      {!on ? <path d="M4 4l16 16" /> : null}
+    </svg>
+  );
+}
+
 function RowTitleMeta({
   coddv,
   movementType
@@ -192,6 +260,16 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pendingFocusItemIdRef = useRef<string | null>(null);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
+  const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
+  const scannerInputStateRef = useRef<ScannerInputState>(createScannerInputState());
+  const {
+    inputMode: searchInputMode,
+    enableSoftKeyboard: enableSearchSoftKeyboard,
+    disableSoftKeyboard: disableSearchSoftKeyboard
+  } = useOnDemandSoftKeyboard("numeric");
   const [movementType, setMovementType] = useState<GestaoEstoqueMovementType>("baixa");
   const [selectedDate, setSelectedDate] = useState(todayIsoBrasilia());
   const [availableDays, setAvailableDays] = useState<GestaoEstoqueAvailableDay[]>([]);
@@ -211,6 +289,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [listSearchInput, setListSearchInput] = useState("");
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [actionRow, setActionRow] = useState<GestaoEstoqueItemRow | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
 
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const today = todayIsoBrasilia();
@@ -257,12 +339,18 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     if (!listSearchQuery) return rows;
     return rows.filter((row) => buildRowSearchBlob(row).includes(listSearchQuery));
   }, [listSearchQuery, rows]);
+  const cameraSupported = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return typeof navigator.mediaDevices?.getUserMedia === "function";
+  }, []);
+  const barcodeIconClassName = "field-icon validation-status";
 
   const focusSearch = useCallback(() => {
+    disableSearchSoftKeyboard();
     window.requestAnimationFrame(() => {
       searchInputRef.current?.focus();
     });
-  }, []);
+  }, [disableSearchSoftKeyboard]);
 
   const focusRow = useCallback((itemId: string) => {
     pendingFocusItemIdRef.current = itemId;
@@ -274,6 +362,109 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       pendingFocusItemIdRef.current = null;
     });
   }, []);
+
+  const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
+    const videoEl = scannerVideoRef.current;
+    if (videoEl?.srcObject instanceof MediaStream) {
+      const [track] = videoEl.srcObject.getVideoTracks();
+      return track ?? null;
+    }
+    return null;
+  }, []);
+
+  const supportsTrackTorch = useCallback((track: MediaStreamTrack | null): boolean => {
+    if (!track) return false;
+    const trackWithCaps = track as MediaStreamTrack & {
+      getCapabilities?: () => MediaTrackCapabilities;
+    };
+    if (typeof trackWithCaps.getCapabilities !== "function") return false;
+    const capabilities = trackWithCaps.getCapabilities();
+    return Boolean((capabilities as { torch?: boolean } | null)?.torch);
+  }, []);
+
+  const stopCameraScanner = useCallback(() => {
+    const controls = scannerControlsRef.current;
+    const activeTrack = scannerTrackRef.current ?? resolveScannerTrack();
+    if (controls) {
+      if (controls.switchTorch && torchEnabled && scannerTorchModeRef.current === "controls") {
+        void controls.switchTorch(false).catch(() => undefined);
+      }
+      controls.stop();
+      scannerControlsRef.current = null;
+    }
+    if (activeTrack && torchEnabled && scannerTorchModeRef.current === "track") {
+      const trackWithConstraints = activeTrack as MediaStreamTrack & {
+        applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+      };
+      if (typeof trackWithConstraints.applyConstraints === "function") {
+        void trackWithConstraints.applyConstraints({ advanced: [{ torch: false } as MediaTrackConstraintSet] }).catch(() => undefined);
+      }
+    }
+
+    const videoEl = scannerVideoRef.current;
+    if (videoEl && videoEl.srcObject instanceof MediaStream) {
+      for (const track of videoEl.srcObject.getTracks()) {
+        track.stop();
+      }
+      videoEl.srcObject = null;
+    }
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+  }, [resolveScannerTrack, torchEnabled]);
+
+  const openCameraScanner = useCallback(() => {
+    if (!cameraSupported) {
+      setErrorMessage("Câmera não disponível neste navegador/dispositivo.");
+      return;
+    }
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+    setScannerOpen(true);
+  }, [cameraSupported]);
+
+  const closeCameraScanner = useCallback(() => {
+    stopCameraScanner();
+    setScannerOpen(false);
+    setScannerError(null);
+    setTorchEnabled(false);
+    setTorchSupported(false);
+    scannerTrackRef.current = null;
+    scannerTorchModeRef.current = "none";
+    focusSearch();
+  }, [focusSearch, stopCameraScanner]);
+
+  const toggleTorch = useCallback(async () => {
+    const controls = scannerControlsRef.current;
+    const track = scannerTrackRef.current ?? resolveScannerTrack();
+    const hasTrackTorch = supportsTrackTorch(track);
+    if (!controls?.switchTorch && !hasTrackTorch) {
+      setScannerError("Flash não disponível neste dispositivo.");
+      return;
+    }
+    try {
+      const next = !torchEnabled;
+      if (hasTrackTorch && track) {
+        const trackWithConstraints = track as MediaStreamTrack & {
+          applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+        };
+        if (!trackWithConstraints || typeof trackWithConstraints.applyConstraints !== "function") {
+          throw new Error("Track sem suporte de constraints");
+        }
+        await trackWithConstraints.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+        scannerTorchModeRef.current = "track";
+      } else if (controls?.switchTorch) {
+        await controls.switchTorch(next);
+        scannerTorchModeRef.current = "controls";
+      }
+      setTorchEnabled(next);
+      setScannerError(null);
+    } catch {
+      setScannerError("Não foi possível alternar o flash.");
+    }
+  }, [resolveScannerTrack, supportsTrackTorch, torchEnabled]);
 
   const refreshDays = useCallback(async () => {
     if (activeCd == null) {
@@ -645,7 +836,9 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
             </span>
           </div>
         </div>
-        <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
+        <div
+          className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone} gestao-op-header-card gestao-op-header-card--${movementType}`}
+        >
           <span className="module-icon" aria-hidden="true"><ModuleIcon name={MODULE_DEF.icon} /></span>
           <div className="gestao-op-header-copy">
             <span className="module-title">{MODULE_DEF.title}</span>
@@ -654,7 +847,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         </div>
       </header>
 
-      <section className="module-screen surface-enter gestao-op-screen">
+      <section className={`module-screen surface-enter gestao-op-screen gestao-op-screen--${movementType}`}>
         <div className="module-screen-header">
           <div className="module-screen-title-row">
             <div className="module-screen-title">
