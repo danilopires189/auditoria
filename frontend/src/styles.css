@@ -12262,6 +12262,7 @@ small {
 }
 
 .gestao-op-row-cell {
+  display: block;
   color: #27425f;
   font-size: 0.9rem;
   line-height: 1.35;
@@ -12269,8 +12270,12 @@ small {
   overflow-wrap: anywhere;
 }
 
-.gestao-op-row-cell b {
-  color: inherit;
+.gestao-op-row-cell-label {
+  display: none;
+}
+
+.gestao-op-row-cell-value {
+  display: block;
 }
 
 .gestao-op-row-details {
@@ -12363,8 +12368,14 @@ small {
 
 @media (max-width: 1040px) {
   .gestao-op-toolbar,
-  .gestao-op-grid,
-  .gestao-op-row,
+  .gestao-op-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gestao-op-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .gestao-op-row-main-table {
     grid-template-columns: 1fr;
   }
@@ -12425,12 +12436,53 @@ small {
     width: 100%;
   }
 
+  .gestao-op-row {
+    padding: 10px;
+    gap: 8px;
+  }
+
   .gestao-op-row-main-table {
-    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .gestao-op-row-expand {
+    grid-column: 1 / -1;
   }
 
   .gestao-op-row-cell {
+    display: grid;
+    gap: 3px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(242, 246, 251, 0.98);
     font-size: 0.88rem;
+  }
+
+  .gestao-op-row-cell-label {
+    display: block;
+    color: #6b8299;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .gestao-op-row-cell-value {
+    color: #21415f;
+    font-weight: 700;
+  }
+
+  .gestao-op-row-actions {
+    align-items: flex-start;
+    justify-content: flex-end;
+    width: auto;
+  }
+
+  .gestao-op-row-more-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
   }
 
   .gestao-op-row-inline-editor {
@@ -12441,8 +12493,7 @@ small {
 
 @media (max-width: 560px) {
   .gestao-op-segmented,
-  .gestao-op-actions,
-  .gestao-op-row-actions {
+  .gestao-op-actions {
     width: 100%;
   }
 
@@ -12451,8 +12502,7 @@ small {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .gestao-op-actions,
-  .gestao-op-row-actions {
+  .gestao-op-actions {
     grid-template-columns: 1fr;
     grid-auto-flow: row;
   }
@@ -12468,6 +12518,22 @@ small {
 
   .gestao-op-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gestao-op-row {
+    grid-template-columns: 1fr;
+  }
+
+  .gestao-op-row-main-table {
+    grid-template-columns: 1fr;
+  }
+
+  .gestao-op-row-cell {
+    padding: 9px 10px;
+  }
+
+  .gestao-op-row-actions {
+    justify-content: flex-start;
   }
 
   .gestao-op-date-pill {
