@@ -11792,11 +11792,11 @@ small {
 }
 
 .gestao-op-screen {
-  gap: 18px;
+  gap: 14px;
 }
 
 .gestao-op-screen .module-screen-header {
-  gap: 14px;
+  gap: 10px;
 }
 
 .gestao-op-screen .module-screen-title-row {
@@ -11805,11 +11805,12 @@ small {
 
 .gestao-op-screen .module-screen-title {
   display: grid;
-  gap: 6px;
+  gap: 2px;
 }
 
 .gestao-op-screen .module-screen-title h2 {
   color: #eef5ff;
+  font-size: 1rem;
 }
 
 .gestao-op-screen .module-screen-title p {
@@ -11840,13 +11841,13 @@ small {
 .gestao-op-date-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid rgba(173, 196, 229, 0.2);
   background: rgba(239, 246, 255, 0.08);
   color: #edf4ff;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 700;
   line-height: 1.35;
   backdrop-filter: blur(4px);

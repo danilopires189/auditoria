@@ -573,8 +573,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         <div className="module-screen-header">
           <div className="module-screen-title-row">
             <div className="module-screen-title">
-              <h2>Lista diária de ajuste</h2>
-              <p>Entrada e baixa na mesma base diária, com atualização viva do dia atual.</p>
+              <h2>Ajuste diário de estoque</h2>
             </div>
           </div>
           <div className="gestao-op-header-meta">
