@@ -898,7 +898,6 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                           <span><b>Endereço PUL:</b> {row.endereco_pul ?? "-"}</span>
                           <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
                           <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span>
-                          <span><b>Dados atualizados:</b> {formatDateTime(row.estoque_updated_at)}</span>
                         </div>
                         {isHistorical ? null : isEditing ? (
                           <div className="gestao-op-row-inline-editor">
