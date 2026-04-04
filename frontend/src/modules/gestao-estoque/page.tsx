@@ -1253,38 +1253,40 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         </div>
 
         <div className="gestao-op-toolbar">
-          <div className="gestao-op-segmented" role="tablist" aria-label="Tipo de movimentação">
+          <div className="gestao-op-toolbar-primary">
+            <div className="gestao-op-segmented" role="tablist" aria-label="Tipo de movimentação">
+              <button
+                type="button"
+                className={movementType === "baixa" ? "is-active" : ""}
+                onClick={() => setMovementType("baixa")}
+              >
+                Baixa
+              </button>
+              <button
+                type="button"
+                className={movementType === "entrada" ? "is-active" : ""}
+                onClick={() => setMovementType("entrada")}
+              >
+                Entrada
+              </button>
+            </div>
+
             <button
               type="button"
-              className={movementType === "baixa" ? "is-active" : ""}
-              onClick={() => setMovementType("baixa")}
+              className={`gestao-op-review-trigger is-${currentReviewStatus}`}
+              onClick={openReviewModal}
+              aria-label={`Status do dia: ${reviewStatusLabel(currentReviewStatus)}. Clique para alterar ou ver detalhes.`}
+              title={`Status do dia: ${reviewStatusLabel(currentReviewStatus)}`}
             >
-              Baixa
-            </button>
-            <button
-              type="button"
-              className={movementType === "entrada" ? "is-active" : ""}
-              onClick={() => setMovementType("entrada")}
-            >
-              Entrada
+              <span className="gestao-op-review-trigger-icon" aria-hidden="true">
+                {checkIcon()}
+              </span>
+              <span className="gestao-op-review-trigger-copy">
+                <span className="gestao-op-review-trigger-label">Status</span>
+                <span className="gestao-op-review-trigger-value">{reviewStatusLabel(currentReviewStatus)}</span>
+              </span>
             </button>
           </div>
-
-          <button
-            type="button"
-            className={`gestao-op-review-trigger is-${currentReviewStatus}`}
-            onClick={openReviewModal}
-            aria-label={`Status do dia: ${reviewStatusLabel(currentReviewStatus)}. Clique para alterar ou ver detalhes.`}
-            title={`Status do dia: ${reviewStatusLabel(currentReviewStatus)}`}
-          >
-            <span className="gestao-op-review-trigger-icon" aria-hidden="true">
-              {checkIcon()}
-            </span>
-            <span className="gestao-op-review-trigger-copy">
-              <span className="gestao-op-review-trigger-label">Status</span>
-              <span className="gestao-op-review-trigger-value">{reviewStatusLabel(currentReviewStatus)}</span>
-            </span>
-          </button>
 
           <label className="gestao-op-day-picker">
             <span className="gestao-op-day-icon" aria-hidden="true"><CalendarIcon /></span>
