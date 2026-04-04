@@ -11013,6 +11013,15 @@ small {
   }
 
 @media (max-width: 720px) {
+  .gestao-estq-panel-reentry,
+  .gestao-estq-panel-top,
+  .gestao-estq-panel-loss,
+  .gestao-estq-panel-details {
+    min-height: 0;
+    height: auto;
+    max-height: none;
+  }
+
   .gestao-estq-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -11076,12 +11085,15 @@ small {
   }
 
   .gestao-estq-details-wrap {
+    display: block;
     width: 100%;
     max-width: 100%;
-    overflow-x: auto;
+    min-width: 0;
+    overflow-x: scroll;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
     scrollbar-gutter: stable both-edges;
   }
 
