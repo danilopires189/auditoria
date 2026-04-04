@@ -10650,6 +10650,13 @@ small {
     overflow: hidden;
   }
 
+  .gestao-estq-panel-reentry > :last-child {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    display: grid;
+  }
+
   .gestao-estq-panel-top {
     min-height: 360px;
     align-content: start;
@@ -10765,6 +10772,13 @@ small {
     min-height: 0;
     overflow: auto;
     padding-right: 4px;
+  }
+
+  .gestao-estq-reentry-list {
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
 .gestao-estq-top-item,
