@@ -170,6 +170,24 @@ function MoreIcon() {
   );
 }
 
+function RowTitleMeta({
+  coddv,
+  movementType
+}: {
+  coddv: number;
+  movementType: GestaoEstoqueMovementType;
+}) {
+  const label = movementLabel(movementType);
+  return (
+    <>
+      <span className="gestao-op-row-title-code gestao-op-row-title-code-desktop">CODDV {coddv}</span>
+      <span className="gestao-op-row-title-code gestao-op-row-title-code-mobile">{coddv}</span>
+      <span aria-hidden="true"> • </span>
+      <span>{label}</span>
+    </>
+  );
+}
+
 export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePageProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -876,26 +894,28 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         </span>
                         <span className="gestao-op-row-title">
                           <strong>{row.descricao}</strong>
-                          <span>CODDV {row.coddv} • {movementLabel(row.movement_type)}</span>
+                          <span>
+                            <RowTitleMeta coddv={row.coddv} movementType={row.movement_type} />
+                          </span>
                         </span>
                       </button>
-                      <span className="gestao-op-row-cell">
+                      <span className="gestao-op-row-cell gestao-op-row-cell--qty">
                         <span className="gestao-op-row-cell-label">Qtd</span>
                         <span className="gestao-op-row-cell-value">{formatInteger(row.quantidade)}</span>
                       </span>
-                      <span className="gestao-op-row-cell">
+                      <span className="gestao-op-row-cell gestao-op-row-cell--purchase">
                         <span className="gestao-op-row-cell-label">Últ. compra</span>
                         <span className="gestao-op-row-cell-value">{formatDate(row.dat_ult_compra)}</span>
                       </span>
-                      <span className="gestao-op-row-cell">
+                      <span className="gestao-op-row-cell gestao-op-row-cell--unit">
                         <span className="gestao-op-row-cell-label">Custo unit.</span>
                         <span className="gestao-op-row-cell-value">{formatCurrency(row.custo_unitario)}</span>
                       </span>
-                      <span className="gestao-op-row-cell">
+                      <span className="gestao-op-row-cell gestao-op-row-cell--total">
                         <span className="gestao-op-row-cell-label">Custo total</span>
                         <span className="gestao-op-row-cell-value">{formatCurrency(row.custo_total)}</span>
                       </span>
-                      <span className="gestao-op-row-cell">
+                      <span className="gestao-op-row-cell gestao-op-row-cell--stock">
                         <span className="gestao-op-row-cell-label">Estoque</span>
                         <span className="gestao-op-row-cell-value">{formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
                       </span>
@@ -917,6 +937,11 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     {isExpanded ? (
                       <div className="gestao-op-row-details">
                         <div className="gestao-op-row-detail-grid">
+                          <span><b>Quantidade:</b> {formatInteger(row.quantidade)}</span>
+                          <span><b>Custo total:</b> {formatCurrency(row.custo_total)}</span>
+                          <span><b>Últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
+                          <span><b>Custo unit.:</b> {formatCurrency(row.custo_unitario)}</span>
+                          <span><b>Estoque:</b> {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
                           <span><b>Endereço SEP:</b> {row.endereco_sep ?? "-"}</span>
                           <span><b>Endereço PUL:</b> {row.endereco_pul ?? "-"}</span>
                           <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
