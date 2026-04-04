@@ -869,12 +869,25 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                           <span>CODDV {row.coddv} • {movementLabel(row.movement_type)}</span>
                         </span>
                       </button>
-                      <span className="gestao-op-row-cell">{formatInteger(row.quantidade)}</span>
-                      <span className="gestao-op-row-cell">{formatDate(row.dat_ult_compra)}</span>
-                      <span className="gestao-op-row-cell">{formatCurrency(row.custo_unitario)}</span>
-                      <span className="gestao-op-row-cell">{formatCurrency(row.custo_total)}</span>
                       <span className="gestao-op-row-cell">
-                        {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.
+                        <span className="gestao-op-row-cell-label">Qtd</span>
+                        <span className="gestao-op-row-cell-value">{formatInteger(row.quantidade)}</span>
+                      </span>
+                      <span className="gestao-op-row-cell">
+                        <span className="gestao-op-row-cell-label">Últ. compra</span>
+                        <span className="gestao-op-row-cell-value">{formatDate(row.dat_ult_compra)}</span>
+                      </span>
+                      <span className="gestao-op-row-cell">
+                        <span className="gestao-op-row-cell-label">Custo unit.</span>
+                        <span className="gestao-op-row-cell-value">{formatCurrency(row.custo_unitario)}</span>
+                      </span>
+                      <span className="gestao-op-row-cell">
+                        <span className="gestao-op-row-cell-label">Custo total</span>
+                        <span className="gestao-op-row-cell-value">{formatCurrency(row.custo_total)}</span>
+                      </span>
+                      <span className="gestao-op-row-cell">
+                        <span className="gestao-op-row-cell-label">Estoque</span>
+                        <span className="gestao-op-row-cell-value">{formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
                       </span>
                     </div>
                     <div className="gestao-op-row-actions">
