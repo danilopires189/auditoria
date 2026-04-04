@@ -266,6 +266,21 @@ function RowTitleMeta({
   );
 }
 
+function PreviewLabel({
+  desktop,
+  mobile
+}: {
+  desktop: string;
+  mobile: string;
+}) {
+  return (
+    <>
+      <span className="gestao-op-preview-label-desktop">{desktop}</span>
+      <span className="gestao-op-preview-label-mobile">{mobile}</span>
+    </>
+  );
+}
+
 export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePageProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -1289,28 +1304,28 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                   <span>CODDV {preview.coddv}</span>
                 </div>
                 <dl>
-                  <div>
-                    <dt>Endereço de Separação</dt>
+                  <div className="gestao-op-preview-item gestao-op-preview-item--sep">
+                    <dt><PreviewLabel desktop="Endereço de Separação" mobile="End. separação" /></dt>
                     <dd>{joinAddresses(preview.enderecos_sep)}</dd>
                   </div>
-                  <div>
-                    <dt>Endereço de Pulmão</dt>
+                  <div className="gestao-op-preview-item gestao-op-preview-item--pul">
+                    <dt><PreviewLabel desktop="Endereço de Pulmão" mobile="End. pulmão" /></dt>
                     <dd>{joinAddresses(preview.enderecos_pul)}</dd>
                   </div>
-                  <div>
-                    <dt>Estoque atual</dt>
+                  <div className="gestao-op-preview-item gestao-op-preview-item--stock">
+                    <dt><PreviewLabel desktop="Estoque atual" mobile="Est. atual" /></dt>
                     <dd>{formatInteger(preview.qtd_est_atual)}</dd>
                   </div>
-                  <div>
-                    <dt>Estoque disponível</dt>
+                  <div className="gestao-op-preview-item gestao-op-preview-item--stock">
+                    <dt><PreviewLabel desktop="Estoque disponível" mobile="Est. disp." /></dt>
                     <dd>{formatInteger(preview.qtd_est_disp)}</dd>
                   </div>
-                  <div>
-                    <dt>Últ. compra</dt>
+                  <div className="gestao-op-preview-item gestao-op-preview-item--meta">
+                    <dt><PreviewLabel desktop="Últ. compra" mobile="Últ. compra" /></dt>
                     <dd>{formatDate(preview.dat_ult_compra)}</dd>
                   </div>
-                  <div>
-                    <dt>R$ unitário</dt>
+                  <div className="gestao-op-preview-item gestao-op-preview-item--meta">
+                    <dt><PreviewLabel desktop="R$ unitário" mobile="R$ unit." /></dt>
                     <dd>{formatCurrency(preview.custo_unitario)}</dd>
                   </div>
                 </dl>
