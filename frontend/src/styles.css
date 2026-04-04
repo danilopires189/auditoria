@@ -11094,7 +11094,7 @@ small {
     overflow-x: scroll;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
+    touch-action: pan-x pan-y;
     overscroll-behavior-x: contain;
     scrollbar-gutter: stable both-edges;
   }
@@ -11109,7 +11109,7 @@ small {
     overflow-x: auto;
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
+    touch-action: auto;
   }
 
   .gestao-estq-details-table {
