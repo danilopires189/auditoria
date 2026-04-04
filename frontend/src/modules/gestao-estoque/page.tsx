@@ -32,6 +32,8 @@ interface GestaoEstoquePageProps {
   profile: GestaoEstoqueModuleProfile;
 }
 
+type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
+
 const MODULE_DEF = getModuleByKeyOrThrow("gestao-estoque");
 const REFRESH_INTERVAL_MS = 15000;
 const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
@@ -151,6 +153,10 @@ function parsePositiveInt(value: string): number | null {
   const parsed = Number.parseInt(value.trim(), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
+}
+
+function sanitizeSearchCode(value: string): string {
+  return normalizeBarcode(value).replace(/\D+/g, "");
 }
 
 function normalizeSearchText(value: string): string {
@@ -306,6 +312,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [availableDays, setAvailableDays] = useState<GestaoEstoqueAvailableDay[]>([]);
   const [rows, setRows] = useState<GestaoEstoqueItemRow[]>([]);
   const [searchInput, setSearchInput] = useState("");
+  const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [quantidadeInput, setQuantidadeInput] = useState("");
   const [preview, setPreview] = useState<BuscaProdutoLookupResult | null>(null);
   const [busyLookup, setBusyLookup] = useState(false);
@@ -350,7 +357,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
   }, []);
-  const barcodeIconClassName = "field-icon validation-status";
+  const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
   const hasSearchInput = searchInput.trim().length > 0;
 
   const focusSearch = useCallback(() => {
@@ -517,16 +524,18 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const clearPreview = useCallback(() => {
     setPreview(null);
     setSearchInput("");
+    setBarcodeValidationState("idle");
     setQuantidadeInput("");
   }, []);
 
   const executeLookup = useCallback(async (rawOverride?: string) => {
-    const rawValue = (rawOverride ?? searchInput).trim();
+    const rawValue = sanitizeSearchCode(rawOverride ?? searchInput);
     const normalized = normalizeBarcode(rawValue);
     if (!normalized) {
       setErrorMessage("Informe código de barras ou CODDV.");
       setStatusMessage(null);
       setPreview(null);
+      setBarcodeValidationState("invalid");
       focusSearch();
       return;
     }
@@ -534,12 +543,14 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       setErrorMessage("CD não definido para este usuário.");
       setStatusMessage(null);
       setPreview(null);
+      setBarcodeValidationState("invalid");
       return;
     }
 
     setBusyLookup(true);
     setErrorMessage(null);
     setStatusMessage(null);
+    setBarcodeValidationState("validating");
 
     try {
       let found: BuscaProdutoLookupResult | null = null;
@@ -562,17 +573,20 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       if (!found) {
         setPreview(null);
         setErrorMessage("Produto não encontrado.");
+        setBarcodeValidationState("invalid");
         focusSearch();
         return;
       }
 
       setPreview(found);
       setStatusMessage("Produto localizado com sucesso.");
+      setBarcodeValidationState("valid");
       setQuantidadeInput("");
       focusSearch();
     } catch (error) {
       setPreview(null);
       setErrorMessage(normalizeGestaoEstoqueError(error));
+      setBarcodeValidationState("invalid");
       focusSearch();
     } finally {
       setBusyLookup(false);
@@ -589,7 +603,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   }, []);
 
   const commitScannerInput = useCallback(async (rawValue: string) => {
-    const normalized = normalizeBarcode(rawValue);
+    const normalized = sanitizeSearchCode(rawValue);
     if (!normalized) return;
 
     const state = scannerInputStateRef.current;
@@ -609,6 +623,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setPreview(null);
     setErrorMessage(null);
     setStatusMessage(null);
+    setBarcodeValidationState("idle");
     await executeLookup(normalized);
   }, [clearScannerInputTimer, executeLookup]);
 
@@ -623,11 +638,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   }, [clearScannerInputTimer, commitScannerInput]);
 
   const onSearchInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const nextValue = event.target.value;
+    const nextValue = sanitizeSearchCode(event.target.value);
     setSearchInput(nextValue);
     setPreview(null);
     setErrorMessage(null);
     setStatusMessage(null);
+    setBarcodeValidationState("idle");
 
     const state = scannerInputStateRef.current;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
