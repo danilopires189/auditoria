@@ -9919,21 +9919,6 @@ small {
     min-height: 48px;
     font-size: 0.9rem;
   }
-
-  .controle-validade-mode-trigger {
-    min-height: 76px;
-    border-radius: 20px;
-  }
-
-  .controle-validade-sync-trigger.btn {
-    min-height: 76px;
-    border-radius: 20px;
-    font-size: 1rem;
-  }
-
-  .controle-validade-mode-helper {
-    font-size: 0.74rem;
-  }
 }
 
 .gestao-estq-metric-badge {
