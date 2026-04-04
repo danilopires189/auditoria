@@ -9477,26 +9477,60 @@ small {
 }
 
 .controle-validade-head-actions {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  justify-content: flex-end;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: min(100%, 560px);
+  margin-left: auto;
 }
 
-.controle-validade-head-actions .btn {
-  white-space: nowrap;
+.controle-validade-head-actions .gestao-op-review-trigger,
+.controle-validade-head-actions .controle-validade-sync-trigger {
+  width: 100%;
+  min-width: 0;
 }
 
-.controle-validade-head-actions .btn.is-active {
-  background: #e6f7ee;
-  border-color: #9ad4b4;
-  color: #1c6b44;
+.controle-validade-mode-trigger {
+  min-height: 96px;
+  padding: 14px 16px;
+  border-radius: 24px;
+  justify-content: center;
+}
+
+.controle-validade-mode-trigger .gestao-op-review-trigger-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.controle-validade-mode-trigger .gestao-op-review-trigger-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.4;
+}
+
+.controle-validade-mode-trigger .gestao-op-review-trigger-copy {
+  gap: 4px;
+}
+
+.controle-validade-mode-helper {
+  color: #6f8498;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.controle-validade-sync-trigger.btn {
+  min-height: 96px;
+  border-radius: 24px;
+  font-size: 1.12rem;
+  font-weight: 800;
+  line-height: 1.15;
+  padding: 14px 18px;
 }
 
 .controle-validade-body {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .controle-validade-meta {
@@ -9522,67 +9556,100 @@ small {
 .controle-validade-tabs,
 .controle-validade-subtabs,
 .controle-validade-status-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  max-width: 640px;
 }
 
-.controle-validade-tabs .btn,
-.controle-validade-subtabs .btn,
-.controle-validade-status-tabs .btn {
-  background: #f3f6fb;
-  border: 1px solid #d7e1ef;
-  color: #4f627f;
+.controle-validade-tabs {
+  padding: 6px;
+  border-radius: 24px;
 }
 
-.controle-validade-tabs .btn:hover:not(:disabled),
-.controle-validade-subtabs .btn:hover:not(:disabled),
-.controle-validade-status-tabs .btn:hover:not(:disabled) {
-  background: #eef3fb;
-  border-color: #d2deee;
-  color: #455a78;
+.controle-validade-subtabs,
+.controle-validade-status-tabs {
+  max-width: 520px;
 }
 
-.controle-validade-tabs .btn.is-active,
-.controle-validade-subtabs .btn.is-active,
-.controle-validade-status-tabs .btn.is-active {
-  background: linear-gradient(140deg, #d3e5ff, #c7dcfc);
-  border-color: #8eafd9;
-  color: #10366f;
-  box-shadow: 0 2px 10px rgba(27, 75, 143, 0.16);
+.controle-validade-tabs button,
+.controle-validade-subtabs button,
+.controle-validade-status-tabs button {
+  width: 100%;
+  justify-content: center;
+}
+
+.controle-validade-tabs button {
+  min-height: 64px;
+  border-radius: 18px;
+  font-size: 1.16rem;
+}
+
+.controle-validade-subtabs button,
+.controle-validade-status-tabs button {
+  min-height: 54px;
+  border-radius: 16px;
+  font-size: 0.98rem;
 }
 
 .controle-validade-pane {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .controle-validade-form {
   display: grid;
-  gap: 10px;
+  gap: 14px;
+}
+
+.controle-validade-panel {
+  gap: 14px;
+  padding: 18px;
+}
+
+.controle-validade-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.controle-validade-field input,
+.controle-validade-field select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid rgba(72, 101, 138, 0.2);
+  border-radius: 12px;
+  background: #fff;
+  color: #173452;
+  font: inherit;
+  outline: none;
+}
+
+.controle-validade-field input:focus,
+.controle-validade-field input:focus-visible,
+.controle-validade-field select:focus,
+.controle-validade-field select:focus-visible {
+  border-color: rgba(31, 95, 168, 0.45);
+  box-shadow: 0 0 0 4px rgba(41, 115, 199, 0.12);
 }
 
 .controle-validade-inline-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
 }
 
 .controle-validade-inline-field .input-icon-wrap {
   min-width: 0;
 }
 
-.controle-validade-inline-field .btn {
-  min-width: 110px;
+.controle-validade-search-field input {
+  padding-right: 48px;
 }
 
-.controle-validade-search-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.controle-validade-search-btn svg {
+.controle-validade-search-field .input-action-btn svg {
   width: 16px;
   height: 16px;
   fill: none;
@@ -9594,34 +9661,36 @@ small {
 
 .controle-validade-lookup-card {
   border: 1px solid #d4e1f2;
-  border-radius: 14px;
-  background: #f8fbff;
-  padding: 12px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%);
+  padding: 16px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .controle-validade-lookup-card strong {
   color: #173b6f;
+  font-size: 1rem;
 }
 
 .controle-validade-list-area {
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
 .controle-validade-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .controle-validade-row-card {
   border: 1px solid #d8e3f2;
-  border-radius: 14px;
+  border-radius: 18px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  padding: 12px;
+  padding: 16px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  box-shadow: 0 10px 24px rgba(17, 52, 82, 0.05);
 }
 
 .controle-validade-row-head {
@@ -9633,6 +9702,8 @@ small {
 
 .controle-validade-row-head strong {
   color: #10335f;
+  font-size: 0.98rem;
+  line-height: 1.3;
 }
 
 .controle-validade-status {
@@ -9662,7 +9733,7 @@ small {
 }
 
 .controle-validade-row-grid span {
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   color: #35547d;
 }
 
@@ -9679,24 +9750,23 @@ small {
 
 @media (max-width: 980px) {
   .controle-validade-head-actions {
-    justify-content: flex-end;
-    flex-wrap: nowrap;
+    grid-template-columns: 1fr;
     width: 100%;
   }
 
-  .controle-validade-head-actions .btn {
-    flex: 1 1 0;
-    min-width: 0;
-    padding-inline: 8px;
-    font-size: 0.86rem;
+  .controle-validade-mode-trigger,
+  .controle-validade-sync-trigger.btn {
+    min-height: 84px;
+  }
+
+  .controle-validade-tabs,
+  .controle-validade-subtabs,
+  .controle-validade-status-tabs {
+    max-width: none;
   }
 
   .controle-validade-inline-field {
     grid-template-columns: 1fr;
-  }
-
-  .controle-validade-inline-field .btn {
-    width: 100%;
   }
 
   .controle-validade-row-grid {
@@ -9897,6 +9967,34 @@ small {
   gap: 10px;
   min-height: 118px;
   box-shadow: 0 16px 30px rgba(27, 67, 129, 0.08);
+}
+
+@media (max-width: 560px) {
+  .controle-validade-tabs button {
+    min-height: 56px;
+    font-size: 1rem;
+  }
+
+  .controle-validade-subtabs button,
+  .controle-validade-status-tabs button {
+    min-height: 48px;
+    font-size: 0.9rem;
+  }
+
+  .controle-validade-mode-trigger {
+    min-height: 76px;
+    border-radius: 20px;
+  }
+
+  .controle-validade-sync-trigger.btn {
+    min-height: 76px;
+    border-radius: 20px;
+    font-size: 1rem;
+  }
+
+  .controle-validade-mode-helper {
+    font-size: 0.74rem;
+  }
 }
 
 .gestao-estq-metric-badge {
