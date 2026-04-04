@@ -1153,7 +1153,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         <div className="module-screen-header">
           <div className="module-screen-title-row">
             <div className="module-screen-title">
-              <h2>Ajuste diário de estoque</h2>
+              <h2>Ajuste Diário de Estoque</h2>
             </div>
           </div>
           <div className="gestao-op-header-meta">
@@ -1323,7 +1323,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     <dd>{formatInteger(preview.qtd_est_atual)}</dd>
                   </div>
                   <div className="gestao-op-preview-item gestao-op-preview-item--stock">
-                    <dt><PreviewLabel desktop="Estoque disponível" mobile="Est. disp." /></dt>
+                    <dt><PreviewLabel desktop="Estoque disponível" mobile="Est. disponível" /></dt>
                     <dd>{formatInteger(preview.qtd_est_disp)}</dd>
                   </div>
                   <div className="gestao-op-preview-item gestao-op-preview-item--meta">
@@ -1448,8 +1448,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                           <span><b>Últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
                           <span><b>Custo unit.:</b> {formatCurrency(row.custo_unitario)}</span>
                           <span><b>Estoque:</b> {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
-                          <span><b>Endereço SEP:</b> {row.endereco_sep ?? "-"}</span>
-                          <span><b>Endereço PUL:</b> {row.endereco_pul ?? "-"}</span>
+                          <span><b>End. Separação:</b> {row.endereco_sep ?? "-"}</span>
+                          <span><b>End. Pulmão:</b> {row.endereco_pul ?? "-"}</span>
                           <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
                           <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span>
                         </div>
