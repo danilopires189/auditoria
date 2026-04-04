@@ -11874,7 +11874,7 @@ small {
 
 .gestao-op-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 10px;
   align-items: center;
 }
@@ -11972,6 +11972,79 @@ small {
   font-size: 0.92rem;
   line-height: 1;
   white-space: nowrap;
+}
+
+.gestao-op-review-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(145, 171, 205, 0.24);
+  border-radius: 12px;
+  background: rgba(248, 251, 255, 0.96);
+  color: #4c647e;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.gestao-op-review-trigger:hover,
+.gestao-op-review-trigger:focus-visible {
+  border-color: rgba(109, 139, 176, 0.42);
+  box-shadow: 0 0 0 4px rgba(41, 115, 199, 0.1);
+  outline: none;
+}
+
+.gestao-op-review-trigger.is-pendente {
+  color: #6b7f95;
+  background: rgba(245, 248, 252, 0.98);
+}
+
+.gestao-op-review-trigger.is-revisado {
+  color: #1f8a57;
+  background: rgba(236, 249, 242, 0.98);
+  border-color: rgba(86, 180, 127, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.gestao-op-review-trigger-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.gestao-op-review-trigger-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gestao-op-review-trigger-copy {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.gestao-op-review-trigger-label {
+  color: #6f8498;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gestao-op-review-trigger-value {
+  color: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
 .gestao-op-metrics {
@@ -12434,6 +12507,168 @@ small {
   gap: 10px;
 }
 
+.gestao-op-review-dialog {
+  width: min(540px, calc(100vw - 24px));
+  gap: 16px;
+}
+
+.gestao-op-review-dialog > p {
+  margin: -6px 0 0;
+  color: #6d8197;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.gestao-op-review-status-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(185, 202, 224, 0.5);
+  background: rgba(245, 248, 252, 0.98);
+}
+
+.gestao-op-review-status-card.is-pendente {
+  color: #687d93;
+}
+
+.gestao-op-review-status-card.is-revisado {
+  color: #1f8a57;
+  border-color: rgba(98, 188, 136, 0.32);
+  background: linear-gradient(160deg, rgba(236, 249, 242, 0.98) 0%, rgba(247, 253, 249, 0.98) 100%);
+}
+
+.gestao-op-review-status-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.gestao-op-review-status-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gestao-op-review-status-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.gestao-op-review-status-copy strong {
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.gestao-op-review-status-copy span {
+  color: #698096;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.gestao-op-review-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gestao-op-review-picker button {
+  min-height: 42px;
+  border: 1px solid rgba(185, 202, 224, 0.65);
+  border-radius: 12px;
+  background: #fff;
+  color: #44607c;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+.gestao-op-review-picker button.is-active {
+  border-color: rgba(40, 133, 86, 0.36);
+  background: rgba(236, 249, 242, 0.98);
+  color: #1f8a57;
+  box-shadow: 0 0 0 4px rgba(31, 138, 87, 0.08);
+}
+
+.gestao-op-review-history {
+  display: grid;
+  gap: 10px;
+}
+
+.gestao-op-review-history > strong {
+  color: #23415f;
+  font-size: 0.94rem;
+  line-height: 1.2;
+}
+
+.gestao-op-review-history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.gestao-op-review-history-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(245, 248, 252, 0.96);
+}
+
+.gestao-op-review-history-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.gestao-op-review-history-badge.is-pendente {
+  background: rgba(229, 237, 246, 0.98);
+  color: #677d95;
+}
+
+.gestao-op-review-history-badge.is-revisado {
+  background: rgba(226, 246, 234, 0.98);
+  color: #1f8a57;
+}
+
+.gestao-op-review-history-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.gestao-op-review-history-copy strong {
+  color: #173452;
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.gestao-op-review-history-copy span {
+  color: #6a8097;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
 @media (max-width: 1040px) {
   .gestao-op-toolbar,
   .gestao-op-grid {
@@ -12454,6 +12689,11 @@ small {
 
   .gestao-op-day-picker {
     justify-content: flex-start;
+  }
+
+  .gestao-op-review-trigger {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .gestao-op-table-head {
@@ -12583,7 +12823,8 @@ small {
 
 @media (max-width: 560px) {
   .gestao-op-segmented,
-  .gestao-op-actions {
+  .gestao-op-actions,
+  .gestao-op-review-trigger {
     width: 100%;
   }
 
@@ -12591,18 +12832,20 @@ small {
     display: none;
   }
 
+  .gestao-op-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
   .gestao-op-segmented {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .gestao-op-actions {
-    grid-template-columns: 1fr;
-    grid-auto-flow: row;
+    grid-column: 1 / -1;
   }
 
   .gestao-op-day-picker {
     width: 100%;
+    grid-column: 1 / -1;
   }
 
   .gestao-op-day-icon {
@@ -12612,6 +12855,55 @@ small {
   .gestao-op-day-picker select {
     min-width: 0;
     width: 100%;
+  }
+
+  .gestao-op-review-trigger {
+    grid-column: 1;
+    align-self: start;
+    min-height: 40px;
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .gestao-op-review-trigger-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .gestao-op-review-trigger-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .gestao-op-review-trigger-label {
+    font-size: 0.66rem;
+  }
+
+  .gestao-op-review-trigger-value {
+    font-size: 0.82rem;
+  }
+
+  .gestao-op-actions {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-self: start;
+  }
+
+  .gestao-op-actions .btn {
+    width: 100%;
+    min-height: 40px;
+    padding: 9px 12px;
+    font-size: 0.86rem;
+  }
+
+  .gestao-op-actions .btn-primary {
+    order: 1;
+  }
+
+  .gestao-op-actions .btn-muted {
+    order: 2;
   }
 
   .gestao-op-metrics {
@@ -12737,6 +13029,44 @@ small {
   .gestao-op-row-more-btn {
     width: 32px;
     height: 32px;
+  }
+
+  .gestao-op-review-dialog {
+    width: min(100vw - 20px, 100%);
+    gap: 14px;
+  }
+
+  .gestao-op-review-status-card {
+    padding: 12px 13px;
+    gap: 10px;
+  }
+
+  .gestao-op-review-status-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .gestao-op-review-status-copy strong {
+    font-size: 0.94rem;
+  }
+
+  .gestao-op-review-status-copy span,
+  .gestao-op-review-history-copy span {
+    font-size: 0.82rem;
+  }
+
+  .gestao-op-review-picker {
+    gap: 8px;
+  }
+
+  .gestao-op-review-picker button {
+    min-height: 40px;
+    font-size: 0.9rem;
+  }
+
+  .gestao-op-review-history-item {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .gestao-op-date-pill {

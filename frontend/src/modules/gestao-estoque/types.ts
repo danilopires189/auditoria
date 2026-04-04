@@ -8,12 +8,28 @@ export interface GestaoEstoqueModuleProfile {
 }
 
 export type GestaoEstoqueMovementType = "baixa" | "entrada";
+export type GestaoEstoqueDayReviewStatus = "pendente" | "revisado";
 
 export interface GestaoEstoqueAvailableDay {
   movement_date: string;
   item_count: number;
   updated_at: string | null;
   is_today: boolean;
+}
+
+export interface GestaoEstoqueDayReviewEntry {
+  actor_id: string | null;
+  actor_mat: string;
+  actor_nome: string;
+  review_status: GestaoEstoqueDayReviewStatus;
+  reviewed_at: string | null;
+}
+
+export interface GestaoEstoqueDayReviewState {
+  movement_date: string;
+  review_status: GestaoEstoqueDayReviewStatus;
+  last_reviewed_at: string | null;
+  reviewers: GestaoEstoqueDayReviewEntry[];
 }
 
 export interface GestaoEstoqueItemRow {

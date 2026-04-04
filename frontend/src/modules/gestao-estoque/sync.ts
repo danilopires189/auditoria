@@ -2,6 +2,9 @@ import { supabase } from "../../lib/supabase";
 import type {
   GestaoEstoqueAddResult,
   GestaoEstoqueAvailableDay,
+  GestaoEstoqueDayReviewEntry,
+  GestaoEstoqueDayReviewState,
+  GestaoEstoqueDayReviewStatus,
   GestaoEstoqueItemRow,
   GestaoEstoqueMovementType
 } from "./types";
@@ -36,6 +39,7 @@ export function normalizeGestaoEstoqueError(error: unknown): string {
   if (normalized.includes("PRODUTO_NAO_ENCONTRADO")) return "Produto não encontrado.";
   if (normalized.includes("PARAMS_BUSCA_OBRIGATORIOS")) return "Informe código de barras ou CODDV.";
   if (normalized.includes("CODDV_INVALIDO")) return "CODDV inválido.";
+  if (normalized.includes("REVIEW_STATUS_INVALIDO")) return "Status de revisão inválido.";
   return raw;
 }
 
@@ -77,6 +81,20 @@ function parseMovementType(value: unknown): GestaoEstoqueMovementType {
   return String(value).trim().toLowerCase() === "entrada" ? "entrada" : "baixa";
 }
 
+function parseDayReviewStatus(value: unknown): GestaoEstoqueDayReviewStatus {
+  return String(value).trim().toLowerCase() === "revisado" ? "revisado" : "pendente";
+}
+
+function mapDayReviewEntry(raw: Record<string, unknown>): GestaoEstoqueDayReviewEntry {
+  return {
+    actor_id: parseNullableString(raw.actor_id),
+    actor_mat: parseString(raw.actor_mat, "-"),
+    actor_nome: parseString(raw.actor_nome, "Usuário"),
+    review_status: parseDayReviewStatus(raw.review_status),
+    reviewed_at: parseNullableString(raw.reviewed_at)
+  };
+}
+
 function mapItemRow(raw: Record<string, unknown>): GestaoEstoqueItemRow {
   return {
     id: parseString(raw.id),
@@ -110,6 +128,13 @@ function firstRecord(data: unknown): Record<string, unknown> | null {
   const first = data[0];
   if (!first || typeof first !== "object") return null;
   return first as Record<string, unknown>;
+}
+
+function parseReviewers(value: unknown): GestaoEstoqueDayReviewEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+    .map(mapDayReviewEntry);
 }
 
 export async function fetchGestaoEstoqueAvailableDays(cd: number | null): Promise<GestaoEstoqueAvailableDay[]> {
@@ -157,6 +182,46 @@ export async function fetchGestaoEstoqueStockUpdatedAt(cd: number | null): Promi
   if (error) throw new Error(normalizeGestaoEstoqueError(error));
   const first = firstRecord(data);
   return parseNullableString(first?.updated_at);
+}
+
+export async function fetchGestaoEstoqueDayReviewState(params: {
+  cd: number | null;
+  date: string;
+}): Promise<GestaoEstoqueDayReviewState> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_gestao_estoque_day_review_state", {
+    p_cd: params.cd,
+    p_date: params.date
+  });
+  if (error) throw new Error(normalizeGestaoEstoqueError(error));
+  const first = firstRecord(data);
+  return {
+    movement_date: parseString(first?.movement_date, params.date),
+    review_status: parseDayReviewStatus(first?.review_status),
+    last_reviewed_at: parseNullableString(first?.last_reviewed_at),
+    reviewers: parseReviewers(first?.reviewers)
+  };
+}
+
+export async function setGestaoEstoqueDayReviewStatus(params: {
+  cd: number | null;
+  date: string;
+  status: GestaoEstoqueDayReviewStatus;
+}): Promise<GestaoEstoqueDayReviewState> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_gestao_estoque_set_day_review_status", {
+    p_cd: params.cd,
+    p_date: params.date,
+    p_status: params.status
+  });
+  if (error) throw new Error(normalizeGestaoEstoqueError(error));
+  const first = firstRecord(data);
+  return {
+    movement_date: parseString(first?.movement_date, params.date),
+    review_status: parseDayReviewStatus(first?.review_status),
+    last_reviewed_at: parseNullableString(first?.last_reviewed_at),
+    reviewers: parseReviewers(first?.reviewers)
+  };
 }
 
 export async function addGestaoEstoqueItem(params: {
