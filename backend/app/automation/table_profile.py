@@ -23,6 +23,11 @@ TABLE_PROFILE: tuple[TableProfileEntry, ...] = (
         workbook_sheet="DB_BARRAS",
     ),
     TableProfileEntry(
+        table_name="db_custo",
+        workbook_file="DB_CUSTO.xlsx",
+        workbook_sheet="BD_CUSTO",
+    ),
+    TableProfileEntry(
         table_name="db_log_end",
         workbook_file="DB_LOG_END.xlsx",
         workbook_sheet="DB_LOG_END",

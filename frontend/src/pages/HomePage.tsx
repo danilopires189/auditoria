@@ -8,6 +8,7 @@ import { LogoutIcon, ModuleIcon, ViewGridIcon, ViewListIcon } from "../ui/icons"
 
 const AVAILABLE_MODULE_KEYS = new Set([
   "controle-validade",
+  "gestao-estoque",
   "coleta-mercadoria",
   "pvps-alocacao",
   "indicadores",

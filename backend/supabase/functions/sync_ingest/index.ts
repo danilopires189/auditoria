@@ -18,6 +18,7 @@ type SyncRequest = {
 
 const ALLOWED_TABLES = new Set([
   "db_barras",
+  "db_custo",
   "db_log_end",
   "db_end",
   "db_estq_entr",

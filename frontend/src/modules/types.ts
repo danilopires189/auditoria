@@ -27,6 +27,7 @@ export type ModuleTone = "blue" | "red" | "teal" | "amber";
 
 export type DashboardModuleKey =
   | "controle-validade"
+  | "gestao-estoque"
   | "pvps-alocacao"
   | "atividade-extra"
   | "indicadores"

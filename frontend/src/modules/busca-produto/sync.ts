@@ -40,6 +40,12 @@ function parseInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseNullableNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function parseNullableString(value: unknown): string | null {
   if (value == null) return null;
   const parsed = String(value).trim();
@@ -104,6 +110,7 @@ function mapLookupRow(raw: Record<string, unknown>): BuscaProdutoLookupResult {
     qtd_est_atual: Math.max(parseInteger(raw.qtd_est_atual), 0),
     estoque_updated_at: parseNullableString(raw.estoque_updated_at),
     dat_ult_compra: parseNullableString(raw.dat_ult_compra),
+    custo_unitario: parseNullableNumber(raw.custo_unitario),
     enderecos_sep: parseAddressRows(raw.enderecos_sep),
     enderecos_pul: parseAddressRows(raw.enderecos_pul),
     enderecos_excluidos: parseExcludedRows(raw.enderecos_excluidos)
