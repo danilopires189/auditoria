@@ -15,13 +15,17 @@ import {
   addGestaoEstoqueItem,
   deleteGestaoEstoqueItem,
   fetchGestaoEstoqueAvailableDays,
+  fetchGestaoEstoqueDayReviewState,
   fetchGestaoEstoqueList,
   fetchGestaoEstoqueStockUpdatedAt,
   normalizeGestaoEstoqueError,
+  setGestaoEstoqueDayReviewStatus,
   updateGestaoEstoqueQuantity
 } from "./sync";
 import type {
   GestaoEstoqueAvailableDay,
+  GestaoEstoqueDayReviewState,
+  GestaoEstoqueDayReviewStatus,
   GestaoEstoqueItemRow,
   GestaoEstoqueModuleProfile,
   GestaoEstoqueMovementType
@@ -135,6 +139,10 @@ function formatDateTime(value: string | null): string {
 
 function movementLabel(value: GestaoEstoqueMovementType): string {
   return value === "entrada" ? "Entrada" : "Baixa";
+}
+
+function reviewStatusLabel(value: GestaoEstoqueDayReviewStatus): string {
+  return value === "revisado" ? "Revisado" : "Pendente";
 }
 
 function resolveCdLabel(profile: GestaoEstoqueModuleProfile, cd: number | null): string {
@@ -260,6 +268,14 @@ function searchIcon() {
   );
 }
 
+function checkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 12.5l4.2 4.2L19 7" />
+    </svg>
+  );
+}
+
 function RowTitleMeta({
   coddv,
   movementType
@@ -332,6 +348,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [estoqueUpdatedAt, setEstoqueUpdatedAt] = useState<string | null>(null);
+  const [dayReviewState, setDayReviewState] = useState<GestaoEstoqueDayReviewState | null>(null);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [pendingReviewStatus, setPendingReviewStatus] = useState<GestaoEstoqueDayReviewStatus>("pendente");
+  const [busyReview, setBusyReview] = useState(false);
 
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const today = todayIsoBrasilia();
@@ -359,6 +379,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   }, []);
   const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
   const hasSearchInput = searchInput.trim().length > 0;
+  const currentReviewStatus = dayReviewState?.review_status ?? "pendente";
+  const hasReviewers = (dayReviewState?.reviewers.length ?? 0) > 0;
 
   const focusSearch = useCallback(() => {
     disableSearchSoftKeyboard();
@@ -517,9 +539,23 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setEstoqueUpdatedAt(nextUpdatedAt);
   }, [activeCd]);
 
+  const refreshDayReviewState = useCallback(async () => {
+    if (activeCd == null) {
+      setDayReviewState(null);
+      setPendingReviewStatus("pendente");
+      return;
+    }
+    const nextState = await fetchGestaoEstoqueDayReviewState({
+      cd: activeCd,
+      date: selectedDate
+    });
+    setDayReviewState(nextState);
+    setPendingReviewStatus(nextState.review_status);
+  }, [activeCd, selectedDate]);
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshDays(), refreshRows(), refreshStockUpdatedAt()]);
-  }, [refreshDays, refreshRows, refreshStockUpdatedAt]);
+    await Promise.all([refreshDays(), refreshRows(), refreshStockUpdatedAt(), refreshDayReviewState()]);
+  }, [refreshDayReviewState, refreshDays, refreshRows, refreshStockUpdatedAt]);
 
   const clearPreview = useCallback(() => {
     setPreview(null);
@@ -816,6 +852,32 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setActionRow(row);
   }, []);
 
+  const openReviewModal = useCallback(() => {
+    setPendingReviewStatus(currentReviewStatus);
+    setReviewModalOpen(true);
+  }, [currentReviewStatus]);
+
+  const saveDayReviewStatus = useCallback(async () => {
+    if (activeCd == null || busyReview) return;
+    setBusyReview(true);
+    try {
+      const nextState = await setGestaoEstoqueDayReviewStatus({
+        cd: activeCd,
+        date: selectedDate,
+        status: pendingReviewStatus
+      });
+      setDayReviewState(nextState);
+      setPendingReviewStatus(nextState.review_status);
+      setStatusMessage(`Status do dia alterado para ${reviewStatusLabel(nextState.review_status).toLocaleLowerCase("pt-BR")}.`);
+      setErrorMessage(null);
+      setReviewModalOpen(false);
+    } catch (error) {
+      setErrorMessage(normalizeGestaoEstoqueError(error));
+    } finally {
+      setBusyReview(false);
+    }
+  }, [activeCd, busyReview, pendingReviewStatus, selectedDate]);
+
   const exportPdf = useCallback(async () => {
     setBusyExport(true);
     try {
@@ -934,7 +996,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
 
     const refreshIfVisible = () => {
       if (document.visibilityState !== "visible") return;
-      void Promise.all([refreshRows(), refreshStockUpdatedAt()]).catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
+      void Promise.all([refreshRows(), refreshStockUpdatedAt(), refreshDayReviewState()]).catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
     };
 
     const timerId = window.setInterval(refreshIfVisible, REFRESH_INTERVAL_MS);
@@ -943,7 +1005,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       window.clearInterval(timerId);
       document.removeEventListener("visibilitychange", refreshIfVisible);
     };
-  }, [isHistorical, isOnline, refreshRows, refreshStockUpdatedAt]);
+  }, [isHistorical, isOnline, refreshDayReviewState, refreshRows, refreshStockUpdatedAt]);
 
   useEffect(() => {
     focusSearch();
@@ -1207,6 +1269,22 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
               Entrada
             </button>
           </div>
+
+          <button
+            type="button"
+            className={`gestao-op-review-trigger is-${currentReviewStatus}`}
+            onClick={openReviewModal}
+            aria-label={`Status do dia: ${reviewStatusLabel(currentReviewStatus)}. Clique para alterar ou ver detalhes.`}
+            title={`Status do dia: ${reviewStatusLabel(currentReviewStatus)}`}
+          >
+            <span className="gestao-op-review-trigger-icon" aria-hidden="true">
+              {checkIcon()}
+            </span>
+            <span className="gestao-op-review-trigger-copy">
+              <span className="gestao-op-review-trigger-label">Status</span>
+              <span className="gestao-op-review-trigger-value">{reviewStatusLabel(currentReviewStatus)}</span>
+            </span>
+          </button>
 
           <label className="gestao-op-day-picker">
             <span className="gestao-op-day-icon" aria-hidden="true"><CalendarIcon /></span>
@@ -1511,6 +1589,87 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           )}
         </article>
       </section>
+      {reviewModalOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estoque-review-title"
+              onClick={() => {
+                if (busyReview) return;
+                setReviewModalOpen(false);
+              }}
+            >
+              <div className="confirm-dialog surface-enter gestao-op-review-dialog" onClick={(event) => event.stopPropagation()}>
+                <h3 id="gestao-estoque-review-title">Status do dia</h3>
+                <p>{`${formatDate(selectedDate)} • ${currentCdLabel}`}</p>
+                <div className={`gestao-op-review-status-card is-${currentReviewStatus}`}>
+                  <span className="gestao-op-review-status-icon" aria-hidden="true">{checkIcon()}</span>
+                  <div className="gestao-op-review-status-copy">
+                    <strong>{reviewStatusLabel(currentReviewStatus)}</strong>
+                    <span>
+                      {dayReviewState?.last_reviewed_at
+                        ? `Última atualização em ${formatDateTime(dayReviewState.last_reviewed_at)}`
+                        : "Nenhuma revisão registrada para este dia."}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="gestao-op-review-picker" role="group" aria-label="Alterar status do dia">
+                  <button
+                    type="button"
+                    className={pendingReviewStatus === "pendente" ? "is-active" : ""}
+                    onClick={() => setPendingReviewStatus("pendente")}
+                  >
+                    Pendente
+                  </button>
+                  <button
+                    type="button"
+                    className={pendingReviewStatus === "revisado" ? "is-active" : ""}
+                    onClick={() => setPendingReviewStatus("revisado")}
+                  >
+                    Revisado
+                  </button>
+                </div>
+
+                <div className="gestao-op-review-history">
+                  <strong>Revisões do dia</strong>
+                  {hasReviewers ? (
+                    <div className="gestao-op-review-history-list">
+                      {dayReviewState?.reviewers.map((entry) => (
+                        <div key={`${entry.actor_id ?? entry.actor_mat}-${entry.reviewed_at ?? "sem-data"}`} className="gestao-op-review-history-item">
+                          <span className={`gestao-op-review-history-badge is-${entry.review_status}`}>{reviewStatusLabel(entry.review_status)}</span>
+                          <div className="gestao-op-review-history-copy">
+                            <strong>{entry.actor_nome}</strong>
+                            <span>{`${entry.actor_mat} • ${formatDateTime(entry.reviewed_at)}`}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="coleta-empty">Nenhuma revisão registrada.</div>
+                  )}
+                </div>
+
+                <div className="confirm-actions">
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    onClick={() => setReviewModalOpen(false)}
+                    disabled={busyReview}
+                  >
+                    Fechar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={() => void saveDayReviewStatus()} disabled={busyReview}>
+                    {busyReview ? "Salvando..." : "Salvar status"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       {scannerOpen && typeof document !== "undefined"
         ? createPortal(
             <div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="gestao-estoque-scanner-title" onClick={closeCameraScanner}>
