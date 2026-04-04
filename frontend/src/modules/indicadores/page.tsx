@@ -7,6 +7,7 @@ import type { IndicadoresModuleProfile } from "./types";
 interface IndicadoresPageProps {
   isOnline: boolean;
   profile: IndicadoresModuleProfile;
+  allowedIndicatorKeys?: Array<"blitz" | "gestao-estoque"> | null;
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
@@ -21,7 +22,10 @@ function toDisplayName(value: string): string {
     .join(" ");
 }
 
-export default function IndicadoresPage({ isOnline, profile }: IndicadoresPageProps) {
+export default function IndicadoresPage({ isOnline, profile, allowedIndicatorKeys = null }: IndicadoresPageProps) {
+  const allowedIndicatorSet = allowedIndicatorKeys ? new Set(allowedIndicatorKeys) : null;
+  const showBlitz = !allowedIndicatorSet || allowedIndicatorSet.has("blitz");
+  const showGestaoEstoque = !allowedIndicatorSet || allowedIndicatorSet.has("gestao-estoque");
   return (
     <>
       <header className="module-topbar module-topbar-fixed indicadores-topbar">
@@ -62,29 +66,33 @@ export default function IndicadoresPage({ isOnline, profile }: IndicadoresPagePr
           </div>
 
           <div className="indicadores-entry-grid">
-            <Link to="/modulos/indicadores/blitz" className="indicadores-entry-card">
-              <div className="indicadores-entry-head">
-                <span className="indicadores-entry-chip">Indicador</span>
-                <span className="indicadores-entry-live">Ativo</span>
-              </div>
-              <div className="indicadores-entry-main">
-                <strong>Blitz</strong>
-                <p>Divergências do mês, zonas com mais erros e lista diária filtrável.</p>
-              </div>
-              <span className="indicadores-entry-action">Abrir dashboard</span>
-            </Link>
+            {showBlitz ? (
+              <Link to="/modulos/indicadores/blitz" className="indicadores-entry-card">
+                <div className="indicadores-entry-head">
+                  <span className="indicadores-entry-chip">Indicador</span>
+                  <span className="indicadores-entry-live">Ativo</span>
+                </div>
+                <div className="indicadores-entry-main">
+                  <strong>Blitz</strong>
+                  <p>Divergências do mês, zonas com mais erros e lista diária filtrável.</p>
+                </div>
+                <span className="indicadores-entry-action">Abrir dashboard</span>
+              </Link>
+            ) : null}
 
-            <Link to="/modulos/indicadores/gestao-estoque" className="indicadores-entry-card">
-              <div className="indicadores-entry-head">
-                <span className="indicadores-entry-chip">Indicador</span>
-                <span className="indicadores-entry-live">Novo</span>
-              </div>
-              <div className="indicadores-entry-main">
-                <strong>Gestão de Estoque</strong>
-                <p>Perda acumulada, entradas e saídas, top 30 e reentrada de produtos no ano.</p>
-              </div>
-              <span className="indicadores-entry-action">Abrir dashboard</span>
-            </Link>
+            {showGestaoEstoque ? (
+              <Link to="/modulos/indicadores/gestao-estoque" className="indicadores-entry-card">
+                <div className="indicadores-entry-head">
+                  <span className="indicadores-entry-chip">Indicador</span>
+                  <span className="indicadores-entry-live">Novo</span>
+                </div>
+                <div className="indicadores-entry-main">
+                  <strong>Gestão de Estoque</strong>
+                  <p>Perda acumulada, entradas e saídas, top 30 e reentrada de produtos no ano.</p>
+                </div>
+                <span className="indicadores-entry-action">Abrir dashboard</span>
+              </Link>
+            ) : null}
           </div>
         </article>
       </section>
