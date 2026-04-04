@@ -39,11 +39,21 @@ interface MetricCardDefinition {
   valueTone?: "default" | "entry" | "exit";
 }
 
+type MobileAccordionSection = "reentry" | "topEntradas" | "topSaidas" | "supplierLoss" | "categoryLoss" | "details";
+
+interface MobileAccordionControl {
+  enabled: boolean;
+  expanded: boolean;
+  bodyId: string;
+  onToggle: () => void;
+}
+
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
 const ALL_DAYS_VALUE = "__ALL_DAYS__";
 const DETAIL_ROWS_LIMIT = 100;
 const INSIGHT_ROWS_LIMIT = 10;
 const REENTRY_ROWS_LIMIT = 12;
+const MOBILE_ACCORDION_MEDIA_QUERY = "(max-width: 720px)";
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -197,6 +207,36 @@ function CurrencyMetricValue({ value, signed = false }: { value: number; signed?
   );
 }
 
+function PanelHead({
+  title,
+  subtitle,
+  mobileAccordion
+}: {
+  title: string;
+  subtitle: string;
+  mobileAccordion?: MobileAccordionControl;
+}) {
+  return (
+    <div className={`indicadores-panel-head${mobileAccordion?.enabled ? " is-mobile-accordion" : ""}`}>
+      <div className="indicadores-panel-head-copy">
+        <h3>{title}</h3>
+        <span>{subtitle}</span>
+      </div>
+      {mobileAccordion?.enabled ? (
+        <button
+          type="button"
+          className="gestao-estq-mobile-toggle"
+          aria-expanded={mobileAccordion.expanded}
+          aria-controls={mobileAccordion.bodyId}
+          onClick={mobileAccordion.onToggle}
+        >
+          {mobileAccordion.expanded ? "Recolher" : "Expandir"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function DailyChart({ rows }: { rows: IndicadoresGestaoEstoqueDailyRow[] }) {
   const safeRows = Math.max(rows.length, 1);
   const horizontalPadding = 40;
@@ -317,39 +357,42 @@ function TopList({
   subtitle,
   rows,
   emptyMessage,
-  className
+  className,
+  mobileAccordion
 }: {
   title: string;
   subtitle: string;
   rows: IndicadoresGestaoEstoqueTopItem[];
   emptyMessage: string;
   className?: string;
+  mobileAccordion?: MobileAccordionControl;
 }) {
   return (
     <section className={`indicadores-panel gestao-estq-panel ${className ?? ""}`}>
-      <div className="indicadores-panel-head">
-        <h3>{title}</h3>
-        <span>{subtitle}</span>
-      </div>
-      {rows.length === 0 ? (
-        <div className="indicadores-empty-box"><p>{emptyMessage}</p></div>
-      ) : (
-        <div className="gestao-estq-top-list">
-          {rows.map((row, index) => (
-            <article key={`${row.movement_group}:${row.coddv}:${index}`} className="gestao-estq-top-item">
-              <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
-              <div className="gestao-estq-top-main">
-                <strong>{row.descricao}</strong>
-                <small>CODDV {formatInteger(row.coddv)} · {row.movimentacoes} mov. · {row.dias_distintos} dias</small>
-              </div>
-              <div className="gestao-estq-top-value">
-                <strong>{formatCurrency(row.total_valor)}</strong>
-                <small>{row.last_date ? formatDate(row.last_date) : "-"}</small>
-              </div>
-            </article>
-          ))}
+      <PanelHead title={title} subtitle={subtitle} mobileAccordion={mobileAccordion} />
+      {!mobileAccordion?.enabled || mobileAccordion.expanded ? (
+        <div id={mobileAccordion?.bodyId}>
+          {rows.length === 0 ? (
+            <div className="indicadores-empty-box"><p>{emptyMessage}</p></div>
+          ) : (
+            <div className="gestao-estq-top-list">
+              {rows.map((row, index) => (
+                <article key={`${row.movement_group}:${row.coddv}:${index}`} className="gestao-estq-top-item">
+                  <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
+                  <div className="gestao-estq-top-main">
+                    <strong>{row.descricao}</strong>
+                    <small>CODDV {formatInteger(row.coddv)} · {row.movimentacoes} mov. · {row.dias_distintos} dias</small>
+                  </div>
+                  <div className="gestao-estq-top-value">
+                    <strong>{formatCurrency(row.total_valor)}</strong>
+                    <small>{row.last_date ? formatDate(row.last_date) : "-"}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -358,38 +401,41 @@ function LossDimensionList({
   title,
   subtitle,
   rows,
-  emptyMessage
+  emptyMessage,
+  mobileAccordion
 }: {
   title: string;
   subtitle: string;
   rows: IndicadoresGestaoEstoqueLossDimensionItem[];
   emptyMessage: string;
+  mobileAccordion?: MobileAccordionControl;
 }) {
   return (
     <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-loss">
-      <div className="indicadores-panel-head">
-        <h3>{title}</h3>
-        <span>{subtitle}</span>
-      </div>
-      {rows.length === 0 ? (
-        <div className="indicadores-empty-box"><p>{emptyMessage}</p></div>
-      ) : (
-        <div className="gestao-estq-loss-list">
-          {rows.map((row, index) => (
-            <article key={`${row.dimension_key}:${index}`} className="gestao-estq-loss-item">
-              <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
-              <div className="gestao-estq-loss-main">
-                <strong>{row.dimension_key}</strong>
-                <small>{row.produtos_distintos_mes} prod. no mês · {row.produtos_distintos_ano} no ano</small>
-              </div>
-              <div className="gestao-estq-loss-metrics">
-                <strong>{formatSignedCurrency(row.perda_acumulada_ano)}</strong>
-                <small>Mês {formatSignedCurrency(row.perda_mes)}</small>
-              </div>
-            </article>
-          ))}
+      <PanelHead title={title} subtitle={subtitle} mobileAccordion={mobileAccordion} />
+      {!mobileAccordion?.enabled || mobileAccordion.expanded ? (
+        <div id={mobileAccordion?.bodyId}>
+          {rows.length === 0 ? (
+            <div className="indicadores-empty-box"><p>{emptyMessage}</p></div>
+          ) : (
+            <div className="gestao-estq-loss-list">
+              {rows.map((row, index) => (
+                <article key={`${row.dimension_key}:${index}`} className="gestao-estq-loss-item">
+                  <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
+                  <div className="gestao-estq-loss-main">
+                    <strong>{row.dimension_key}</strong>
+                    <small>{row.produtos_distintos_mes} prod. no mês · {row.produtos_distintos_ano} no ano</small>
+                  </div>
+                  <div className="gestao-estq-loss-metrics">
+                    <strong>{formatSignedCurrency(row.perda_acumulada_ano)}</strong>
+                    <small>Mês {formatSignedCurrency(row.perda_mes)}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -419,6 +465,41 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null);
+  const [isMobileAccordion, setIsMobileAccordion] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(MOBILE_ACCORDION_MEDIA_QUERY).matches;
+  });
+  const [expandedMobileSection, setExpandedMobileSection] = useState<MobileAccordionSection | null>(null);
+
+  function toggleMobileSection(section: MobileAccordionSection) {
+    setExpandedMobileSection((current) => (current === section ? null : section));
+  }
+
+  function mobileAccordionControl(section: MobileAccordionSection, bodyId: string): MobileAccordionControl {
+    return {
+      enabled: isMobileAccordion,
+      expanded: expandedMobileSection === section,
+      bodyId,
+      onToggle: () => toggleMobileSection(section)
+    };
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const mediaQuery = window.matchMedia(MOBILE_ACCORDION_MEDIA_QUERY);
+    const sync = () => setIsMobileAccordion(mediaQuery.matches);
+    sync();
+    mediaQuery.addEventListener("change", sync);
+    return () => {
+      mediaQuery.removeEventListener("change", sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMobileAccordion) {
+      setExpandedMobileSection(null);
+    }
+  }, [isMobileAccordion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -596,6 +677,11 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       return;
     }
 
+    if (isMobileAccordion && expandedMobileSection !== "details") {
+      setDetailRows([]);
+      return;
+    }
+
     let cancelled = false;
 
     async function loadDetails() {
@@ -622,7 +708,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     return () => {
       cancelled = true;
     };
-  }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
+  }, [activeCd, expandedMobileSection, isMobileAccordion, movementFilter, selectedDay, selectedMonthStart]);
 
   const selectedMonthLabel = useMemo(
     () => monthOptions.find((option) => option.month_start === selectedMonthStart)?.month_label ?? "-",
@@ -781,47 +867,52 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
             </section>
 
             <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-reentry">
-              <div className="indicadores-panel-head">
-                <h3>Saída seguida de entrada</h3>
-                <span>Acumulado do ano.</span>
-              </div>
-              {loadingInsights && reentryRows.length === 0 ? (
-                <div className="indicadores-empty-box"><p>Carregando insights do ano...</p></div>
-              ) : reentryRows.length === 0 ? (
-                <div className="indicadores-empty-box"><p>Nenhum produto com saída seguida de entrada encontrado no ano.</p></div>
-              ) : (
-                <div className="gestao-estq-reentry-list">
-                  {reentryRows.map((row, index) => (
-                    <article key={`${row.coddv}:${index}`} className="gestao-estq-reentry-item">
-                      <div className="gestao-estq-reentry-main">
-                        <strong className="gestao-estq-reentry-title">
-                          <span className="gestao-estq-reentry-coddv">CODDV {formatPlainInteger(row.coddv)}</span>
-                          <span className="gestao-estq-reentry-description">{row.descricao}</span>
-                        </strong>
-                      </div>
-                      <div className="gestao-estq-reentry-stats">
-                        <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-saida">
-                          <span className="gestao-estq-reentry-stat-label">Saída</span>
-                          <strong>{formatCurrency(row.total_saida_ano)}</strong>
-                          <small>Data {formatDate(row.first_saida_date)}</small>
-                        </section>
-                        <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-entrada">
-                          <span className="gestao-estq-reentry-stat-label">Entrada</span>
-                          <strong>{formatCurrency(row.total_entrada_ano)}</strong>
-                          <small>Data {formatDate(row.first_entrada_after_saida_date)}</small>
-                        </section>
-                        <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-diff">
-                          <span className="gestao-estq-reentry-stat-label">Diferença</span>
-                          <strong className={row.saldo_ano >= 0 ? "gestao-estq-value-positive" : "gestao-estq-value-negative"}>
-                            {formatSignedCurrency(row.saldo_ano)}
-                          </strong>
-                          <small>Entrada - saída</small>
-                        </section>
-                      </div>
-                    </article>
-                  ))}
+              <PanelHead
+                title="Saída seguida de entrada"
+                subtitle="Acumulado do ano."
+                mobileAccordion={mobileAccordionControl("reentry", "gestao-estq-reentry-body")}
+              />
+              {!isMobileAccordion || expandedMobileSection === "reentry" ? (
+                <div id="gestao-estq-reentry-body">
+                  {loadingInsights && reentryRows.length === 0 ? (
+                    <div className="indicadores-empty-box"><p>Carregando insights do ano...</p></div>
+                  ) : reentryRows.length === 0 ? (
+                    <div className="indicadores-empty-box"><p>Nenhum produto com saída seguida de entrada encontrado no ano.</p></div>
+                  ) : (
+                    <div className="gestao-estq-reentry-list">
+                      {reentryRows.map((row, index) => (
+                        <article key={`${row.coddv}:${index}`} className="gestao-estq-reentry-item">
+                          <div className="gestao-estq-reentry-main">
+                            <strong className="gestao-estq-reentry-title">
+                              <span className="gestao-estq-reentry-coddv">CODDV {formatPlainInteger(row.coddv)}</span>
+                              <span className="gestao-estq-reentry-description">{row.descricao}</span>
+                            </strong>
+                          </div>
+                          <div className="gestao-estq-reentry-stats">
+                            <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-saida">
+                              <span className="gestao-estq-reentry-stat-label">Saída</span>
+                              <strong>{formatCurrency(row.total_saida_ano)}</strong>
+                              <small>Data {formatDate(row.first_saida_date)}</small>
+                            </section>
+                            <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-entrada">
+                              <span className="gestao-estq-reentry-stat-label">Entrada</span>
+                              <strong>{formatCurrency(row.total_entrada_ano)}</strong>
+                              <small>Data {formatDate(row.first_entrada_after_saida_date)}</small>
+                            </section>
+                            <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-diff">
+                              <span className="gestao-estq-reentry-stat-label">Diferença</span>
+                              <strong className={row.saldo_ano >= 0 ? "gestao-estq-value-positive" : "gestao-estq-value-negative"}>
+                                {formatSignedCurrency(row.saldo_ano)}
+                              </strong>
+                              <small>Entrada - saída</small>
+                            </section>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
             </section>
 
             <TopList
@@ -830,6 +921,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
               rows={topEntradas}
               emptyMessage="Nenhuma entrada encontrada para o filtro selecionado."
               className="gestao-estq-panel-top"
+              mobileAccordion={mobileAccordionControl("topEntradas", "gestao-estq-top-entradas-body")}
             />
 
             <TopList
@@ -838,6 +930,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
               rows={topSaidas}
               emptyMessage="Nenhuma saída encontrada para o filtro selecionado."
               className="gestao-estq-panel-top"
+              mobileAccordion={mobileAccordionControl("topSaidas", "gestao-estq-top-saidas-body")}
             />
 
             <LossDimensionList
@@ -845,6 +938,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
               subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
               rows={supplierLossRows}
               emptyMessage="Nenhuma perda positiva por fornecedor encontrada no filtro selecionado."
+              mobileAccordion={mobileAccordionControl("supplierLoss", "gestao-estq-supplier-loss-body")}
             />
 
             <LossDimensionList
@@ -852,64 +946,68 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
               subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
               rows={categoryLossRows}
               emptyMessage="Nenhuma perda positiva por categoria encontrada no filtro selecionado."
+              mobileAccordion={mobileAccordionControl("categoryLoss", "gestao-estq-category-loss-body")}
             />
 
             <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-details">
-              <div className="indicadores-panel-head">
-                <h3>{selectedDay === ALL_DAYS_VALUE ? "Movimentações do mês" : "Movimentações do dia"}</h3>
-                <span>
-                  {selectedDay === ALL_DAYS_VALUE
-                    ? `${selectedMonthLabel} · acumulado do mês no filtro ativo`
-                    : `${formatDate(selectedDay)} · filtro ${formatMovementLabel(movementFilter)}`}
-                  {" · "}
-                  {`top ${DETAIL_ROWS_LIMIT}`}
-                </span>
-              </div>
-              {loadingDetails ? (
-                <div className="indicadores-empty-box"><p>Carregando movimentações...</p></div>
-              ) : detailRows.length === 0 ? (
-                <div className="indicadores-empty-box"><p>Nenhuma movimentação encontrada para o filtro selecionado.</p></div>
-              ) : (
-                <div className="gestao-estq-details-wrap">
-                  <table className="gestao-estq-details-table">
-                    <thead>
-                      <tr>
-                        <th>Data</th>
-                        <th>Produto</th>
-                        <th>Tipo</th>
-                        <th>Mov.</th>
-                        <th>Natureza</th>
-                        <th>Ocorrências</th>
-                        <th>Total (R$)</th>
-                        <th>Responsável</th>
-                        <th>Cargo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailRows.map((row, index) => (
-                        <tr key={`${row.data_mov}:${row.coddv}:${row.tipo_movimentacao}:${index}`}>
-                          <td>{formatDate(row.data_mov)}</td>
-                          <td>
-                            <div className="gestao-estq-product-cell">
-                              <strong>{row.descricao}</strong>
-                              <small>CODDV {formatInteger(row.coddv)}</small>
-                            </div>
-                          </td>
-                          <td>{row.tipo_movimentacao}</td>
-                          <td className="gestao-estq-capitalize">{row.movement_group}</td>
-                          <td>
-                            <span className={`indicadores-status-badge ${natureClassName(row.natureza)}`}>{row.natureza}</span>
-                          </td>
-                          <td>{formatInteger(row.ocorrencias)}</td>
-                          <td>{formatCurrency(row.valor_total)}</td>
-                          <td>{row.responsavel}</td>
-                          <td>{row.cargo}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <PanelHead
+                title={selectedDay === ALL_DAYS_VALUE ? "Movimentações do mês" : "Movimentações do dia"}
+                subtitle={
+                  selectedDay === ALL_DAYS_VALUE
+                    ? `${selectedMonthLabel} · acumulado do mês no filtro ativo · top ${DETAIL_ROWS_LIMIT}`
+                    : `${formatDate(selectedDay)} · filtro ${formatMovementLabel(movementFilter)} · top ${DETAIL_ROWS_LIMIT}`
+                }
+                mobileAccordion={mobileAccordionControl("details", "gestao-estq-details-body")}
+              />
+              {!isMobileAccordion || expandedMobileSection === "details" ? (
+                <div id="gestao-estq-details-body">
+                  {loadingDetails ? (
+                    <div className="indicadores-empty-box"><p>Carregando movimentações...</p></div>
+                  ) : detailRows.length === 0 ? (
+                    <div className="indicadores-empty-box"><p>Nenhuma movimentação encontrada para o filtro selecionado.</p></div>
+                  ) : (
+                    <div className="gestao-estq-details-wrap">
+                      <table className="gestao-estq-details-table">
+                        <thead>
+                          <tr>
+                            <th>Data</th>
+                            <th>Produto</th>
+                            <th>Tipo</th>
+                            <th>Mov.</th>
+                            <th>Natureza</th>
+                            <th>Ocorrências</th>
+                            <th>Total (R$)</th>
+                            <th>Responsável</th>
+                            <th>Cargo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detailRows.map((row, index) => (
+                            <tr key={`${row.data_mov}:${row.coddv}:${row.tipo_movimentacao}:${index}`}>
+                              <td>{formatDate(row.data_mov)}</td>
+                              <td>
+                                <div className="gestao-estq-product-cell">
+                                  <strong>{row.descricao}</strong>
+                                  <small>CODDV {formatInteger(row.coddv)}</small>
+                                </div>
+                              </td>
+                              <td>{row.tipo_movimentacao}</td>
+                              <td className="gestao-estq-capitalize">{row.movement_group}</td>
+                              <td>
+                                <span className={`indicadores-status-badge ${natureClassName(row.natureza)}`}>{row.natureza}</span>
+                              </td>
+                              <td>{formatInteger(row.ocorrencias)}</td>
+                              <td>{formatCurrency(row.valor_total)}</td>
+                              <td>{row.responsavel}</td>
+                              <td>{row.cargo}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : null}
             </section>
           </div>
         </article>
