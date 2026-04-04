@@ -352,6 +352,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [pendingReviewStatus, setPendingReviewStatus] = useState<GestaoEstoqueDayReviewStatus>("pendente");
   const [busyReview, setBusyReview] = useState(false);
+  const [exportChoiceOpen, setExportChoiceOpen] = useState(false);
 
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const today = todayIsoBrasilia();
@@ -857,6 +858,11 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setReviewModalOpen(true);
   }, [currentReviewStatus]);
 
+  const openExportChoices = useCallback(() => {
+    if (busyExport || rows.length === 0) return;
+    setExportChoiceOpen(true);
+  }, [busyExport, rows.length]);
+
   const saveDayReviewStatus = useCallback(async () => {
     if (activeCd == null || busyReview) return;
     setBusyReview(true);
@@ -1300,10 +1306,13 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           </label>
 
           <div className="gestao-op-actions">
-            <button className="btn btn-muted" type="button" onClick={() => void exportPdf()} disabled={busyExport || rows.length === 0}>
+            <button className="btn btn-primary gestao-op-export-trigger" type="button" onClick={openExportChoices} disabled={busyExport || rows.length === 0}>
+              {busyExport ? "Gerando..." : "Exportar"}
+            </button>
+            <button className="btn btn-muted gestao-op-export-btn gestao-op-export-btn--pdf" type="button" onClick={() => void exportPdf()} disabled={busyExport || rows.length === 0}>
               {busyExport ? "Gerando..." : "Exportar PDF"}
             </button>
-            <button className="btn btn-primary" type="button" onClick={() => void exportXlsx()} disabled={busyExport || rows.length === 0}>
+            <button className="btn btn-primary gestao-op-export-btn gestao-op-export-btn--xlsx" type="button" onClick={() => void exportXlsx()} disabled={busyExport || rows.length === 0}>
               {busyExport ? "Gerando..." : "Exportar Excel"}
             </button>
           </div>
@@ -1665,6 +1674,55 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                   </button>
                   <button className="btn btn-primary" type="button" onClick={() => void saveDayReviewStatus()} disabled={busyReview}>
                     {busyReview ? "Salvando..." : "Salvar status"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {exportChoiceOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estoque-export-title"
+              onClick={() => {
+                if (busyExport) return;
+                setExportChoiceOpen(false);
+              }}
+            >
+              <div className="confirm-dialog surface-enter gestao-op-export-dialog" onClick={(event) => event.stopPropagation()}>
+                <h3 id="gestao-estoque-export-title">Exportar lista</h3>
+                <p>{`${formatDate(selectedDate)} • ${movementLabel(movementType)}`}</p>
+                <div className="gestao-op-choice-actions">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => {
+                      setExportChoiceOpen(false);
+                      void exportXlsx();
+                    }}
+                    disabled={busyExport}
+                  >
+                    {busyExport ? "Gerando..." : "Exportar Excel"}
+                  </button>
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    onClick={() => {
+                      setExportChoiceOpen(false);
+                      void exportPdf();
+                    }}
+                    disabled={busyExport}
+                  >
+                    {busyExport ? "Gerando..." : "Exportar PDF"}
+                  </button>
+                </div>
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setExportChoiceOpen(false)} disabled={busyExport}>
+                    Fechar
                   </button>
                 </div>
               </div>
