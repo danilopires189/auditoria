@@ -9536,6 +9536,18 @@ small {
   width: min(100%, 320px);
 }
 
+.controle-validade-filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
+.controle-validade-filters-row .controle-validade-tabs {
+  flex: 1 1 280px;
+  width: auto;
+}
+
 .controle-validade-tabs span {
   color: #58708a;
   font-size: 0.86rem;

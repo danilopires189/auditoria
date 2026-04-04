@@ -112,6 +112,41 @@ function formatDateTime(value: string | null): string {
   return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "value" });
 }
 
+const MONTH_LABELS_PT_BR = [
+  "Janeiro",
+  "Fevereiro",
+  "Marco",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro"
+] as const;
+
+function parseValidadeMonth(value: string): { month: number; year: number; key: string } | null {
+  const matched = /^(\d{2})\/(\d{2})$/.exec(String(value ?? "").trim());
+  if (!matched) return null;
+  const month = Number.parseInt(matched[1], 10);
+  const yearTwoDigits = Number.parseInt(matched[2], 10);
+  if (!Number.isFinite(month) || month < 1 || month > 12 || !Number.isFinite(yearTwoDigits)) return null;
+  const year = 2000 + yearTwoDigits;
+  return {
+    month,
+    year,
+    key: `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`
+  };
+}
+
+function formatValidadeMonthOption(value: string): string {
+  const parsed = parseValidadeMonth(value);
+  if (!parsed) return value || "Mes invalido";
+  return `${MONTH_LABELS_PT_BR[parsed.month - 1]} ${parsed.year}`;
+}
+
 function safeUuid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -189,6 +224,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [mainTab, setMainTab] = useState<MainTab>("linha");
   const [linhaSubTab, setLinhaSubTab] = useState<LinhaSubTab>("coleta");
   const [statusFilter, setStatusFilter] = useState<RetiradaStatusFilter>("pendente");
+  const [monthFilter, setMonthFilter] = useState("todos");
 
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -1013,16 +1049,46 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   }, [commitScannerInput, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch]);
 
   const linhaRowsFiltered = useMemo(() => {
-    if (statusFilter === "todos") return linhaRows;
-    return linhaRows.filter((row) => row.status === statusFilter);
-  }, [linhaRows, statusFilter]);
+    return linhaRows.filter((row) => {
+      if (statusFilter !== "todos" && row.status !== statusFilter) return false;
+      if (monthFilter !== "todos" && row.val_mmaa !== monthFilter) return false;
+      return true;
+    });
+  }, [linhaRows, monthFilter, statusFilter]);
 
   const pulRowsFiltered = useMemo(() => {
-    if (statusFilter === "todos") return pulRows;
-    return pulRows.filter((row) => row.status === statusFilter);
-  }, [pulRows, statusFilter]);
+    return pulRows.filter((row) => {
+      if (statusFilter !== "todos" && row.status !== statusFilter) return false;
+      if (monthFilter !== "todos" && row.val_mmaa !== monthFilter) return false;
+      return true;
+    });
+  }, [monthFilter, pulRows, statusFilter]);
 
   const hasBarcodeInput = barcodeInput.trim().length > 0;
+  const monthFilterOptions = useMemo(() => {
+    const uniqueValues = new Set<string>();
+    for (const row of linhaRows) {
+      if (row.val_mmaa) uniqueValues.add(row.val_mmaa);
+    }
+    for (const row of pulRows) {
+      if (row.val_mmaa) uniqueValues.add(row.val_mmaa);
+    }
+    return Array.from(uniqueValues)
+      .map((value) => ({ value, parsed: parseValidadeMonth(value) }))
+      .sort((a, b) => {
+        if (a.parsed && b.parsed) return b.parsed.key.localeCompare(a.parsed.key, "pt-BR");
+        if (a.parsed) return -1;
+        if (b.parsed) return 1;
+        return a.value.localeCompare(b.value, "pt-BR");
+      })
+      .map((entry) => entry.value);
+  }, [linhaRows, pulRows]);
+
+  useEffect(() => {
+    if (monthFilter === "todos") return;
+    if (monthFilterOptions.includes(monthFilter)) return;
+    setMonthFilter("todos");
+  }, [monthFilter, monthFilterOptions]);
 
   return (
     <>
@@ -1094,17 +1160,35 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Trabalhar offline".</div>
             ) : null}
 
-            <label className={`controle-validade-tabs ${mainTab === "pulmao" ? "is-pulmao" : "is-linha"}`} htmlFor="controle-validade-tipo">
-              <span>Tipo de Validade</span>
-              <select
-                id="controle-validade-tipo"
-                value={mainTab}
-                onChange={(event) => setMainTab(event.target.value as MainTab)}
-              >
-                <option value="linha">Separação</option>
-                <option value="pulmao">Pulmão</option>
-              </select>
-            </label>
+            <div className="controle-validade-filters-row">
+              <label className={`controle-validade-tabs ${mainTab === "pulmao" ? "is-pulmao" : "is-linha"}`} htmlFor="controle-validade-tipo">
+                <span>Tipo de Validade</span>
+                <select
+                  id="controle-validade-tipo"
+                  value={mainTab}
+                  onChange={(event) => setMainTab(event.target.value as MainTab)}
+                >
+                  <option value="linha">Separacao</option>
+                  <option value="pulmao">Pulmao</option>
+                </select>
+              </label>
+
+              <label className="controle-validade-tabs controle-validade-tabs-date" htmlFor="controle-validade-mes">
+                <span>Data da Validade</span>
+                <select
+                  id="controle-validade-mes"
+                  value={monthFilter}
+                  onChange={(event) => setMonthFilter(event.target.value)}
+                >
+                  <option value="todos">Todos os meses</option>
+                  {monthFilterOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {formatValidadeMonthOption(value)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             {mainTab === "linha" ? (
               <div className="controle-validade-pane">
