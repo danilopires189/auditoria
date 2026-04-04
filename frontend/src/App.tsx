@@ -92,6 +92,7 @@ interface AuthBranding {
   authCaption: string;
   hiddenModuleKeys: DashboardModuleKey[];
   allowedModuleKeys?: DashboardModuleKey[] | null;
+  allowedIndicatorKeys?: Array<"blitz" | "gestao-estoque"> | null;
   defaultRoute?: string | null;
 }
 
@@ -99,6 +100,7 @@ const DEFAULT_AUTH_BRANDING: AuthBranding = {
   appLabel: "Auditoria",
   authCaption: "Prevenção de Perdas CDs",
   hiddenModuleKeys: [],
+  allowedIndicatorKeys: null,
   defaultRoute: null
 };
 
@@ -107,6 +109,7 @@ const INDICADORES_AUTH_BRANDING: AuthBranding = {
   authCaption: "Indicadores CDs",
   hiddenModuleKeys: [],
   allowedModuleKeys: ["indicadores"],
+  allowedIndicatorKeys: ["blitz", "gestao-estoque"],
   defaultRoute: null
 };
 
@@ -115,18 +118,21 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     appLabel: "Prevenção CDs",
     authCaption: "Prevenção de Perdas CDs",
     hiddenModuleKeys: [],
+    allowedIndicatorKeys: null,
     defaultRoute: null
   },
   "www.prevencaocd.vercel.app": {
     appLabel: "Prevenção CDs",
     authCaption: "Prevenção de Perdas CDs",
     hiddenModuleKeys: [],
+    allowedIndicatorKeys: null,
     defaultRoute: null
   },
   "logisticacd.vercel.app": {
     appLabel: "Logística CDs",
     authCaption: "Logística CDs",
     hiddenModuleKeys: ["atividade-extra", "produtividade"],
+    allowedIndicatorKeys: null,
     defaultRoute: null
   },
   "gestaoestoquecd.vercel.app": {
@@ -134,6 +140,7 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     authCaption: "Logística CDs",
     hiddenModuleKeys: [],
     allowedModuleKeys: ["gestao-estoque", "indicadores"],
+    allowedIndicatorKeys: ["gestao-estoque"],
     defaultRoute: null
   },
   "www.gestaoestoquecd.vercel.app": {
@@ -141,6 +148,7 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     authCaption: "Logística CDs",
     hiddenModuleKeys: [],
     allowedModuleKeys: ["gestao-estoque", "indicadores"],
+    allowedIndicatorKeys: ["gestao-estoque"],
     defaultRoute: null
   },
   "indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
@@ -2467,7 +2475,11 @@ export default function App() {
             path="/modulos/indicadores"
             element={
               indicadoresProfile ? (
-                <IndicadoresPage isOnline={isOnline} profile={indicadoresProfile} />
+                <IndicadoresPage
+                  isOnline={isOnline}
+                  profile={indicadoresProfile}
+                  allowedIndicatorKeys={authBranding.allowedIndicatorKeys ?? null}
+                />
               ) : (
                 <Navigate to="/inicio" replace />
               )
@@ -2476,10 +2488,10 @@ export default function App() {
           <Route
             path="/modulos/indicadores/blitz"
             element={
-              indicadoresProfile ? (
+              indicadoresProfile && (!authBranding.allowedIndicatorKeys || authBranding.allowedIndicatorKeys.includes("blitz")) ? (
                 <IndicadoresBlitzPage isOnline={isOnline} profile={indicadoresProfile} />
               ) : (
-                <Navigate to="/inicio" replace />
+                <Navigate to="/modulos/indicadores" replace />
               )
             }
           />
