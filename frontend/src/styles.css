@@ -12580,6 +12580,10 @@ small {
     width: 100%;
   }
 
+  .gestao-op-header-meta .gestao-op-date-pill:first-child {
+    display: none;
+  }
+
   .gestao-op-segmented {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
