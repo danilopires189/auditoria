@@ -239,6 +239,15 @@ function flashIcon({ on }: { on: boolean }) {
   );
 }
 
+function searchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-4-4" />
+    </svg>
+  );
+}
+
 function RowTitleMeta({
   coddv,
   movementType
@@ -315,6 +324,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     return typeof navigator.mediaDevices?.getUserMedia === "function";
   }, []);
   const barcodeIconClassName = "field-icon validation-status";
+  const hasSearchInput = searchInput.trim().length > 0;
 
   const focusSearch = useCallback(() => {
     disableSearchSoftKeyboard();
@@ -1228,12 +1238,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     <button
                       type="button"
                       className="input-action-btn gestao-op-mobile-camera-btn"
-                      onClick={openCameraScanner}
-                      title="Ler código pela câmera"
-                      aria-label="Ler código pela câmera"
-                      disabled={!cameraSupported || busyLookup || isHistorical}
+                      onClick={hasSearchInput ? () => void executeLookup() : openCameraScanner}
+                      title={hasSearchInput ? "Buscar produto" : "Ler código pela câmera"}
+                      aria-label={hasSearchInput ? "Buscar produto" : "Ler código pela câmera"}
+                      disabled={hasSearchInput ? busyLookup || isHistorical : !cameraSupported || busyLookup || isHistorical}
                     >
-                      {cameraIcon()}
+                      {hasSearchInput ? searchIcon() : cameraIcon()}
                     </button>
                   </div>
                   <button className="btn btn-muted gestao-op-search-btn" type="button" onClick={() => void executeLookup()} disabled={busyLookup || isHistorical}>
