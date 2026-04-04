@@ -97,6 +97,10 @@ function formatInteger(value: number): string {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function formatPlainInteger(value: number): string {
+  return Number.isFinite(value) ? String(Math.trunc(value)) : "0";
+}
+
 function formatNumber(value: number): string {
   const safe = Number.isFinite(value) ? value : 0;
   const isInteger = Math.abs(safe % 1) < 0.000001;
@@ -803,7 +807,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                     <article key={`${row.coddv}:${index}`} className="gestao-estq-reentry-item">
                       <div className="gestao-estq-reentry-main">
                         <strong className="gestao-estq-reentry-title">
-                          <span className="gestao-estq-reentry-coddv">CODDV {formatInteger(row.coddv)}</span>
+                          <span className="gestao-estq-reentry-coddv">CODDV {formatPlainInteger(row.coddv)}</span>
                           <span className="gestao-estq-reentry-description">{row.descricao}</span>
                         </strong>
                       </div>

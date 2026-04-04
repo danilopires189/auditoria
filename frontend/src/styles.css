@@ -10615,6 +10615,8 @@ small {
   }
 
   .gestao-estq-panel-reentry {
+    min-height: 430px;
+    height: 430px;
     max-height: 430px;
     overflow: hidden;
   }
@@ -10957,6 +10959,8 @@ small {
     }
 
     .gestao-estq-panel-reentry {
+      min-height: 0;
+      height: auto;
       max-height: none;
     }
   }
