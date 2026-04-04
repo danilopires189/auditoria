@@ -991,6 +991,18 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   }, [refreshAll]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const scrollToTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+    };
+    scrollToTop();
+    const frameId = window.requestAnimationFrame(scrollToTop);
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
+
+  useEffect(() => {
     const pendingId = pendingFocusItemIdRef.current;
     if (!pendingId) return;
     focusRow(pendingId);
