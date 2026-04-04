@@ -11795,6 +11795,32 @@ small {
   gap: 18px;
 }
 
+.gestao-op-screen .module-screen-header {
+  gap: 14px;
+}
+
+.gestao-op-screen .module-screen-title-row {
+  display: block;
+}
+
+.gestao-op-screen .module-screen-title {
+  display: grid;
+  gap: 6px;
+}
+
+.gestao-op-screen .module-screen-title p {
+  margin: 0;
+  color: #5d7693;
+  font-size: 0.96rem;
+  line-height: 1.45;
+}
+
+.gestao-op-screen .module-screen-body {
+  gap: 6px;
+  justify-items: center;
+  align-items: center;
+}
+
 .gestao-op-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -11880,13 +11906,18 @@ small {
 
 .gestao-op-metric-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
   gap: 6px;
+  padding: 18px 18px 16px;
+  min-height: 92px;
 }
 
 .gestao-op-metric-card span {
   color: #60758c;
   font-size: 0.92rem;
   font-weight: 600;
+  line-height: 1.25;
 }
 
 .gestao-op-metric-card strong {
@@ -11904,7 +11935,11 @@ small {
 .gestao-op-panel,
 .gestao-op-list-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
   gap: 16px;
+  padding: 18px;
+  min-width: 0;
 }
 
 .gestao-op-panel-head {
@@ -11912,28 +11947,33 @@ small {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .gestao-op-panel-head h3 {
   margin: 0;
   color: #173452;
   font-size: 1.02rem;
+  line-height: 1.2;
 }
 
 .gestao-op-panel-head span {
   color: #68809a;
   font-size: 0.92rem;
   font-weight: 600;
+  line-height: 1.35;
 }
 
 .gestao-op-search-form {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .gestao-op-field {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .gestao-op-field label {
@@ -11979,6 +12019,7 @@ small {
 .gestao-op-preview {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .gestao-op-preview-head {
@@ -12030,6 +12071,7 @@ small {
 .gestao-op-list {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .gestao-op-row {
