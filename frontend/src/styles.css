@@ -12395,7 +12395,15 @@ small {
 }
 
 @media (max-width: 720px) {
-  .gestao-op-metrics,
+  .gestao-op-metrics {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+    gap: 10px;
+  }
+
+  .gestao-op-metrics .gestao-op-metric-card:last-child {
+    grid-column: 1 / -1;
+  }
+
   .gestao-op-preview dl {
     grid-template-columns: 1fr;
   }
@@ -12456,6 +12464,10 @@ small {
   .gestao-op-day-picker select {
     min-width: 0;
     width: 100%;
+  }
+
+  .gestao-op-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .gestao-op-date-pill {
