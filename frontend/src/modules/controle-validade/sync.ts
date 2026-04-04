@@ -343,7 +343,9 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
         regra_aplicada: cycle.regra_aplicada,
         dt_ultima_coleta: shouldReplaceActor ? nextColetaAt ?? current?.dt_ultima_coleta ?? null : current?.dt_ultima_coleta ?? null,
         auditor_nome_ultima_coleta: shouldReplaceActor ? payload.auditor_nome ?? current?.auditor_nome_ultima_coleta ?? null : current?.auditor_nome_ultima_coleta ?? null,
-        auditor_mat_ultima_coleta: shouldReplaceActor ? payload.auditor_mat ?? current?.auditor_mat_ultima_coleta ?? null : current?.auditor_mat_ultima_coleta ?? null
+        auditor_mat_ultima_coleta: shouldReplaceActor ? payload.auditor_mat ?? current?.auditor_mat_ultima_coleta ?? null : current?.auditor_mat_ultima_coleta ?? null,
+        editable_retirada_id: current?.editable_retirada_id ?? null,
+        editable_retirada_qtd: current?.editable_retirada_qtd ?? null
       });
       continue;
     }
@@ -374,7 +376,9 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
       ...current,
       qtd_retirada: qtdRetirada,
       qtd_pendente: qtdPendente,
-      status: qtdPendente > 0 ? "pendente" : "concluido"
+      status: qtdPendente > 0 ? "pendente" : "concluido",
+      editable_retirada_id: current.editable_retirada_id,
+      editable_retirada_qtd: current.editable_retirada_qtd
     });
   }
 
@@ -432,7 +436,9 @@ function applyPendingEventsToPulRows(rows: PulRetiradaRow[], events: ControleVal
       ...current,
       qtd_retirada: qtdRetirada,
       qtd_pendente: qtdPendente,
-      status: qtdPendente > 0 ? "pendente" : "concluido"
+      status: qtdPendente > 0 ? "pendente" : "concluido",
+      editable_retirada_id: current.editable_retirada_id,
+      editable_retirada_qtd: current.editable_retirada_qtd
     });
   }
 
