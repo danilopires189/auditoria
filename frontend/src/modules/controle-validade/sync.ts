@@ -125,7 +125,13 @@ function mapLinhaRow(raw: Record<string, unknown>): LinhaRetiradaRow {
     qtd_pendente: parseInteger(raw.qtd_pendente),
     status: parseRetiradaStatus(raw.status),
     regra_aplicada: parseString(raw.regra_aplicada),
-    dt_ultima_coleta: parseNullableString(raw.dt_ultima_coleta)
+    dt_ultima_coleta: parseNullableString(raw.dt_ultima_coleta),
+    auditor_nome_ultima_coleta: parseNullableString(
+      raw.auditor_nome_ultima_coleta ?? raw.created_nome ?? raw.nome_ultima_coleta
+    ),
+    auditor_mat_ultima_coleta: parseNullableString(
+      raw.auditor_mat_ultima_coleta ?? raw.created_mat ?? raw.mat_ultima_coleta
+    )
   };
 }
 
