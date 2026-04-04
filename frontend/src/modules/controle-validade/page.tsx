@@ -8,7 +8,7 @@ import { normalizeBarcode, refreshDbBarrasCacheSmart } from "../../shared/db-bar
 import { getDbEndMeta } from "../../shared/db-end/storage";
 import { refreshDbEndCacheSmart } from "../../shared/db-end/sync";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
-import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { BackIcon, EyeIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
@@ -126,6 +126,10 @@ const MONTH_LABELS_PT_BR = [
   "Novembro",
   "Dezembro"
 ] as const;
+const UI_TEXT_COLLATOR = new Intl.Collator("pt-BR", {
+  numeric: true,
+  sensitivity: "base"
+});
 
 function parseValidadeMonth(value: string): { month: number; year: number; key: string } | null {
   const matched = /^(\d{2})\/(\d{2})$/.exec(String(value ?? "").trim());
@@ -145,6 +149,26 @@ function formatValidadeMonthOption(value: string): string {
   const parsed = parseValidadeMonth(value);
   if (!parsed) return value || "Mes invalido";
   return `${MONTH_LABELS_PT_BR[parsed.month - 1]} ${parsed.year}`;
+}
+
+function compareUiText(left: string | number | null | undefined, right: string | number | null | undefined): number {
+  return UI_TEXT_COLLATOR.compare(String(left ?? ""), String(right ?? ""));
+}
+
+function linhaZone(value: string): string {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (!normalized) return "SEM ZONA";
+  const matched = /^([A-Z]{2,4})/.exec(normalized);
+  return matched?.[1] ?? (normalized.slice(0, 4) || "SEM ZONA");
+}
+
+function formatLinhaCollector(row: LinhaRetiradaRow): string {
+  const mat = String(row.auditor_mat_ultima_coleta ?? "").trim();
+  const nome = String(row.auditor_nome_ultima_coleta ?? "").trim();
+  if (mat && nome) return `${mat} - ${nome}`;
+  if (nome) return nome;
+  if (mat) return mat;
+  return "Aguardando sincronizacao";
 }
 
 function currentValidadeMonthValue(baseDate = new Date()): string {
@@ -264,6 +288,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
+  const [expandedLinhaCardKey, setExpandedLinhaCardKey] = useState<string | null>(null);
 
   const [linhaRows, setLinhaRows] = useState<LinhaRetiradaRow[]>([]);
   const [pulRows, setPulRows] = useState<PulRetiradaRow[]>([]);
@@ -752,8 +777,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const submitLinhaRetirada = useCallback(async (row: LinhaRetiradaRow) => {
     if (activeCd == null) return;
     const key = `${row.coddv}|${row.endereco_sep}|${row.val_mmaa}|${row.ref_coleta_mes}`;
-    const parsed = Number.parseInt((linhaQtyInputs[key] || "1").replace(/\D/g, ""), 10);
-    const qtd = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    const parsed = Number.parseInt((linhaQtyInputs[key] ?? "").replace(/\D/g, ""), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setErrorMessage("Informe a quantidade retirada da Linha.");
+      return;
+    }
+    const qtd = parsed;
 
     try {
       await enqueueLinhaRetirada({
@@ -771,6 +800,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       });
       await refreshQueueStats();
       setStatusMessage(`Retirada da Linha registrada (${qtd}).`);
+      setLinhaQtyInputs((current) => ({ ...current, [key]: "" }));
       if (isOnline) {
         await flushQueue(false);
       }
@@ -1062,25 +1092,38 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   }, [commitScannerInput, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch]);
 
   const linhaRowsFiltered = useMemo(() => {
-    return linhaRows.filter((row) => {
-      if (statusFilter !== "todos" && row.status !== statusFilter) return false;
-      if (row.val_mmaa !== monthFilter) return false;
-      return true;
-    });
-  }, [linhaRows, monthFilter, statusFilter]);
+    const effectiveMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
+    return linhaRows
+      .filter((row) => {
+        if (statusFilter !== "todos" && row.status !== statusFilter) return false;
+        if (row.val_mmaa !== effectiveMonthFilter) return false;
+        return true;
+      })
+      .sort((left, right) => {
+        const zoneCompare = compareUiText(linhaZone(left.endereco_sep), linhaZone(right.endereco_sep));
+        if (zoneCompare !== 0) return zoneCompare;
+        const addressCompare = compareUiText(left.endereco_sep, right.endereco_sep);
+        if (addressCompare !== 0) return addressCompare;
+        const coddvCompare = compareUiText(left.coddv, right.coddv);
+        if (coddvCompare !== 0) return coddvCompare;
+        return compareUiText(left.descricao, right.descricao);
+      });
+  }, [defaultMonthFilter, linhaRows, monthFilter, statusFilter]);
 
   const pulRowsFiltered = useMemo(() => {
+    const effectiveMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
     return pulRows.filter((row) => {
       if (statusFilter !== "todos" && row.status !== statusFilter) return false;
-      if (row.val_mmaa !== monthFilter) return false;
+      if (row.val_mmaa !== effectiveMonthFilter) return false;
       return true;
     });
-  }, [monthFilter, pulRows, statusFilter]);
+  }, [defaultMonthFilter, monthFilter, pulRows, statusFilter]);
 
   const hasBarcodeInput = barcodeInput.trim().length > 0;
   const monthFilterOptions = useMemo(() => {
     return buildValidadeMonthWindow();
   }, []);
+  const displayedMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
 
   useEffect(() => {
     if (monthFilterOptions.includes(monthFilter)) return;
@@ -1180,8 +1223,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 </span>
                 <select
                   id="controle-validade-mes"
-                  value={monthFilter}
+                  value={displayedMonthFilter}
                   onChange={(event) => setMonthFilter(event.target.value)}
+                  disabled={statusFilter === "concluido"}
                 >
                   {monthFilterOptions.map((value) => (
                     <option key={value} value={value}>
@@ -1332,50 +1376,81 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                       <p>Nenhum item na Linha para o filtro atual.</p>
                     ) : null}
                     <div className="controle-validade-list">
-                      {linhaRowsFiltered.map((row) => {
+                      {linhaRowsFiltered.map((row, index) => {
                         const key = `${row.coddv}|${row.endereco_sep}|${row.val_mmaa}|${row.ref_coleta_mes}`;
+                        const previousRow = index > 0 ? linhaRowsFiltered[index - 1] : null;
+                        const zone = linhaZone(row.endereco_sep);
+                        const previousZone = previousRow ? linhaZone(previousRow.endereco_sep) : null;
+                        const showZoneHeader = previousZone !== zone;
                         const isPending = row.status === "pendente";
+                        const isExpanded = expandedLinhaCardKey === key;
+                        const qtyValue = linhaQtyInputs[key] ?? "";
+                        const parsedQty = Number.parseInt(qtyValue.replace(/\D/g, ""), 10);
+                        const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0;
                         return (
-                          <article key={key} className="controle-validade-row-card">
-                            <div className="controle-validade-row-head">
-                              <strong>{row.descricao}</strong>
-                              <span className={`controle-validade-status ${row.status}`}>
-                                {row.status === "pendente" ? "Pendente" : "Concluído"}
-                              </span>
-                            </div>
-                            <div className="controle-validade-row-grid">
-                              <span>CODDV: {row.coddv}</span>
-                              <span>Endereço: {row.endereco_sep}</span>
-                              <span>Validade: {row.val_mmaa}</span>
-                              <span>Regra: {row.regra_aplicada === "al_lt_3m" ? "AL < 3 meses" : "Até 5 meses"}</span>
-                              <span>Coletado: {row.qtd_coletada}</span>
-                              <span>Retirado: {row.qtd_retirada}</span>
-                              <span>Pendente: {row.qtd_pendente}</span>
-                              <span>Última coleta: {formatDateTime(row.dt_ultima_coleta)}</span>
-                            </div>
-                            {isPending ? (
-                              <div className="controle-validade-row-actions">
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  value={linhaQtyInputs[key] ?? "1"}
-                                  onChange={(event) =>
-                                    setLinhaQtyInputs((current) => ({
-                                      ...current,
-                                      [key]: event.target.value.replace(/\D/g, "").slice(0, 4)
-                                    }))
-                                  }
-                                />
+                          <div key={key} className="pvps-zone-group">
+                            {showZoneHeader ? <div className="pvps-zone-divider">Zona {zone}</div> : null}
+                            <article className="controle-validade-row-card controle-validade-linha-card">
+                              <div className="controle-validade-linha-card-main">
                                 <button
+                                  className="gestao-op-row-expand controle-validade-linha-expand"
                                   type="button"
-                                  className="btn btn-primary"
-                                  onClick={() => void submitLinhaRetirada(row)}
+                                  onClick={() => setExpandedLinhaCardKey((current) => (current === key ? null : key))}
+                                  aria-expanded={isExpanded}
                                 >
-                                  Registrar retirada
+                                  <span className="gestao-op-row-expand-icon" aria-hidden="true">
+                                    <EyeIcon open={isExpanded} />
+                                  </span>
+                                  <span className="controle-validade-linha-summary">
+                                    <strong>{row.endereco_sep}</strong>
+                                    <span>{`${row.coddv} - ${row.descricao}`}</span>
+                                  </span>
                                 </button>
+                                <span className={`controle-validade-status ${row.status}`}>
+                                  {row.status === "pendente" ? "Pendente" : "Concluído"}
+                                </span>
                               </div>
-                            ) : null}
-                          </article>
+
+                              {isExpanded ? (
+                                <div className="controle-validade-linha-details">
+                                  <div className="controle-validade-linha-detail-grid">
+                                    <span><b>Validade:</b> {row.val_mmaa}</span>
+                                    <span><b>Coleta:</b> {formatDateTime(row.dt_ultima_coleta)}</span>
+                                    <span><b>Usuário coleta:</b> {formatLinhaCollector(row)}</span>
+                                    <span><b>Regra:</b> {row.regra_aplicada === "al_lt_3m" ? "AL < 3 meses" : "Até 5 meses"}</span>
+                                    <span><b>Coletado:</b> {row.qtd_coletada}</span>
+                                    <span><b>Retirado:</b> {row.qtd_retirada}</span>
+                                    <span><b>Pendente:</b> {row.qtd_pendente}</span>
+                                  </div>
+
+                                  {isPending ? (
+                                    <div className="controle-validade-row-actions controle-validade-linha-actions">
+                                      <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        placeholder="Qtd"
+                                        value={qtyValue}
+                                        onChange={(event) =>
+                                          setLinhaQtyInputs((current) => ({
+                                            ...current,
+                                            [key]: event.target.value.replace(/\D/g, "").slice(0, 4)
+                                          }))
+                                        }
+                                      />
+                                      <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={() => void submitLinhaRetirada(row)}
+                                        disabled={!canSubmit}
+                                      >
+                                        Registrar retirada
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </article>
+                          </div>
                         );
                       })}
                     </div>
