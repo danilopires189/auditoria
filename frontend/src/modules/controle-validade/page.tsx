@@ -147,6 +147,18 @@ function formatValidadeMonthOption(value: string): string {
   return `${MONTH_LABELS_PT_BR[parsed.month - 1]} ${parsed.year}`;
 }
 
+function currentValidadeMonthValue(baseDate = new Date()): string {
+  return `${String(baseDate.getMonth() + 1).padStart(2, "0")}/${String(baseDate.getFullYear()).slice(-2)}`;
+}
+
+function buildValidadeMonthWindow(baseDate = new Date(), count = 6): string[] {
+  const safeCount = Math.max(Math.trunc(count), 1);
+  return Array.from({ length: safeCount }, (_, index) => {
+    const date = new Date(baseDate.getFullYear(), baseDate.getMonth() + index, 1);
+    return `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getFullYear()).slice(-2)}`;
+  });
+}
+
 function safeUuid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -206,6 +218,7 @@ function searchIcon() {
 }
 
 export default function ControleValidadePage({ isOnline, profile }: ControleValidadePageProps) {
+  const defaultMonthFilter = useMemo(() => currentValidadeMonthValue(), []);
   const barcodeRef = useRef<HTMLInputElement | null>(null);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
@@ -224,7 +237,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [mainTab, setMainTab] = useState<MainTab>("linha");
   const [linhaSubTab, setLinhaSubTab] = useState<LinhaSubTab>("coleta");
   const [statusFilter, setStatusFilter] = useState<RetiradaStatusFilter>("pendente");
-  const [monthFilter, setMonthFilter] = useState("todos");
+  const [monthFilter, setMonthFilter] = useState(defaultMonthFilter);
 
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -1051,7 +1064,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const linhaRowsFiltered = useMemo(() => {
     return linhaRows.filter((row) => {
       if (statusFilter !== "todos" && row.status !== statusFilter) return false;
-      if (monthFilter !== "todos" && row.val_mmaa !== monthFilter) return false;
+      if (row.val_mmaa !== monthFilter) return false;
       return true;
     });
   }, [linhaRows, monthFilter, statusFilter]);
@@ -1059,36 +1072,20 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const pulRowsFiltered = useMemo(() => {
     return pulRows.filter((row) => {
       if (statusFilter !== "todos" && row.status !== statusFilter) return false;
-      if (monthFilter !== "todos" && row.val_mmaa !== monthFilter) return false;
+      if (row.val_mmaa !== monthFilter) return false;
       return true;
     });
   }, [monthFilter, pulRows, statusFilter]);
 
   const hasBarcodeInput = barcodeInput.trim().length > 0;
   const monthFilterOptions = useMemo(() => {
-    const uniqueValues = new Set<string>();
-    for (const row of linhaRows) {
-      if (row.val_mmaa) uniqueValues.add(row.val_mmaa);
-    }
-    for (const row of pulRows) {
-      if (row.val_mmaa) uniqueValues.add(row.val_mmaa);
-    }
-    return Array.from(uniqueValues)
-      .map((value) => ({ value, parsed: parseValidadeMonth(value) }))
-      .sort((a, b) => {
-        if (a.parsed && b.parsed) return b.parsed.key.localeCompare(a.parsed.key, "pt-BR");
-        if (a.parsed) return -1;
-        if (b.parsed) return 1;
-        return a.value.localeCompare(b.value, "pt-BR");
-      })
-      .map((entry) => entry.value);
-  }, [linhaRows, pulRows]);
+    return buildValidadeMonthWindow();
+  }, []);
 
   useEffect(() => {
-    if (monthFilter === "todos") return;
     if (monthFilterOptions.includes(monthFilter)) return;
-    setMonthFilter("todos");
-  }, [monthFilter, monthFilterOptions]);
+    setMonthFilter(defaultMonthFilter);
+  }, [defaultMonthFilter, monthFilter, monthFilterOptions]);
 
   return (
     <>
@@ -1162,7 +1159,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
             <div className="controle-validade-filters-row">
               <label className={`controle-validade-tabs ${mainTab === "pulmao" ? "is-pulmao" : "is-linha"}`} htmlFor="controle-validade-tipo">
-                <span>Tipo de Validade</span>
+                <span className="controle-validade-filter-label">
+                  <span className="controle-validade-filter-label-full">Tipo de Validade</span>
+                  <span className="controle-validade-filter-label-short">Tipo</span>
+                </span>
                 <select
                   id="controle-validade-tipo"
                   value={mainTab}
@@ -1174,13 +1174,15 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               </label>
 
               <label className="controle-validade-tabs controle-validade-tabs-date" htmlFor="controle-validade-mes">
-                <span>Data da Validade</span>
+                <span className="controle-validade-filter-label">
+                  <span className="controle-validade-filter-label-full">Data da Validade</span>
+                  <span className="controle-validade-filter-label-short">Data</span>
+                </span>
                 <select
                   id="controle-validade-mes"
                   value={monthFilter}
                   onChange={(event) => setMonthFilter(event.target.value)}
                 >
-                  <option value="todos">Todos os meses</option>
                   {monthFilterOptions.map((value) => (
                     <option key={value} value={value}>
                       {formatValidadeMonthOption(value)}

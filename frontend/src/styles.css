@@ -9538,20 +9538,26 @@ small {
 
 .controle-validade-filters-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 12px;
   align-items: end;
 }
 
 .controle-validade-filters-row .controle-validade-tabs {
-  flex: 1 1 280px;
+  flex: 1 1 0;
   width: auto;
+  min-width: 0;
 }
 
-.controle-validade-tabs span {
+.controle-validade-filter-label {
   color: #58708a;
   font-size: 0.86rem;
   font-weight: 700;
+  min-width: 0;
+}
+
+.controle-validade-filter-label-short {
+  display: none;
 }
 
 .controle-validade-tabs select {
@@ -9856,6 +9862,28 @@ small {
 }
 
 @media (max-width: 720px) {
+  .controle-validade-filters-row {
+    gap: 8px;
+  }
+
+  .controle-validade-filters-row .controle-validade-tabs {
+    flex: 1 1 0;
+  }
+
+  .controle-validade-filter-label-full {
+    display: none;
+  }
+
+  .controle-validade-filter-label-short {
+    display: inline;
+  }
+
+  .controle-validade-tabs select {
+    min-height: 40px;
+    padding-inline: 10px 30px;
+    font-size: 0.92rem;
+  }
+
   .controle-validade-mobile-search-btn {
     display: grid;
   }
