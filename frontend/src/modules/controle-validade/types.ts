@@ -37,9 +37,12 @@ export interface LinhaRetiradaRow {
   dt_ultima_coleta: string | null;
   auditor_nome_ultima_coleta: string | null;
   auditor_mat_ultima_coleta: string | null;
+  editable_retirada_id: string | null;
+  editable_retirada_qtd: number | null;
 }
 
 export interface LinhaColetaHistoryRow {
+  id: string;
   cd: number;
   coddv: number;
   descricao: string;
@@ -48,6 +51,7 @@ export interface LinhaColetaHistoryRow {
   endereco_sep: string;
   val_mmaa: string;
   data_coleta: string | null;
+  auditor_id: string | null;
   auditor_mat: string | null;
   auditor_nome: string | null;
 }
@@ -60,13 +64,14 @@ export interface PulRetiradaRow {
   endereco_pul: string;
   andar: string | null;
   val_mmaa: string;
-  qtd_alvo: number;
   qtd_retirada: number;
   qtd_pendente: number;
   status: RetiradaStatus;
   qtd_est_disp: number;
   dt_ultima_retirada: string | null;
   auditor_nome_ultima_retirada: string | null;
+  editable_retirada_id: string | null;
+  editable_retirada_qtd: number | null;
 }
 
 export interface LinhaColetaPayload {

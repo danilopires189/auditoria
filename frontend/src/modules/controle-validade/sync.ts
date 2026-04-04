@@ -150,6 +150,9 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("ITEM_NAO_ELEGIVEL_RETIRADA")) return "Item não elegível para retirada.";
   if (normalized.includes("QTD_RETIRADA_EXCEDE_PENDENTE")) return "Quantidade retirada excede o pendente.";
   if (normalized.includes("ITEM_JA_CONCLUIDO")) return "Este item já está concluído.";
+  if (normalized.includes("APENAS_AUTOR_PODE_EDITAR")) return "Apenas o usuário que registrou pode editar este lançamento.";
+  if (normalized.includes("REGISTRO_NAO_ENCONTRADO")) return "Registro não encontrado.";
+  if (normalized.includes("COLETA_COM_RETIRADA_NAO_EDITAVEL")) return "Esta coleta já possui retirada vinculada e não pode ser editada.";
   return raw;
 }
 
@@ -202,13 +205,16 @@ function mapLinhaRow(raw: Record<string, unknown>): LinhaRetiradaRow {
     ),
     auditor_mat_ultima_coleta: parseNullableString(
       raw.auditor_mat_ultima_coleta ?? raw.created_mat ?? raw.mat_ultima_coleta
-    )
+    ),
+    editable_retirada_id: parseNullableString(raw.editable_retirada_id),
+    editable_retirada_qtd: raw.editable_retirada_qtd == null ? null : parseInteger(raw.editable_retirada_qtd)
   };
 }
 
 function mapLinhaColetaHistoryRow(raw: Record<string, unknown>): LinhaColetaHistoryRow {
   const enderecoSep = normalizeEnderecoDisplay(parseString(raw.endereco_sep));
   return {
+    id: parseString(raw.id),
     cd: parseInteger(raw.cd),
     coddv: parseInteger(raw.coddv),
     descricao: parseString(raw.descricao),
@@ -217,6 +223,7 @@ function mapLinhaColetaHistoryRow(raw: Record<string, unknown>): LinhaColetaHist
     endereco_sep: enderecoSep,
     val_mmaa: parseString(raw.val_mmaa),
     data_coleta: parseNullableString(raw.data_coleta),
+    auditor_id: parseNullableString(raw.auditor_id),
     auditor_mat: parseNullableString(raw.auditor_mat),
     auditor_nome: parseNullableString(raw.auditor_nome)
   };
@@ -232,13 +239,14 @@ function mapPulRow(raw: Record<string, unknown>): PulRetiradaRow {
     endereco_pul: enderecoPul,
     andar: parseNullableString(raw.andar),
     val_mmaa: parseString(raw.val_mmaa),
-    qtd_alvo: parseInteger(raw.qtd_alvo, 1),
     qtd_retirada: parseInteger(raw.qtd_retirada),
     qtd_pendente: parseInteger(raw.qtd_pendente),
     status: parseRetiradaStatus(raw.status),
     qtd_est_disp: parseInteger(raw.qtd_est_disp),
     dt_ultima_retirada: parseNullableString(raw.dt_ultima_retirada),
-    auditor_nome_ultima_retirada: parseNullableString(raw.auditor_nome_ultima_retirada)
+    auditor_nome_ultima_retirada: parseNullableString(raw.auditor_nome_ultima_retirada),
+    editable_retirada_id: parseNullableString(raw.editable_retirada_id),
+    editable_retirada_qtd: raw.editable_retirada_qtd == null ? null : parseInteger(raw.editable_retirada_qtd)
   };
 }
 
@@ -286,6 +294,11 @@ function sortLinhaColetaHistoryRows(rows: LinhaColetaHistoryRow[]): LinhaColetaH
     if (byEndereco !== 0) return byEndereco;
     return a.coddv - b.coddv;
   });
+}
+
+function filterLinhaColetaHistoryToCurrentMonth(rows: LinhaColetaHistoryRow[], baseDate = new Date()): LinhaColetaHistoryRow[] {
+  const currentRef = currentMonthRef(baseDate);
+  return rows.filter((row) => monthRefFromDateTime(row.data_coleta) === currentRef);
 }
 
 function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: ControleValidadeOfflineEventRow[]): LinhaRetiradaRow[] {
@@ -378,6 +391,7 @@ function applyPendingEventsToLinhaColetaHistoryRows(
     const payload = normalizeOfflinePayload(event.payload as LinhaColetaPayload);
     if (payload.coddv <= 0 || !payload.endereco_sep) continue;
     projected.push({
+      id: event.event_id,
       cd: payload.cd,
       coddv: payload.coddv,
       descricao: payload.descricao || `CODDV ${payload.coddv}`,
@@ -386,11 +400,12 @@ function applyPendingEventsToLinhaColetaHistoryRows(
       endereco_sep: payload.endereco_sep,
       val_mmaa: payload.val_mmaa,
       data_coleta: payload.data_hr ?? event.created_at,
+      auditor_id: event.user_id,
       auditor_mat: payload.auditor_mat,
       auditor_nome: payload.auditor_nome
     });
   }
-  return sortLinhaColetaHistoryRows(projected).slice(0, 1000);
+  return sortLinhaColetaHistoryRows(filterLinhaColetaHistoryToCurrentMonth(projected)).slice(0, 1000);
 }
 
 function applyPendingEventsToPulRows(rows: PulRetiradaRow[], events: ControleValidadeOfflineEventRow[]): PulRetiradaRow[] {
@@ -411,7 +426,8 @@ function applyPendingEventsToPulRows(rows: PulRetiradaRow[], events: ControleVal
     if (!current) continue;
 
     const qtdRetirada = current.qtd_retirada + payload.qtd_retirada;
-    const qtdPendente = Math.max(current.qtd_alvo - qtdRetirada, 0);
+    const qtdTotal = Math.max(current.qtd_retirada + current.qtd_pendente, 1);
+    const qtdPendente = Math.max(qtdTotal - qtdRetirada, 0);
     merged.set(key, {
       ...current,
       qtd_retirada: qtdRetirada,
@@ -553,7 +569,7 @@ export async function fetchLinhaColetaHistoryList(params: {
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
-  return sortLinhaColetaHistoryRows(data.map((row) => mapLinhaColetaHistoryRow(row as Record<string, unknown>)));
+  return sortLinhaColetaHistoryRows(data.map((row) => mapLinhaColetaHistoryRow(row as Record<string, unknown>))).slice(0, 1000);
 }
 
 export async function searchLinhaLastColeta(params: {
@@ -637,6 +653,51 @@ export async function sendPulRetiradaOnline(payload: PulRetiradaPayload): Promis
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error("Falha ao registrar retirada do Pulmão.");
+  }
+}
+
+export async function updateLinhaColetaValidadeOnline(params: {
+  id: string;
+  val_mmaa: string;
+}): Promise<LinhaColetaHistoryRow> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_linha_coleta_update_val_mmaa", {
+    p_id: params.id,
+    p_val_mmaa: params.val_mmaa
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao editar coleta da Linha.");
+  return mapLinhaColetaHistoryRow(first);
+}
+
+export async function updateLinhaRetiradaQtdOnline(params: {
+  id: string;
+  qtd_retirada: number;
+}): Promise<void> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_linha_retirada_update_qtd", {
+    p_id: params.id,
+    p_qtd_retirada: params.qtd_retirada
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("Falha ao editar retirada da Linha.");
+  }
+}
+
+export async function updatePulRetiradaQtdOnline(params: {
+  id: string;
+  qtd_retirada: number;
+}): Promise<void> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_pul_retirada_update_qtd", {
+    p_id: params.id,
+    p_qtd_retirada: params.qtd_retirada
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("Falha ao editar retirada do Pulmão.");
   }
 }
 

@@ -30,7 +30,10 @@ import {
   loadProjectedOfflineRows,
   normalizeControleValidadeError,
   resolveLinhaColetaProduto,
-  searchLinhaLastColeta
+  searchLinhaLastColeta,
+  updateLinhaColetaValidadeOnline,
+  updateLinhaRetiradaQtdOnline,
+  updatePulRetiradaQtdOnline
 } from "./sync";
 import type {
   ControleValidadeModuleProfile,
@@ -38,6 +41,7 @@ import type {
   LinhaColetaHistoryRow,
   LinhaRetiradaRow,
   PulRetiradaRow,
+  RetiradaStatus,
   RetiradaStatusFilter
 } from "./types";
 
@@ -116,18 +120,18 @@ function formatDateTime(value: string | null): string {
 }
 
 const MONTH_LABELS_PT_BR = [
-  "Janeiro",
-  "Fevereiro",
-  "Marco",
-  "Abril",
-  "Maio",
-  "Junho",
-  "Julho",
-  "Agosto",
-  "Setembro",
-  "Outubro",
-  "Novembro",
-  "Dezembro"
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez"
 ] as const;
 const UI_TEXT_COLLATOR = new Intl.Collator("pt-BR", {
   numeric: true,
@@ -195,7 +199,7 @@ function currentValidadeMonthValue(baseDate = new Date()): string {
   return `${String(baseDate.getMonth() + 1).padStart(2, "0")}/${String(baseDate.getFullYear()).slice(-2)}`;
 }
 
-function buildValidadeMonthWindow(baseDate = new Date(), count = 6): string[] {
+function buildValidadeMonthWindow(baseDate = new Date(), count = 5): string[] {
   const safeCount = Math.max(Math.trunc(count), 1);
   return Array.from({ length: safeCount }, (_, index) => {
     const date = new Date(baseDate.getFullYear(), baseDate.getMonth() + index, 1);
@@ -261,6 +265,15 @@ function searchIcon() {
   );
 }
 
+function pencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 20l4.2-1 9.9-9.9-3.2-3.2L5 15.8 4 20z" />
+      <path d="M13.8 5.9l3.2 3.2" />
+    </svg>
+  );
+}
+
 export default function ControleValidadePage({ isOnline, profile }: ControleValidadePageProps) {
   const defaultMonthFilter = useMemo(() => currentValidadeMonthValue(), []);
   const barcodeRef = useRef<HTMLInputElement | null>(null);
@@ -280,7 +293,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
   const [mainTab, setMainTab] = useState<MainTab>("linha");
   const [linhaSubTab, setLinhaSubTab] = useState<LinhaSubTab>("coleta");
-  const [statusFilter, setStatusFilter] = useState<RetiradaStatusFilter>("pendente");
+  const [linhaStatusFilter, setLinhaStatusFilter] = useState<RetiradaStatus>("pendente");
+  const [pulStatusFilter, setPulStatusFilter] = useState<RetiradaStatusFilter>("todos");
   const [monthFilter, setMonthFilter] = useState(defaultMonthFilter);
 
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -317,6 +331,13 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [pulRows, setPulRows] = useState<PulRetiradaRow[]>([]);
   const [linhaQtyInputs, setLinhaQtyInputs] = useState<Record<string, string>>({});
   const [pulQtyInputs, setPulQtyInputs] = useState<Record<string, string>>({});
+  const [editingColetaId, setEditingColetaId] = useState<string | null>(null);
+  const [editingColetaValidade, setEditingColetaValidade] = useState("");
+  const [editingLinhaRetiradaId, setEditingLinhaRetiradaId] = useState<string | null>(null);
+  const [editingLinhaRetiradaQty, setEditingLinhaRetiradaQty] = useState("");
+  const [editingPulRetiradaId, setEditingPulRetiradaId] = useState<string | null>(null);
+  const [editingPulRetiradaQty, setEditingPulRetiradaQty] = useState("");
+  const [busyEdit, setBusyEdit] = useState(false);
   const [lastColetaSearchTerm, setLastColetaSearchTerm] = useState("");
   const [lastColetaSearchBusy, setLastColetaSearchBusy] = useState(false);
   const [lastColetaSearchResult, setLastColetaSearchResult] = useState<LinhaColetaHistoryRow | null>(null);
@@ -1182,8 +1203,121 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     }
   }, [activeCd, isOnline, lastColetaSearchTerm, linhaColetaHistoryRows]);
 
+  const canEditColetaRow = useCallback((row: LinhaColetaHistoryRow | null) => {
+    return Boolean(isOnline && row?.id && row.auditor_id === profile.user_id);
+  }, [isOnline, profile.user_id]);
+
+  const startEditingColeta = useCallback((row: LinhaColetaHistoryRow) => {
+    setEditingColetaId(row.id);
+    setEditingColetaValidade(row.val_mmaa.replace(/\D/g, ""));
+  }, []);
+
+  const cancelEditingColeta = useCallback(() => {
+    setEditingColetaId(null);
+    setEditingColetaValidade("");
+  }, []);
+
+  const saveEditingColeta = useCallback(async (row: LinhaColetaHistoryRow) => {
+    if (!canEditColetaRow(row)) return;
+    try {
+      setBusyEdit(true);
+      setErrorMessage(null);
+      const updated = await updateLinhaColetaValidadeOnline({
+        id: row.id,
+        val_mmaa: normalizeValidadeInput(editingColetaValidade)
+      });
+      setStatusMessage("Validade da coleta atualizada.");
+      setLastColetaSearchResult((current) => (current?.id === updated.id ? updated : current));
+      cancelEditingColeta();
+      await loadRows();
+    } catch (error) {
+      setErrorMessage(normalizeControleValidadeError(error));
+    } finally {
+      setBusyEdit(false);
+    }
+  }, [canEditColetaRow, cancelEditingColeta, editingColetaValidade, loadRows]);
+
+  const startEditingLinhaRetirada = useCallback((row: LinhaRetiradaRow) => {
+    if (!row.editable_retirada_id || row.editable_retirada_qtd == null) return;
+    setEditingLinhaRetiradaId(row.editable_retirada_id);
+    setEditingLinhaRetiradaQty(String(row.editable_retirada_qtd));
+  }, []);
+
+  const cancelEditingLinhaRetirada = useCallback(() => {
+    setEditingLinhaRetiradaId(null);
+    setEditingLinhaRetiradaQty("");
+  }, []);
+
+  const saveEditingLinhaRetirada = useCallback(async (row: LinhaRetiradaRow) => {
+    if (!isOnline || !row.editable_retirada_id) return;
+    const parsed = Number.parseInt(editingLinhaRetiradaQty.replace(/\D/g, ""), 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setErrorMessage("Informe a quantidade da sua retirada.");
+      return;
+    }
+    try {
+      setBusyEdit(true);
+      setErrorMessage(null);
+      await updateLinhaRetiradaQtdOnline({
+        id: row.editable_retirada_id,
+        qtd_retirada: parsed
+      });
+      setStatusMessage("Quantidade da retirada da Linha atualizada.");
+      cancelEditingLinhaRetirada();
+      await loadRows();
+    } catch (error) {
+      setErrorMessage(normalizeControleValidadeError(error));
+    } finally {
+      setBusyEdit(false);
+    }
+  }, [cancelEditingLinhaRetirada, editingLinhaRetiradaQty, isOnline, loadRows]);
+
+  const startEditingPulRetirada = useCallback((row: PulRetiradaRow) => {
+    if (!row.editable_retirada_id || row.editable_retirada_qtd == null) return;
+    setEditingPulRetiradaId(row.editable_retirada_id);
+    setEditingPulRetiradaQty(String(row.editable_retirada_qtd));
+  }, []);
+
+  const cancelEditingPulRetirada = useCallback(() => {
+    setEditingPulRetiradaId(null);
+    setEditingPulRetiradaQty("");
+  }, []);
+
+  const saveEditingPulRetirada = useCallback(async (row: PulRetiradaRow) => {
+    if (!isOnline || !row.editable_retirada_id) return;
+    const parsed = Number.parseInt(editingPulRetiradaQty.replace(/\D/g, ""), 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setErrorMessage("Informe a quantidade da sua retirada.");
+      return;
+    }
+    try {
+      setBusyEdit(true);
+      setErrorMessage(null);
+      await updatePulRetiradaQtdOnline({
+        id: row.editable_retirada_id,
+        qtd_retirada: parsed
+      });
+      setStatusMessage("Quantidade da retirada do Pulmão atualizada.");
+      cancelEditingPulRetirada();
+      await loadRows();
+    } catch (error) {
+      setErrorMessage(normalizeControleValidadeError(error));
+    } finally {
+      setBusyEdit(false);
+    }
+  }, [cancelEditingPulRetirada, editingPulRetiradaQty, isOnline, loadRows]);
+
+  const activeStatusFilter = mainTab === "pulmao" ? pulStatusFilter : linhaStatusFilter;
+
   const linhaColetaHistoryGrouped = useMemo(() => {
-    return [...linhaColetaHistoryRows].sort((left, right) => {
+    return linhaColetaHistoryRows
+      .filter((row) => {
+        const parsedDate = row.data_coleta ? new Date(row.data_coleta) : null;
+        if (!parsedDate || Number.isNaN(parsedDate.getTime())) return false;
+        return parsedDate.getFullYear() === new Date().getFullYear()
+          && parsedDate.getMonth() === new Date().getMonth();
+      })
+      .sort((left, right) => {
       const zoneCompare = compareUiText(left.zona, right.zona);
       if (zoneCompare !== 0) return zoneCompare;
       const dateCompare = compareUiText(String(right.data_coleta ?? ""), String(left.data_coleta ?? ""));
@@ -1191,14 +1325,15 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       const addressCompare = compareUiText(left.endereco_sep, right.endereco_sep);
       if (addressCompare !== 0) return addressCompare;
       return compareUiText(left.coddv, right.coddv);
-    });
+    })
+      .slice(0, 1000);
   }, [linhaColetaHistoryRows]);
 
   const linhaRowsFiltered = useMemo(() => {
-    const effectiveMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
+    const effectiveMonthFilter = linhaStatusFilter === "concluido" ? defaultMonthFilter : monthFilter;
     return linhaRows
       .filter((row) => {
-        if (statusFilter !== "todos" && row.status !== statusFilter) return false;
+        if (row.status !== linhaStatusFilter) return false;
         if (row.val_mmaa !== effectiveMonthFilter) return false;
         return true;
       })
@@ -1211,13 +1346,13 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         if (coddvCompare !== 0) return coddvCompare;
         return compareUiText(left.descricao, right.descricao);
       });
-  }, [defaultMonthFilter, linhaRows, monthFilter, statusFilter]);
+  }, [defaultMonthFilter, linhaRows, linhaStatusFilter, monthFilter]);
 
   const pulRowsFiltered = useMemo(() => {
-    const effectiveMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
+    const effectiveMonthFilter = pulStatusFilter === "concluido" ? defaultMonthFilter : monthFilter;
     return pulRows
       .filter((row) => {
-        if (statusFilter !== "todos" && row.status !== statusFilter) return false;
+        if (pulStatusFilter !== "todos" && row.status !== pulStatusFilter) return false;
         if (row.val_mmaa !== effectiveMonthFilter) return false;
         return true;
       })
@@ -1230,28 +1365,28 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         if (coddvCompare !== 0) return coddvCompare;
         return compareUiText(left.descricao, right.descricao);
       });
-  }, [defaultMonthFilter, monthFilter, pulRows, statusFilter]);
+  }, [defaultMonthFilter, monthFilter, pulRows, pulStatusFilter]);
 
   const hasBarcodeInput = barcodeInput.trim().length > 0;
   const monthFilterOptions = useMemo(() => {
     return buildValidadeMonthWindow();
   }, []);
   const preferredMonthFilterOptions = useMemo(() => {
-    if (statusFilter === "concluido") return [defaultMonthFilter];
+    if (activeStatusFilter === "concluido") return [defaultMonthFilter];
     const sourceRows = mainTab === "pulmao" ? pulRows : linhaRows;
     const filteredRows = sourceRows.filter((row) => {
-      if (statusFilter === "todos") return true;
-      return row.status === statusFilter;
+      if (activeStatusFilter === "todos") return true;
+      return row.status === activeStatusFilter;
     });
     const availableMonths = monthFilterOptions.filter((month) =>
       filteredRows.some((row) => row.val_mmaa === month)
     );
     return availableMonths.length > 0 ? availableMonths : monthFilterOptions;
-  }, [defaultMonthFilter, linhaRows, mainTab, monthFilterOptions, pulRows, statusFilter]);
-  const displayedMonthFilter = statusFilter === "concluido" ? defaultMonthFilter : monthFilter;
+  }, [activeStatusFilter, defaultMonthFilter, linhaRows, mainTab, monthFilterOptions, pulRows]);
+  const displayedMonthFilter = activeStatusFilter === "concluido" ? defaultMonthFilter : monthFilter;
 
   useEffect(() => {
-    if (statusFilter === "concluido") {
+    if (activeStatusFilter === "concluido") {
       if (monthFilter !== defaultMonthFilter) {
         setMonthFilter(defaultMonthFilter);
       }
@@ -1259,7 +1394,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     }
     if (preferredMonthFilterOptions.includes(monthFilter)) return;
     setMonthFilter(preferredMonthFilterOptions[0] ?? defaultMonthFilter);
-  }, [defaultMonthFilter, monthFilter, preferredMonthFilterOptions, statusFilter]);
+  }, [activeStatusFilter, defaultMonthFilter, monthFilter, preferredMonthFilterOptions]);
 
   return (
     <>
@@ -1340,7 +1475,13 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 <select
                   id="controle-validade-tipo"
                   value={mainTab}
-                  onChange={(event) => setMainTab(event.target.value as MainTab)}
+                  onChange={(event) => {
+                    const nextTab = event.target.value as MainTab;
+                    setMainTab(nextTab);
+                    if (nextTab === "pulmao") {
+                      setPulStatusFilter("todos");
+                    }
+                  }}
                 >
                   <option value="linha">Separacao</option>
                   <option value="pulmao">Pulmao</option>
@@ -1356,9 +1497,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   id="controle-validade-mes"
                   value={displayedMonthFilter}
                   onChange={(event) => setMonthFilter(event.target.value)}
-                  disabled={statusFilter === "concluido"}
+                  disabled={activeStatusFilter === "concluido"}
                 >
-                  {monthFilterOptions.map((value) => (
+                  {preferredMonthFilterOptions.map((value) => (
                     <option key={value} value={value}>
                       {formatValidadeMonthOption(value)}
                     </option>
@@ -1391,15 +1532,17 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     <div className="controle-validade-status-tabs">
                       <button
                         type="button"
-                        className={`btn btn-muted${statusFilter === "pendente" ? " is-active" : ""}`}
-                        onClick={() => setStatusFilter("pendente")}
+                        className={`controle-validade-status-tab is-pendente${linhaStatusFilter === "pendente" ? " is-active" : ""}`}
+                        onClick={() => setLinhaStatusFilter("pendente")}
+                        aria-pressed={linhaStatusFilter === "pendente"}
                       >
                         Pendentes
                       </button>
                       <button
                         type="button"
-                        className={`btn btn-muted${statusFilter === "concluido" ? " is-active" : ""}`}
-                        onClick={() => setStatusFilter("concluido")}
+                        className={`controle-validade-status-tab is-concluido${linhaStatusFilter === "concluido" ? " is-active" : ""}`}
+                        onClick={() => setLinhaStatusFilter("concluido")}
+                        aria-pressed={linhaStatusFilter === "concluido"}
                       >
                         Concluídos
                       </button>
@@ -1576,11 +1719,43 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                             {expandedLinhaColetaHistoryKey === "last-search-result" ? (
                               <div className="controle-validade-linha-details">
                                 <div className="controle-validade-linha-detail-grid">
-                                  <span><b>Validade:</b> {lastColetaSearchResult.val_mmaa}</span>
+                                  <span className="controle-validade-editable-line">
+                                    <b>Validade:</b> {lastColetaSearchResult.val_mmaa}
+                                    {canEditColetaRow(lastColetaSearchResult) ? (
+                                      <button
+                                        type="button"
+                                        className="controle-validade-edit-trigger"
+                                        onClick={() => startEditingColeta(lastColetaSearchResult)}
+                                        aria-label="Editar validade da coleta"
+                                        title="Editar validade da coleta"
+                                        disabled={busyEdit}
+                                      >
+                                        {pencilIcon()}
+                                      </button>
+                                    ) : null}
+                                  </span>
                                   <span><b>Coleta:</b> {formatDateTime(lastColetaSearchResult.data_coleta)}</span>
                                   <span><b>Usuário coleta:</b> {formatLinhaHistoryCollector(lastColetaSearchResult)}</span>
                                   <span><b>Barras:</b> {lastColetaSearchResult.barras || "-"}</span>
                                 </div>
+                                {editingColetaId === lastColetaSearchResult.id ? (
+                                  <div className="controle-validade-inline-editor">
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      maxLength={4}
+                                      value={editingColetaValidade}
+                                      onChange={(event) => setEditingColetaValidade(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                      placeholder="MMAA"
+                                    />
+                                    <button type="button" className="btn btn-primary" onClick={() => void saveEditingColeta(lastColetaSearchResult)} disabled={busyEdit}>
+                                      Salvar
+                                    </button>
+                                    <button type="button" className="btn btn-muted" onClick={cancelEditingColeta} disabled={busyEdit}>
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                           </article>
@@ -1622,11 +1797,43 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                   {isExpanded ? (
                                     <div className="controle-validade-linha-details">
                                       <div className="controle-validade-linha-detail-grid">
-                                        <span><b>Validade:</b> {row.val_mmaa}</span>
+                                        <span className="controle-validade-editable-line">
+                                          <b>Validade:</b> {row.val_mmaa}
+                                          {canEditColetaRow(row) ? (
+                                            <button
+                                              type="button"
+                                              className="controle-validade-edit-trigger"
+                                              onClick={() => startEditingColeta(row)}
+                                              aria-label="Editar validade da coleta"
+                                              title="Editar validade da coleta"
+                                              disabled={busyEdit}
+                                            >
+                                              {pencilIcon()}
+                                            </button>
+                                          ) : null}
+                                        </span>
                                         <span><b>Coleta:</b> {formatDateTime(row.data_coleta)}</span>
                                         <span><b>Usuário coleta:</b> {formatLinhaHistoryCollector(row)}</span>
                                         <span><b>Barras:</b> {row.barras || "-"}</span>
                                       </div>
+                                      {editingColetaId === row.id ? (
+                                        <div className="controle-validade-inline-editor">
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            maxLength={4}
+                                            value={editingColetaValidade}
+                                            onChange={(event) => setEditingColetaValidade(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                            placeholder="MMAA"
+                                          />
+                                          <button type="button" className="btn btn-primary" onClick={() => void saveEditingColeta(row)} disabled={busyEdit}>
+                                            Salvar
+                                          </button>
+                                          <button type="button" className="btn btn-muted" onClick={cancelEditingColeta} disabled={busyEdit}>
+                                            Cancelar
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                 </article>
@@ -1685,10 +1892,43 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                       <span><b>Validade:</b> {row.val_mmaa}</span>
                                       <span><b>Coleta:</b> {formatDateTime(row.dt_ultima_coleta)}</span>
                                       <span><b>Usuário coleta:</b> {formatLinhaCollector(row)}</span>
-                                      <span><b>Coletado:</b> {row.qtd_coletada}</span>
                                       <span><b>Retirado:</b> {row.qtd_retirada}</span>
                                       <span><b>Pendente:</b> {row.qtd_pendente}</span>
+                                      {row.editable_retirada_qtd != null ? (
+                                        <span className="controle-validade-editable-line">
+                                          <b>Sua retirada:</b> {row.editable_retirada_qtd}
+                                          {isOnline ? (
+                                            <button
+                                              type="button"
+                                              className="controle-validade-edit-trigger"
+                                              onClick={() => startEditingLinhaRetirada(row)}
+                                              aria-label="Editar quantidade da sua retirada"
+                                              title="Editar quantidade da sua retirada"
+                                              disabled={busyEdit}
+                                            >
+                                              {pencilIcon()}
+                                            </button>
+                                          ) : null}
+                                        </span>
+                                      ) : null}
                                     </div>
+                                    {editingLinhaRetiradaId === row.editable_retirada_id && row.editable_retirada_id ? (
+                                      <div className="controle-validade-inline-editor">
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          value={editingLinhaRetiradaQty}
+                                          onChange={(event) => setEditingLinhaRetiradaQty(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                          placeholder="Qtd"
+                                        />
+                                        <button type="button" className="btn btn-primary" onClick={() => void saveEditingLinhaRetirada(row)} disabled={busyEdit}>
+                                          Salvar
+                                        </button>
+                                        <button type="button" className="btn btn-muted" onClick={cancelEditingLinhaRetirada} disabled={busyEdit}>
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    ) : null}
 
                                   {isPending ? (
                                     <div className="controle-validade-row-actions controle-validade-linha-actions">
@@ -1729,15 +1969,25 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 <div className="controle-validade-status-tabs">
                   <button
                     type="button"
-                    className={`btn btn-muted${statusFilter === "pendente" ? " is-active" : ""}`}
-                    onClick={() => setStatusFilter("pendente")}
+                    className={`controle-validade-status-tab is-todos${pulStatusFilter === "todos" ? " is-active" : ""}`}
+                    onClick={() => setPulStatusFilter("todos")}
+                    aria-pressed={pulStatusFilter === "todos"}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    className={`controle-validade-status-tab is-pendente${pulStatusFilter === "pendente" ? " is-active" : ""}`}
+                    onClick={() => setPulStatusFilter("pendente")}
+                    aria-pressed={pulStatusFilter === "pendente"}
                   >
                     Pendentes
                   </button>
                   <button
                     type="button"
-                    className={`btn btn-muted${statusFilter === "concluido" ? " is-active" : ""}`}
-                    onClick={() => setStatusFilter("concluido")}
+                    className={`controle-validade-status-tab is-concluido${pulStatusFilter === "concluido" ? " is-active" : ""}`}
+                    onClick={() => setPulStatusFilter("concluido")}
+                    aria-pressed={pulStatusFilter === "concluido"}
                   >
                     Concluídos
                   </button>
@@ -1787,9 +2037,25 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                 <span><b>Validade:</b> {row.val_mmaa}</span>
                                 <span><b>Andar:</b> {row.andar ?? "-"}</span>
                                 <span><b>Estoque disponível:</b> {row.qtd_est_disp}</span>
-                                <span><b>Alvo:</b> {row.qtd_alvo}</span>
                                 <span><b>Retirado:</b> {row.qtd_retirada}</span>
                                 <span><b>Pendente:</b> {row.qtd_pendente}</span>
+                                {row.editable_retirada_qtd != null ? (
+                                  <span className="controle-validade-editable-line">
+                                    <b>Sua retirada:</b> {row.editable_retirada_qtd}
+                                    {isOnline ? (
+                                      <button
+                                        type="button"
+                                        className="controle-validade-edit-trigger"
+                                        onClick={() => startEditingPulRetirada(row)}
+                                        aria-label="Editar quantidade da sua retirada"
+                                        title="Editar quantidade da sua retirada"
+                                        disabled={busyEdit}
+                                      >
+                                        {pencilIcon()}
+                                      </button>
+                                    ) : null}
+                                  </span>
+                                ) : null}
                                 {!isPending ? (
                                   <span><b>Data/hora retirada:</b> {formatDateTime(row.dt_ultima_retirada)}</span>
                                 ) : null}
@@ -1797,6 +2063,23 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                   <span><b>Usuário retirada:</b> {row.auditor_nome_ultima_retirada ?? "Aguardando sincronizacao"}</span>
                                 ) : null}
                               </div>
+                              {editingPulRetiradaId === row.editable_retirada_id && row.editable_retirada_id ? (
+                                <div className="controle-validade-inline-editor">
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={editingPulRetiradaQty}
+                                    onChange={(event) => setEditingPulRetiradaQty(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                    placeholder="Qtd"
+                                  />
+                                  <button type="button" className="btn btn-primary" onClick={() => void saveEditingPulRetirada(row)} disabled={busyEdit}>
+                                    Salvar
+                                  </button>
+                                  <button type="button" className="btn btn-muted" onClick={cancelEditingPulRetirada} disabled={busyEdit}>
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : null}
 
                               {isPending ? (
                                 <div className="controle-validade-row-actions controle-validade-linha-actions">
