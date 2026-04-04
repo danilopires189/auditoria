@@ -428,15 +428,15 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       autoTable(doc, {
         startY: 78,
         head: [[
-          "CODDV",
+          "CodDv",
           "Descrição",
           "Tipo",
-          "Qtd",
+          "Quantidade",
           "Últ. compra",
           "Custo unit.",
           "Custo total",
-          "SEP",
-          "PUL",
+          "End. de Separação",
+          "End. de Pulmão",
           "Criado / Editado"
         ]],
         body: rows.map((row) => [
@@ -561,7 +561,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         </div>
         <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
           <span className="module-icon" aria-hidden="true"><ModuleIcon name={MODULE_DEF.icon} /></span>
-          <span className="module-title">{MODULE_DEF.title}</span>
+          <div className="gestao-op-header-copy">
+            <span className="module-title">{MODULE_DEF.title}</span>
+            <span className="gestao-op-header-cd">{currentCdLabel}</span>
+          </div>
         </div>
       </header>
 
@@ -573,9 +576,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
               <p>Entrada e baixa na mesma base diária, com atualização viva do dia atual.</p>
             </div>
           </div>
-          <div className="module-screen-body">
-            <p><strong>CD:</strong> {currentCdLabel}</p>
-            <p><strong>Data ativa:</strong> {formatDate(selectedDate)} {isHistorical ? "(somente leitura)" : "(dia atual)"}</p>
+          <div className="gestao-op-header-meta">
+            <span className="gestao-op-date-pill">
+              Data ativa: {formatDate(selectedDate)} {isHistorical ? "(somente leitura)" : "(dia atual)"}
+            </span>
           </div>
         </div>
 
@@ -640,7 +644,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           <article className="module-card module-card-static gestao-op-panel">
             <div className="gestao-op-panel-head">
               <h3>Localizar produto</h3>
-              <span>Informe barras ou CODDV</span>
+              <span></span>
             </div>
             <form className="gestao-op-search-form" onSubmit={onSubmitAdd}>
               <div className="gestao-op-field">
@@ -697,7 +701,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           <article className="module-card module-card-static gestao-op-panel">
             <div className="gestao-op-panel-head">
               <h3>Pré-visualização</h3>
-              <span>Dados vivos do produto no CD</span>
+              <span>Dados Atualizados</span>
             </div>
             {preview ? (
               <div className="gestao-op-preview">
@@ -707,19 +711,19 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                 </div>
                 <dl>
                   <div>
-                    <dt>SEP</dt>
+                    <dt>Endereço de Separação</dt>
                     <dd>{joinAddresses(preview.enderecos_sep)}</dd>
                   </div>
                   <div>
-                    <dt>PUL</dt>
+                    <dt>Endereço de Pulmão</dt>
                     <dd>{joinAddresses(preview.enderecos_pul)}</dd>
                   </div>
                   <div>
-                    <dt>Qtd. atual</dt>
+                    <dt>Estoque atual</dt>
                     <dd>{formatInteger(preview.qtd_est_atual)}</dd>
                   </div>
                   <div>
-                    <dt>Qtd. disponível</dt>
+                    <dt>Estoque disponível</dt>
                     <dd>{formatInteger(preview.qtd_est_disp)}</dd>
                   </div>
                   <div>
@@ -727,7 +731,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     <dd>{formatDate(preview.dat_ult_compra)}</dd>
                   </div>
                   <div>
-                    <dt>Custo unitário</dt>
+                    <dt>R$ unitário</dt>
                     <dd>{formatCurrency(preview.custo_unitario)}</dd>
                   </div>
                 </dl>

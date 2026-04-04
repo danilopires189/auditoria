@@ -11808,17 +11808,48 @@ small {
   gap: 6px;
 }
 
+.gestao-op-screen .module-screen-title h2 {
+  color: #eef5ff;
+}
+
 .gestao-op-screen .module-screen-title p {
   margin: 0;
-  color: #5d7693;
+  color: rgba(230, 239, 252, 0.82);
   font-size: 0.96rem;
   line-height: 1.45;
 }
 
-.gestao-op-screen .module-screen-body {
-  gap: 6px;
-  justify-items: center;
+.gestao-op-header-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.gestao-op-header-cd {
+  color: #54739a;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.gestao-op-header-meta {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.gestao-op-date-pill {
+  display: inline-flex;
   align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(173, 196, 229, 0.2);
+  background: rgba(239, 246, 255, 0.08);
+  color: #edf4ff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.35;
+  backdrop-filter: blur(4px);
 }
 
 .gestao-op-toolbar {
@@ -12287,5 +12318,12 @@ small {
   .gestao-op-day-picker select {
     min-width: 0;
     width: 100%;
+  }
+
+  .gestao-op-date-pill {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    padding: 10px 14px;
   }
 }
