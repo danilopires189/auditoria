@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -104,6 +105,28 @@ function parsePositiveInt(value: string): number | null {
   return parsed;
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
+}
+
+function buildRowSearchBlob(row: GestaoEstoqueItemRow): string {
+  return normalizeSearchText([
+    row.descricao,
+    String(row.coddv),
+    movementLabel(row.movement_type),
+    row.endereco_sep ?? "",
+    row.created_nome,
+    row.created_mat,
+    row.updated_nome,
+    row.updated_mat,
+    formatDate(row.dat_ult_compra)
+  ].join(" "));
+}
+
 function compareDateDesc(left: string, right: string): number {
   return right.localeCompare(left, "pt-BR");
 }
@@ -141,6 +164,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingQuantity, setEditingQuantity] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [confirmDeleteRow, setConfirmDeleteRow] = useState<GestaoEstoqueItemRow | null>(null);
+  const [listSearchInput, setListSearchInput] = useState("");
 
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const today = todayIsoBrasilia();
@@ -151,6 +176,11 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const totalUnique = rows.length;
   const totalQuantidade = useMemo(() => rows.reduce((acc, row) => acc + row.quantidade, 0), [rows]);
   const totalValor = useMemo(() => rows.reduce((acc, row) => acc + row.custo_total, 0), [rows]);
+  const listSearchQuery = useMemo(() => normalizeSearchText(listSearchInput), [listSearchInput]);
+  const filteredRows = useMemo(() => {
+    if (!listSearchQuery) return rows;
+    return rows.filter((row) => buildRowSearchBlob(row).includes(listSearchQuery));
+  }, [listSearchQuery, rows]);
 
   const focusSearch = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -355,9 +385,9 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     }
   }, [editingQuantity, focusRow, refreshAll]);
 
-  const removeRow = useCallback(async (row: GestaoEstoqueItemRow) => {
-    if (pendingDeleteId) return;
-    if (!window.confirm(`Excluir ${row.descricao} (${row.coddv}) da lista?`)) return;
+  const confirmRemoveRow = useCallback(async () => {
+    const row = confirmDeleteRow;
+    if (!row || pendingDeleteId) return;
     setPendingDeleteId(row.id);
     try {
       await deleteGestaoEstoqueItem({
@@ -368,6 +398,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       setErrorMessage(null);
       setEditingItemId((current) => (current === row.id ? null : current));
       setEditingQuantity("");
+      setConfirmDeleteRow(null);
       await refreshAll();
       focusSearch();
     } catch (error) {
@@ -375,7 +406,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     } finally {
       setPendingDeleteId(null);
     }
-  }, [focusSearch, pendingDeleteId, refreshAll]);
+  }, [confirmDeleteRow, focusSearch, pendingDeleteId, refreshAll]);
+
+  const removeRow = useCallback(async (row: GestaoEstoqueItemRow) => {
+    if (pendingDeleteId) return;
+    setConfirmDeleteRow(row);
+  }, [pendingDeleteId]);
 
   const exportPdf = useCallback(async () => {
     setBusyExport(true);
@@ -705,13 +741,34 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         <article className="module-card module-card-static gestao-op-list-panel">
           <div className="gestao-op-panel-head">
             <h3>Lista da visão atual</h3>
-            <span>{busyList ? "Atualizando..." : `${formatInteger(rows.length)} registro(s)`}</span>
+            <span>
+              {busyList
+                ? "Atualizando..."
+                : listSearchQuery
+                  ? `${formatInteger(filteredRows.length)} de ${formatInteger(rows.length)} registro(s)`
+                  : `${formatInteger(rows.length)} registro(s)`}
+            </span>
+          </div>
+          <div className="gestao-op-list-toolbar">
+            <label className="gestao-op-list-search">
+              <span>Buscar na lista</span>
+              <input
+                type="text"
+                value={listSearchInput}
+                onChange={(event) => setListSearchInput(event.target.value)}
+                placeholder="Filtrar por descrição, CODDV, SEP, usuário..."
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
           </div>
           {rows.length === 0 ? (
             <div className="coleta-empty">Nenhum item lançado para esta data e visão.</div>
+          ) : filteredRows.length === 0 ? (
+            <div className="coleta-empty">Nenhum item encontrado para o filtro informado.</div>
           ) : (
             <div className="gestao-op-list">
-              {rows.map((row) => {
+              {filteredRows.map((row) => {
                 const isEditing = editingItemId === row.id;
                 return (
                   <div
@@ -728,19 +785,17 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         <strong>{row.descricao}</strong>
                         <span>CODDV {row.coddv} • {movementLabel(row.movement_type)}</span>
                       </div>
-                      <div className="gestao-op-row-grid">
+                      <div className="gestao-op-row-summary">
                         <span><b>Qtd:</b> {formatInteger(row.quantidade)}</span>
+                        <span><b>SEP:</b> {row.endereco_sep ?? "-"}</span>
                         <span><b>Últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
                         <span><b>Custo unit.:</b> {formatCurrency(row.custo_unitario)}</span>
                         <span><b>Custo total:</b> {formatCurrency(row.custo_total)}</span>
-                        <span><b>SEP:</b> {row.endereco_sep ?? "-"}</span>
-                        <span><b>PUL:</b> {row.endereco_pul ?? "-"}</span>
-                        <span><b>Estoque atual:</b> {formatInteger(row.qtd_est_atual)}</span>
-                        <span><b>Estoque disp.:</b> {formatInteger(row.qtd_est_disp)}</span>
+                        <span><b>Estoque:</b> {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
                       </div>
-                      <div className="gestao-op-row-meta">
+                      <div className="gestao-op-row-meta-line">
                         <small>Criado por {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</small>
-                        <small>Última edição por {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</small>
+                        <small>Editado por {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</small>
                       </div>
                     </div>
                     <div className="gestao-op-row-actions">
@@ -786,6 +841,46 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           )}
         </article>
       </section>
+      {confirmDeleteRow && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estoque-delete-title"
+              onClick={() => {
+                if (pendingDeleteId) return;
+                setConfirmDeleteRow(null);
+              }}
+            >
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="gestao-estoque-delete-title">Excluir item da lista</h3>
+                <p>
+                  {`Deseja excluir "${confirmDeleteRow.descricao}" (CODDV ${confirmDeleteRow.coddv}) da lista de ${movementLabel(confirmDeleteRow.movement_type).toLocaleLowerCase("pt-BR")}? Essa ação ficará registrada no histórico.`}
+                </p>
+                <div className="confirm-actions">
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    onClick={() => setConfirmDeleteRow(null)}
+                    disabled={pendingDeleteId === confirmDeleteRow.id}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    type="button"
+                    onClick={() => void confirmRemoveRow()}
+                    disabled={pendingDeleteId === confirmDeleteRow.id}
+                  >
+                    {pendingDeleteId === confirmDeleteRow.id ? "Excluindo..." : "Excluir"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }
