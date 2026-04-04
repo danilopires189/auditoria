@@ -334,6 +334,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     if (!listSearchQuery) return rows;
     return rows.filter((row) => buildRowSearchBlob(row).includes(listSearchQuery));
   }, [listSearchQuery, rows]);
+  const listCountLabel = useMemo(() => {
+    if (listSearchQuery) {
+      return `${formatInteger(filteredRows.length)} de ${formatInteger(rows.length)} registro(s)`;
+    }
+    return `${formatInteger(rows.length)} registro(s)`;
+  }, [filteredRows.length, listSearchQuery, rows.length]);
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -1339,13 +1345,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         <article className="module-card module-card-static gestao-op-list-panel">
           <div className="gestao-op-panel-head">
             <h3>Lista da visão atual</h3>
-            <span>
-              {busyList
-                ? "Atualizando..."
-                : listSearchQuery
-                  ? `${formatInteger(filteredRows.length)} de ${formatInteger(rows.length)} registro(s)`
-                  : `${formatInteger(rows.length)} registro(s)`}
-            </span>
+            <span>{listCountLabel}</span>
           </div>
           <div className="gestao-op-list-toolbar">
             <label className="gestao-op-list-search">
