@@ -59,6 +59,7 @@ const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+const ALL_MONTHS_FILTER = "__all__";
 
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 
@@ -153,6 +154,7 @@ function parseValidadeMonth(value: string): { month: number; year: number; key: 
 }
 
 function formatValidadeMonthOption(value: string): string {
+  if (value === ALL_MONTHS_FILTER) return "Todos os meses";
   const parsed = parseValidadeMonth(value);
   if (!parsed) return value || "Mes invalido";
   return `${MONTH_LABELS_PT_BR[parsed.month - 1]} ${parsed.year}`;
@@ -295,7 +297,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [linhaSubTab, setLinhaSubTab] = useState<LinhaSubTab>("coleta");
   const [linhaStatusFilter, setLinhaStatusFilter] = useState<RetiradaStatus>("pendente");
   const [pulStatusFilter, setPulStatusFilter] = useState<RetiradaStatusFilter>("todos");
-  const [monthFilter, setMonthFilter] = useState(defaultMonthFilter);
+  const [monthFilter, setMonthFilter] = useState(ALL_MONTHS_FILTER);
 
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -1334,7 +1336,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     return linhaRows
       .filter((row) => {
         if (row.status !== linhaStatusFilter) return false;
-        if (row.val_mmaa !== effectiveMonthFilter) return false;
+        if (effectiveMonthFilter !== ALL_MONTHS_FILTER && row.val_mmaa !== effectiveMonthFilter) return false;
         return true;
       })
       .sort((left, right) => {
@@ -1353,7 +1355,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     return pulRows
       .filter((row) => {
         if (pulStatusFilter !== "todos" && row.status !== pulStatusFilter) return false;
-        if (row.val_mmaa !== effectiveMonthFilter) return false;
+        if (effectiveMonthFilter !== ALL_MONTHS_FILTER && row.val_mmaa !== effectiveMonthFilter) return false;
         return true;
       })
       .sort((left, right) => {
@@ -1381,7 +1383,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     const availableMonths = monthFilterOptions.filter((month) =>
       filteredRows.some((row) => row.val_mmaa === month)
     );
-    return availableMonths.length > 0 ? availableMonths : monthFilterOptions;
+    const scopedMonths = availableMonths.length > 0 ? availableMonths : monthFilterOptions;
+    return [ALL_MONTHS_FILTER, ...scopedMonths];
   }, [activeStatusFilter, defaultMonthFilter, linhaRows, mainTab, monthFilterOptions, pulRows]);
   const displayedMonthFilter = activeStatusFilter === "concluido" ? defaultMonthFilter : monthFilter;
 
@@ -1392,8 +1395,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       }
       return;
     }
+    if (monthFilter === ALL_MONTHS_FILTER) return;
     if (preferredMonthFilterOptions.includes(monthFilter)) return;
-    setMonthFilter(preferredMonthFilterOptions[0] ?? defaultMonthFilter);
+    setMonthFilter(ALL_MONTHS_FILTER);
   }, [activeStatusFilter, defaultMonthFilter, monthFilter, preferredMonthFilterOptions]);
 
   return (
@@ -1478,6 +1482,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   onChange={(event) => {
                     const nextTab = event.target.value as MainTab;
                     setMainTab(nextTab);
+                    setMonthFilter(ALL_MONTHS_FILTER);
                     if (nextTab === "pulmao") {
                       setPulStatusFilter("todos");
                     }
@@ -1533,7 +1538,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                       <button
                         type="button"
                         className={`controle-validade-status-tab is-pendente${linhaStatusFilter === "pendente" ? " is-active" : ""}`}
-                        onClick={() => setLinhaStatusFilter("pendente")}
+                        onClick={() => {
+                          setLinhaStatusFilter("pendente");
+                          setMonthFilter(ALL_MONTHS_FILTER);
+                        }}
                         aria-pressed={linhaStatusFilter === "pendente"}
                       >
                         Pendentes
@@ -1541,7 +1549,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                       <button
                         type="button"
                         className={`controle-validade-status-tab is-concluido${linhaStatusFilter === "concluido" ? " is-active" : ""}`}
-                        onClick={() => setLinhaStatusFilter("concluido")}
+                        onClick={() => {
+                          setLinhaStatusFilter("concluido");
+                          setMonthFilter(defaultMonthFilter);
+                        }}
                         aria-pressed={linhaStatusFilter === "concluido"}
                       >
                         Concluídos
@@ -1970,7 +1981,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   <button
                     type="button"
                     className={`controle-validade-status-tab is-todos${pulStatusFilter === "todos" ? " is-active" : ""}`}
-                    onClick={() => setPulStatusFilter("todos")}
+                    onClick={() => {
+                      setPulStatusFilter("todos");
+                      setMonthFilter(ALL_MONTHS_FILTER);
+                    }}
                     aria-pressed={pulStatusFilter === "todos"}
                   >
                     Todos
@@ -1978,7 +1992,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   <button
                     type="button"
                     className={`controle-validade-status-tab is-pendente${pulStatusFilter === "pendente" ? " is-active" : ""}`}
-                    onClick={() => setPulStatusFilter("pendente")}
+                    onClick={() => {
+                      setPulStatusFilter("pendente");
+                      setMonthFilter(ALL_MONTHS_FILTER);
+                    }}
                     aria-pressed={pulStatusFilter === "pendente"}
                   >
                     Pendentes
@@ -1986,7 +2003,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   <button
                     type="button"
                     className={`controle-validade-status-tab is-concluido${pulStatusFilter === "concluido" ? " is-active" : ""}`}
-                    onClick={() => setPulStatusFilter("concluido")}
+                    onClick={() => {
+                      setPulStatusFilter("concluido");
+                      setMonthFilter(defaultMonthFilter);
+                    }}
                     aria-pressed={pulStatusFilter === "concluido"}
                   >
                     Concluídos
