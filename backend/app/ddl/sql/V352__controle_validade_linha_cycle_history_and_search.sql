@@ -404,13 +404,13 @@ begin
           and upper(trim(c.endereco_sep)) = v_endereco_sep
           and c.val_mmaa = v_val_mmaa
     ) x
-    where ((
+    where (
         x.coleta_mes = v_prev_month_ref
         and v_target_month_idx = v_current_month_idx
     ) or (
         x.coleta_mes = v_current_month_ref
         and v_target_month_idx <= v_current_month_idx
-    ))
+    )
       and (v_requested_ref_coleta_mes is null or x.coleta_mes = v_requested_ref_coleta_mes)
     group by x.coleta_mes
     order by x.coleta_mes desc
