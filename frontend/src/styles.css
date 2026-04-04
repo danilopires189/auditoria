@@ -9746,6 +9746,53 @@ small {
   color: #173b6f;
 }
 
+.controle-validade-coleta-extras {
+  display: grid;
+  gap: 12px;
+}
+
+.controle-validade-coleta-search-card {
+  gap: 10px;
+}
+
+.controle-validade-search-inline-field {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.controle-validade-last-search-wrap input {
+  padding-right: 44px;
+}
+
+.controle-validade-last-search-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.controle-validade-section-title {
+  color: #173b6f;
+  font-size: 0.94rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.controle-validade-history-zone-badge {
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 4px 10px;
+  border: 1px solid #cfe0f7;
+  background: linear-gradient(180deg, #f6faff 0%, #edf4ff 100%);
+  color: #406488;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .controle-validade-list-area {
   display: grid;
   gap: 10px;
@@ -9918,6 +9965,10 @@ small {
     grid-template-columns: 1fr;
   }
 
+  .controle-validade-search-inline-field {
+    grid-template-columns: 1fr;
+  }
+
   .controle-validade-inline-field .btn {
     width: 100%;
   }
@@ -9965,6 +10016,10 @@ small {
   }
 
   .controle-validade-mobile-search-btn {
+    display: grid;
+  }
+
+  .controle-validade-last-search-btn {
     display: grid;
   }
 

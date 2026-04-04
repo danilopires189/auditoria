@@ -39,6 +39,19 @@ export interface LinhaRetiradaRow {
   auditor_mat_ultima_coleta: string | null;
 }
 
+export interface LinhaColetaHistoryRow {
+  cd: number;
+  coddv: number;
+  descricao: string;
+  barras: string;
+  zona: string;
+  endereco_sep: string;
+  val_mmaa: string;
+  data_coleta: string | null;
+  auditor_mat: string | null;
+  auditor_nome: string | null;
+}
+
 export interface PulRetiradaRow {
   cd: number;
   coddv: number;
@@ -60,8 +73,12 @@ export interface LinhaColetaPayload {
   client_event_id: string;
   cd: number;
   barras: string;
+  coddv: number;
+  descricao: string;
   endereco_sep: string;
   val_mmaa: string;
+  auditor_mat: string | null;
+  auditor_nome: string | null;
   data_hr: string | null;
 }
 
@@ -71,6 +88,7 @@ export interface LinhaRetiradaPayload {
   coddv: number;
   endereco_sep: string;
   val_mmaa: string;
+  ref_coleta_mes: string;
   qtd_retirada: number;
   data_hr: string | null;
 }
@@ -114,6 +132,7 @@ export interface ControleValidadeOfflineSnapshot {
   user_id: string;
   cd: number;
   linha_rows: LinhaRetiradaRow[];
+  linha_coleta_history: LinhaColetaHistoryRow[];
   pul_rows: PulRetiradaRow[];
   cached_at: string;
 }

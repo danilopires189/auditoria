@@ -20,6 +20,7 @@ import type {
   ControleValidadeOfflineEventRow,
   ControleValidadeOfflineSyncResult,
   LinhaColetaLookupResult,
+  LinhaColetaHistoryRow,
   LinhaColetaPayload,
   LinhaRetiradaPayload,
   LinhaRetiradaRow,
@@ -54,6 +55,75 @@ function parseRetiradaStatus(value: unknown): "pendente" | "concluido" {
   return String(value) === "concluido" ? "concluido" : "pendente";
 }
 
+function parseMonthIndexFromValidade(value: string): number | null {
+  const matched = /^(\d{2})\/(\d{2})$/.exec(String(value ?? "").trim());
+  if (!matched) return null;
+  const month = Number.parseInt(matched[1], 10);
+  const year = 2000 + Number.parseInt(matched[2], 10);
+  if (!Number.isFinite(month) || month < 1 || month > 12) return null;
+  return year * 12 + month;
+}
+
+function parseMonthIndexFromRef(value: string): number | null {
+  const matched = /^(\d{4})-(\d{2})/.exec(String(value ?? "").trim());
+  if (!matched) return null;
+  const year = Number.parseInt(matched[1], 10);
+  const month = Number.parseInt(matched[2], 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  return year * 12 + month;
+}
+
+function monthRefFromDate(value: Date): string {
+  return `${String(value.getFullYear()).padStart(4, "0")}-${String(value.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function monthRefFromDateTime(value: string | null | undefined): string | null {
+  const parsed = new Date(String(value ?? "").trim());
+  if (Number.isNaN(parsed.getTime())) return null;
+  return monthRefFromDate(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+}
+
+function currentMonthRef(baseDate = new Date()): string {
+  return monthRefFromDate(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1));
+}
+
+function previousMonthRef(baseDate = new Date()): string {
+  return monthRefFromDate(new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, 1));
+}
+
+function linhaLeadMonths(enderecoSep: string): number {
+  return /^AL/i.test(String(enderecoSep ?? "").trim()) ? 2 : 4;
+}
+
+function linhaRuleLabel(enderecoSep: string): string {
+  return linhaLeadMonths(enderecoSep) === 2 ? "al_lte_2m" : "geral_lte_4m";
+}
+
+function resolveLinhaColetaCycle(params: {
+  endereco_sep: string;
+  val_mmaa: string;
+  data_coleta: string | null | undefined;
+  baseDate?: Date;
+}): { eligible: boolean; ref_coleta_mes: string | null; regra_aplicada: string } {
+  const regra_aplicada = linhaRuleLabel(params.endereco_sep);
+  const coletaRef = monthRefFromDateTime(params.data_coleta);
+  const validadeMonthIdx = parseMonthIndexFromValidade(params.val_mmaa);
+  const currentRef = currentMonthRef(params.baseDate);
+  const previousRef = previousMonthRef(params.baseDate);
+  const currentMonthIdx = parseMonthIndexFromRef(currentRef);
+  if (!coletaRef || validadeMonthIdx == null || currentMonthIdx == null) {
+    return { eligible: false, ref_coleta_mes: null, regra_aplicada };
+  }
+  const targetMonthIdx = validadeMonthIdx - linhaLeadMonths(params.endereco_sep);
+  if (coletaRef === previousRef && targetMonthIdx === currentMonthIdx) {
+    return { eligible: true, ref_coleta_mes: previousRef, regra_aplicada };
+  }
+  if (coletaRef === currentRef && targetMonthIdx <= currentMonthIdx) {
+    return { eligible: true, ref_coleta_mes: currentRef, regra_aplicada };
+  }
+  return { eligible: false, ref_coleta_mes: null, regra_aplicada };
+}
+
 function toErrorMessage(error: unknown): string {
   const raw = (() => {
     if (error instanceof Error) return error.message;
@@ -73,6 +143,7 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("CD_NAO_DEFINIDO_USUARIO")) return "CD não definido para este usuário.";
   if (normalized.includes("CD_SEM_ACESSO")) return "Sem acesso ao CD selecionado.";
   if (normalized.includes("PRODUTO_NAO_ENCONTRADO")) return "Produto não encontrado.";
+  if (normalized.includes("TERMO_BUSCA_OBRIGATORIO")) return "Informe endereço, CODDV ou barras para buscar.";
   if (normalized.includes("ENDERECO_SEP_INVALIDO")) return "Endereço de Linha inválido para este produto.";
   if (normalized.includes("VALIDADE_INVALIDA")) return "Validade inválida. Use MMAA.";
   if (normalized.includes("ITEM_PUL_SEM_ESTOQUE")) return "Item do Pulmão sem estoque disponível (qtd_est_disp <= 0).";
@@ -135,6 +206,22 @@ function mapLinhaRow(raw: Record<string, unknown>): LinhaRetiradaRow {
   };
 }
 
+function mapLinhaColetaHistoryRow(raw: Record<string, unknown>): LinhaColetaHistoryRow {
+  const enderecoSep = normalizeEnderecoDisplay(parseString(raw.endereco_sep));
+  return {
+    cd: parseInteger(raw.cd),
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao),
+    barras: normalizeBarcode(parseString(raw.barras)),
+    zona: parseZona(raw.zona, enderecoSep),
+    endereco_sep: enderecoSep,
+    val_mmaa: parseString(raw.val_mmaa),
+    data_coleta: parseNullableString(raw.data_coleta),
+    auditor_mat: parseNullableString(raw.auditor_mat),
+    auditor_nome: parseNullableString(raw.auditor_nome)
+  };
+}
+
 function mapPulRow(raw: Record<string, unknown>): PulRetiradaRow {
   const enderecoPul = normalizeEnderecoDisplay(parseString(raw.endereco_pul));
   return {
@@ -187,6 +274,20 @@ function sortPulRows(rows: PulRetiradaRow[]): PulRetiradaRow[] {
   });
 }
 
+function sortLinhaColetaHistoryRows(rows: LinhaColetaHistoryRow[]): LinhaColetaHistoryRow[] {
+  return [...rows].sort((a, b) => {
+    const byZona = a.zona.localeCompare(b.zona, "pt-BR");
+    if (byZona !== 0) return byZona;
+    const leftDate = String(a.data_coleta ?? "");
+    const rightDate = String(b.data_coleta ?? "");
+    const byData = rightDate.localeCompare(leftDate, "pt-BR");
+    if (byData !== 0) return byData;
+    const byEndereco = a.endereco_sep.localeCompare(b.endereco_sep, "pt-BR");
+    if (byEndereco !== 0) return byEndereco;
+    return a.coddv - b.coddv;
+  });
+}
+
 function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: ControleValidadeOfflineEventRow[]): LinhaRetiradaRow[] {
   const merged = new Map<string, LinhaRetiradaRow>();
   for (const row of rows) {
@@ -194,20 +295,69 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
   }
 
   for (const event of events) {
+    if (event.kind === "linha_coleta") {
+      const payload = normalizeOfflinePayload(event.payload as LinhaColetaPayload);
+      const cycle = resolveLinhaColetaCycle({
+        endereco_sep: payload.endereco_sep,
+        val_mmaa: payload.val_mmaa,
+        data_coleta: payload.data_hr ?? event.created_at
+      });
+      if (!cycle.eligible || !cycle.ref_coleta_mes || payload.coddv <= 0) continue;
+      const key = lineKey({
+        coddv: payload.coddv,
+        endereco_sep: payload.endereco_sep,
+        val_mmaa: payload.val_mmaa,
+        ref_coleta_mes: cycle.ref_coleta_mes
+      });
+      const current = merged.get(key);
+      const nextColetaAt = payload.data_hr ?? event.created_at;
+      const shouldReplaceActor = !current?.dt_ultima_coleta
+        || (nextColetaAt != null && String(nextColetaAt).localeCompare(String(current.dt_ultima_coleta ?? "")) >= 0);
+      const qtdColetada = (current?.qtd_coletada ?? 0) + 1;
+      const qtdRetirada = current?.qtd_retirada ?? 0;
+      const qtdPendente = Math.max(qtdColetada - qtdRetirada, 0);
+      merged.set(key, {
+        cd: payload.cd,
+        coddv: payload.coddv,
+        descricao: payload.descricao || current?.descricao || `CODDV ${payload.coddv}`,
+        endereco_sep: payload.endereco_sep,
+        val_mmaa: payload.val_mmaa,
+        ref_coleta_mes: cycle.ref_coleta_mes,
+        qtd_coletada: qtdColetada,
+        qtd_retirada: qtdRetirada,
+        qtd_pendente: qtdPendente,
+        status: qtdPendente > 0 ? "pendente" : "concluido",
+        regra_aplicada: cycle.regra_aplicada,
+        dt_ultima_coleta: shouldReplaceActor ? nextColetaAt ?? current?.dt_ultima_coleta ?? null : current?.dt_ultima_coleta ?? null,
+        auditor_nome_ultima_coleta: shouldReplaceActor ? payload.auditor_nome ?? current?.auditor_nome_ultima_coleta ?? null : current?.auditor_nome_ultima_coleta ?? null,
+        auditor_mat_ultima_coleta: shouldReplaceActor ? payload.auditor_mat ?? current?.auditor_mat_ultima_coleta ?? null : current?.auditor_mat_ultima_coleta ?? null
+      });
+      continue;
+    }
+
     if (event.kind !== "linha_retirada") continue;
     const payload = normalizeOfflinePayload(event.payload as LinhaRetiradaPayload);
-    const key = lineKey({
-      coddv: payload.coddv,
-      endereco_sep: payload.endereco_sep,
-      val_mmaa: payload.val_mmaa,
-      ref_coleta_mes: rows[0]?.ref_coleta_mes ?? ""
-    });
-    const current = merged.get(key);
+    const explicitKey = payload.ref_coleta_mes
+      ? lineKey({
+          coddv: payload.coddv,
+          endereco_sep: payload.endereco_sep,
+          val_mmaa: payload.val_mmaa,
+          ref_coleta_mes: payload.ref_coleta_mes
+        })
+      : null;
+    const fallbackRow = explicitKey == null
+      ? Array.from(merged.values()).find((candidate) =>
+          candidate.coddv === payload.coddv
+          && candidate.endereco_sep === payload.endereco_sep
+          && candidate.val_mmaa === payload.val_mmaa
+        ) ?? null
+      : null;
+    const current = explicitKey != null ? merged.get(explicitKey) ?? null : fallbackRow;
     if (!current) continue;
 
     const qtdRetirada = current.qtd_retirada + payload.qtd_retirada;
     const qtdPendente = Math.max(current.qtd_coletada - qtdRetirada, 0);
-    merged.set(key, {
+    merged.set(lineKey(current), {
       ...current,
       qtd_retirada: qtdRetirada,
       qtd_pendente: qtdPendente,
@@ -216,6 +366,31 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
   }
 
   return sortLinhaRows(Array.from(merged.values()));
+}
+
+function applyPendingEventsToLinhaColetaHistoryRows(
+  rows: LinhaColetaHistoryRow[],
+  events: ControleValidadeOfflineEventRow[]
+): LinhaColetaHistoryRow[] {
+  const projected = [...rows];
+  for (const event of events) {
+    if (event.kind !== "linha_coleta") continue;
+    const payload = normalizeOfflinePayload(event.payload as LinhaColetaPayload);
+    if (payload.coddv <= 0 || !payload.endereco_sep) continue;
+    projected.push({
+      cd: payload.cd,
+      coddv: payload.coddv,
+      descricao: payload.descricao || `CODDV ${payload.coddv}`,
+      barras: payload.barras,
+      zona: parseZona(null, payload.endereco_sep),
+      endereco_sep: payload.endereco_sep,
+      val_mmaa: payload.val_mmaa,
+      data_coleta: payload.data_hr ?? event.created_at,
+      auditor_mat: payload.auditor_mat,
+      auditor_nome: payload.auditor_nome
+    });
+  }
+  return sortLinhaColetaHistoryRows(projected).slice(0, 1000);
 }
 
 function applyPendingEventsToPulRows(rows: PulRetiradaRow[], events: ControleValidadeOfflineEventRow[]): PulRetiradaRow[] {
@@ -366,6 +541,35 @@ export async function fetchLinhaRetiradaList(params: {
   return sortLinhaRows(data.map((row) => mapLinhaRow(row as Record<string, unknown>)));
 }
 
+export async function fetchLinhaColetaHistoryList(params: {
+  cd: number;
+  limit?: number;
+}): Promise<LinhaColetaHistoryRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_linha_coleta_history_list", {
+    p_cd: params.cd,
+    p_limit: params.limit ?? 1000,
+    p_offset: 0
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return sortLinhaColetaHistoryRows(data.map((row) => mapLinhaColetaHistoryRow(row as Record<string, unknown>)));
+}
+
+export async function searchLinhaLastColeta(params: {
+  cd: number;
+  term: string;
+}): Promise<LinhaColetaHistoryRow | null> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_linha_coleta_last_search", {
+    p_cd: params.cd,
+    p_term: params.term
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  return first ? mapLinhaColetaHistoryRow(first) : null;
+}
+
 export async function fetchPulRetiradaList(params: {
   cd: number;
   status: RetiradaStatusFilter;
@@ -407,6 +611,7 @@ export async function sendLinhaRetiradaOnline(payload: LinhaRetiradaPayload): Pr
     p_coddv: normalized.coddv,
     p_endereco_sep: normalized.endereco_sep,
     p_val_mmaa: normalized.val_mmaa,
+    p_ref_coleta_mes: normalized.ref_coleta_mes,
     p_qtd_retirada: normalized.qtd_retirada,
     p_data_hr: normalized.data_hr,
     p_client_event_id: normalized.client_event_id
@@ -437,19 +642,22 @@ export async function sendPulRetiradaOnline(payload: PulRetiradaPayload): Promis
 
 export async function downloadOfflineSnapshot(userId: string, cd: number): Promise<{
   linha_rows: LinhaRetiradaRow[];
+  linha_coleta_history: LinhaColetaHistoryRow[];
   pul_rows: PulRetiradaRow[];
 }> {
-  const [linhaRows, pulRows] = await Promise.all([
+  const [linhaRows, linhaColetaHistory, pulRows] = await Promise.all([
     fetchLinhaRetiradaList({ cd, status: "todos" }),
+    fetchLinhaColetaHistoryList({ cd, limit: 1000 }),
     fetchPulRetiradaList({ cd, status: "todos" })
   ]);
   await saveOfflineSnapshot({
     user_id: userId,
     cd,
     linha_rows: linhaRows,
+    linha_coleta_history: linhaColetaHistory,
     pul_rows: pulRows
   });
-  return { linha_rows: linhaRows, pul_rows: pulRows };
+  return { linha_rows: linhaRows, linha_coleta_history: linhaColetaHistory, pul_rows: pulRows };
 }
 
 export async function loadProjectedOfflineRows(params: {
@@ -457,17 +665,22 @@ export async function loadProjectedOfflineRows(params: {
   cd: number;
 }): Promise<{
   linha_rows: LinhaRetiradaRow[];
+  linha_coleta_history: LinhaColetaHistoryRow[];
   pul_rows: PulRetiradaRow[];
 }> {
   const snapshot = await loadOfflineSnapshot(params.userId, params.cd);
   if (!snapshot) {
-    return { linha_rows: [], pul_rows: [] };
+    return { linha_rows: [], linha_coleta_history: [], pul_rows: [] };
   }
   const events = await listPendingOfflineEvents(params.userId, params.cd);
   const linhaRows = (snapshot.linha_rows ?? []).map((row) => mapLinhaRow(row as unknown as Record<string, unknown>));
+  const linhaColetaHistory = (snapshot.linha_coleta_history ?? []).map((row) =>
+    mapLinhaColetaHistoryRow(row as unknown as Record<string, unknown>)
+  );
   const pulRows = (snapshot.pul_rows ?? []).map((row) => mapPulRow(row as unknown as Record<string, unknown>));
   return {
     linha_rows: applyPendingEventsToLinhaRows(linhaRows, events),
+    linha_coleta_history: applyPendingEventsToLinhaColetaHistoryRows(linhaColetaHistory, events),
     pul_rows: applyPendingEventsToPulRows(pulRows, events)
   };
 }
