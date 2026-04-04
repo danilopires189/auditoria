@@ -1094,15 +1094,15 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Trabalhar offline".</div>
             ) : null}
 
-            <label className="controle-validade-tabs" htmlFor="controle-validade-tipo">
+            <label className={`controle-validade-tabs ${mainTab === "pulmao" ? "is-pulmao" : "is-linha"}`} htmlFor="controle-validade-tipo">
               <span>Tipo de Validade</span>
               <select
                 id="controle-validade-tipo"
                 value={mainTab}
                 onChange={(event) => setMainTab(event.target.value as MainTab)}
               >
-                <option value="Separação">Separação</option>
-                <option value="Pulmão">Pulmão</option>
+                <option value="linha">Separação</option>
+                <option value="pulmao">Pulmão</option>
               </select>
             </label>
 
