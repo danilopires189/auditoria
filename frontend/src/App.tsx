@@ -133,14 +133,14 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     appLabel: "Logística CDs",
     authCaption: "Logística CDs",
     hiddenModuleKeys: [],
-    allowedModuleKeys: ["gestao-estoque"],
+    allowedModuleKeys: ["gestao-estoque", "indicadores"],
     defaultRoute: null
   },
   "www.gestaoestoquecd.vercel.app": {
     appLabel: "Logística CDs",
     authCaption: "Logística CDs",
     hiddenModuleKeys: [],
-    allowedModuleKeys: ["gestao-estoque"],
+    allowedModuleKeys: ["gestao-estoque", "indicadores"],
     defaultRoute: null
   },
   "indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
