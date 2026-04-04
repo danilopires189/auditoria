@@ -5,7 +5,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { normalizeBarcode } from "../../shared/db-barras/sync";
-import { BackIcon, CalendarIcon, ModuleIcon } from "../../ui/icons";
+import { BackIcon, CalendarIcon, EyeIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
 import { lookupProduto } from "../busca-produto/sync";
 import type { BuscaProdutoLookupResult } from "../busca-produto/types";
@@ -160,6 +160,16 @@ function buildDayOptions(today: string, availableDays: GestaoEstoqueAvailableDay
   return [...byDate.values()].sort((left, right) => compareDateDesc(left.movement_date, right.movement_date));
 }
 
+function MoreIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="6" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="18" cy="12" r="1.6" />
+    </svg>
+  );
+}
+
 export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePageProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -181,6 +191,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [confirmDeleteRow, setConfirmDeleteRow] = useState<GestaoEstoqueItemRow | null>(null);
   const [listSearchInput, setListSearchInput] = useState("");
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [actionRow, setActionRow] = useState<GestaoEstoqueItemRow | null>(null);
 
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const today = todayIsoBrasilia();
@@ -334,6 +346,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const startEditingRow = useCallback((row: GestaoEstoqueItemRow) => {
     setEditingItemId(row.id);
     setEditingQuantity(String(row.quantidade));
+    setExpandedRowId(row.id);
     focusRow(row.id);
   }, [focusRow]);
 
@@ -414,6 +427,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       setErrorMessage(null);
       setEditingItemId(null);
       setEditingQuantity("");
+      setExpandedRowId(row.id);
       await refreshAll();
       focusRow(row.id);
     } catch (error) {
@@ -448,6 +462,14 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     if (pendingDeleteId) return;
     setConfirmDeleteRow(row);
   }, [pendingDeleteId]);
+
+  const toggleExpandedRow = useCallback((rowId: string) => {
+    setExpandedRowId((current) => (current === rowId ? null : rowId));
+  }, []);
+
+  const openRowActions = useCallback((row: GestaoEstoqueItemRow) => {
+    setActionRow(row);
+  }, []);
 
   const exportPdf = useCallback(async () => {
     setBusyExport(true);
@@ -809,9 +831,20 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           ) : filteredRows.length === 0 ? (
             <div className="coleta-empty">Nenhum item encontrado para o filtro informado.</div>
           ) : (
-            <div className="gestao-op-list">
+            <div className="gestao-op-table">
+              <div className="gestao-op-table-head" role="row">
+                <span>Produto</span>
+                <span>Qtd</span>
+                <span>SEP</span>
+                <span>Últ. compra</span>
+                <span>Custo unit.</span>
+                <span>Custo total</span>
+                <span>Estoque</span>
+                <span className="gestao-op-table-head-actions">Ações</span>
+              </div>
               {filteredRows.map((row) => {
                 const isEditing = editingItemId === row.id;
+                const isExpanded = expandedRowId === row.id;
                 return (
                   <div
                     key={row.id}
@@ -822,60 +855,79 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     className={`gestao-op-row${isEditing ? " is-editing" : ""}`}
                     tabIndex={-1}
                   >
-                    <div className="gestao-op-row-main">
-                      <div className="gestao-op-row-title">
-                        <strong>{row.descricao}</strong>
-                        <span>CODDV {row.coddv} • {movementLabel(row.movement_type)}</span>
-                      </div>
-                      <div className="gestao-op-row-summary">
-                        <span><b>Qtd:</b> {formatInteger(row.quantidade)}</span>
-                        <span><b>SEP:</b> {row.endereco_sep ?? "-"}</span>
-                        <span><b>Últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
-                        <span><b>Custo unit.:</b> {formatCurrency(row.custo_unitario)}</span>
-                        <span><b>Custo total:</b> {formatCurrency(row.custo_total)}</span>
-                        <span><b>Estoque:</b> {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
-                      </div>
-                      <div className="gestao-op-row-meta-line">
-                        <small>Criado por {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</small>
-                        <small>Editado por {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</small>
-                      </div>
+                    <div className="gestao-op-row-main gestao-op-row-main-table">
+                      <button
+                        className="gestao-op-row-expand"
+                        type="button"
+                        onClick={() => toggleExpandedRow(row.id)}
+                        aria-expanded={isExpanded}
+                      >
+                        <span className="gestao-op-row-expand-icon" aria-hidden="true">
+                          <EyeIcon open={isExpanded} />
+                        </span>
+                        <span className="gestao-op-row-title">
+                          <strong>{row.descricao}</strong>
+                          <span>CODDV {row.coddv} • {movementLabel(row.movement_type)}</span>
+                        </span>
+                      </button>
+                      <span className="gestao-op-row-cell">{formatInteger(row.quantidade)}</span>
+                      <span className="gestao-op-row-cell">{row.endereco_sep ?? "-"}</span>
+                      <span className="gestao-op-row-cell">{formatDate(row.dat_ult_compra)}</span>
+                      <span className="gestao-op-row-cell">{formatCurrency(row.custo_unitario)}</span>
+                      <span className="gestao-op-row-cell">{formatCurrency(row.custo_total)}</span>
+                      <span className="gestao-op-row-cell">
+                        {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.
+                      </span>
                     </div>
                     <div className="gestao-op-row-actions">
                       {isHistorical ? (
                         <span className="gestao-op-readonly-badge">Somente leitura</span>
-                      ) : isEditing ? (
-                        <>
-                          <input
-                            type="number"
-                            min={1}
-                            max={row.movement_type === "baixa" ? Math.max(row.qtd_est_atual, 1) : undefined}
-                            value={editingQuantity}
-                            onChange={(event) => setEditingQuantity(event.target.value)}
-                            inputMode="numeric"
-                          />
-                          <button className="btn btn-primary" type="button" onClick={() => void saveEditingRow(row)}>
-                            Salvar
-                          </button>
-                          <button className="btn btn-muted" type="button" onClick={() => { setEditingItemId(null); setEditingQuantity(""); }}>
-                            Cancelar
-                          </button>
-                        </>
                       ) : (
-                        <>
-                          <button className="btn btn-muted" type="button" onClick={() => startEditingRow(row)}>
-                            Editar
-                          </button>
-                          <button
-                            className="btn btn-danger"
-                            type="button"
-                            onClick={() => void removeRow(row)}
-                            disabled={pendingDeleteId === row.id}
-                          >
-                            {pendingDeleteId === row.id ? "Excluindo..." : "Excluir"}
-                          </button>
-                        </>
+                        <button
+                          className="gestao-op-row-more-btn"
+                          type="button"
+                          onClick={() => openRowActions(row)}
+                          aria-label={`Ações para ${row.descricao}`}
+                        >
+                          <MoreIcon />
+                        </button>
                       )}
                     </div>
+                    {isExpanded ? (
+                      <div className="gestao-op-row-details">
+                        <div className="gestao-op-row-detail-grid">
+                          <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
+                          <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span>
+                          <span><b>Dados atualizados:</b> {formatDateTime(row.estoque_updated_at)}</span>
+                          <span><b>Endereço PUL:</b> {row.endereco_pul ?? "-"}</span>
+                        </div>
+                        {isHistorical ? null : isEditing ? (
+                          <div className="gestao-op-row-inline-editor">
+                            <input
+                              type="number"
+                              min={1}
+                              max={row.movement_type === "baixa" ? Math.max(row.qtd_est_atual, 1) : undefined}
+                              value={editingQuantity}
+                              onChange={(event) => setEditingQuantity(event.target.value)}
+                              inputMode="numeric"
+                            />
+                            <button className="btn btn-primary" type="button" onClick={() => void saveEditingRow(row)}>
+                              Salvar
+                            </button>
+                            <button
+                              className="btn btn-muted"
+                              type="button"
+                              onClick={() => {
+                                setEditingItemId(null);
+                                setEditingQuantity("");
+                              }}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -916,6 +968,48 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     disabled={pendingDeleteId === confirmDeleteRow.id}
                   >
                     {pendingDeleteId === confirmDeleteRow.id ? "Excluindo..." : "Excluir"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {actionRow && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estoque-action-title"
+              onClick={() => setActionRow(null)}
+            >
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="gestao-estoque-action-title">O que deseja fazer?</h3>
+                <p>{`${actionRow.descricao} (CODDV ${actionRow.coddv})`}</p>
+                <div className="gestao-op-choice-actions">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => {
+                      startEditingRow(actionRow);
+                      setActionRow(null);
+                    }}
+                  >
+                    Editar quantidade
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    type="button"
+                    onClick={() => {
+                      setActionRow(null);
+                      void removeRow(actionRow);
+                    }}
+                  >
+                    Excluir item
+                  </button>
+                  <button className="btn btn-muted" type="button" onClick={() => setActionRow(null)}>
+                    Cancelar
                   </button>
                 </div>
               </div>
