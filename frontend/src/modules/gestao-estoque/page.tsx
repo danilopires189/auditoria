@@ -123,6 +123,7 @@ function buildRowSearchBlob(row: GestaoEstoqueItemRow): string {
     row.created_mat,
     row.updated_nome,
     row.updated_mat,
+    formatDateTime(row.estoque_updated_at),
     formatDate(row.dat_ult_compra)
   ].join(" "));
 }
@@ -727,6 +728,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     <dd>{formatInteger(preview.qtd_est_disp)}</dd>
                   </div>
                   <div>
+                    <dt>Atualização estq</dt>
+                    <dd>{formatDateTime(preview.estoque_updated_at)}</dd>
+                  </div>
+                  <div>
                     <dt>Últ. compra</dt>
                     <dd>{formatDate(preview.dat_ult_compra)}</dd>
                   </div>
@@ -793,6 +798,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         <span><b>Qtd:</b> {formatInteger(row.quantidade)}</span>
                         <span><b>SEP:</b> {row.endereco_sep ?? "-"}</span>
                         <span><b>Últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
+                        <span><b>db_estq_entr:</b> {formatDateTime(row.estoque_updated_at)}</span>
                         <span><b>Custo unit.:</b> {formatCurrency(row.custo_unitario)}</span>
                         <span><b>Custo total:</b> {formatCurrency(row.custo_total)}</span>
                         <span><b>Estoque:</b> {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>

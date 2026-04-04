@@ -11855,27 +11855,31 @@ small {
 .gestao-op-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
 .gestao-op-segmented {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px;
-  border: 1px solid rgba(55, 86, 132, 0.14);
-  border-radius: 16px;
-  background: rgba(247, 250, 255, 0.94);
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(145, 171, 205, 0.22);
+  border-radius: 14px;
+  background: rgba(247, 250, 255, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .gestao-op-segmented button {
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   background: transparent;
   color: #46607d;
+  font-size: 0.95rem;
   font-weight: 700;
-  padding: 10px 16px;
+  line-height: 1;
+  padding: 10px 14px;
+  min-height: 40px;
   cursor: pointer;
   transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
@@ -11883,19 +11887,20 @@ small {
 .gestao-op-segmented button.is-active {
   background: linear-gradient(135deg, #1f5fa8 0%, #3d8ad9 100%);
   color: #fff;
-  box-shadow: 0 8px 18px rgba(22, 65, 118, 0.2);
+  box-shadow: 0 6px 14px rgba(22, 65, 118, 0.18);
 }
 
 .gestao-op-day-picker {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 0 14px;
-  border: 1px solid rgba(55, 86, 132, 0.14);
-  border-radius: 14px;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(145, 171, 205, 0.22);
+  border-radius: 12px;
   background: #fff;
   color: #27425e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
 }
 
 .gestao-op-day-picker select {
@@ -11904,7 +11909,7 @@ small {
   color: inherit;
   font: inherit;
   font-weight: 600;
-  min-width: 180px;
+  min-width: 164px;
   outline: none;
 }
 
@@ -11926,7 +11931,17 @@ small {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gestao-op-actions .btn {
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .gestao-op-metrics {
@@ -12253,6 +12268,10 @@ small {
   }
 
   .gestao-op-actions {
+    justify-content: flex-start;
+  }
+
+  .gestao-op-day-picker {
     justify-content: flex-start;
   }
 

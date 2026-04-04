@@ -90,6 +90,7 @@ function mapItemRow(raw: Record<string, unknown>): GestaoEstoqueItemRow {
     endereco_pul: parseNullableString(raw.endereco_pul),
     qtd_est_atual: parseInteger(raw.qtd_est_atual),
     qtd_est_disp: parseInteger(raw.qtd_est_disp),
+    estoque_updated_at: parseNullableString(raw.estoque_updated_at),
     dat_ult_compra: parseNullableString(raw.dat_ult_compra),
     custo_unitario: parseNullableNumber(raw.custo_unitario),
     custo_total: parseNumber(raw.custo_total),
