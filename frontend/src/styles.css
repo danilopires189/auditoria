@@ -9630,6 +9630,12 @@ small {
   background: rgba(232, 239, 249, 0.92);
 }
 
+.controle-validade-linha-controls {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
 .controle-validade-pane {
   display: grid;
   gap: 12px;
