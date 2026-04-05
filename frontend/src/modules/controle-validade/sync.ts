@@ -326,7 +326,6 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
         || (nextColetaAt != null && String(nextColetaAt).localeCompare(String(current.dt_ultima_coleta ?? "")) >= 0);
       const qtdColetada = (current?.qtd_coletada ?? 0) + 1;
       const qtdRetirada = current?.qtd_retirada ?? 0;
-      const qtdPendente = Math.max(qtdColetada - qtdRetirada, 0);
       merged.set(key, {
         cd: payload.cd,
         coddv: payload.coddv,
@@ -336,7 +335,7 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
         ref_coleta_mes: cycle.ref_coleta_mes,
         qtd_coletada: qtdColetada,
         qtd_retirada: qtdRetirada,
-        status: qtdPendente > 0 ? "pendente" : "concluido",
+        status: current?.status === "concluido" ? "concluido" : "pendente",
         regra_aplicada: cycle.regra_aplicada,
         dt_ultima_coleta: shouldReplaceActor ? nextColetaAt ?? current?.dt_ultima_coleta ?? null : current?.dt_ultima_coleta ?? null,
         auditor_nome_ultima_coleta: shouldReplaceActor ? payload.auditor_nome ?? current?.auditor_nome_ultima_coleta ?? null : current?.auditor_nome_ultima_coleta ?? null,
@@ -367,12 +366,11 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
     const current = explicitKey != null ? merged.get(explicitKey) ?? null : fallbackRow;
     if (!current) continue;
 
-    const qtdRetirada = current.qtd_retirada + payload.qtd_retirada;
-    const qtdPendente = Math.max(current.qtd_coletada - qtdRetirada, 0);
+    const qtdRetirada = payload.qtd_retirada;
     merged.set(lineKey(current), {
       ...current,
       qtd_retirada: qtdRetirada,
-      status: qtdPendente > 0 ? "pendente" : "concluido",
+      status: "concluido",
       editable_retirada_id: current.editable_retirada_id,
       editable_retirada_qtd: current.editable_retirada_qtd
     });
