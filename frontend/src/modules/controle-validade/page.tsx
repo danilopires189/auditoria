@@ -200,20 +200,16 @@ function formatActorDisplay(matValue: string | null | undefined, nomeValue: stri
   return "Aguardando sincronizacao";
 }
 
-function linhaPendingAvailable(row: LinhaRetiradaRow): number {
-  return Math.max(row.qtd_coletada - row.qtd_retirada, 0);
-}
-
 function pulPendingAvailable(row: PulRetiradaRow): number {
   return Math.max(1 - row.qtd_retirada, 0);
 }
 
-function linhaEditableMax(row: LinhaRetiradaRow): number {
-  return Math.max(row.qtd_coletada - (row.qtd_retirada - (row.editable_retirada_qtd ?? 0)), 0);
-}
-
 function pulEditableMax(row: PulRetiradaRow): number {
   return Math.max(1 - (row.qtd_retirada - (row.editable_retirada_qtd ?? 0)), 0);
+}
+
+function normalizeRetiradaQtyInput(raw: string): string {
+  return raw.replace(/\D/g, "").slice(0, 4);
 }
 
 function sortLinhaRowsForDisplay(rows: LinhaRetiradaRow[]): LinhaRetiradaRow[] {
@@ -256,8 +252,8 @@ function applyLinhaRetiradaOptimistic(
     ) {
       return row;
     }
-    const nextQtdRetirada = row.qtd_retirada + qtdRetirada;
-    const nextStatus: RetiradaStatus = Math.max(row.qtd_coletada - nextQtdRetirada, 0) > 0 ? "pendente" : "concluido";
+    const nextQtdRetirada = qtdRetirada;
+    const nextStatus: RetiradaStatus = "concluido";
     return {
       ...row,
       qtd_retirada: nextQtdRetirada,
@@ -1024,23 +1020,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const submitLinhaRetirada = useCallback(async (row: LinhaRetiradaRow) => {
     if (activeCd == null) return;
     const key = `${row.coddv}|${row.endereco_sep}|${row.val_mmaa}|${row.ref_coleta_mes}`;
-    const parsed = Number.parseInt((linhaQtyInputs[key] ?? "").replace(/\D/g, ""), 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
+    const normalizedDigits = normalizeRetiradaQtyInput(linhaQtyInputs[key] ?? "");
+    if (!normalizedDigits.length) {
       setErrorMessage("Informe a quantidade retirada da Linha.");
       return;
     }
-    const maxAllowed = linhaPendingAvailable(row);
-    if (maxAllowed <= 0) {
-      setErrorMessage("Este item não possui quantidade pendente para retirada.");
-      void loadRows();
-      return;
-    }
-    if (parsed > maxAllowed) {
-      setErrorMessage(`Quantidade disponível para retirada: ${maxAllowed}.`);
-      setLinhaQtyInputs((current) => ({ ...current, [key]: String(maxAllowed) }));
-      return;
-    }
-    const qtd = parsed;
+    const qtd = Number.parseInt(normalizedDigits, 10);
     try {
       const payload = {
         client_event_id: safeUuid(),
@@ -1511,17 +1496,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
   const saveEditingLinhaRetirada = useCallback(async (row: LinhaRetiradaRow) => {
     if (!isOnline || !row.editable_retirada_id) return;
-    const parsed = Number.parseInt(editingLinhaRetiradaQty.replace(/\D/g, ""), 10);
-    if (!Number.isFinite(parsed) || parsed < 0) {
+    const normalizedDigits = normalizeRetiradaQtyInput(editingLinhaRetiradaQty);
+    if (!normalizedDigits.length) {
       setErrorMessage("Informe a quantidade da sua retirada.");
       return;
     }
-    const maxAllowed = linhaEditableMax(row);
-    if (parsed > maxAllowed) {
-      setErrorMessage(`Quantidade disponível para esta retirada: ${maxAllowed}.`);
-      setEditingLinhaRetiradaQty(String(maxAllowed));
-      return;
-    }
+    const parsed = Number.parseInt(normalizedDigits, 10);
     try {
       setBusyEdit(true);
       setErrorMessage(null);
@@ -2143,10 +2123,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                         const showZoneHeader = previousZone !== zone;
                         const isPending = row.status === "pendente";
                         const isExpanded = expandedLinhaCardKey === key;
-                        const pendingAvailable = linhaPendingAvailable(row);
                         const qtyValue = linhaQtyInputs[key] ?? "";
                         const parsedQty = Number.parseInt(qtyValue.replace(/\D/g, ""), 10);
-                        const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0 && parsedQty <= pendingAvailable;
+                        const canSubmit = qtyValue.trim().length > 0 && Number.isFinite(parsedQty) && parsedQty >= 0;
                         return (
                           <div key={key} className="pvps-zone-group">
                             {showZoneHeader ? <div className="pvps-zone-divider">Zona {zone}</div> : null}
@@ -2202,10 +2181,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                           type="text"
                                           inputMode="numeric"
                                           value={editingLinhaRetiradaQty}
-                                          onChange={(event) => {
-                                            const nextValue = Number.parseInt(event.target.value.replace(/\D/g, "").slice(0, 4) || "0", 10) || 0;
-                                            setEditingLinhaRetiradaQty(String(Math.min(nextValue, linhaEditableMax(row))).replace(/^0$/, ""));
-                                          }}
+                                          onChange={(event) => setEditingLinhaRetiradaQty(normalizeRetiradaQtyInput(event.target.value))}
                                           placeholder="Qtd"
                                         />
                                         <button type="button" className="btn btn-primary" onClick={() => void saveEditingLinhaRetirada(row)} disabled={busyEdit}>
@@ -2224,13 +2200,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                         inputMode="numeric"
                                         placeholder="Qtd"
                                         value={qtyValue}
-                                        onChange={(event) => {
-                                          const nextValue = Number.parseInt(event.target.value.replace(/\D/g, "").slice(0, 4) || "0", 10) || 0;
+                                        onChange={(event) =>
                                           setLinhaQtyInputs((current) => ({
                                             ...current,
-                                            [key]: String(Math.min(nextValue, pendingAvailable)).replace(/^0$/, "")
-                                          }));
-                                        }}
+                                            [key]: normalizeRetiradaQtyInput(event.target.value)
+                                          }))
+                                        }
                                       />
                                       <button
                                         type="button"
