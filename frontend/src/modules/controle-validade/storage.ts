@@ -238,7 +238,8 @@ export async function listPendingOfflineEvents(userId: string, cd: number): Prom
 }
 
 export async function countPendingOfflineEvents(userId: string, cd: number): Promise<number> {
-  return (await listPendingOfflineEvents(userId, cd)).length;
+  const rows = await listPendingOfflineEvents(userId, cd);
+  return rows.filter((row) => row.status === "pending").length;
 }
 
 export async function countErrorOfflineEvents(userId: string, cd: number): Promise<number> {

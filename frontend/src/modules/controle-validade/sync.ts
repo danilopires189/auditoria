@@ -734,15 +734,16 @@ export async function loadProjectedOfflineRows(params: {
     return { linha_rows: [], linha_coleta_history: [], pul_rows: [] };
   }
   const events = await listPendingOfflineEvents(params.userId, params.cd);
+  const pendingEvents = events.filter((event) => event.status === "pending");
   const linhaRows = (snapshot.linha_rows ?? []).map((row) => mapLinhaRow(row as unknown as Record<string, unknown>));
   const linhaColetaHistory = (snapshot.linha_coleta_history ?? []).map((row) =>
     mapLinhaColetaHistoryRow(row as unknown as Record<string, unknown>)
   );
   const pulRows = (snapshot.pul_rows ?? []).map((row) => mapPulRow(row as unknown as Record<string, unknown>));
   return {
-    linha_rows: applyPendingEventsToLinhaRows(linhaRows, events),
-    linha_coleta_history: applyPendingEventsToLinhaColetaHistoryRows(linhaColetaHistory, events),
-    pul_rows: applyPendingEventsToPulRows(pulRows, events)
+    linha_rows: applyPendingEventsToLinhaRows(linhaRows, pendingEvents),
+    linha_coleta_history: applyPendingEventsToLinhaColetaHistoryRows(linhaColetaHistory, pendingEvents),
+    pul_rows: applyPendingEventsToPulRows(pulRows, pendingEvents)
   };
 }
 
