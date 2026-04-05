@@ -1632,6 +1632,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const monthFilterOptions = useMemo(() => {
     return buildValidadeMonthWindow();
   }, []);
+  const showMonthFilter = mainTab === "pulmao" && pulStatusFilter === "pendente";
   const preferredMonthFilterOptions = useMemo(() => {
     if (activeStatusFilter === "concluido") return [concludedMonthFilter];
     const sourceRows = mainTab === "pulmao" ? pulRows : linhaRows;
@@ -1651,10 +1652,11 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       }
       return;
     }
+    if (!showMonthFilter) return;
     if (monthFilter === ALL_MONTHS_FILTER) return;
     if (preferredMonthFilterOptions.includes(monthFilter)) return;
     setMonthFilter(ALL_MONTHS_FILTER);
-  }, [activeStatusFilter, concludedMonthFilter, monthFilter, preferredMonthFilterOptions]);
+  }, [activeStatusFilter, concludedMonthFilter, monthFilter, preferredMonthFilterOptions, showMonthFilter]);
 
   return (
     <>
@@ -1726,7 +1728,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Trabalhar offline".</div>
             ) : null}
 
-            <div className="controle-validade-filters-row">
+            <div className={`controle-validade-filters-row${showMonthFilter ? "" : " is-single"}`}>
               <label className={`controle-validade-tabs ${mainTab === "pulmao" ? "is-pulmao" : "is-linha"}`} htmlFor="controle-validade-tipo">
                 <span className="controle-validade-filter-label">
                   <span className="controle-validade-filter-label-full">Tipo de Validade</span>
@@ -1750,24 +1752,25 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 </select>
               </label>
 
-              <label className="controle-validade-tabs controle-validade-tabs-date" htmlFor="controle-validade-mes">
-                <span className="controle-validade-filter-label">
-                  <span className="controle-validade-filter-label-full">Data da Validade</span>
-                  <span className="controle-validade-filter-label-short">Data</span>
-                </span>
-                <select
-                  id="controle-validade-mes"
-                  value={displayedMonthFilter}
-                  onChange={(event) => setMonthFilter(event.target.value)}
-                  disabled={activeStatusFilter === "concluido"}
-                >
-                  {preferredMonthFilterOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {formatValidadeMonthOption(value)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {showMonthFilter ? (
+                <label className="controle-validade-tabs controle-validade-tabs-date" htmlFor="controle-validade-mes">
+                  <span className="controle-validade-filter-label">
+                    <span className="controle-validade-filter-label-full">Data da Validade</span>
+                    <span className="controle-validade-filter-label-short">Data</span>
+                  </span>
+                  <select
+                    id="controle-validade-mes"
+                    value={displayedMonthFilter}
+                    onChange={(event) => setMonthFilter(event.target.value)}
+                  >
+                    {preferredMonthFilterOptions.map((value) => (
+                      <option key={value} value={value}>
+                        {formatValidadeMonthOption(value)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
 
             {mainTab === "linha" ? (
