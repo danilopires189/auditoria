@@ -200,12 +200,8 @@ function formatActorDisplay(matValue: string | null | undefined, nomeValue: stri
   return "Aguardando sincronizacao";
 }
 
-function pulPendingAvailable(row: PulRetiradaRow): number {
-  return Math.max(1 - row.qtd_retirada, 0);
-}
-
-function pulEditableMax(row: PulRetiradaRow): number {
-  return Math.max(1 - (row.qtd_retirada - (row.editable_retirada_qtd ?? 0)), 0);
+function pulMaxRetiradaQty(row: PulRetiradaRow): number {
+  return Math.max(row.qtd_est_disp, row.editable_retirada_qtd ?? 0, 0);
 }
 
 function normalizeRetiradaQtyInput(raw: string): string {
@@ -241,7 +237,8 @@ function sortPulRowsForDisplay(rows: PulRetiradaRow[]): PulRetiradaRow[] {
 function applyLinhaRetiradaOptimistic(
   rows: LinhaRetiradaRow[],
   targetRow: LinhaRetiradaRow,
-  qtdRetirada: number
+  qtdRetirada: number,
+  dataHr: string
 ): LinhaRetiradaRow[] {
   const nextRows = rows.map((row) => {
     if (
@@ -257,7 +254,8 @@ function applyLinhaRetiradaOptimistic(
     return {
       ...row,
       qtd_retirada: nextQtdRetirada,
-      status: nextStatus
+      status: nextStatus,
+      dt_ultima_retirada: dataHr
     };
   });
   return sortLinhaRowsForDisplay(nextRows);
@@ -266,7 +264,8 @@ function applyLinhaRetiradaOptimistic(
 function applyPulRetiradaOptimistic(
   rows: PulRetiradaRow[],
   targetRow: PulRetiradaRow,
-  qtdRetirada: number
+  qtdRetirada: number,
+  dataHr: string
 ): PulRetiradaRow[] {
   const nextRows = rows.map((row) => {
     if (
@@ -276,12 +275,13 @@ function applyPulRetiradaOptimistic(
     ) {
       return row;
     }
-    const nextQtdRetirada = row.qtd_retirada + qtdRetirada;
-    const nextStatus: RetiradaStatus = Math.max(1 - nextQtdRetirada, 0) > 0 ? "pendente" : "concluido";
+    const nextQtdRetirada = qtdRetirada;
+    const nextStatus: RetiradaStatus = "concluido";
     return {
       ...row,
       qtd_retirada: nextQtdRetirada,
-      status: nextStatus
+      status: nextStatus,
+      dt_ultima_retirada: dataHr
     };
   });
   return sortPulRowsForDisplay(nextRows);
@@ -306,6 +306,15 @@ function normalizeLinhaColetaSearchTerm(value: string): { raw: string; upper: st
 
 function currentValidadeMonthValue(baseDate = new Date()): string {
   return `${String(baseDate.getMonth() + 1).padStart(2, "0")}/${String(baseDate.getFullYear()).slice(-2)}`;
+}
+
+function isDateInCurrentMonth(value: string | null | undefined, baseDate = new Date()): boolean {
+  const raw = String(value ?? "").trim();
+  if (!raw) return false;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getFullYear() === baseDate.getFullYear()
+    && parsed.getMonth() === baseDate.getMonth();
 }
 
 function buildValidadeMonthWindow(baseDate = new Date(), count = 5): string[] {
@@ -1053,7 +1062,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         });
         await refreshQueueStats();
       }
-      const nextLinhaRows = applyLinhaRetiradaOptimistic(linhaRows, row, qtd);
+      const nextLinhaRows = applyLinhaRetiradaOptimistic(linhaRows, row, qtd, payload.data_hr);
       setLinhaRows(nextLinhaRows);
       void persistSnapshotDraft({ linhaRows: nextLinhaRows });
       setStatusMessage(null);
@@ -1065,8 +1074,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           mainTab: "linha",
           linhaSubTab: "retirada",
           linhaStatusFilter: "concluido",
-          monthFilter: row.val_mmaa,
-          completedMonthFocus: row.val_mmaa
+          monthFilter: defaultMonthFilter,
+          completedMonthFocus: null
         }
       });
       setLinhaQtyInputs((current) => ({ ...current, [key]: "" }));
@@ -1076,24 +1085,20 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
     }
-  }, [activeCd, isOnline, linhaQtyInputs, linhaRows, loadRows, persistSnapshotDraft, profile.user_id, refreshQueueStats]);
+  }, [activeCd, defaultMonthFilter, isOnline, linhaQtyInputs, linhaRows, loadRows, persistSnapshotDraft, profile.user_id, refreshQueueStats]);
 
   const submitPulRetirada = useCallback(async (row: PulRetiradaRow) => {
     if (activeCd == null) return;
     const key = `${row.coddv}|${row.endereco_pul}|${row.val_mmaa}`;
-    const parsed = Number.parseInt((pulQtyInputs[key] ?? "").replace(/\D/g, ""), 10);
+    const normalizedDigits = normalizeRetiradaQtyInput(pulQtyInputs[key] ?? "");
+    const parsed = Number.parseInt(normalizedDigits, 10);
     if (!Number.isFinite(parsed) || parsed <= 0) {
       setErrorMessage("Informe a quantidade retirada do Pulmão.");
       return;
     }
-    const maxAllowed = pulPendingAvailable(row);
-    if (maxAllowed <= 0) {
-      setErrorMessage("Este item não possui quantidade pendente para retirada.");
-      void loadRows();
-      return;
-    }
+    const maxAllowed = pulMaxRetiradaQty(row);
     if (parsed > maxAllowed) {
-      setErrorMessage(`Quantidade disponível para retirada: ${maxAllowed}.`);
+      setErrorMessage(`Quantidade disponível em estoque: ${maxAllowed}.`);
       setPulQtyInputs((current) => ({ ...current, [key]: String(maxAllowed) }));
       return;
     }
@@ -1124,7 +1129,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         });
         await refreshQueueStats();
       }
-      const nextPulRows = applyPulRetiradaOptimistic(pulRows, row, qtd);
+      const nextPulRows = applyPulRetiradaOptimistic(pulRows, row, qtd, payload.data_hr);
       setPulRows(nextPulRows);
       void persistSnapshotDraft({ pulRows: nextPulRows });
       setStatusMessage(null);
@@ -1135,8 +1140,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         onCloseTarget: {
           mainTab: "pulmao",
           pulStatusFilter: "concluido",
-          monthFilter: row.val_mmaa,
-          completedMonthFocus: row.val_mmaa
+          monthFilter: defaultMonthFilter,
+          completedMonthFocus: null
         }
       });
       setPulQtyInputs((current) => ({ ...current, [key]: "" }));
@@ -1146,7 +1151,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
     }
-  }, [activeCd, isOnline, loadRows, persistSnapshotDraft, profile.user_id, pulQtyInputs, pulRows, refreshQueueStats]);
+  }, [activeCd, defaultMonthFilter, isOnline, loadRows, persistSnapshotDraft, profile.user_id, pulQtyInputs, pulRows, refreshQueueStats]);
 
   useEffect(() => {
     if (activeCd == null) return;
@@ -1532,14 +1537,15 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
   const saveEditingPulRetirada = useCallback(async (row: PulRetiradaRow) => {
     if (!isOnline || !row.editable_retirada_id) return;
-    const parsed = Number.parseInt(editingPulRetiradaQty.replace(/\D/g, ""), 10);
+    const normalizedDigits = normalizeRetiradaQtyInput(editingPulRetiradaQty);
+    const parsed = Number.parseInt(normalizedDigits, 10);
     if (!Number.isFinite(parsed) || parsed < 0) {
       setErrorMessage("Informe a quantidade da sua retirada.");
       return;
     }
-    const maxAllowed = pulEditableMax(row);
+    const maxAllowed = pulMaxRetiradaQty(row);
     if (parsed > maxAllowed) {
-      setErrorMessage(`Quantidade disponível para esta retirada: ${maxAllowed}.`);
+      setErrorMessage(`Quantidade disponível em estoque: ${maxAllowed}.`);
       setEditingPulRetiradaQty(String(maxAllowed));
       return;
     }
@@ -1585,11 +1591,11 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const concludedMonthFilter = completedMonthFocus ?? defaultMonthFilter;
 
   const linhaRowsFiltered = useMemo(() => {
-    const effectiveMonthFilter = linhaStatusFilter === "concluido" ? concludedMonthFilter : monthFilter;
     return linhaRows
       .filter((row) => {
         if (row.status !== linhaStatusFilter) return false;
-        if (effectiveMonthFilter !== ALL_MONTHS_FILTER && row.val_mmaa !== effectiveMonthFilter) return false;
+        if (linhaStatusFilter === "concluido") return isDateInCurrentMonth(row.dt_ultima_retirada);
+        if (monthFilter !== ALL_MONTHS_FILTER && row.val_mmaa !== monthFilter) return false;
         return true;
       })
       .sort((left, right) => {
@@ -1601,14 +1607,14 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         if (coddvCompare !== 0) return coddvCompare;
         return compareUiText(left.descricao, right.descricao);
       });
-  }, [concludedMonthFilter, linhaRows, linhaStatusFilter, monthFilter]);
+  }, [linhaRows, linhaStatusFilter, monthFilter]);
 
   const pulRowsFiltered = useMemo(() => {
-    const effectiveMonthFilter = pulStatusFilter === "concluido" ? concludedMonthFilter : monthFilter;
     return pulRows
       .filter((row) => {
         if (row.status !== pulStatusFilter) return false;
-        if (effectiveMonthFilter !== ALL_MONTHS_FILTER && row.val_mmaa !== effectiveMonthFilter) return false;
+        if (pulStatusFilter === "concluido") return isDateInCurrentMonth(row.dt_ultima_retirada);
+        if (monthFilter !== ALL_MONTHS_FILTER && row.val_mmaa !== monthFilter) return false;
         return true;
       })
       .sort((left, right) => {
@@ -1620,7 +1626,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         if (coddvCompare !== 0) return coddvCompare;
         return compareUiText(left.descricao, right.descricao);
       });
-  }, [concludedMonthFilter, monthFilter, pulRows, pulStatusFilter]);
+  }, [monthFilter, pulRows, pulStatusFilter]);
 
   const hasBarcodeInput = barcodeInput.trim().length > 0;
   const monthFilterOptions = useMemo(() => {
@@ -2267,10 +2273,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     const showZoneHeader = !prev || prev.zona !== row.zona;
                     const isPending = row.status === "pendente";
                     const isExpanded = expandedPulCardKey === key;
-                    const pendingAvailable = pulPendingAvailable(row);
+                    const maxRetiradaQty = pulMaxRetiradaQty(row);
                     const qtyValue = pulQtyInputs[key] ?? "";
-                    const parsedQty = Number.parseInt(qtyValue.replace(/\D/g, ""), 10);
-                    const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0 && parsedQty <= pendingAvailable;
+                    const parsedQty = Number.parseInt(normalizeRetiradaQtyInput(qtyValue), 10);
+                    const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0 && parsedQty <= maxRetiradaQty;
                     return (
                       <div key={key} className="pvps-zone-group">
                         {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
@@ -2333,8 +2339,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                     inputMode="numeric"
                                     value={editingPulRetiradaQty}
                                     onChange={(event) => {
-                                      const nextValue = Number.parseInt(event.target.value.replace(/\D/g, "").slice(0, 4) || "0", 10) || 0;
-                                      setEditingPulRetiradaQty(String(Math.min(nextValue, pulEditableMax(row))).replace(/^0$/, ""));
+                                      setEditingPulRetiradaQty(normalizeRetiradaQtyInput(event.target.value));
                                     }}
                                     placeholder="Qtd"
                                   />
@@ -2355,10 +2360,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                     placeholder="Qtd"
                                     value={qtyValue}
                                     onChange={(event) => {
-                                      const nextValue = Number.parseInt(event.target.value.replace(/\D/g, "").slice(0, 4) || "0", 10) || 0;
                                       setPulQtyInputs((current) => ({
                                         ...current,
-                                        [key]: String(Math.min(nextValue, pendingAvailable)).replace(/^0$/, "")
+                                        [key]: normalizeRetiradaQtyInput(event.target.value)
                                       }));
                                     }}
                                   />

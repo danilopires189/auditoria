@@ -34,6 +34,7 @@ export interface LinhaRetiradaRow {
   status: RetiradaStatus;
   regra_aplicada: string;
   dt_ultima_coleta: string | null;
+  dt_ultima_retirada: string | null;
   auditor_nome_ultima_coleta: string | null;
   auditor_mat_ultima_coleta: string | null;
   editable_retirada_id: string | null;
