@@ -196,7 +196,6 @@ function mapLinhaRow(raw: Record<string, unknown>): LinhaRetiradaRow {
     ref_coleta_mes: parseString(raw.ref_coleta_mes),
     qtd_coletada: parseInteger(raw.qtd_coletada),
     qtd_retirada: parseInteger(raw.qtd_retirada),
-    qtd_pendente: parseInteger(raw.qtd_pendente),
     status: parseRetiradaStatus(raw.status),
     regra_aplicada: parseString(raw.regra_aplicada),
     dt_ultima_coleta: parseNullableString(raw.dt_ultima_coleta),
@@ -240,7 +239,6 @@ function mapPulRow(raw: Record<string, unknown>): PulRetiradaRow {
     andar: parseNullableString(raw.andar),
     val_mmaa: parseString(raw.val_mmaa),
     qtd_retirada: parseInteger(raw.qtd_retirada),
-    qtd_pendente: parseInteger(raw.qtd_pendente),
     status: parseRetiradaStatus(raw.status),
     qtd_est_disp: parseInteger(raw.qtd_est_disp),
     dt_ultima_retirada: parseNullableString(raw.dt_ultima_retirada),
@@ -338,7 +336,6 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
         ref_coleta_mes: cycle.ref_coleta_mes,
         qtd_coletada: qtdColetada,
         qtd_retirada: qtdRetirada,
-        qtd_pendente: qtdPendente,
         status: qtdPendente > 0 ? "pendente" : "concluido",
         regra_aplicada: cycle.regra_aplicada,
         dt_ultima_coleta: shouldReplaceActor ? nextColetaAt ?? current?.dt_ultima_coleta ?? null : current?.dt_ultima_coleta ?? null,
@@ -375,7 +372,6 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
     merged.set(lineKey(current), {
       ...current,
       qtd_retirada: qtdRetirada,
-      qtd_pendente: qtdPendente,
       status: qtdPendente > 0 ? "pendente" : "concluido",
       editable_retirada_id: current.editable_retirada_id,
       editable_retirada_qtd: current.editable_retirada_qtd
@@ -430,12 +426,10 @@ function applyPendingEventsToPulRows(rows: PulRetiradaRow[], events: ControleVal
     if (!current) continue;
 
     const qtdRetirada = current.qtd_retirada + payload.qtd_retirada;
-    const qtdTotal = Math.max(current.qtd_retirada + current.qtd_pendente, 1);
-    const qtdPendente = Math.max(qtdTotal - qtdRetirada, 0);
+    const qtdPendente = Math.max(1 - qtdRetirada, 0);
     merged.set(key, {
       ...current,
       qtd_retirada: qtdRetirada,
-      qtd_pendente: qtdPendente,
       status: qtdPendente > 0 ? "pendente" : "concluido",
       editable_retirada_id: current.editable_retirada_id,
       editable_retirada_qtd: current.editable_retirada_qtd

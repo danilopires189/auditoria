@@ -31,7 +31,6 @@ export interface LinhaRetiradaRow {
   ref_coleta_mes: string;
   qtd_coletada: number;
   qtd_retirada: number;
-  qtd_pendente: number;
   status: RetiradaStatus;
   regra_aplicada: string;
   dt_ultima_coleta: string | null;
@@ -65,7 +64,6 @@ export interface PulRetiradaRow {
   andar: string | null;
   val_mmaa: string;
   qtd_retirada: number;
-  qtd_pendente: number;
   status: RetiradaStatus;
   qtd_est_disp: number;
   dt_ultima_retirada: string | null;

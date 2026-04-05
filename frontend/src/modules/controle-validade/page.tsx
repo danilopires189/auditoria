@@ -41,8 +41,7 @@ import type {
   LinhaColetaHistoryRow,
   LinhaRetiradaRow,
   PulRetiradaRow,
-  RetiradaStatus,
-  RetiradaStatusFilter
+  RetiradaStatus
 } from "./types";
 
 interface ControleValidadePageProps {
@@ -70,6 +69,24 @@ interface ScannerInputState {
   timerId: number | null;
   lastSubmittedValue: string;
   lastSubmittedAt: number;
+}
+
+interface ActionPopupLine {
+  label: string;
+  value: string;
+}
+
+interface ActionPopupState {
+  title: string;
+  tone: "coleta" | "retirada";
+  lines: ActionPopupLine[];
+  onCloseTarget?: {
+    mainTab?: MainTab;
+    linhaSubTab?: LinhaSubTab;
+    linhaStatusFilter?: RetiradaStatus;
+    pulStatusFilter?: RetiradaStatus;
+    monthFilter?: string;
+  };
 }
 
 function createScannerInputState(): ScannerInputState {
@@ -296,7 +313,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [mainTab, setMainTab] = useState<MainTab>("linha");
   const [linhaSubTab, setLinhaSubTab] = useState<LinhaSubTab>("coleta");
   const [linhaStatusFilter, setLinhaStatusFilter] = useState<RetiradaStatus>("pendente");
-  const [pulStatusFilter, setPulStatusFilter] = useState<RetiradaStatusFilter>("todos");
+  const [pulStatusFilter, setPulStatusFilter] = useState<RetiradaStatus>("pendente");
   const [monthFilter, setMonthFilter] = useState(ALL_MONTHS_FILTER);
 
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -343,6 +360,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [lastColetaSearchTerm, setLastColetaSearchTerm] = useState("");
   const [lastColetaSearchBusy, setLastColetaSearchBusy] = useState(false);
   const [lastColetaSearchResult, setLastColetaSearchResult] = useState<LinhaColetaHistoryRow | null>(null);
+  const [actionPopup, setActionPopup] = useState<ActionPopupState | null>(null);
 
   const flushBusyRef = useRef(false);
   const isOfflineModeActive = preferOfflineMode || !isOnline;
@@ -351,6 +369,21 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     return typeof navigator.mediaDevices?.getUserMedia === "function";
   }, []);
   const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
+
+  const closeActionPopup = useCallback(() => {
+    setActionPopup((current) => {
+      if (current?.onCloseTarget) {
+        if (current.onCloseTarget.mainTab) setMainTab(current.onCloseTarget.mainTab);
+        if (current.onCloseTarget.linhaSubTab) setLinhaSubTab(current.onCloseTarget.linhaSubTab);
+        if (current.onCloseTarget.linhaStatusFilter) setLinhaStatusFilter(current.onCloseTarget.linhaStatusFilter);
+        if (current.onCloseTarget.pulStatusFilter) setPulStatusFilter(current.onCloseTarget.pulStatusFilter);
+        if (current.onCloseTarget.monthFilter != null) setMonthFilter(current.onCloseTarget.monthFilter);
+        setExpandedLinhaCardKey(null);
+        setExpandedPulCardKey(null);
+      }
+      return null;
+    });
+  }, []);
 
   const refreshQueueStats = useCallback(async () => {
     if (activeCd == null) {
@@ -799,6 +832,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
     try {
       const valMmaa = normalizeValidadeInput(validadeInput);
+      const popupLines: ActionPopupLine[] = [
+        { label: "Endereco", value: selectedEnderecoSep },
+        { label: "Produto", value: `${coletaLookup.coddv} - ${coletaLookup.descricao}` },
+        { label: "Barras", value: coletaLookup.barras },
+        { label: "Validade", value: valMmaa }
+      ];
       await enqueueLinhaColeta({
         userId: profile.user_id,
         cd: activeCd,
@@ -816,7 +855,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         }
       });
       await refreshQueueStats();
-      setStatusMessage("Coleta da Linha registrada.");
+      setStatusMessage(null);
+      setActionPopup({
+        title: "Produto coletado",
+        tone: "coleta",
+        lines: popupLines
+      });
       setBarcodeInput("");
       setBarcodeValidationState("idle");
       setValidadeInput("");
@@ -844,6 +888,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     let queued = false;
 
     try {
+      const popupLines: ActionPopupLine[] = [
+        { label: "Endereco", value: row.endereco_sep },
+        { label: "Produto", value: `${row.coddv} - ${row.descricao}` },
+        { label: "Validade", value: row.val_mmaa },
+        { label: "Quantidade retirada", value: String(qtd) }
+      ];
       await enqueueLinhaRetirada({
         userId: profile.user_id,
         cd: activeCd,
@@ -860,7 +910,18 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       });
       queued = true;
       await refreshQueueStats();
-      setStatusMessage(`Retirada da Linha registrada (${qtd}).`);
+      setStatusMessage(null);
+      setActionPopup({
+        title: "Retirada registrada",
+        tone: "retirada",
+        lines: popupLines,
+        onCloseTarget: {
+          mainTab: "linha",
+          linhaSubTab: "retirada",
+          linhaStatusFilter: "concluido",
+          monthFilter: defaultMonthFilter
+        }
+      });
       setLinhaQtyInputs((current) => ({ ...current, [key]: "" }));
       if (isOnline) {
         await flushQueue(false);
@@ -872,7 +933,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         await loadRows();
       }
     }
-  }, [activeCd, flushQueue, isOnline, linhaQtyInputs, loadRows, profile.user_id, refreshQueueStats]);
+  }, [activeCd, defaultMonthFilter, flushQueue, isOnline, linhaQtyInputs, loadRows, profile.user_id, refreshQueueStats]);
 
   const submitPulRetirada = useCallback(async (row: PulRetiradaRow) => {
     if (activeCd == null) return;
@@ -886,6 +947,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     let queued = false;
 
     try {
+      const popupLines: ActionPopupLine[] = [
+        { label: "Endereco", value: row.endereco_pul },
+        { label: "Produto", value: `${row.coddv} - ${row.descricao}` },
+        { label: "Validade", value: row.val_mmaa },
+        { label: "Quantidade retirada", value: String(qtd) }
+      ];
       await enqueuePulRetirada({
         userId: profile.user_id,
         cd: activeCd,
@@ -901,7 +968,18 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       });
       queued = true;
       await refreshQueueStats();
-      setStatusMessage(`Retirada do Pulmão registrada (${qtd}).`);
+      setStatusMessage(null);
+      setActionPopup({
+        title: "Retirada registrada",
+        tone: "retirada",
+        lines: popupLines,
+        onCloseTarget: {
+          mainTab: "pulmao",
+          pulStatusFilter: "concluido",
+          monthFilter: defaultMonthFilter
+        }
+      });
+      setPulQtyInputs((current) => ({ ...current, [key]: "" }));
       if (isOnline) {
         await flushQueue(false);
       }
@@ -912,7 +990,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         await loadRows();
       }
     }
-  }, [activeCd, flushQueue, isOnline, loadRows, profile.user_id, pulQtyInputs, refreshQueueStats]);
+  }, [activeCd, defaultMonthFilter, flushQueue, isOnline, loadRows, profile.user_id, pulQtyInputs, refreshQueueStats]);
 
   useEffect(() => {
     if (activeCd == null) return;
@@ -1364,7 +1442,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     const effectiveMonthFilter = pulStatusFilter === "concluido" ? defaultMonthFilter : monthFilter;
     return pulRows
       .filter((row) => {
-        if (pulStatusFilter !== "todos" && row.status !== pulStatusFilter) return false;
+        if (row.status !== pulStatusFilter) return false;
         if (effectiveMonthFilter !== ALL_MONTHS_FILTER && row.val_mmaa !== effectiveMonthFilter) return false;
         return true;
       })
@@ -1386,10 +1464,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const preferredMonthFilterOptions = useMemo(() => {
     if (activeStatusFilter === "concluido") return [defaultMonthFilter];
     const sourceRows = mainTab === "pulmao" ? pulRows : linhaRows;
-    const filteredRows = sourceRows.filter((row) => {
-      if (activeStatusFilter === "todos") return true;
-      return row.status === activeStatusFilter;
-    });
+    const filteredRows = sourceRows.filter((row) => row.status === activeStatusFilter);
     const availableMonths = monthFilterOptions.filter((month) =>
       filteredRows.some((row) => row.val_mmaa === month)
     );
@@ -1494,7 +1569,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     setMainTab(nextTab);
                     setMonthFilter(ALL_MONTHS_FILTER);
                     if (nextTab === "pulmao") {
-                      setPulStatusFilter("todos");
+                      setPulStatusFilter("pendente");
                     }
                   }}
                 >
@@ -1914,7 +1989,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                       <span><b>Coleta:</b> {formatDateTime(row.dt_ultima_coleta)}</span>
                                       <span><b>Usuário coleta:</b> {formatLinhaCollector(row)}</span>
                                       <span><b>Retirado:</b> {row.qtd_retirada}</span>
-                                      <span><b>Pendente:</b> {row.qtd_pendente}</span>
                                       {row.editable_retirada_qtd != null ? (
                                         <span className="controle-validade-editable-line">
                                           <b>Sua retirada:</b> {row.editable_retirada_qtd}
@@ -1990,17 +2064,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 <div className="controle-validade-status-tabs">
                   <button
                     type="button"
-                    className={`controle-validade-status-tab is-todos${pulStatusFilter === "todos" ? " is-active" : ""}`}
-                    onClick={() => {
-                      setPulStatusFilter("todos");
-                      setMonthFilter(ALL_MONTHS_FILTER);
-                    }}
-                    aria-pressed={pulStatusFilter === "todos"}
-                  >
-                    Todos
-                  </button>
-                  <button
-                    type="button"
                     className={`controle-validade-status-tab is-pendente${pulStatusFilter === "pendente" ? " is-active" : ""}`}
                     onClick={() => {
                       setPulStatusFilter("pendente");
@@ -2068,7 +2131,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                 <span><b>Andar:</b> {row.andar ?? "-"}</span>
                                 <span><b>Estoque disponível:</b> {row.qtd_est_disp}</span>
                                 <span><b>Retirado:</b> {row.qtd_retirada}</span>
-                                <span><b>Pendente:</b> {row.qtd_pendente}</span>
                                 {row.editable_retirada_qtd != null ? (
                                   <span className="controle-validade-editable-line">
                                     <b>Sua retirada:</b> {row.editable_retirada_qtd}
@@ -2147,6 +2209,49 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           </div>
         </article>
       </section>
+
+      {actionPopup && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="controle-validade-popup-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="controle-validade-popup-title"
+              onClick={closeActionPopup}
+            >
+              <div className={`controle-validade-popup-card controle-validade-popup-card-${actionPopup.tone} surface-enter`} onClick={(event) => event.stopPropagation()}>
+                <div className="controle-validade-popup-head">
+                  <div>
+                    <h3 id="controle-validade-popup-title">{actionPopup.title}</h3>
+                    <p>Confira os dados do registro.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="controle-validade-popup-close"
+                    onClick={closeActionPopup}
+                    aria-label="Fechar aviso"
+                  >
+                    {closeIcon()}
+                  </button>
+                </div>
+                <div className="controle-validade-popup-body">
+                  {actionPopup.lines.map((line) => (
+                    <div key={`${line.label}:${line.value}`} className="controle-validade-popup-line">
+                      <span>{line.label}</span>
+                      <strong>{line.value}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="controle-validade-popup-footer">
+                  <button type="button" className="btn btn-primary" onClick={closeActionPopup}>
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {scannerOpen && typeof document !== "undefined"
         ? createPortal(
