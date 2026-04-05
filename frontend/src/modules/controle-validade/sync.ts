@@ -149,6 +149,7 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("ITEM_PUL_SEM_ESTOQUE")) return "Item do Pulmão sem estoque disponível (qtd_est_disp <= 0).";
   if (normalized.includes("ITEM_NAO_ELEGIVEL_RETIRADA")) return "Item não elegível para retirada.";
   if (normalized.includes("QTD_RETIRADA_EXCEDE_PENDENTE")) return "Quantidade retirada excede o pendente.";
+  if (normalized.includes("QTD_RETIRADA_EXCEDE_ESTOQUE")) return "Quantidade retirada excede o estoque disponível.";
   if (normalized.includes("ITEM_JA_CONCLUIDO")) return "Este item já está concluído.";
   if (normalized.includes("APENAS_AUTOR_PODE_EDITAR")) return "Apenas o usuário que registrou pode editar este lançamento.";
   if (normalized.includes("REGISTRO_NAO_ENCONTRADO")) return "Registro não encontrado.";
@@ -164,6 +165,7 @@ function isRetiradaConflict(error: unknown): boolean {
   const normalized = toErrorMessage(error).toUpperCase();
   return normalized.includes("ITEM NÃO ELEGÍVEL")
     || normalized.includes("EXCEDE O PENDENTE")
+    || normalized.includes("EXCEDE O ESTOQUE")
     || normalized.includes("JÁ ESTÁ CONCLUÍDO")
     || normalized.includes("SEM ESTOQUE");
 }
@@ -199,6 +201,7 @@ function mapLinhaRow(raw: Record<string, unknown>): LinhaRetiradaRow {
     status: parseRetiradaStatus(raw.status),
     regra_aplicada: parseString(raw.regra_aplicada),
     dt_ultima_coleta: parseNullableString(raw.dt_ultima_coleta),
+    dt_ultima_retirada: parseNullableString(raw.dt_ultima_retirada),
     auditor_nome_ultima_coleta: parseNullableString(
       raw.auditor_nome_ultima_coleta ?? raw.created_nome ?? raw.nome_ultima_coleta
     ),
@@ -338,6 +341,7 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
         status: current?.status === "concluido" ? "concluido" : "pendente",
         regra_aplicada: cycle.regra_aplicada,
         dt_ultima_coleta: shouldReplaceActor ? nextColetaAt ?? current?.dt_ultima_coleta ?? null : current?.dt_ultima_coleta ?? null,
+        dt_ultima_retirada: current?.dt_ultima_retirada ?? null,
         auditor_nome_ultima_coleta: shouldReplaceActor ? payload.auditor_nome ?? current?.auditor_nome_ultima_coleta ?? null : current?.auditor_nome_ultima_coleta ?? null,
         auditor_mat_ultima_coleta: shouldReplaceActor ? payload.auditor_mat ?? current?.auditor_mat_ultima_coleta ?? null : current?.auditor_mat_ultima_coleta ?? null,
         editable_retirada_id: current?.editable_retirada_id ?? null,
@@ -367,10 +371,12 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
     if (!current) continue;
 
     const qtdRetirada = payload.qtd_retirada;
+    const dtUltimaRetirada = payload.data_hr ?? event.created_at;
     merged.set(lineKey(current), {
       ...current,
       qtd_retirada: qtdRetirada,
       status: "concluido",
+      dt_ultima_retirada: dtUltimaRetirada,
       editable_retirada_id: current.editable_retirada_id,
       editable_retirada_qtd: current.editable_retirada_qtd
     });
@@ -424,11 +430,11 @@ function applyPendingEventsToPulRows(rows: PulRetiradaRow[], events: ControleVal
     if (!current) continue;
 
     const qtdRetirada = current.qtd_retirada + payload.qtd_retirada;
-    const qtdPendente = Math.max(1 - qtdRetirada, 0);
     merged.set(key, {
       ...current,
       qtd_retirada: qtdRetirada,
-      status: qtdPendente > 0 ? "pendente" : "concluido",
+      status: qtdRetirada > 0 ? "concluido" : "pendente",
+      dt_ultima_retirada: payload.data_hr ?? event.created_at,
       editable_retirada_id: current.editable_retirada_id,
       editable_retirada_qtd: current.editable_retirada_qtd
     });
