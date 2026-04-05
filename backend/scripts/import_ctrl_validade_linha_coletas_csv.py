@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import csv
-import os
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterable
@@ -213,10 +213,35 @@ def fetch_existing_lookup(cur, rows: list[ImportRow]) -> tuple[set[str], set[tup
     return existing_client_ids, valid_sep_keys, valid_authors
 
 
+def chunk_strings(values: Iterable[str], size: int) -> Iterable[list[str]]:
+    batch: list[str] = []
+    for value in values:
+        batch.append(value)
+        if len(batch) >= size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
+def count_rows_by_client_event_ids(cur, client_event_ids: list[str]) -> int:
+    total = 0
+    for batch in chunk_strings(client_event_ids, 1000):
+        cur.execute(
+            """
+            select count(*)
+            from app.ctrl_validade_linha_coletas
+            where client_event_id = any(%s)
+            """,
+            (batch,),
+        )
+        total += int(cur.fetchone()[0])
+    return total
+
+
 def insert_rows(cur, rows: list[ImportRow]) -> int:
     payload = [
         (
-            row.id,
             row.client_event_id,
             row.cd,
             row.barras,
@@ -237,7 +262,6 @@ def insert_rows(cur, rows: list[ImportRow]) -> int:
         cur,
         """
         insert into app.ctrl_validade_linha_coletas (
-            id,
             client_event_id,
             cd,
             barras,
@@ -252,13 +276,27 @@ def insert_rows(cur, rows: list[ImportRow]) -> int:
             created_at,
             updated_at
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         on conflict (client_event_id) do nothing
         """,
         payload,
         page_size=500,
     )
     return cur.rowcount
+
+
+def build_default_reject_report_path() -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return Path(__file__).resolve().parents[1] / "logs" / "rejections" / f"ctrl_validade_linha_coletas_import_rejeitadas_{timestamp}.csv"
+
+
+def write_reject_report(path: Path, errors: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle, delimiter=";")
+        writer.writerow(["error"])
+        for error in errors:
+            writer.writerow([error])
 
 
 def main() -> None:
@@ -272,6 +310,16 @@ def main() -> None:
         "--apply",
         action="store_true",
         help="Aplica o insert no banco. Sem isso, roda apenas dry-run.",
+    )
+    parser.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="Permite inserir somente as linhas válidas mesmo com rejeições.",
+    )
+    parser.add_argument(
+        "--reject-report",
+        default="",
+        help="Caminho opcional para gravar o relatório de rejeições.",
     )
     args = parser.parse_args()
 
@@ -320,14 +368,19 @@ def main() -> None:
                 print(f"ERRO_VALIDACAO {error}")
 
             if validation_errors:
-                raise SystemExit("Importação interrompida por erros de validação.")
+                report_path = Path(args.reject_report).expanduser().resolve() if args.reject_report else build_default_reject_report_path()
+                write_reject_report(report_path, validation_errors)
+                print(f"rejeicoes_salvas_em={report_path}")
+                if not args.allow_partial:
+                    raise SystemExit("Importação interrompida por erros de validação.")
 
             if not args.apply:
                 conn.rollback()
                 print("dry_run=ok")
                 return
 
-            inserted = insert_rows(cur, valid_rows)
+            insert_rows(cur, valid_rows)
+            inserted = count_rows_by_client_event_ids(cur, [row.client_event_id for row in valid_rows])
             conn.commit()
             print(f"inserted={inserted}")
     finally:
