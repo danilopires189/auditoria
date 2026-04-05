@@ -200,6 +200,22 @@ function formatActorDisplay(matValue: string | null | undefined, nomeValue: stri
   return "Aguardando sincronizacao";
 }
 
+function linhaPendingAvailable(row: LinhaRetiradaRow): number {
+  return Math.max(row.qtd_coletada - row.qtd_retirada, 0);
+}
+
+function pulPendingAvailable(row: PulRetiradaRow): number {
+  return Math.max(1 - row.qtd_retirada, 0);
+}
+
+function linhaEditableMax(row: LinhaRetiradaRow): number {
+  return Math.max(row.qtd_coletada - (row.qtd_retirada - (row.editable_retirada_qtd ?? 0)), 0);
+}
+
+function pulEditableMax(row: PulRetiradaRow): number {
+  return Math.max(1 - (row.qtd_retirada - (row.editable_retirada_qtd ?? 0)), 0);
+}
+
 function sortLinhaRowsForDisplay(rows: LinhaRetiradaRow[]): LinhaRetiradaRow[] {
   return [...rows].sort((left, right) => {
     if (left.status !== right.status) return left.status === "pendente" ? -1 : 1;
@@ -1013,6 +1029,17 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       setErrorMessage("Informe a quantidade retirada da Linha.");
       return;
     }
+    const maxAllowed = linhaPendingAvailable(row);
+    if (maxAllowed <= 0) {
+      setErrorMessage("Este item não possui quantidade pendente para retirada.");
+      void loadRows();
+      return;
+    }
+    if (parsed > maxAllowed) {
+      setErrorMessage(`Quantidade disponível para retirada: ${maxAllowed}.`);
+      setLinhaQtyInputs((current) => ({ ...current, [key]: String(maxAllowed) }));
+      return;
+    }
     const qtd = parsed;
     try {
       const payload = {
@@ -1072,6 +1099,17 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     const parsed = Number.parseInt((pulQtyInputs[key] ?? "").replace(/\D/g, ""), 10);
     if (!Number.isFinite(parsed) || parsed <= 0) {
       setErrorMessage("Informe a quantidade retirada do Pulmão.");
+      return;
+    }
+    const maxAllowed = pulPendingAvailable(row);
+    if (maxAllowed <= 0) {
+      setErrorMessage("Este item não possui quantidade pendente para retirada.");
+      void loadRows();
+      return;
+    }
+    if (parsed > maxAllowed) {
+      setErrorMessage(`Quantidade disponível para retirada: ${maxAllowed}.`);
+      setPulQtyInputs((current) => ({ ...current, [key]: String(maxAllowed) }));
       return;
     }
     const qtd = parsed;
@@ -1478,6 +1516,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       setErrorMessage("Informe a quantidade da sua retirada.");
       return;
     }
+    const maxAllowed = linhaEditableMax(row);
+    if (parsed > maxAllowed) {
+      setErrorMessage(`Quantidade disponível para esta retirada: ${maxAllowed}.`);
+      setEditingLinhaRetiradaQty(String(maxAllowed));
+      return;
+    }
     try {
       setBusyEdit(true);
       setErrorMessage(null);
@@ -1511,6 +1555,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     const parsed = Number.parseInt(editingPulRetiradaQty.replace(/\D/g, ""), 10);
     if (!Number.isFinite(parsed) || parsed < 0) {
       setErrorMessage("Informe a quantidade da sua retirada.");
+      return;
+    }
+    const maxAllowed = pulEditableMax(row);
+    if (parsed > maxAllowed) {
+      setErrorMessage(`Quantidade disponível para esta retirada: ${maxAllowed}.`);
+      setEditingPulRetiradaQty(String(maxAllowed));
       return;
     }
     try {
@@ -2093,9 +2143,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                         const showZoneHeader = previousZone !== zone;
                         const isPending = row.status === "pendente";
                         const isExpanded = expandedLinhaCardKey === key;
+                        const pendingAvailable = linhaPendingAvailable(row);
                         const qtyValue = linhaQtyInputs[key] ?? "";
                         const parsedQty = Number.parseInt(qtyValue.replace(/\D/g, ""), 10);
-                        const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0;
+                        const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0 && parsedQty <= pendingAvailable;
                         return (
                           <div key={key} className="pvps-zone-group">
                             {showZoneHeader ? <div className="pvps-zone-divider">Zona {zone}</div> : null}
@@ -2151,7 +2202,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                           type="text"
                                           inputMode="numeric"
                                           value={editingLinhaRetiradaQty}
-                                          onChange={(event) => setEditingLinhaRetiradaQty(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                          onChange={(event) => {
+                                            const nextValue = Number.parseInt(event.target.value.replace(/\D/g, "").slice(0, 4) || "0", 10) || 0;
+                                            setEditingLinhaRetiradaQty(String(Math.min(nextValue, linhaEditableMax(row))).replace(/^0$/, ""));
+                                          }}
                                           placeholder="Qtd"
                                         />
                                         <button type="button" className="btn btn-primary" onClick={() => void saveEditingLinhaRetirada(row)} disabled={busyEdit}>
@@ -2170,12 +2224,13 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                         inputMode="numeric"
                                         placeholder="Qtd"
                                         value={qtyValue}
-                                        onChange={(event) =>
+                                        onChange={(event) => {
+                                          const nextValue = Number.parseInt(event.target.value.replace(/\D/g, "").slice(0, 4) || "0", 10) || 0;
                                           setLinhaQtyInputs((current) => ({
                                             ...current,
-                                            [key]: event.target.value.replace(/\D/g, "").slice(0, 4)
-                                          }))
-                                        }
+                                            [key]: String(Math.min(nextValue, pendingAvailable)).replace(/^0$/, "")
+                                          }));
+                                        }}
                                       />
                                       <button
                                         type="button"
@@ -2237,9 +2292,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     const showZoneHeader = !prev || prev.zona !== row.zona;
                     const isPending = row.status === "pendente";
                     const isExpanded = expandedPulCardKey === key;
+                    const pendingAvailable = pulPendingAvailable(row);
                     const qtyValue = pulQtyInputs[key] ?? "";
                     const parsedQty = Number.parseInt(qtyValue.replace(/\D/g, ""), 10);
-                    const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0;
+                    const canSubmit = Number.isFinite(parsedQty) && parsedQty > 0 && parsedQty <= pendingAvailable;
                     return (
                       <div key={key} className="pvps-zone-group">
                         {showZoneHeader ? <div className="pvps-zone-divider">Zona {row.zona}</div> : null}
@@ -2301,7 +2357,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                     type="text"
                                     inputMode="numeric"
                                     value={editingPulRetiradaQty}
-                                    onChange={(event) => setEditingPulRetiradaQty(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                    onChange={(event) => {
+                                      const nextValue = Number.parseInt(event.target.value.replace(/\D/g, "").slice(0, 4) || "0", 10) || 0;
+                                      setEditingPulRetiradaQty(String(Math.min(nextValue, pulEditableMax(row))).replace(/^0$/, ""));
+                                    }}
                                     placeholder="Qtd"
                                   />
                                   <button type="button" className="btn btn-primary" onClick={() => void saveEditingPulRetirada(row)} disabled={busyEdit}>
@@ -2320,12 +2379,13 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                     inputMode="numeric"
                                     placeholder="Qtd"
                                     value={qtyValue}
-                                    onChange={(event) =>
+                                    onChange={(event) => {
+                                      const nextValue = Number.parseInt(event.target.value.replace(/\D/g, "").slice(0, 4) || "0", 10) || 0;
                                       setPulQtyInputs((current) => ({
                                         ...current,
-                                        [key]: event.target.value.replace(/\D/g, "").slice(0, 4)
-                                      }))
-                                    }
+                                        [key]: String(Math.min(nextValue, pendingAvailable)).replace(/^0$/, "")
+                                      }));
+                                    }}
                                   />
                                   <button
                                     type="button"
