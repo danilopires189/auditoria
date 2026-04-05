@@ -198,6 +198,81 @@ function formatActorDisplay(matValue: string | null | undefined, nomeValue: stri
   return "Aguardando sincronizacao";
 }
 
+function sortLinhaRowsForDisplay(rows: LinhaRetiradaRow[]): LinhaRetiradaRow[] {
+  return [...rows].sort((left, right) => {
+    if (left.status !== right.status) return left.status === "pendente" ? -1 : 1;
+    const zoneCompare = compareUiText(linhaZone(left.endereco_sep), linhaZone(right.endereco_sep));
+    if (zoneCompare !== 0) return zoneCompare;
+    const addressCompare = compareUiText(left.endereco_sep, right.endereco_sep);
+    if (addressCompare !== 0) return addressCompare;
+    const coddvCompare = compareUiText(left.coddv, right.coddv);
+    if (coddvCompare !== 0) return coddvCompare;
+    return compareUiText(left.descricao, right.descricao);
+  });
+}
+
+function sortPulRowsForDisplay(rows: PulRetiradaRow[]): PulRetiradaRow[] {
+  return [...rows].sort((left, right) => {
+    if (left.status !== right.status) return left.status === "pendente" ? -1 : 1;
+    const zoneCompare = compareUiText(left.zona, right.zona);
+    if (zoneCompare !== 0) return zoneCompare;
+    const addressCompare = compareUiText(left.endereco_pul, right.endereco_pul);
+    if (addressCompare !== 0) return addressCompare;
+    const coddvCompare = compareUiText(left.coddv, right.coddv);
+    if (coddvCompare !== 0) return coddvCompare;
+    return compareUiText(left.descricao, right.descricao);
+  });
+}
+
+function applyLinhaRetiradaOptimistic(
+  rows: LinhaRetiradaRow[],
+  targetRow: LinhaRetiradaRow,
+  qtdRetirada: number
+): LinhaRetiradaRow[] {
+  const nextRows = rows.map((row) => {
+    if (
+      row.coddv !== targetRow.coddv
+      || row.endereco_sep !== targetRow.endereco_sep
+      || row.val_mmaa !== targetRow.val_mmaa
+      || row.ref_coleta_mes !== targetRow.ref_coleta_mes
+    ) {
+      return row;
+    }
+    const nextQtdRetirada = row.qtd_retirada + qtdRetirada;
+    const nextStatus: RetiradaStatus = Math.max(row.qtd_coletada - nextQtdRetirada, 0) > 0 ? "pendente" : "concluido";
+    return {
+      ...row,
+      qtd_retirada: nextQtdRetirada,
+      status: nextStatus
+    };
+  });
+  return sortLinhaRowsForDisplay(nextRows);
+}
+
+function applyPulRetiradaOptimistic(
+  rows: PulRetiradaRow[],
+  targetRow: PulRetiradaRow,
+  qtdRetirada: number
+): PulRetiradaRow[] {
+  const nextRows = rows.map((row) => {
+    if (
+      row.coddv !== targetRow.coddv
+      || row.endereco_pul !== targetRow.endereco_pul
+      || row.val_mmaa !== targetRow.val_mmaa
+    ) {
+      return row;
+    }
+    const nextQtdRetirada = row.qtd_retirada + qtdRetirada;
+    const nextStatus: RetiradaStatus = Math.max(1 - nextQtdRetirada, 0) > 0 ? "pendente" : "concluido";
+    return {
+      ...row,
+      qtd_retirada: nextQtdRetirada,
+      status: nextStatus
+    };
+  });
+  return sortPulRowsForDisplay(nextRows);
+}
+
 function formatLinhaCollector(row: LinhaRetiradaRow): string {
   return formatActorDisplay(row.auditor_mat_ultima_coleta, row.auditor_nome_ultima_coleta);
 }
@@ -415,6 +490,26 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     setDbEndCount(endMeta.row_count);
   }, [activeCd]);
 
+  const persistSnapshotDraft = useCallback(async (params?: {
+    linhaRows?: LinhaRetiradaRow[];
+    linhaColetaHistoryRows?: LinhaColetaHistoryRow[];
+    pulRows?: PulRetiradaRow[];
+  }) => {
+    if (activeCd == null) return;
+    try {
+      await saveOfflineSnapshot({
+        user_id: profile.user_id,
+        cd: activeCd,
+        linha_rows: params?.linhaRows ?? linhaRows,
+        linha_coleta_history: params?.linhaColetaHistoryRows ?? linhaColetaHistoryRows,
+        pul_rows: params?.pulRows ?? pulRows
+      });
+      setOfflineSnapshotReady(true);
+    } catch {
+      // Best effort only: the UI should stay responsive even if the local snapshot cannot be refreshed now.
+    }
+  }, [activeCd, linhaColetaHistoryRows, linhaRows, profile.user_id, pulRows]);
+
   const loadRows = useCallback(async () => {
     if (activeCd == null) {
       setLinhaColetaHistoryRows([]);
@@ -474,7 +569,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     }
   }, [activeCd, isOfflineModeActive, profile.user_id]);
 
-  const flushQueue = useCallback(async (manual = false): Promise<void> => {
+  const flushQueue = useCallback(async (
+    manual = false,
+    options?: {
+      refreshAfterSync?: boolean;
+    }
+  ): Promise<void> => {
     if (!isOnline || activeCd == null) return;
     if (flushBusyRef.current) return;
     flushBusyRef.current = true;
@@ -498,9 +598,18 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         setErrorMessage(`Falha ao sincronizar ${result.failed} evento(s).`);
       }
 
+      const shouldRefreshAfterSync = options?.refreshAfterSync ?? true;
+      const shouldReloadRows = manual || shouldRefreshAfterSync || result.failed > 0 || result.discarded > 0;
+
       if (result.synced > 0 || result.discarded > 0) {
+        if (!shouldReloadRows) return;
         await downloadOfflineSnapshot(profile.user_id, activeCd);
         setOfflineSnapshotReady(true);
+        await loadRows();
+        return;
+      }
+
+      if (result.failed > 0 && shouldReloadRows) {
         await loadRows();
       }
     } catch (error) {
@@ -903,8 +1012,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       return;
     }
     const qtd = parsed;
-    let queued = false;
-
     try {
       const popupLines: ActionPopupLine[] = [
         { label: "Endereco", value: row.endereco_sep },
@@ -926,7 +1033,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           data_hr: new Date().toISOString()
         }
       });
-      queued = true;
+      const nextLinhaRows = applyLinhaRetiradaOptimistic(linhaRows, row, qtd);
+      setLinhaRows(nextLinhaRows);
+      void persistSnapshotDraft({ linhaRows: nextLinhaRows });
       await refreshQueueStats();
       setStatusMessage(null);
       setActionPopup({
@@ -943,16 +1052,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       });
       setLinhaQtyInputs((current) => ({ ...current, [key]: "" }));
       if (isOnline) {
-        await flushQueue(false);
+        await flushQueue(false, { refreshAfterSync: false });
       }
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
-    } finally {
-      if (queued) {
-        await loadRows();
-      }
     }
-  }, [activeCd, defaultMonthFilter, flushQueue, isOnline, linhaQtyInputs, loadRows, profile.user_id, refreshQueueStats]);
+  }, [activeCd, flushQueue, isOnline, linhaQtyInputs, linhaRows, persistSnapshotDraft, profile.user_id, refreshQueueStats]);
 
   const submitPulRetirada = useCallback(async (row: PulRetiradaRow) => {
     if (activeCd == null) return;
@@ -963,8 +1068,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       return;
     }
     const qtd = parsed;
-    let queued = false;
-
     try {
       const popupLines: ActionPopupLine[] = [
         { label: "Endereco", value: row.endereco_pul },
@@ -985,7 +1088,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           data_hr: new Date().toISOString()
         }
       });
-      queued = true;
+      const nextPulRows = applyPulRetiradaOptimistic(pulRows, row, qtd);
+      setPulRows(nextPulRows);
+      void persistSnapshotDraft({ pulRows: nextPulRows });
       await refreshQueueStats();
       setStatusMessage(null);
       setActionPopup({
@@ -1001,16 +1106,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       });
       setPulQtyInputs((current) => ({ ...current, [key]: "" }));
       if (isOnline) {
-        await flushQueue(false);
+        await flushQueue(false, { refreshAfterSync: false });
       }
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
-    } finally {
-      if (queued) {
-        await loadRows();
-      }
     }
-  }, [activeCd, defaultMonthFilter, flushQueue, isOnline, loadRows, profile.user_id, pulQtyInputs, refreshQueueStats]);
+  }, [activeCd, flushQueue, isOnline, persistSnapshotDraft, profile.user_id, pulQtyInputs, pulRows, refreshQueueStats]);
 
   useEffect(() => {
     if (activeCd == null) return;
