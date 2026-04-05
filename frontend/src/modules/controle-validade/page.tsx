@@ -86,6 +86,7 @@ interface ActionPopupState {
     linhaStatusFilter?: RetiradaStatus;
     pulStatusFilter?: RetiradaStatus;
     monthFilter?: string;
+    completedMonthFocus?: string | null;
   };
 }
 
@@ -315,6 +316,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [linhaStatusFilter, setLinhaStatusFilter] = useState<RetiradaStatus>("pendente");
   const [pulStatusFilter, setPulStatusFilter] = useState<RetiradaStatus>("pendente");
   const [monthFilter, setMonthFilter] = useState(ALL_MONTHS_FILTER);
+  const [completedMonthFocus, setCompletedMonthFocus] = useState<string | null>(null);
 
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -378,6 +380,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         if (current.onCloseTarget.linhaStatusFilter) setLinhaStatusFilter(current.onCloseTarget.linhaStatusFilter);
         if (current.onCloseTarget.pulStatusFilter) setPulStatusFilter(current.onCloseTarget.pulStatusFilter);
         if (current.onCloseTarget.monthFilter != null) setMonthFilter(current.onCloseTarget.monthFilter);
+        if (current.onCloseTarget.completedMonthFocus !== undefined) {
+          setCompletedMonthFocus(current.onCloseTarget.completedMonthFocus);
+        }
         setExpandedLinhaCardKey(null);
         setExpandedPulCardKey(null);
       }
@@ -437,9 +442,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         fetchLinhaColetaHistoryList({ cd: activeCd, limit: 1000 }),
         fetchPulRetiradaList({ cd: activeCd, status: "todos" })
       ]);
-      setLinhaColetaHistoryRows(linhaColetaHistoryOnline);
-      setLinhaRows(linhaOnline);
-      setPulRows(pulOnline);
 
       await saveOfflineSnapshot({
         user_id: profile.user_id,
@@ -449,6 +451,22 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         pul_rows: pulOnline
       });
       setOfflineSnapshotReady(true);
+
+      const queueStats = await getOfflineQueueStats(profile.user_id, activeCd);
+      if (queueStats.pending > 0 || queueStats.errors > 0) {
+        const projected = await loadProjectedOfflineRows({
+          userId: profile.user_id,
+          cd: activeCd
+        });
+        setLinhaColetaHistoryRows(projected.linha_coleta_history);
+        setLinhaRows(projected.linha_rows);
+        setPulRows(projected.pul_rows);
+        return;
+      }
+
+      setLinhaColetaHistoryRows(linhaColetaHistoryOnline);
+      setLinhaRows(linhaOnline);
+      setPulRows(pulOnline);
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
     } finally {
@@ -919,7 +937,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           mainTab: "linha",
           linhaSubTab: "retirada",
           linhaStatusFilter: "concluido",
-          monthFilter: defaultMonthFilter
+          monthFilter: row.val_mmaa,
+          completedMonthFocus: row.val_mmaa
         }
       });
       setLinhaQtyInputs((current) => ({ ...current, [key]: "" }));
@@ -976,7 +995,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         onCloseTarget: {
           mainTab: "pulmao",
           pulStatusFilter: "concluido",
-          monthFilter: defaultMonthFilter
+          monthFilter: row.val_mmaa,
+          completedMonthFocus: row.val_mmaa
         }
       });
       setPulQtyInputs((current) => ({ ...current, [key]: "" }));
@@ -1419,8 +1439,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       .slice(0, 1000);
   }, [linhaColetaHistoryRows]);
 
+  const concludedMonthFilter = completedMonthFocus ?? defaultMonthFilter;
+
   const linhaRowsFiltered = useMemo(() => {
-    const effectiveMonthFilter = linhaStatusFilter === "concluido" ? defaultMonthFilter : monthFilter;
+    const effectiveMonthFilter = linhaStatusFilter === "concluido" ? concludedMonthFilter : monthFilter;
     return linhaRows
       .filter((row) => {
         if (row.status !== linhaStatusFilter) return false;
@@ -1436,10 +1458,10 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         if (coddvCompare !== 0) return coddvCompare;
         return compareUiText(left.descricao, right.descricao);
       });
-  }, [defaultMonthFilter, linhaRows, linhaStatusFilter, monthFilter]);
+  }, [concludedMonthFilter, linhaRows, linhaStatusFilter, monthFilter]);
 
   const pulRowsFiltered = useMemo(() => {
-    const effectiveMonthFilter = pulStatusFilter === "concluido" ? defaultMonthFilter : monthFilter;
+    const effectiveMonthFilter = pulStatusFilter === "concluido" ? concludedMonthFilter : monthFilter;
     return pulRows
       .filter((row) => {
         if (row.status !== pulStatusFilter) return false;
@@ -1455,14 +1477,14 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         if (coddvCompare !== 0) return coddvCompare;
         return compareUiText(left.descricao, right.descricao);
       });
-  }, [defaultMonthFilter, monthFilter, pulRows, pulStatusFilter]);
+  }, [concludedMonthFilter, monthFilter, pulRows, pulStatusFilter]);
 
   const hasBarcodeInput = barcodeInput.trim().length > 0;
   const monthFilterOptions = useMemo(() => {
     return buildValidadeMonthWindow();
   }, []);
   const preferredMonthFilterOptions = useMemo(() => {
-    if (activeStatusFilter === "concluido") return [defaultMonthFilter];
+    if (activeStatusFilter === "concluido") return [concludedMonthFilter];
     const sourceRows = mainTab === "pulmao" ? pulRows : linhaRows;
     const filteredRows = sourceRows.filter((row) => row.status === activeStatusFilter);
     const availableMonths = monthFilterOptions.filter((month) =>
@@ -1470,20 +1492,20 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     );
     const scopedMonths = availableMonths.length > 0 ? availableMonths : monthFilterOptions;
     return [ALL_MONTHS_FILTER, ...scopedMonths];
-  }, [activeStatusFilter, defaultMonthFilter, linhaRows, mainTab, monthFilterOptions, pulRows]);
-  const displayedMonthFilter = activeStatusFilter === "concluido" ? defaultMonthFilter : monthFilter;
+  }, [activeStatusFilter, concludedMonthFilter, linhaRows, mainTab, monthFilterOptions, pulRows]);
+  const displayedMonthFilter = activeStatusFilter === "concluido" ? concludedMonthFilter : monthFilter;
 
   useEffect(() => {
     if (activeStatusFilter === "concluido") {
-      if (monthFilter !== defaultMonthFilter) {
-        setMonthFilter(defaultMonthFilter);
+      if (monthFilter !== concludedMonthFilter) {
+        setMonthFilter(concludedMonthFilter);
       }
       return;
     }
     if (monthFilter === ALL_MONTHS_FILTER) return;
     if (preferredMonthFilterOptions.includes(monthFilter)) return;
     setMonthFilter(ALL_MONTHS_FILTER);
-  }, [activeStatusFilter, defaultMonthFilter, monthFilter, preferredMonthFilterOptions]);
+  }, [activeStatusFilter, concludedMonthFilter, monthFilter, preferredMonthFilterOptions]);
 
   return (
     <>
@@ -1568,6 +1590,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     const nextTab = event.target.value as MainTab;
                     setMainTab(nextTab);
                     setMonthFilter(ALL_MONTHS_FILTER);
+                    setCompletedMonthFocus(null);
                     if (nextTab === "pulmao") {
                       setPulStatusFilter("pendente");
                     }
@@ -1625,6 +1648,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                         className={`controle-validade-status-tab is-pendente${linhaStatusFilter === "pendente" ? " is-active" : ""}`}
                         onClick={() => {
                           setLinhaStatusFilter("pendente");
+                          setCompletedMonthFocus(null);
                           setMonthFilter(ALL_MONTHS_FILTER);
                         }}
                         aria-pressed={linhaStatusFilter === "pendente"}
@@ -1636,6 +1660,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                         className={`controle-validade-status-tab is-concluido${linhaStatusFilter === "concluido" ? " is-active" : ""}`}
                         onClick={() => {
                           setLinhaStatusFilter("concluido");
+                          setCompletedMonthFocus(null);
                           setMonthFilter(defaultMonthFilter);
                         }}
                         aria-pressed={linhaStatusFilter === "concluido"}
@@ -2067,6 +2092,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     className={`controle-validade-status-tab is-pendente${pulStatusFilter === "pendente" ? " is-active" : ""}`}
                     onClick={() => {
                       setPulStatusFilter("pendente");
+                      setCompletedMonthFocus(null);
                       setMonthFilter(ALL_MONTHS_FILTER);
                     }}
                     aria-pressed={pulStatusFilter === "pendente"}
@@ -2078,6 +2104,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     className={`controle-validade-status-tab is-concluido${pulStatusFilter === "concluido" ? " is-active" : ""}`}
                     onClick={() => {
                       setPulStatusFilter("concluido");
+                      setCompletedMonthFocus(null);
                       setMonthFilter(defaultMonthFilter);
                     }}
                     aria-pressed={pulStatusFilter === "concluido"}
