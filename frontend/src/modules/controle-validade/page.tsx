@@ -30,6 +30,8 @@ import {
   loadProjectedOfflineRows,
   normalizeControleValidadeError,
   resolveLinhaColetaProduto,
+  sendLinhaRetiradaOnline,
+  sendPulRetiradaOnline,
   searchLinhaLastColeta,
   updateLinhaColetaValidadeOnline,
   updateLinhaRetiradaQtdOnline,
@@ -1013,30 +1015,35 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     }
     const qtd = parsed;
     try {
+      const payload = {
+        client_event_id: safeUuid(),
+        cd: activeCd,
+        coddv: row.coddv,
+        endereco_sep: row.endereco_sep,
+        val_mmaa: row.val_mmaa,
+        ref_coleta_mes: row.ref_coleta_mes,
+        qtd_retirada: qtd,
+        data_hr: new Date().toISOString()
+      };
       const popupLines: ActionPopupLine[] = [
         { label: "Endereco", value: row.endereco_sep },
         { label: "Produto", value: `${row.coddv} - ${row.descricao}` },
         { label: "Validade", value: row.val_mmaa },
         { label: "Quantidade retirada", value: String(qtd) }
       ];
-      await enqueueLinhaRetirada({
-        userId: profile.user_id,
-        cd: activeCd,
-        payload: {
-          client_event_id: safeUuid(),
+      if (isOnline) {
+        await sendLinhaRetiradaOnline(payload);
+      } else {
+        await enqueueLinhaRetirada({
+          userId: profile.user_id,
           cd: activeCd,
-          coddv: row.coddv,
-          endereco_sep: row.endereco_sep,
-          val_mmaa: row.val_mmaa,
-          ref_coleta_mes: row.ref_coleta_mes,
-          qtd_retirada: qtd,
-          data_hr: new Date().toISOString()
-        }
-      });
+          payload
+        });
+        await refreshQueueStats();
+      }
       const nextLinhaRows = applyLinhaRetiradaOptimistic(linhaRows, row, qtd);
       setLinhaRows(nextLinhaRows);
       void persistSnapshotDraft({ linhaRows: nextLinhaRows });
-      await refreshQueueStats();
       setStatusMessage(null);
       setActionPopup({
         title: "Retirada registrada",
@@ -1052,12 +1059,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       });
       setLinhaQtyInputs((current) => ({ ...current, [key]: "" }));
       if (isOnline) {
-        await flushQueue(false, { refreshAfterSync: false });
+        void loadRows();
       }
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
     }
-  }, [activeCd, flushQueue, isOnline, linhaQtyInputs, linhaRows, persistSnapshotDraft, profile.user_id, refreshQueueStats]);
+  }, [activeCd, isOnline, linhaQtyInputs, linhaRows, loadRows, persistSnapshotDraft, profile.user_id, refreshQueueStats]);
 
   const submitPulRetirada = useCallback(async (row: PulRetiradaRow) => {
     if (activeCd == null) return;
@@ -1069,29 +1076,34 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     }
     const qtd = parsed;
     try {
+      const payload = {
+        client_event_id: safeUuid(),
+        cd: activeCd,
+        coddv: row.coddv,
+        endereco_pul: row.endereco_pul,
+        val_mmaa: row.val_mmaa,
+        qtd_retirada: qtd,
+        data_hr: new Date().toISOString()
+      };
       const popupLines: ActionPopupLine[] = [
         { label: "Endereco", value: row.endereco_pul },
         { label: "Produto", value: `${row.coddv} - ${row.descricao}` },
         { label: "Validade", value: row.val_mmaa },
         { label: "Quantidade retirada", value: String(qtd) }
       ];
-      await enqueuePulRetirada({
-        userId: profile.user_id,
-        cd: activeCd,
-        payload: {
-          client_event_id: safeUuid(),
+      if (isOnline) {
+        await sendPulRetiradaOnline(payload);
+      } else {
+        await enqueuePulRetirada({
+          userId: profile.user_id,
           cd: activeCd,
-          coddv: row.coddv,
-          endereco_pul: row.endereco_pul,
-          val_mmaa: row.val_mmaa,
-          qtd_retirada: qtd,
-          data_hr: new Date().toISOString()
-        }
-      });
+          payload
+        });
+        await refreshQueueStats();
+      }
       const nextPulRows = applyPulRetiradaOptimistic(pulRows, row, qtd);
       setPulRows(nextPulRows);
       void persistSnapshotDraft({ pulRows: nextPulRows });
-      await refreshQueueStats();
       setStatusMessage(null);
       setActionPopup({
         title: "Retirada registrada",
@@ -1106,12 +1118,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       });
       setPulQtyInputs((current) => ({ ...current, [key]: "" }));
       if (isOnline) {
-        await flushQueue(false, { refreshAfterSync: false });
+        void loadRows();
       }
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
     }
-  }, [activeCd, flushQueue, isOnline, persistSnapshotDraft, profile.user_id, pulQtyInputs, pulRows, refreshQueueStats]);
+  }, [activeCd, isOnline, loadRows, persistSnapshotDraft, profile.user_id, pulQtyInputs, pulRows, refreshQueueStats]);
 
   useEffect(() => {
     if (activeCd == null) return;
