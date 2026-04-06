@@ -78,6 +78,25 @@ def _prepare_db_prod_vol_compat_columns(
     }
 
 
+def _prepare_db_end_compat_columns(
+    frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    work = frame.copy()
+
+    if "tipo" not in work.columns and "tipo_movimentacao" in work.columns:
+        work["tipo"] = work["tipo_movimentacao"]
+        return work, {"populated_tipo_from_tipo_movimentacao": int(work["tipo_movimentacao"].notna().sum())}
+
+    if "tipo" in work.columns and "tipo_movimentacao" in work.columns:
+        fill_mask = work["tipo"].isna() & work["tipo_movimentacao"].notna()
+        populated = int(fill_mask.sum())
+        if populated > 0:
+            work.loc[fill_mask, "tipo"] = work.loc[fill_mask, "tipo_movimentacao"]
+        return work, {"populated_tipo_from_tipo_movimentacao": populated}
+
+    return work, {"populated_tipo_from_tipo_movimentacao": 0}
+
+
 def apply_table_specific_rules(
     table_name: str,
     frame: pd.DataFrame,
@@ -86,5 +105,7 @@ def apply_table_specific_rules(
         return _drop_db_usuario_empty_cd_duplicates(frame)
     if table_name == "db_prod_vol":
         return _prepare_db_prod_vol_compat_columns(frame)
+    if table_name == "db_end":
+        return _prepare_db_end_compat_columns(frame)
 
     return frame, {}
