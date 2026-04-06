@@ -221,7 +221,7 @@ tables:
   db_prod_vol:
     file: "DB_PROD_VOL.xlsx"
     sheet: "DB_PROD_VOL"
-    mode: "insert_new"
+    mode: "full_replace"
     unique_keys: []
     required_columns: ["cd", "seq_ped", "filial", "usuario", "vol_conf"]
     refresh_before_load: false
