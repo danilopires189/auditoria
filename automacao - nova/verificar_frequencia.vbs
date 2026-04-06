@@ -50,12 +50,13 @@ ElseIf InStr(UCase(strArquivo), "DB_BARRAS") > 0 Or _
        InStr(UCase(strArquivo), "BD_ROTAS") > 0 Or _
        InStr(UCase(strArquivo), "DB_LOG_END") > 0 Or _
        InStr(UCase(strArquivo), "DB_USUARIO") > 0 Or _
-       InStr(UCase(strArquivo), "DB_PROD_VOL") > 0 Then
+       InStr(UCase(strArquivo), "DB_PROD_VOL") > 0 Or _
+       InStr(UCase(strArquivo), "DB_GESTAO_ESTQ") > 0 Then
     
     ' Verificar se já foi atualizado hoje
     Dim dtHoje, dtUltimaModificacao
     dtHoje = Date()  ' Data de hoje (sem hora)
-    dtUltimaModificacao = Date(dtModificacaoArquivo)  ' Data da última modificação (sem hora)
+    dtUltimaModificacao = DateValue(dtModificacaoArquivo)  ' Data da última modificação (sem hora)
     
     If dtUltimaModificacao >= dtHoje Then
         ' Já foi atualizado hoje

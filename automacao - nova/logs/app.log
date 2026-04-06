@@ -3517,3 +3517,39 @@ DETAIL:  Key (cd, aud)=(1, 76845) already exists.
         ]
 [parameters: {'run_id': '560540eb-458d-4cc8-a7a0-bf8f1aadfaa4'}]
 (Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-04-06 13:00:56.212 | ERROR    | app.sync_service:_run_sync:527 - table sync failed: db_gestao_estq
+Traceback (most recent call last):
+
+  File "main.py", line 22, in <module>
+
+  File "app\cli\app.py", line 389, in run
+
+  File "typer\main.py", line 1135, in __call__
+
+  File "click\core.py", line 1485, in __call__
+
+  File "typer\core.py", line 812, in main
+
+  File "typer\core.py", line 188, in _main
+
+  File "click\core.py", line 1873, in invoke
+
+  File "click\core.py", line 1269, in invoke
+
+  File "click\core.py", line 824, in invoke
+
+  File "typer\main.py", line 1514, in wrapper
+
+  File "app\cli\app.py", line 134, in validate_command
+
+  File "app\sync_service.py", line 130, in validate_only
+
+> File "app\sync_service.py", line 470, in _run_sync
+
+  File "app\sync_service.py", line 201, in _prepare_table_dataset
+
+  File "app\sync_service.py", line 166, in _effective_types
+
+  File "app\etl\table_specs.py", line 408, in get_table_spec
+
+KeyError: 'Unknown table spec: db_gestao_estq'

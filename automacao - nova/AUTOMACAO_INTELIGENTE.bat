@@ -22,7 +22,7 @@ echo    ✅ Para automaticamente quando dados param de chegar
 echo    ✅ Não desperdiça tempo com esperas desnecessárias
 echo    ✅ Detecta queries travadas automaticamente
 echo    ⏰ CONTROLA FREQUÊNCIA de atualização por arquivo:
-echo       • 1x/dia: DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO, DB_PROD_VOL
+echo       • 1x/dia: DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO, DB_PROD_VOL, DB_GESTAO_ESTQ
 echo       • 6h: BD_END
 echo       • 1h: DB_TERMO, DB_PEDIDO_DIRETO, DB_PROD_BLITZ, DB_ESTQ_ENTR
 echo       • 30min: DB_ENTRADA_NOTAS (arquivo crítico)
@@ -225,7 +225,7 @@ echo - Execute VER_STATUS_FREQUENCIA.bat para ver quando cada arquivo será atua
 echo - Arquivo crítico (30min): DB_ENTRADA_NOTAS
 echo - Arquivos importantes (1h): DB_TERMO, DB_PEDIDO_DIRETO, DB_PROD_BLITZ, DB_ESTQ_ENTR
 echo - Arquivos moderados (6h): BD_END
-echo - Arquivos estáticos (1x/dia): DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO, DB_PROD_VOL
+echo - Arquivos estáticos (1x/dia): DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO, DB_PROD_VOL, DB_GESTAO_ESTQ
 echo.
 
 if not exist "logs" mkdir logs
