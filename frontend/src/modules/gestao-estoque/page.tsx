@@ -942,6 +942,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setBusyExport(true);
     try {
       const XLSX = await import("xlsx");
+      const exportBaseName = `gestao-estoque-${movementType}-${selectedDate}`;
       const itemRows = rows.map((row) => ({
         Data: formatDate(row.movement_date),
         Tipo: movementLabel(row.movement_type),
@@ -974,9 +975,13 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(itemRows), "Itens");
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), "Resumo");
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(inputRows), "Input");
-      XLSX.writeFile(workbook, `gestao-estoque-${movementType}-${selectedDate}.xlsx`, { compression: true });
-      setStatusMessage("Excel gerado com sucesso.");
+
+      const inputWorkbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(inputWorkbook, XLSX.utils.aoa_to_sheet(inputRows), "Input");
+
+      XLSX.writeFile(workbook, `${exportBaseName}.xlsx`, { compression: true });
+      XLSX.writeFile(inputWorkbook, `${exportBaseName}-input.xlsx`, { compression: true });
+      setStatusMessage("2 arquivos Excel gerados com sucesso.");
       setErrorMessage(null);
       await refreshRows();
     } catch (error) {
