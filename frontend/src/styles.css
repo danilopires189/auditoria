@@ -12729,9 +12729,9 @@ small {
 }
 
 .gestao-op-panel {
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 420px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
 }
 
 .gestao-op-panel-head {
@@ -12756,14 +12756,23 @@ small {
   line-height: 1.35;
 }
 
-.gestao-op-search-form {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
+.gestao-op-panel-body {
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-gutter: stable;
+}
+
+.gestao-op-panel-body--preview {
+  display: flex;
+  align-items: flex-start;
+}
+
+.gestao-op-search-form {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
 }
 
 .gestao-op-field {
@@ -12843,10 +12852,13 @@ small {
   display: grid;
   gap: 14px;
   min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-  scrollbar-gutter: stable;
+  width: 100%;
+  align-content: start;
+}
+
+.gestao-op-preview-empty {
+  width: 100%;
+  align-self: center;
 }
 
 .gestao-op-preview-head {
