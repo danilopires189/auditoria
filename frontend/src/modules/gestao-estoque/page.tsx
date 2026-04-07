@@ -1603,7 +1603,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     <dd>{formatInteger(preview.qtd_est_disp)}</dd>
                   </div>
                   <div className="gestao-op-preview-item gestao-op-preview-item--history">
-                    <dt><PreviewLabel desktop={`Histórico de Entrada (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} mobile={`Entradas (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} /></dt>
+                    <dt><PreviewLabel desktop={`Hist. de Entrada (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} mobile={`Hist. entrada (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} /></dt>
                     <dd>
                       <PreviewHistoryBlock
                         rows={previewEntryHistory.rows}
@@ -1613,7 +1613,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     </dd>
                   </div>
                   <div className="gestao-op-preview-item gestao-op-preview-item--history">
-                    <dt><PreviewLabel desktop={`Histórico de Saída (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} mobile={`Saídas (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} /></dt>
+                    <dt><PreviewLabel desktop={`Hist. de Saída (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} mobile={`Hist. saída (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} /></dt>
                     <dd>
                       <PreviewHistoryBlock
                         rows={previewExitHistory.rows}
