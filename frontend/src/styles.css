@@ -12715,6 +12715,7 @@ small {
   display: grid;
   grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
   gap: 16px;
+  align-items: start;
 }
 
 .gestao-op-panel,
@@ -12725,6 +12726,12 @@ small {
   gap: 16px;
   padding: 18px;
   min-width: 0;
+}
+
+.gestao-op-panel {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 560px;
+  overflow: hidden;
 }
 
 .gestao-op-panel-head {
@@ -12753,6 +12760,10 @@ small {
   display: grid;
   gap: 14px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .gestao-op-field {
@@ -12832,6 +12843,10 @@ small {
   display: grid;
   gap: 14px;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .gestao-op-preview-head {
