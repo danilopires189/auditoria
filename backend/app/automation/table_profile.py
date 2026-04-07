@@ -31,22 +31,16 @@ TABLE_PROFILE: tuple[TableProfileEntry, ...] = (
         table_name="db_log_end",
         workbook_file="DB_LOG_END.xlsx",
         workbook_sheet="DB_LOG_END",
-        csv_target="convertido/DB_LOG_END.csv",
-        csv_usecols=["CD", "CODDV", "ENDERECO", "EXCLUSAO"],
     ),
     TableProfileEntry(
         table_name="db_end",
         workbook_file="BD_END.xlsx",
         workbook_sheet="DB_END",
-        csv_target="convertido/BD_END.csv",
-        csv_usecols=["CD", "CODDV", "DESC", "ENDERECO", "ANDAR", "VALIDADE", "TIPO"],
     ),
     TableProfileEntry(
         table_name="db_estq_entr",
         workbook_file="DB_ESTQ_ENTR.xlsx",
         workbook_sheet="DB_ESTQ_ENTR",
-        csv_target="convertido/DB_ESTQ_ENTR.csv",
-        csv_usecols=["CD", "CODDV", "QTD_EST_ATUAL", "QTD_EST_DISP", "DAT_ULT_COMPRA"],
     ),
     TableProfileEntry(
         table_name="db_usuario",

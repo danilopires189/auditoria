@@ -75,3 +75,50 @@ export interface IndicadoresGestaoEstoqueLossDimensionItem {
   produtos_distintos_mes: number;
   produtos_distintos_ano: number;
 }
+
+export interface IndicadoresGestaoEstoqueReportSummary {
+  dt_ini: string;
+  dt_fim: string;
+  available_day_start: string | null;
+  available_day_end: string | null;
+  updated_at: string | null;
+  total_entradas_periodo: number;
+  total_saidas_periodo: number;
+  total_sobras_periodo: number;
+  total_faltas_periodo: number;
+  perda_liquida_periodo: number;
+  produtos_distintos_periodo: number;
+}
+
+export interface IndicadoresGestaoEstoqueReportReentryItem {
+  coddv: number;
+  descricao: string;
+  first_saida_date: string | null;
+  first_entrada_after_saida_date: string | null;
+  total_saida_periodo: number;
+  total_entrada_periodo: number;
+  saldo_periodo: number;
+}
+
+export interface IndicadoresGestaoEstoqueReportLossDimensionItem {
+  dimension_key: string;
+  perda_periodo: number;
+  total_faltas_periodo: number;
+  total_sobras_periodo: number;
+  produtos_distintos_periodo: number;
+}
+
+export interface IndicadoresGestaoEstoqueReportBaseRow {
+  cd: number;
+  data_mov: string;
+  coddv: number;
+  descricao: string;
+  tipo_movimentacao: string;
+  categoria_n1: string | null;
+  categoria_n2: string | null;
+  fornecedor: string | null;
+  usuario: string | null;
+  qtd_mov: number | null;
+  valor_mov: number;
+  updated_at: string | null;
+}

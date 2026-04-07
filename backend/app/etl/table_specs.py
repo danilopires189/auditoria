@@ -421,6 +421,7 @@ TABLE_SPECS: dict[str, TableSpec] = {
             "categoria_n2",
             "fornecedor",
             "usuario",
+            "qtd_mov",
             "valor_mov",
         ],
         sql_types={
@@ -433,6 +434,7 @@ TABLE_SPECS: dict[str, TableSpec] = {
             "categoria_n2": "text",
             "fornecedor": "text",
             "usuario": "text",
+            "qtd_mov": "integer",
             "valor_mov": "numeric",
         },
         has_cd=True,

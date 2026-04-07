@@ -245,11 +245,12 @@ tables:
       coddv: "integer"
       descricao: "text"
       tipo_movimentacao: "text"
-      categoria_n1: "text"
-      categoria_n2: "text"
-      fornecedor: "text"
-      usuario: "text"
-      valor_mov: "numeric"
+        categoria_n1: "text"
+        categoria_n2: "text"
+        fornecedor: "text"
+        usuario: "text"
+        qtd_mov: "integer"
+        valor_mov: "numeric"
 
   db_conf_blitz:
     file: "DB_BLITZ.xlsx"

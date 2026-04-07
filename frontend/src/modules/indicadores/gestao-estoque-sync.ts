@@ -4,6 +4,10 @@ import type {
   IndicadoresGestaoEstoqueDetailRow,
   IndicadoresGestaoEstoqueLossDimensionItem,
   IndicadoresGestaoEstoqueMonthOption,
+  IndicadoresGestaoEstoqueReportBaseRow,
+  IndicadoresGestaoEstoqueReportLossDimensionItem,
+  IndicadoresGestaoEstoqueReportReentryItem,
+  IndicadoresGestaoEstoqueReportSummary,
   IndicadoresGestaoEstoqueMovementFilter,
   IndicadoresGestaoEstoqueReentryItem,
   IndicadoresGestaoEstoqueSummary,
@@ -154,6 +158,61 @@ function mapLossDimensionItem(raw: Record<string, unknown>): IndicadoresGestaoEs
   };
 }
 
+function mapReportSummary(raw: Record<string, unknown>): IndicadoresGestaoEstoqueReportSummary {
+  return {
+    dt_ini: parseString(raw.dt_ini),
+    dt_fim: parseString(raw.dt_fim),
+    available_day_start: parseNullableString(raw.available_day_start),
+    available_day_end: parseNullableString(raw.available_day_end),
+    updated_at: parseNullableString(raw.updated_at),
+    total_entradas_periodo: parseNumber(raw.total_entradas_periodo),
+    total_saidas_periodo: parseNumber(raw.total_saidas_periodo),
+    total_sobras_periodo: parseNumber(raw.total_sobras_periodo),
+    total_faltas_periodo: parseNumber(raw.total_faltas_periodo),
+    perda_liquida_periodo: parseNumber(raw.perda_liquida_periodo),
+    produtos_distintos_periodo: parseInteger(raw.produtos_distintos_periodo)
+  };
+}
+
+function mapReportReentryItem(raw: Record<string, unknown>): IndicadoresGestaoEstoqueReportReentryItem {
+  return {
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    first_saida_date: parseNullableString(raw.first_saida_date),
+    first_entrada_after_saida_date: parseNullableString(raw.first_entrada_after_saida_date),
+    total_saida_periodo: parseNumber(raw.total_saida_periodo),
+    total_entrada_periodo: parseNumber(raw.total_entrada_periodo),
+    saldo_periodo: parseNumber(raw.saldo_periodo)
+  };
+}
+
+function mapReportLossDimensionItem(raw: Record<string, unknown>): IndicadoresGestaoEstoqueReportLossDimensionItem {
+  return {
+    dimension_key: parseString(raw.dimension_key, "Sem informação"),
+    perda_periodo: parseNumber(raw.perda_periodo),
+    total_faltas_periodo: parseNumber(raw.total_faltas_periodo),
+    total_sobras_periodo: parseNumber(raw.total_sobras_periodo),
+    produtos_distintos_periodo: parseInteger(raw.produtos_distintos_periodo)
+  };
+}
+
+function mapReportBaseRow(raw: Record<string, unknown>): IndicadoresGestaoEstoqueReportBaseRow {
+  return {
+    cd: parseInteger(raw.cd),
+    data_mov: parseString(raw.data_mov),
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    tipo_movimentacao: parseString(raw.tipo_movimentacao, "-"),
+    categoria_n1: parseNullableString(raw.categoria_n1),
+    categoria_n2: parseNullableString(raw.categoria_n2),
+    fornecedor: parseNullableString(raw.fornecedor),
+    usuario: parseNullableString(raw.usuario),
+    qtd_mov: raw.qtd_mov == null ? null : parseInteger(raw.qtd_mov),
+    valor_mov: parseNumber(raw.valor_mov),
+    updated_at: parseNullableString(raw.updated_at)
+  };
+}
+
 export async function fetchIndicadoresGestaoEstoqueMonthOptions(cd: number | null): Promise<IndicadoresGestaoEstoqueMonthOption[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
@@ -285,4 +344,149 @@ export async function fetchIndicadoresGestaoEstoqueLossDimension(params: {
   if (!Array.isArray(data)) return [];
 
   return data.map((row) => mapLossDimensionItem(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueReportSummary(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueReportSummary> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_report_summary", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  const row = firstRow(data);
+  if (!row) throw new Error("Falha ao carregar o resumo do relatório da gestão de estoque.");
+  return mapReportSummary(row);
+}
+
+export async function fetchIndicadoresGestaoEstoqueReportDailySeries(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueDailyRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_report_daily_series", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapDailyRow(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueReportTopItems(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  rankGroup: "entrada" | "saida";
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueTopItem[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_report_top_items", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_rank_group: params.rankGroup,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapTopItem(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueReportReentryItems(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueReportReentryItem[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_report_reentry_items", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapReportReentryItem(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueReportLossDimension(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  dimension: "fornecedor" | "categoria_n2";
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueReportLossDimensionItem[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_report_loss_dimension", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_dimension: params.dimension,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapReportLossDimensionItem(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueReportDetails(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueDetailRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_report_details", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapDetailRow(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueReportBase(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueReportBaseRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_report_base", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapReportBaseRow(row as Record<string, unknown>));
 }

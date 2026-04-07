@@ -46,7 +46,7 @@ class NormalizeGestaoEstqTests(unittest.TestCase):
                 "categoria_n2",
                 "fornecedor",
                 "usuario",
-                "quantidade_mov",
+                "qtd_mov",
                 "valor_mov",
             ],
         )
@@ -55,7 +55,7 @@ class NormalizeGestaoEstqTests(unittest.TestCase):
         self.assertEqual(normalized.loc[0, "categoria_n2"], "Refrigerante")
         self.assertEqual(normalized.loc[0, "fornecedor"], "Fornecedor XPTO")
         self.assertEqual(normalized.loc[0, "usuario"], "Maria")
-        self.assertEqual(normalized.loc[0, "quantidade_mov"], "7")
+        self.assertEqual(normalized.loc[0, "qtd_mov"], "7")
         self.assertEqual(normalized.loc[0, "valor_mov"], "-123.45")
 
 

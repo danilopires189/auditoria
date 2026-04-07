@@ -97,6 +97,25 @@ def _prepare_db_end_compat_columns(
     return work, {"populated_tipo_from_tipo_movimentacao": 0}
 
 
+def _prepare_db_gestao_estq_compat_columns(
+    frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    work = frame.copy()
+
+    if "tipo_movimentacao" not in work.columns and "tipo" in work.columns:
+        work["tipo_movimentacao"] = work["tipo"]
+        return work, {"populated_tipo_movimentacao_from_tipo": int(work["tipo"].notna().sum())}
+
+    if "tipo_movimentacao" in work.columns and "tipo" in work.columns:
+        fill_mask = work["tipo_movimentacao"].isna() & work["tipo"].notna()
+        populated = int(fill_mask.sum())
+        if populated > 0:
+            work.loc[fill_mask, "tipo_movimentacao"] = work.loc[fill_mask, "tipo"]
+        return work, {"populated_tipo_movimentacao_from_tipo": populated}
+
+    return work, {"populated_tipo_movimentacao_from_tipo": 0}
+
+
 def apply_table_specific_rules(
     table_name: str,
     frame: pd.DataFrame,
@@ -107,5 +126,7 @@ def apply_table_specific_rules(
         return _prepare_db_prod_vol_compat_columns(frame)
     if table_name == "db_end":
         return _prepare_db_end_compat_columns(frame)
+    if table_name == "db_gestao_estq":
+        return _prepare_db_gestao_estq_compat_columns(frame)
 
     return frame, {}

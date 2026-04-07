@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -10,6 +10,13 @@ import {
   fetchIndicadoresGestaoEstoqueDetails,
   fetchIndicadoresGestaoEstoqueLossDimension,
   fetchIndicadoresGestaoEstoqueMonthOptions,
+  fetchIndicadoresGestaoEstoqueReportBase,
+  fetchIndicadoresGestaoEstoqueReportDailySeries,
+  fetchIndicadoresGestaoEstoqueReportDetails,
+  fetchIndicadoresGestaoEstoqueReportLossDimension,
+  fetchIndicadoresGestaoEstoqueReportReentryItems,
+  fetchIndicadoresGestaoEstoqueReportSummary,
+  fetchIndicadoresGestaoEstoqueReportTopItems,
   fetchIndicadoresGestaoEstoqueSummary,
   fetchIndicadoresGestaoEstoqueTopItems,
   fetchIndicadoresGestaoEstoqueYearReentryItems
@@ -177,6 +184,24 @@ function formatMovementLabel(value: IndicadoresGestaoEstoqueMovementFilter): str
   if (value === "entrada") return "Entrada";
   if (value === "saida") return "Saída";
   return "Todas";
+}
+
+function defaultReportStartDate(
+  summary: IndicadoresGestaoEstoqueSummary | null,
+  selectedMonthStart: string,
+  selectedDay: string
+): string {
+  if (selectedDay !== ALL_DAYS_VALUE && selectedDay) return selectedDay;
+  return summary?.available_day_start ?? summary?.month_start ?? selectedMonthStart;
+}
+
+function defaultReportEndDate(
+  summary: IndicadoresGestaoEstoqueSummary | null,
+  selectedMonthStart: string,
+  selectedDay: string
+): string {
+  if (selectedDay !== ALL_DAYS_VALUE && selectedDay) return selectedDay;
+  return summary?.available_day_end ?? summary?.month_end ?? selectedMonthStart;
 }
 
 function natureClassName(value: IndicadoresGestaoEstoqueDetailRow["natureza"]): string {
@@ -465,6 +490,13 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportErrorMessage, setReportErrorMessage] = useState<string | null>(null);
+  const [reportStatusMessage, setReportStatusMessage] = useState<string | null>(null);
+  const [reportDateStart, setReportDateStart] = useState("");
+  const [reportDateEnd, setReportDateEnd] = useState("");
+  const [reportMovementFilter, setReportMovementFilter] = useState<IndicadoresGestaoEstoqueMovementFilter>("todas");
   const [isMobileAccordion, setIsMobileAccordion] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia(MOBILE_ACCORDION_MEDIA_QUERY).matches;
@@ -498,6 +530,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   useEffect(() => {
     if (isMobileAccordion) {
       setExpandedMobileSection(null);
+      setReportDialogOpen(false);
     }
   }, [isMobileAccordion]);
 
@@ -710,6 +743,370 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     };
   }, [activeCd, expandedMobileSection, isMobileAccordion, movementFilter, selectedDay, selectedMonthStart]);
 
+  const canExportReport = !isMobileAccordion && Boolean(selectedMonthStart);
+
+  const openReportDialog = useCallback(() => {
+    if (!canExportReport || reportBusy) return;
+
+    setReportDateStart(defaultReportStartDate(summary, selectedMonthStart, selectedDay));
+    setReportDateEnd(defaultReportEndDate(summary, selectedMonthStart, selectedDay));
+    setReportMovementFilter(movementFilter);
+    setReportErrorMessage(null);
+    setReportStatusMessage(null);
+    setReportDialogOpen(true);
+  }, [canExportReport, movementFilter, reportBusy, selectedDay, selectedMonthStart, summary]);
+
+  const closeReportDialog = useCallback(() => {
+    if (reportBusy) return;
+    setReportDialogOpen(false);
+    setReportErrorMessage(null);
+  }, [reportBusy]);
+
+  const validateReportFilters = useCallback((): string | null => {
+    if (!reportDateStart || !reportDateEnd) {
+      return "Informe a data inicial e a data final do relatório.";
+    }
+    if (reportDateStart > reportDateEnd) {
+      return "A data inicial não pode ser maior que a data final.";
+    }
+    return null;
+  }, [reportDateEnd, reportDateStart]);
+
+  const exportReportXlsx = useCallback(async () => {
+    const validationError = validateReportFilters();
+    if (validationError) {
+      setReportErrorMessage(validationError);
+      return;
+    }
+
+    setReportBusy(true);
+    setReportErrorMessage(null);
+    setReportStatusMessage(null);
+
+    try {
+      const [
+        reportSummary,
+        reportDailySeries,
+        reportTopEntradas,
+        reportTopSaidas,
+        reportReentries,
+        reportSupplierLoss,
+        reportCategoryLoss,
+        reportDetails,
+        reportBase
+      ] = await Promise.all([
+        fetchIndicadoresGestaoEstoqueReportSummary({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportDailySeries({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportTopItems({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          rankGroup: "entrada",
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportTopItems({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          rankGroup: "saida",
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportReentryItems({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportLossDimension({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          dimension: "fornecedor",
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportLossDimension({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          dimension: "categoria_n2",
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportDetails({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportBase({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          movementFilter: reportMovementFilter
+        })
+      ]);
+
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+      const generatedAtIso = new Date().toISOString();
+      const fileCdSuffix = activeCd == null ? "na" : String(activeCd).padStart(2, "0");
+      const fileName = `indicadores-gestao-estoque-${reportDateStart}-a-${reportDateEnd}-cd${fileCdSuffix}.xlsx`;
+      const setSheetWidths = (sheet: Record<string, unknown>, widths: number[]) => {
+        sheet["!cols"] = widths.map((wch) => ({ wch }));
+      };
+
+      const parametrosSheet = XLSX.utils.aoa_to_sheet([
+        ["Parametro", "Valor"],
+        ["CD", displayCdName],
+        ["Codigo do CD", activeCd == null ? "-" : String(activeCd).padStart(2, "0")],
+        ["Data inicial", formatDate(reportDateStart)],
+        ["Data final", formatDate(reportDateEnd)],
+        ["Movimentacao", formatMovementLabel(reportMovementFilter)],
+        ["Gerado em", formatDateTime(generatedAtIso)],
+        ["Atualizado em", formatDateTime(reportSummary.updated_at)]
+      ]);
+      setSheetWidths(parametrosSheet, [28, 34]);
+
+      const resumoSheet = XLSX.utils.aoa_to_sheet([
+        ["Indicador", "Valor"],
+        ["Entradas no Periodo", formatCurrency(reportSummary.total_entradas_periodo)],
+        ["Saidas no Periodo", formatCurrency(reportSummary.total_saidas_periodo)],
+        ["Sobras no Periodo", formatCurrency(reportSummary.total_sobras_periodo)],
+        ["Faltas no Periodo", formatCurrency(reportSummary.total_faltas_periodo)],
+        ["Perda Liquida no Periodo", formatSignedCurrency(reportSummary.perda_liquida_periodo)],
+        ["Produtos Distintos", formatInteger(reportSummary.produtos_distintos_periodo)],
+        ["Primeiro dia com movimento", formatDate(reportSummary.available_day_start)],
+        ["Ultimo dia com movimento", formatDate(reportSummary.available_day_end)]
+      ]);
+      setSheetWidths(resumoSheet, [34, 26]);
+
+      const serieDiariaSheet = XLSX.utils.json_to_sheet(
+        reportDailySeries.map((row) => ({
+          Data: formatDate(row.date_ref),
+          Entradas: row.entrada_total,
+          Saidas: row.saida_total,
+          Perda: row.perda_total
+        })),
+        { header: ["Data", "Entradas", "Saidas", "Perda"] }
+      );
+      setSheetWidths(serieDiariaSheet, [14, 16, 16, 16]);
+
+      const reentradaSheet = XLSX.utils.json_to_sheet(
+        reportReentries.map((row) => ({
+          CODDV: formatPlainInteger(row.coddv),
+          Descricao: row.descricao,
+          PrimeiraSaida: formatDate(row.first_saida_date),
+          PrimeiraReentrada: formatDate(row.first_entrada_after_saida_date),
+          TotalSaidaPeriodo: row.total_saida_periodo,
+          TotalEntradaPeriodo: row.total_entrada_periodo,
+          SaldoPeriodo: row.saldo_periodo
+        })),
+        {
+          header: [
+            "CODDV",
+            "Descricao",
+            "PrimeiraSaida",
+            "PrimeiraReentrada",
+            "TotalSaidaPeriodo",
+            "TotalEntradaPeriodo",
+            "SaldoPeriodo"
+          ]
+        }
+      );
+      setSheetWidths(reentradaSheet, [12, 44, 16, 18, 18, 20, 16]);
+
+      const topEntradasSheet = XLSX.utils.json_to_sheet(
+        reportTopEntradas.map((row) => ({
+          CODDV: formatPlainInteger(row.coddv),
+          Descricao: row.descricao,
+          TotalValor: row.total_valor,
+          Movimentacoes: row.movimentacoes,
+          DiasDistintos: row.dias_distintos,
+          PrimeiraData: formatDate(row.first_date),
+          UltimaData: formatDate(row.last_date)
+        })),
+        {
+          header: [
+            "CODDV",
+            "Descricao",
+            "TotalValor",
+            "Movimentacoes",
+            "DiasDistintos",
+            "PrimeiraData",
+            "UltimaData"
+          ]
+        }
+      );
+      setSheetWidths(topEntradasSheet, [12, 42, 16, 14, 14, 16, 16]);
+
+      const topSaidasSheet = XLSX.utils.json_to_sheet(
+        reportTopSaidas.map((row) => ({
+          CODDV: formatPlainInteger(row.coddv),
+          Descricao: row.descricao,
+          TotalValor: row.total_valor,
+          Movimentacoes: row.movimentacoes,
+          DiasDistintos: row.dias_distintos,
+          PrimeiraData: formatDate(row.first_date),
+          UltimaData: formatDate(row.last_date)
+        })),
+        {
+          header: [
+            "CODDV",
+            "Descricao",
+            "TotalValor",
+            "Movimentacoes",
+            "DiasDistintos",
+            "PrimeiraData",
+            "UltimaData"
+          ]
+        }
+      );
+      setSheetWidths(topSaidasSheet, [12, 42, 16, 14, 14, 16, 16]);
+
+      const perdasFornecedorSheet = XLSX.utils.json_to_sheet(
+        reportSupplierLoss.map((row) => ({
+          Fornecedor: row.dimension_key,
+          PerdaPeriodo: row.perda_periodo,
+          TotalFaltasPeriodo: row.total_faltas_periodo,
+          TotalSobrasPeriodo: row.total_sobras_periodo,
+          ProdutosDistintosPeriodo: row.produtos_distintos_periodo
+        })),
+        {
+          header: [
+            "Fornecedor",
+            "PerdaPeriodo",
+            "TotalFaltasPeriodo",
+            "TotalSobrasPeriodo",
+            "ProdutosDistintosPeriodo"
+          ]
+        }
+      );
+      setSheetWidths(perdasFornecedorSheet, [34, 16, 18, 18, 18]);
+
+      const perdasCategoriaSheet = XLSX.utils.json_to_sheet(
+        reportCategoryLoss.map((row) => ({
+          CategoriaN2: row.dimension_key,
+          PerdaPeriodo: row.perda_periodo,
+          TotalFaltasPeriodo: row.total_faltas_periodo,
+          TotalSobrasPeriodo: row.total_sobras_periodo,
+          ProdutosDistintosPeriodo: row.produtos_distintos_periodo
+        })),
+        {
+          header: [
+            "CategoriaN2",
+            "PerdaPeriodo",
+            "TotalFaltasPeriodo",
+            "TotalSobrasPeriodo",
+            "ProdutosDistintosPeriodo"
+          ]
+        }
+      );
+      setSheetWidths(perdasCategoriaSheet, [32, 16, 18, 18, 18]);
+
+      const movimentacoesSheet = XLSX.utils.json_to_sheet(
+        reportDetails.map((row) => ({
+          Data: formatDate(row.data_mov),
+          CODDV: formatPlainInteger(row.coddv),
+          Descricao: row.descricao,
+          TipoMovimentacao: row.tipo_movimentacao,
+          GrupoMovimento: row.movement_group,
+          Natureza: row.natureza,
+          Quantidade: row.quantidade,
+          ValorTotal: row.valor_total,
+          Responsavel: row.responsavel,
+          Cargo: row.cargo,
+          Ocorrencias: row.ocorrencias
+        })),
+        {
+          header: [
+            "Data",
+            "CODDV",
+            "Descricao",
+            "TipoMovimentacao",
+            "GrupoMovimento",
+            "Natureza",
+            "Quantidade",
+            "ValorTotal",
+            "Responsavel",
+            "Cargo",
+            "Ocorrencias"
+          ]
+        }
+      );
+      setSheetWidths(movimentacoesSheet, [14, 12, 42, 18, 16, 14, 12, 16, 28, 22, 12]);
+
+      const baseSheet = XLSX.utils.json_to_sheet(
+        reportBase.map((row) => ({
+          CD: row.cd,
+          DataMov: row.data_mov,
+          CODDV: row.coddv,
+          Descricao: row.descricao,
+          TipoMovimentacao: row.tipo_movimentacao,
+          CategoriaN1: row.categoria_n1 ?? "",
+          CategoriaN2: row.categoria_n2 ?? "",
+          Fornecedor: row.fornecedor ?? "",
+          Usuario: row.usuario ?? "",
+          QtdMov: row.qtd_mov ?? "",
+          ValorMov: row.valor_mov,
+          UpdatedAt: row.updated_at ?? ""
+        })),
+        {
+          header: [
+            "CD",
+            "DataMov",
+            "CODDV",
+            "Descricao",
+            "TipoMovimentacao",
+            "CategoriaN1",
+            "CategoriaN2",
+            "Fornecedor",
+            "Usuario",
+            "QtdMov",
+            "ValorMov",
+            "UpdatedAt"
+          ]
+        }
+      );
+      setSheetWidths(baseSheet, [8, 12, 12, 40, 18, 24, 24, 28, 18, 12, 14, 22]);
+
+      XLSX.utils.book_append_sheet(workbook, parametrosSheet, "Parametros");
+      XLSX.utils.book_append_sheet(workbook, resumoSheet, "Resumo");
+      XLSX.utils.book_append_sheet(workbook, serieDiariaSheet, "Serie Diaria");
+      XLSX.utils.book_append_sheet(workbook, reentradaSheet, "Reentrada");
+      XLSX.utils.book_append_sheet(workbook, topEntradasSheet, "Top Entradas");
+      XLSX.utils.book_append_sheet(workbook, topSaidasSheet, "Top Saidas");
+      XLSX.utils.book_append_sheet(workbook, perdasFornecedorSheet, "Perdas Fornec");
+      XLSX.utils.book_append_sheet(workbook, perdasCategoriaSheet, "Perdas Cat N2");
+      XLSX.utils.book_append_sheet(workbook, movimentacoesSheet, "Mov Agregadas");
+      XLSX.utils.book_append_sheet(workbook, baseSheet, "Base Periodo");
+
+      XLSX.writeFile(workbook, fileName, { compression: true });
+
+      setReportDialogOpen(false);
+      setReportStatusMessage("Relatório Excel gerado com sucesso.");
+    } catch (error) {
+      setReportErrorMessage(asErrorMessage(error));
+    } finally {
+      setReportBusy(false);
+    }
+  }, [
+    activeCd,
+    displayCdName,
+    reportDateEnd,
+    reportDateStart,
+    reportMovementFilter,
+    validateReportFilters
+  ]);
+
   const selectedMonthLabel = useMemo(
     () => monthOptions.find((option) => option.month_start === selectedMonthStart)?.month_label ?? "-",
     [monthOptions, selectedMonthStart]
@@ -828,11 +1225,24 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                     <option value="saida">Saída</option>
                   </select>
                 </label>
+                {!isMobileAccordion ? (
+                  <div className="indicadores-filters-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary gestao-estq-report-export-trigger"
+                      onClick={openReportDialog}
+                      disabled={!canExportReport || reportBusy}
+                    >
+                      {reportBusy ? "Gerando Excel..." : "Exportar Excel"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
 
           {dashboardErrorMessage ? <div className="indicadores-feedback is-error">{dashboardErrorMessage}</div> : null}
+          {reportStatusMessage ? <div className="module-inline-message">{reportStatusMessage}</div> : null}
 
           <div className="indicadores-metrics-grid gestao-estq-metrics-grid">
             {metricCards.map((card) => (
@@ -1012,6 +1422,67 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           </div>
         </article>
       </section>
+      {!isMobileAccordion && reportDialogOpen ? (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gestao-estq-report-title"
+          onClick={closeReportDialog}
+        >
+          <div className="confirm-dialog surface-enter gestao-estq-report-dialog" onClick={(event) => event.stopPropagation()}>
+            <h3 id="gestao-estq-report-title">Exportar relatório Excel</h3>
+            <p>{`${displayCdName} · filtro ${formatMovementLabel(reportMovementFilter)}`}</p>
+
+            <div className="gestao-estq-report-form">
+              <div className="gestao-estq-report-form-row">
+                <label>
+                  <span>Data inicial</span>
+                  <input
+                    type="date"
+                    value={reportDateStart}
+                    onChange={(event) => setReportDateStart(event.target.value)}
+                    disabled={reportBusy}
+                  />
+                </label>
+                <label>
+                  <span>Data final</span>
+                  <input
+                    type="date"
+                    value={reportDateEnd}
+                    onChange={(event) => setReportDateEnd(event.target.value)}
+                    disabled={reportBusy}
+                  />
+                </label>
+              </div>
+
+              <label>
+                <span>Movimentação</span>
+                <select
+                  value={reportMovementFilter}
+                  onChange={(event) => setReportMovementFilter(event.target.value as IndicadoresGestaoEstoqueMovementFilter)}
+                  disabled={reportBusy}
+                >
+                  <option value="todas">Todas</option>
+                  <option value="entrada">Entrada</option>
+                  <option value="saida">Saída</option>
+                </select>
+              </label>
+
+              {reportErrorMessage ? <div className="module-inline-error">{reportErrorMessage}</div> : null}
+            </div>
+
+            <div className="confirm-actions">
+              <button className="btn btn-primary" type="button" onClick={() => void exportReportXlsx()} disabled={reportBusy}>
+                {reportBusy ? "Gerando Excel..." : "Gerar Excel"}
+              </button>
+              <button className="btn btn-muted" type="button" onClick={closeReportDialog} disabled={reportBusy}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

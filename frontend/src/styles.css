@@ -10388,6 +10388,11 @@ small {
   min-width: 170px;
 }
 
+.indicadores-filters-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
 .indicadores-filters span {
   color: #35527d;
   font-size: 0.8rem;
@@ -10402,6 +10407,56 @@ small {
   color: #163d72;
   font: inherit;
   padding: 0 12px;
+}
+
+.gestao-estq-report-export-trigger {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.gestao-estq-report-dialog {
+  width: min(100%, 520px);
+  max-width: min(calc(100vw - 24px), 520px);
+}
+
+.gestao-estq-report-form {
+  display: grid;
+  gap: 14px;
+}
+
+.gestao-estq-report-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gestao-estq-report-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.gestao-estq-report-form label span {
+  color: #35527d;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.gestao-estq-report-form input,
+.gestao-estq-report-form select {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid #c7d8ee;
+  background: #fff;
+  color: #163d72;
+  font: inherit;
+  padding: 0 12px;
+}
+
+.gestao-estq-report-form input:focus,
+.gestao-estq-report-form select:focus {
+  outline: 2px solid rgba(38, 99, 201, 0.18);
+  outline-offset: 1px;
+  border-color: #7ea6df;
 }
 
 .indicadores-feedback {
@@ -11054,6 +11109,14 @@ small {
     flex: 1 1 180px;
   }
 
+  .indicadores-filters-actions {
+    width: 100%;
+  }
+
+  .gestao-estq-report-export-trigger {
+    width: 100%;
+  }
+
   .indicadores-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
@@ -11669,6 +11732,10 @@ small {
   .gestao-estq-top-value,
   .gestao-estq-loss-metrics {
     text-align: left;
+  }
+
+  .gestao-estq-report-form-row {
+    grid-template-columns: 1fr;
   }
 }
 
