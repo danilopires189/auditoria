@@ -1,4 +1,6 @@
-# Resumo da Aplicação Auditoria
+# Resumo da Aplicacao Auditoria
+
+> Status do documento: snapshot executivo gerado em 23/03/2026. O projeto continuou evoluindo depois desta data. Para setup, deploy e operacao atual use primeiro `README.md`, `docs/arquitetura.md`, `docs/setup-e-deploy.md` e `docs/runbook-operacional.md`. Para schema e contratos atuais, a fonte oficial e o codigo em `backend/app/ddl/sql/`, `backend/config.yml` e `frontend/src/modules/registry.ts`.
 
 ## 1. O que a aplicação faz
 

@@ -1,17 +1,83 @@
-# Backend Sync Local -> Supabase
+# Backend Local -> Supabase
 
-## 1. Setup
+Backend Python responsavel por migracoes, validacao, carga e automacao das bases operacionais do projeto Auditoria.
+
+## Responsabilidades
+
+- aplicar migracoes SQL do banco;
+- validar conectividade com o Supabase;
+- atualizar planilhas com `refresh` quando o fluxo exigir;
+- ler Excel/CSV de `data/`;
+- carregar tabelas `staging` e promover para tabelas finais;
+- registrar execucoes, metadados, snapshots e rejeicoes;
+- operar por CLI, GUI Tkinter e Task Scheduler do Windows.
+
+## Requisitos
+
+- Python 3.11+
+- acesso ao Supabase Postgres ou a Edge Function
+- Windows para GUI, `schtasks` e automacao COM do Excel
+
+## Setup
+
+No diretorio `backend/`:
 
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env
+Copy-Item env.example .env
 ```
 
-Preencha `.env` com as credenciais reais do banco Supabase Postgres.
+Se preferir usar a virtualenv da raiz do repositorio, os scripts `.bat` tambem reconhecem `..\.venv\Scripts\python.exe`.
 
-Se a rede bloquear PostgreSQL (`5432/6543`), use modo HTTPS:
+## Arquivos de configuracao
+
+### `.env`
+
+Credenciais e transporte:
+
+- `SUPABASE_DB_HOST`
+- `SUPABASE_DB_PORT`
+- `SUPABASE_DB_NAME`
+- `SUPABASE_DB_USER`
+- `SUPABASE_DB_PASSWORD`
+- `SYNC_TRANSPORT`
+- `EDGE_FUNCTION_URL`
+- `EDGE_FUNCTION_BEARER_TOKEN`
+- `EDGE_FUNCTION_SHARED_SECRET`
+- `EDGE_FUNCTION_TIMEOUT_SECONDS`
+- `EDGE_FUNCTION_CHUNK_SIZE`
+
+### `config.yml`
+
+Define:
+
+- `app.data_dir`
+- `app.rejections_dir`
+- `app.log_level`
+- timeouts e pool do Supabase
+- tabelas carregadas, modo de sync, arquivos, abas e tipos
+
+### `automation_config.json`
+
+Define:
+
+- janela operacional
+- intervalo
+- timezone
+- regra de domingo
+- nome da tarefa agendada
+
+## Modos de transporte
+
+### PostgreSQL direto
+
+Modo padrao, usando `5432` ou `6543`.
+
+### Edge Function
+
+Use quando a rede bloquear PostgreSQL:
 
 ```env
 SYNC_TRANSPORT=edge
@@ -22,56 +88,89 @@ EDGE_FUNCTION_TIMEOUT_SECONDS=120
 EDGE_FUNCTION_CHUNK_SIZE=1000
 ```
 
-Template da function: `edge_function/sync_ingest/index.ts`.
+Fonte de referencia da function: `edge_function/sync_ingest/index.ts`.
 
-## 2. Comandos CLI
+## Comandos principais
 
 ```powershell
 py -3 main.py bootstrap --config .\config.yml --env-file .\.env
 py -3 main.py healthcheck --config .\config.yml --env-file .\.env
+py -3 main.py refresh --config .\config.yml --env-file .\.env
 py -3 main.py validate --config .\config.yml --env-file .\.env
 py -3 main.py sync --config .\config.yml --env-file .\.env
 py -3 main.py dry-run --config .\config.yml --env-file .\.env
-py -3 main.py refresh --config .\config.yml --env-file .\.env
 py -3 main.py automation-cycle --scheduled --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
 py -3 main.py automation-task install --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
 py -3 main.py automation-task status --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
+py -3 main.py automation-task run-now --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
+py -3 main.py automation-task remove --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
 py -3 main.py gui --config .\config.yml --env-file .\.env --automation-config .\automation_config.json
 ```
 
-No modo `SYNC_TRANSPORT=edge`, `healthcheck` valida a Edge Function (HTTPS) e
-`automation-cycle` envia dados para o Supabase via função HTTP.
+Resumo de uso:
 
-Sem argumentos (`py -3 main.py`) o app abre a interface Tkinter.
+- `bootstrap`: aplica o schema
+- `healthcheck`: valida conectividade
+- `refresh`: atualiza planilhas externas
+- `validate`: valida sem promover
+- `sync`: executa a carga real
+- `dry-run`: simula a carga
+- `automation-cycle`: executa o fluxo orquestrado
+- `automation-task *`: administra a tarefa do Windows
+- `gui`: abre a interface Tkinter
 
-## 3. Empacotamento com PyInstaller
+Sem argumentos, `main.py` abre a GUI.
+
+## Empacotamento
 
 ```powershell
 py -3 -m PyInstaller sync_backend.spec
 ```
 
-Artefato gerado em `dist\sync_backend.exe`.
+Artefato esperado:
 
-## 4. Execução em outra máquina
+- `dist\sync_backend.exe`
 
-1. Copiar para a máquina de destino:
-   - `dist\sync_backend.exe`
-   - `config.yml`
-   - `automation_config.json`
-   - `.env`
-   - pasta `data\`
-   - `run_bootstrap.bat`
-   - `run_sync.bat`
-2. Manter `data` no mesmo diretório do `.exe`.
-3. Executar `run_bootstrap.bat` (primeira vez) e depois `run_sync.bat`.
+O `sync_backend.spec` inclui:
 
-Arquivos esperados no fluxo padrão (`data\`):
-- `DB_BARRAS.xlsx`
-- demais arquivos já configurados em `config.yml`
+- `config.yml`
+- `automation_config.json` quando existir
+- migracoes em `app/ddl/sql/`
 
-## 5. Observações de segurança
+## Execucao em outra maquina
 
-- Nunca salvar senha real em `config.yml`.
-- O frontend depende de RLS no banco para controle de acesso.
-- `db_barras` é dimensão global (sem `cd`) e leitura autenticada via profile.
-- `db_inventario` é base por CD usada no módulo `Inventário (zerados)`, gerida por RPCs Admin e montada a partir de `db_end` + `db_estq_entr`.
+Copie:
+
+- `dist\sync_backend.exe`
+- `config.yml`
+- `automation_config.json`
+- `.env`
+- pasta `data\`
+- `run_bootstrap.bat`
+- `run_sync.bat`
+
+Regras:
+
+1. mantenha `data\` no mesmo diretorio do executavel;
+2. execute `run_bootstrap.bat` na primeira subida;
+3. depois use `run_sync.bat` ou a tarefa agendada.
+
+## Logs e evidencias
+
+- logs gerais: `logs\`
+- rejeicoes exportadas: `logs\rejections\`
+- identificador de execucao: `run_id` na saida da CLI
+
+## Boas praticas
+
+- nunca salve segredo em `config.yml`
+- altere schema apenas via nova migracao versionada
+- documente novos arquivos de origem tambem em `config.yml`
+- valide `healthcheck` antes de culpar o frontend
+
+## Leitura complementar
+
+- `../docs/setup-e-deploy.md`
+- `../docs/runbook-operacional.md`
+- `../docs/troubleshooting.md`
+- `edge_function/README.md`

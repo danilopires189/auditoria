@@ -1,4 +1,6 @@
-# Inventário da Aplicação 
+# Inventario da Aplicacao
+
+> Status do documento: snapshot tecnico gerado em 23/03/2026. O repositorio continuou recebendo migracoes e modulos depois desta data. Use este arquivo como referencia historica, nao como contrato unico de producao. Para a fonte oficial atual, consulte `backend/app/ddl/sql/`, `backend/config.yml` e os documentos em `docs/`.
 
 ## 1. Resumo executivo
 
@@ -225,4 +227,3 @@ Total de tabelas customizadas identificadas nas migrações atuais: 98.
 
 
 "A aplicação Auditoria é uma plataforma web com backend de sincronização local que centraliza rotinas de auditoria operacional dos CDs. Ela utiliza frontend React/Vite, autenticação Supabase por matrícula e banco PostgreSQL/Supabase com controle de acesso por perfil e por CD. Os módulos ativos cobrem conferência de entrada de notas, pedido direto, termo, volume avulso, devolução, inventário zerados, auditoria de PVPS e alocação, coleta de mercadoria, controle de validade, indicadores, produtividade, atividade extra, busca por produto, validação de endereçamento e validação de etiqueta pulmão. O backend também executa ETL de arquivos Excel/CSV para tabelas de staging, promoção para tabelas de negócio e trilha de auditoria das cargas. O inventário atual do banco customizado contém 98 tabelas distribuídas entre os schemas `app`, `staging`, `audit`, `authz`, `aud` e `public`, conforme detalhado neste documento." 
-
