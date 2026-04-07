@@ -1567,7 +1567,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           <article className="module-card module-card-static gestao-op-panel">
             <div className="gestao-op-panel-head">
               <h3>Pré-visualização</h3>
-              <span>Dados Atualizados</span>
+              <span>Detalhes</span>
             </div>
             <div className="gestao-op-panel-body gestao-op-panel-body--preview">
               {preview ? (
