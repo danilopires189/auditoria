@@ -1426,7 +1426,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       {!isMobileAccordion && reportDialogOpen && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="confirm-overlay"
+              className="confirm-overlay gestao-estq-report-overlay"
               role="dialog"
               aria-modal="true"
               aria-labelledby="gestao-estq-report-title"

@@ -10414,9 +10414,16 @@ small {
   white-space: nowrap;
 }
 
+.gestao-estq-report-overlay {
+  place-items: start center;
+  align-content: start;
+  overflow-y: auto;
+}
+
 .gestao-estq-report-dialog {
   width: min(100%, 520px);
   max-width: min(calc(100vw - 24px), 520px);
+  align-self: start;
 }
 
 .gestao-estq-report-form {
