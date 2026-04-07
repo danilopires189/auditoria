@@ -12730,7 +12730,7 @@ small {
 
 .gestao-op-panel {
   grid-template-rows: auto minmax(0, 1fr);
-  height: 560px;
+  height: 420px;
   overflow: hidden;
 }
 
