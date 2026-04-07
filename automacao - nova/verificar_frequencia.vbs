@@ -79,6 +79,7 @@ ElseIf InStr(UCase(strArquivo), "BD_END") > 0 Then
 
 ' GRUPO 4: A CADA 1 HORA (60 minutos)
 ElseIf InStr(UCase(strArquivo), "DB_TERMO") > 0 Or _
+       InStr(UCase(strArquivo), "DB_ATENDIMENTO") > 0 Or _
        InStr(UCase(strArquivo), "DB_PEDIDO_DIRETO") > 0 Or _
        InStr(UCase(strArquivo), "DB_PROD_BLITZ") > 0 Or _
        InStr(UCase(strArquivo), "DB_ESTQ_ENTR") > 0 Then

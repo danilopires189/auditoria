@@ -13,7 +13,7 @@ intTotalFiles = 0
 
 ' Lista de arquivos Excel para atualizar
 arrFiles = Array("BD_AVULSO.xlsx", "BD_END.xlsx", "BD_ROTAS.xlsx", "DB_BARRAS.xlsx", "DB_BLITZ.xlsx", _
-                 "DB_DEVOLUCAO.xlsx", "DB_ENTRADA_NOTAS.xlsx", "DB_ESTQ_ENTR.xlsx", _
+                 "DB_DEVOLUCAO.xlsx", "DB_ENTRADA_NOTAS.xlsx", "DB_ATENDIMENTO.xlsx", "DB_ESTQ_ENTR.xlsx", _
                  "DB_LOG_END.xlsx", "DB_PEDIDO_DIRETO.xlsx", "DB_PROD_BLITZ.xlsx", _
                  "DB_PROD_VOL.xlsx", "DB_GESTAO_ESTQ.xlsx", "DB_TERMO.xlsx", "DB_USUARIO.xlsx")
 

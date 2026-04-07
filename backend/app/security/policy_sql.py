@@ -2,6 +2,7 @@ from __future__ import annotations
 
 APP_TABLES_WITH_CD = [
     "db_entrada_notas",
+    "db_atendimento",
     "db_avulso",
     "db_usuario",
     "db_devolucao",

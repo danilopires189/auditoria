@@ -26,6 +26,8 @@ tables:
     refresh_before_load: false
     types:
       cd: "integer"
+      dh_consistida: "timestamp"
+      dh_liberacao: "timestamp"
       transportadora: "text"
       forn: "text"
       seq_entrada: "bigint"
@@ -36,6 +38,34 @@ tables:
       un_por_cx: "integer"
       qtd_total: "integer"
       vl_tt: "numeric"
+
+  db_atendimento:
+    file: "DB_ATENDIMENTO.xlsx"
+    sheet: "DB_ATENDIMENTO"
+    mode: "full_replace"
+    unique_keys: []
+    required_columns: ["cd", "pedido", "coddv", "ocorrencia"]
+    refresh_before_load: false
+    types:
+      cd: "integer"
+      pedido: "bigint"
+      origem: "text"
+      coddv: "integer"
+      descricao: "text"
+      ocorrencia: "timestamp"
+      caixa: "text"
+      filial: "bigint"
+      qtd_caixa: "integer"
+      qtd_acertada: "integer"
+      dif: "integer"
+      estoque: "integer"
+      mat: "text"
+      endereco: "text"
+      descricao_zona: "text"
+      rua: "text"
+      dat_ult_compra: "date"
+      qtd_ult_compra: "integer"
+      emb_exp: "integer"
 
   db_avulso:
     file: "BD_AVULSO.xlsx"

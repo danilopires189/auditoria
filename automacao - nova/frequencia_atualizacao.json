@@ -32,10 +32,11 @@
       "intervalo_minutos": 60,
       "descricao": "Atualiza a cada 1 hora",
       "arquivos": [
+        "DB_ATENDIMENTO.xlsx",
         "DB_TERMO.xlsx",
         "DB_PEDIDO_DIRETO.xlsx",
         "DB_PROD_BLITZ.xlsx",
-        "DB_ESTQ_ENTR.xlsx",
+        "DB_ESTQ_ENTR.xlsx",
         "DB_BLITZ.xlsx"
       ]
     }

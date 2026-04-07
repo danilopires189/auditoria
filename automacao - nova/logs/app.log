@@ -3729,3 +3729,111 @@ Traceback (most recent call last):
 psycopg2.errors.QueryCanceled: canceling statement due to statement timeout
 CONTEXT:  COPY db_estq_entr, line 739474: "10,332305,0,0,\N,bcc0c498-6d89-4bd0-a4e1-4d21501c13ba,DB_ESTQ_ENTR.xlsx,739475,2026-04-07 14:36:48.0..."
 
+2026-04-07 16:29:08.912 | ERROR    | app.cli.app:_exit_with_error:57 - command failed
+Traceback (most recent call last):
+
+  File "C:\PROJETOS\AUDITORIA\backend\main.py", line 22, in <module>
+    run_cli()
+    └ <function run at 0x000001798B6C3F60>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\cli\app.py", line 389, in run
+    cli()
+    └ <typer.main.Typer object at 0x00000179FBCBB290>
+
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\main.py", line 1135, in __call__
+    return get_command(self)(*args, **kwargs)
+           │           │      │       └ {}
+           │           │      └ ()
+           │           └ <typer.main.Typer object at 0x00000179FBCBB290>
+           └ <function get_command at 0x00000179FC434C20>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           │    │     │       └ {}
+           │    │     └ ()
+           │    └ <function TyperGroup.main at 0x00000179FC434720>
+           └ <TyperGroup >
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\core.py", line 813, in main
+    return _main(
+           └ <function _main at 0x00000179FC413380>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\core.py", line 189, in _main
+    rv = self.invoke(ctx)
+         │    │      └ <click.core.Context object at 0x000001798B5C7CE0>
+         │    └ <function Group.invoke at 0x00000179FC10ACA0>
+         └ <TyperGroup >
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1873, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+           │               │       │       │      └ <click.core.Context object at 0x00000179FFE7CDA0>
+           │               │       │       └ <function Command.invoke at 0x00000179FC109A80>
+           │               │       └ <TyperCommand bootstrap>
+           │               └ <click.core.Context object at 0x00000179FFE7CDA0>
+           └ <function Group.invoke.<locals>._process_result at 0x000001798B6C9300>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           │   │      │    │           │   └ {'config': 'c:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'c:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           │   │      │    │           └ <click.core.Context object at 0x00000179FFE7CDA0>
+           │   │      │    └ <function bootstrap_command at 0x00000179FBB7D120>
+           │   │      └ <TyperCommand bootstrap>
+           │   └ <function Context.invoke at 0x00000179FC108CC0>
+           └ <click.core.Context object at 0x00000179FFE7CDA0>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+           │         │       └ {'config': 'c:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'c:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           │         └ ()
+           └ <function bootstrap_command at 0x00000179FBB7D120>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\main.py", line 1514, in wrapper
+    return callback(**use_params)
+           │          └ {'config': 'c:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'c:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           └ <function bootstrap_command at 0x000001798B6C8040>
+
+> File "C:\PROJETOS\AUDITORIA\backend\app\cli\app.py", line 107, in bootstrap_command
+    result = service.bootstrap()
+             │       └ <function SyncService.bootstrap at 0x000001798B5C32E0>
+             └ <app.sync_service.SyncService object at 0x000001798BBCCAA0>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\sync_service.py", line 59, in bootstrap
+    migration_results = apply_migrations(self.engine, sql_dir)
+                        │                │    │       └ WindowsPath('C:/PROJETOS/AUDITORIA/backend/app/ddl/sql')
+                        │                │    └ Engine(postgresql+psycopg2://postgres.gpgqklqhomsaomdnccvu:***@aws-1-sa-east-1.pooler.supabase.com:5432/postgres)
+                        │                └ <app.sync_service.SyncService object at 0x000001798BBCCAA0>
+                        └ <function apply_migrations at 0x000001798B5C22A0>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\ddl\migrator.py", line 55, in apply_migrations
+    raise RuntimeError(
+
+RuntimeError: Migration checksum mismatch for V370__db_atendimento_and_entrada_notas_new_columns.sql. Create a new versioned migration instead of editing applied files.
+2026-04-07 16:37:13.642 | ERROR    | app.sync_service:_run_sync:527 - table sync failed: db_atendimento
+Traceback (most recent call last):
+
+  File "main.py", line 22, in <module>
+
+  File "app\cli\app.py", line 389, in run
+
+  File "typer\main.py", line 1135, in __call__
+
+  File "click\core.py", line 1485, in __call__
+
+  File "typer\core.py", line 813, in main
+
+  File "typer\core.py", line 189, in _main
+
+  File "click\core.py", line 1873, in invoke
+
+  File "click\core.py", line 1269, in invoke
+
+  File "click\core.py", line 824, in invoke
+
+  File "typer\main.py", line 1514, in wrapper
+
+  File "app\cli\app.py", line 134, in validate_command
+
+  File "app\sync_service.py", line 130, in validate_only
+
+> File "app\sync_service.py", line 470, in _run_sync
+
+  File "app\sync_service.py", line 201, in _prepare_table_dataset
+
+  File "app\sync_service.py", line 166, in _effective_types
+
+  File "app\etl\table_specs.py", line 445, in get_table_spec
+
+KeyError: 'Unknown table spec: db_atendimento'
