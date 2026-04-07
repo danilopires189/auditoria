@@ -12929,33 +12929,17 @@ small {
 }
 
 .gestao-op-preview-history {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 8px;
+  display: flex;
   min-height: 118px;
   max-height: 118px;
   min-width: 0;
-}
-
-.gestao-op-preview-history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.gestao-op-preview-history-head span,
-.gestao-op-preview-history-head strong {
-  color: #35516e;
-  font-size: 0.8rem;
-  font-weight: 800;
-  line-height: 1.1;
 }
 
 .gestao-op-preview-history-list {
   display: grid;
   align-content: start;
   gap: 7px;
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
@@ -12965,7 +12949,7 @@ small {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  align-items: start;
+  align-items: center;
   padding-bottom: 6px;
   border-bottom: 1px solid rgba(94, 122, 153, 0.14);
 }
@@ -12975,24 +12959,11 @@ small {
   padding-bottom: 0;
 }
 
-.gestao-op-preview-history-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.gestao-op-preview-history-copy span {
+.gestao-op-preview-history-row span {
   color: #173452;
   font-size: 0.82rem;
   font-weight: 700;
   line-height: 1.25;
-}
-
-.gestao-op-preview-history-copy small {
-  color: #70859b;
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1.2;
 }
 
 .gestao-op-preview-history-row strong {
@@ -13783,19 +13754,15 @@ small {
   }
 
   .gestao-op-preview-history {
-    gap: 6px;
     min-height: 104px;
     max-height: 104px;
   }
 
-  .gestao-op-preview-history-head span,
-  .gestao-op-preview-history-head strong,
   .gestao-op-preview-history-row strong,
-  .gestao-op-preview-history-copy span {
+  .gestao-op-preview-history-row span {
     font-size: 0.76rem;
   }
 
-  .gestao-op-preview-history-copy small,
   .gestao-op-preview-history-empty {
     font-size: 0.68rem;
   }

@@ -110,9 +110,12 @@ function formatCurrency(value: number | null): string {
   return `R$ ${formatNumber(value)}`;
 }
 
-function formatOptionalInteger(value: number | null): string {
-  if (value == null || !Number.isFinite(value)) return "-";
-  return formatInteger(value);
+function toFiniteQuantity(value: number | null): number {
+  return value != null && Number.isFinite(value) ? value : 0;
+}
+
+function formatUnitQuantity(value: number): string {
+  return `${formatNumber(value)} un`;
 }
 
 function formatInputCoddv(value: number): string {
@@ -330,13 +333,11 @@ function previewHistoryErrorMessage(error: unknown): string {
 }
 
 function PreviewHistoryBlock({
-  title,
   rows,
   loading,
   errorMessage
 }: {
-  title: string;
-  rows: GestaoEstoqueProductHistoryRow[];
+  rows: Array<{ data_mov: string; qtd_mov: number }>;
   loading: boolean;
   errorMessage: string | null;
 }) {
@@ -352,27 +353,38 @@ function PreviewHistoryBlock({
     content = (
       <div className="gestao-op-preview-history-list">
         {rows.map((row, index) => (
-          <div key={`${title}:${row.data_mov}:${row.tipo_movimentacao}:${index}`} className="gestao-op-preview-history-row">
-            <div className="gestao-op-preview-history-copy">
-              <span>{formatDate(row.data_mov)}</span>
-              <small>{row.tipo_movimentacao}</small>
-            </div>
-            <strong>{formatOptionalInteger(row.qtd_mov)}</strong>
+          <div key={`${row.data_mov}:${index}`} className="gestao-op-preview-history-row">
+            <span>{formatDate(row.data_mov)}</span>
+            <strong>{formatUnitQuantity(row.qtd_mov)}</strong>
           </div>
         ))}
       </div>
     );
   }
 
-  return (
-    <div className="gestao-op-preview-history">
-      <div className="gestao-op-preview-history-head">
-        <span>{title}</span>
-        <strong>{rows.length}</strong>
-      </div>
-      {content}
-    </div>
-  );
+  return <div className="gestao-op-preview-history">{content}</div>;
+}
+
+function buildPreviewHistorySummary(rows: GestaoEstoqueProductHistoryRow[]): {
+  totalQuantity: number;
+  rows: Array<{ data_mov: string; qtd_mov: number }>;
+} {
+  const quantityByDate = new Map<string, number>();
+
+  for (const row of rows) {
+    const movementDate = String(row.data_mov ?? "").trim();
+    if (!movementDate) continue;
+    quantityByDate.set(movementDate, (quantityByDate.get(movementDate) ?? 0) + toFiniteQuantity(row.qtd_mov));
+  }
+
+  const summaryRows = [...quantityByDate.entries()]
+    .map(([data_mov, qtd_mov]) => ({ data_mov, qtd_mov }))
+    .sort((left, right) => compareDateDesc(left.data_mov, right.data_mov));
+
+  return {
+    totalQuantity: summaryRows.reduce((total, row) => total + row.qtd_mov, 0),
+    rows: summaryRows
+  };
 }
 
 export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePageProps) {
@@ -451,12 +463,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const hasSearchInput = searchInput.trim().length > 0;
   const currentReviewStatus = dayReviewState?.review_status ?? "pendente";
   const hasReviewers = (dayReviewState?.reviewers.length ?? 0) > 0;
-  const previewEntryHistoryRows = useMemo(
-    () => previewHistoryRows.filter((row) => row.movement_group === "entrada"),
+  const previewEntryHistory = useMemo(
+    () => buildPreviewHistorySummary(previewHistoryRows.filter((row) => row.movement_group === "entrada")),
     [previewHistoryRows]
   );
-  const previewExitHistoryRows = useMemo(
-    () => previewHistoryRows.filter((row) => row.movement_group === "saida"),
+  const previewExitHistory = useMemo(
+    () => buildPreviewHistorySummary(previewHistoryRows.filter((row) => row.movement_group === "saida")),
     [previewHistoryRows]
   );
 
@@ -1591,22 +1603,20 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     <dd>{formatInteger(preview.qtd_est_disp)}</dd>
                   </div>
                   <div className="gestao-op-preview-item gestao-op-preview-item--history">
-                    <dt><PreviewLabel desktop="Histórico de Entrada" mobile="Entradas" /></dt>
+                    <dt><PreviewLabel desktop={`Histórico de Entrada (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} mobile={`Entradas (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} /></dt>
                     <dd>
                       <PreviewHistoryBlock
-                        title="Entradas"
-                        rows={previewEntryHistoryRows}
+                        rows={previewEntryHistory.rows}
                         loading={busyPreviewHistory}
                         errorMessage={previewHistoryError}
                       />
                     </dd>
                   </div>
                   <div className="gestao-op-preview-item gestao-op-preview-item--history">
-                    <dt><PreviewLabel desktop="Histórico de Saída" mobile="Saídas" /></dt>
+                    <dt><PreviewLabel desktop={`Histórico de Saída (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} mobile={`Saídas (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} /></dt>
                     <dd>
                       <PreviewHistoryBlock
-                        title="Saídas"
-                        rows={previewExitHistoryRows}
+                        rows={previewExitHistory.rows}
                         loading={busyPreviewHistory}
                         errorMessage={previewHistoryError}
                       />
