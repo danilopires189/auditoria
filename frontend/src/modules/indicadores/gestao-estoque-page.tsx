@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -1422,67 +1423,70 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           </div>
         </article>
       </section>
-      {!isMobileAccordion && reportDialogOpen ? (
-        <div
-          className="confirm-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="gestao-estq-report-title"
-          onClick={closeReportDialog}
-        >
-          <div className="confirm-dialog surface-enter gestao-estq-report-dialog" onClick={(event) => event.stopPropagation()}>
-            <h3 id="gestao-estq-report-title">Exportar relatório Excel</h3>
-            <p>{`${displayCdName} · filtro ${formatMovementLabel(reportMovementFilter)}`}</p>
+      {!isMobileAccordion && reportDialogOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estq-report-title"
+              onClick={closeReportDialog}
+            >
+              <div className="confirm-dialog surface-enter gestao-estq-report-dialog" onClick={(event) => event.stopPropagation()}>
+                <h3 id="gestao-estq-report-title">Exportar relatório Excel</h3>
+                <p>{`${displayCdName} · filtro ${formatMovementLabel(reportMovementFilter)}`}</p>
 
-            <div className="gestao-estq-report-form">
-              <div className="gestao-estq-report-form-row">
-                <label>
-                  <span>Data inicial</span>
-                  <input
-                    type="date"
-                    value={reportDateStart}
-                    onChange={(event) => setReportDateStart(event.target.value)}
-                    disabled={reportBusy}
-                  />
-                </label>
-                <label>
-                  <span>Data final</span>
-                  <input
-                    type="date"
-                    value={reportDateEnd}
-                    onChange={(event) => setReportDateEnd(event.target.value)}
-                    disabled={reportBusy}
-                  />
-                </label>
+                <div className="gestao-estq-report-form">
+                  <div className="gestao-estq-report-form-row">
+                    <label>
+                      <span>Data inicial</span>
+                      <input
+                        type="date"
+                        value={reportDateStart}
+                        onChange={(event) => setReportDateStart(event.target.value)}
+                        disabled={reportBusy}
+                      />
+                    </label>
+                    <label>
+                      <span>Data final</span>
+                      <input
+                        type="date"
+                        value={reportDateEnd}
+                        onChange={(event) => setReportDateEnd(event.target.value)}
+                        disabled={reportBusy}
+                      />
+                    </label>
+                  </div>
+
+                  <label>
+                    <span>Movimentação</span>
+                    <select
+                      value={reportMovementFilter}
+                      onChange={(event) => setReportMovementFilter(event.target.value as IndicadoresGestaoEstoqueMovementFilter)}
+                      disabled={reportBusy}
+                    >
+                      <option value="todas">Todas</option>
+                      <option value="entrada">Entrada</option>
+                      <option value="saida">Saída</option>
+                    </select>
+                  </label>
+
+                  {reportErrorMessage ? <div className="module-inline-error">{reportErrorMessage}</div> : null}
+                </div>
+
+                <div className="confirm-actions">
+                  <button className="btn btn-primary" type="button" onClick={() => void exportReportXlsx()} disabled={reportBusy}>
+                    {reportBusy ? "Gerando Excel..." : "Gerar Excel"}
+                  </button>
+                  <button className="btn btn-muted" type="button" onClick={closeReportDialog} disabled={reportBusy}>
+                    Fechar
+                  </button>
+                </div>
               </div>
-
-              <label>
-                <span>Movimentação</span>
-                <select
-                  value={reportMovementFilter}
-                  onChange={(event) => setReportMovementFilter(event.target.value as IndicadoresGestaoEstoqueMovementFilter)}
-                  disabled={reportBusy}
-                >
-                  <option value="todas">Todas</option>
-                  <option value="entrada">Entrada</option>
-                  <option value="saida">Saída</option>
-                </select>
-              </label>
-
-              {reportErrorMessage ? <div className="module-inline-error">{reportErrorMessage}</div> : null}
-            </div>
-
-            <div className="confirm-actions">
-              <button className="btn btn-primary" type="button" onClick={() => void exportReportXlsx()} disabled={reportBusy}>
-                {reportBusy ? "Gerando Excel..." : "Gerar Excel"}
-              </button>
-              <button className="btn btn-muted" type="button" onClick={closeReportDialog} disabled={reportBusy}>
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

@@ -3553,3 +3553,179 @@ Traceback (most recent call last):
   File "app\etl\table_specs.py", line 408, in get_table_spec
 
 KeyError: 'Unknown table spec: db_gestao_estq'
+2026-04-07 14:33:40.778 | ERROR    | app.sync_service:_run_sync:527 - table sync failed: db_end
+Traceback (most recent call last):
+
+  File "C:\PROJETOS\AUDITORIA\backend\main.py", line 22, in <module>
+    run_cli()
+    └ <function run at 0x0000028F98267EC0>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\cli\app.py", line 389, in run
+    cli()
+    └ <typer.main.Typer object at 0x0000028F8886B4A0>
+
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\main.py", line 1135, in __call__
+    return get_command(self)(*args, **kwargs)
+           │           │      │       └ {}
+           │           │      └ ()
+           │           └ <typer.main.Typer object at 0x0000028F8886B4A0>
+           └ <function get_command at 0x0000028F8A9B4C20>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           │    │     │       └ {}
+           │    │     └ ()
+           │    └ <function TyperGroup.main at 0x0000028F8A9B4720>
+           └ <TyperGroup >
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\core.py", line 813, in main
+    return _main(
+           └ <function _main at 0x0000028F8A993380>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\core.py", line 189, in _main
+    rv = self.invoke(ctx)
+         │    │      └ <click.core.Context object at 0x0000028F982295E0>
+         │    └ <function Group.invoke at 0x0000028F88CDECA0>
+         └ <TyperGroup >
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1873, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+           │               │       │       │      └ <click.core.Context object at 0x0000028F95D3FB00>
+           │               │       │       └ <function Command.invoke at 0x0000028F88CDDA80>
+           │               │       └ <TyperCommand sync>
+           │               └ <click.core.Context object at 0x0000028F95D3FB00>
+           └ <function Group.invoke.<locals>._process_result at 0x0000028F9826D260>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           │   │      │    │           │   └ {'config': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           │   │      │    │           └ <click.core.Context object at 0x0000028F95D3FB00>
+           │   │      │    └ <function sync_command at 0x0000028F9826C900>
+           │   │      └ <TyperCommand sync>
+           │   └ <function Context.invoke at 0x0000028F88CDCCC0>
+           └ <click.core.Context object at 0x0000028F95D3FB00>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+           │         │       └ {'config': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           │         └ ()
+           └ <function sync_command at 0x0000028F9826C900>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\main.py", line 1514, in wrapper
+    return callback(**use_params)
+           │          └ {'config': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           └ <function sync_command at 0x0000028F9826C180>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\cli\app.py", line 153, in sync_command
+    result = service.sync(
+             │       └ <function SyncService.sync at 0x0000028F98157420>
+             └ <app.sync_service.SyncService object at 0x0000028F98790EC0>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\sync_service.py", line 143, in sync
+    return self._run_sync(
+           │    └ <function SyncService._run_sync at 0x0000028F98157B00>
+           └ <app.sync_service.SyncService object at 0x0000028F98790EC0>
+
+> File "C:\PROJETOS\AUDITORIA\backend\app\sync_service.py", line 479, in _run_sync
+    rows_loaded = load_dataframe_to_staging(
+                  └ <function load_dataframe_to_staging at 0x0000028F98156700>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\etl\load\staging_loader.py", line 127, in load_dataframe_to_staging
+    _copy_single_batch(data, copy_sql, cursor)
+    │                  │     │         └ <cursor object at 0x0000028F98FDD0E0; closed: -1>
+    │                  │     └ 'COPY staging."db_end" ("cd", "coddv", "descricao", "endereco", "andar", "validade", "tipo", "run_id", "source_file", "source...
+    │                  └         cd   coddv  ... source_row_number                      ingested_at
+    │                    0        1  100137  ...                 2 2026-04-...
+    └ <function _copy_single_batch at 0x0000028F98156660>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\etl\load\staging_loader.py", line 81, in _copy_single_batch
+    cursor.copy_expert(copy_sql, csv_buffer)
+    │      │           │         └ <_io.StringIO object at 0x0000028F98EB65C0>
+    │      │           └ 'COPY staging."db_end" ("cd", "coddv", "descricao", "endereco", "andar", "validade", "tipo", "run_id", "source_file", "source...
+    │      └ <method 'copy_expert' of 'psycopg2.extensions.cursor' objects>
+    └ <cursor object at 0x0000028F98FDD0E0; closed: -1>
+
+psycopg2.errors.QueryCanceled: canceling statement due to statement timeout
+CONTEXT:  COPY db_end, line 313009: "4,536504,ESM RISQUE VIVA LADO CC 8ML,DB1 .029.003.242,\N,\N,SEP,bcc0c498-6d89-4bd0-a4e1-4d21501c13ba..."
+
+2026-04-07 14:40:02.481 | ERROR    | app.sync_service:_run_sync:527 - table sync failed: db_estq_entr
+Traceback (most recent call last):
+
+  File "C:\PROJETOS\AUDITORIA\backend\main.py", line 22, in <module>
+    run_cli()
+    └ <function run at 0x0000028F98267EC0>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\cli\app.py", line 389, in run
+    cli()
+    └ <typer.main.Typer object at 0x0000028F8886B4A0>
+
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\main.py", line 1135, in __call__
+    return get_command(self)(*args, **kwargs)
+           │           │      │       └ {}
+           │           │      └ ()
+           │           └ <typer.main.Typer object at 0x0000028F8886B4A0>
+           └ <function get_command at 0x0000028F8A9B4C20>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           │    │     │       └ {}
+           │    │     └ ()
+           │    └ <function TyperGroup.main at 0x0000028F8A9B4720>
+           └ <TyperGroup >
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\core.py", line 813, in main
+    return _main(
+           └ <function _main at 0x0000028F8A993380>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\core.py", line 189, in _main
+    rv = self.invoke(ctx)
+         │    │      └ <click.core.Context object at 0x0000028F982295E0>
+         │    └ <function Group.invoke at 0x0000028F88CDECA0>
+         └ <TyperGroup >
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1873, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+           │               │       │       │      └ <click.core.Context object at 0x0000028F95D3FB00>
+           │               │       │       └ <function Command.invoke at 0x0000028F88CDDA80>
+           │               │       └ <TyperCommand sync>
+           │               └ <click.core.Context object at 0x0000028F95D3FB00>
+           └ <function Group.invoke.<locals>._process_result at 0x0000028F9826D260>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           │   │      │    │           │   └ {'config': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           │   │      │    │           └ <click.core.Context object at 0x0000028F95D3FB00>
+           │   │      │    └ <function sync_command at 0x0000028F9826C900>
+           │   │      └ <TyperCommand sync>
+           │   └ <function Context.invoke at 0x0000028F88CDCCC0>
+           └ <click.core.Context object at 0x0000028F95D3FB00>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+           │         │       └ {'config': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           │         └ ()
+           └ <function sync_command at 0x0000028F9826C900>
+  File "C:\Users\Samsung\AppData\Local\Programs\Python\Python312\Lib\site-packages\typer\main.py", line 1514, in wrapper
+    return callback(**use_params)
+           │          └ {'config': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\config.yml', 'env_file': 'C:\\PROJETOS\\AUDITORIA\\automacao - nova\\....
+           └ <function sync_command at 0x0000028F9826C180>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\cli\app.py", line 153, in sync_command
+    result = service.sync(
+             │       └ <function SyncService.sync at 0x0000028F98157420>
+             └ <app.sync_service.SyncService object at 0x0000028F98790EC0>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\sync_service.py", line 143, in sync
+    return self._run_sync(
+           │    └ <function SyncService._run_sync at 0x0000028F98157B00>
+           └ <app.sync_service.SyncService object at 0x0000028F98790EC0>
+
+> File "C:\PROJETOS\AUDITORIA\backend\app\sync_service.py", line 479, in _run_sync
+    rows_loaded = load_dataframe_to_staging(
+                  └ <function load_dataframe_to_staging at 0x0000028F98156700>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\etl\load\staging_loader.py", line 127, in load_dataframe_to_staging
+    _copy_single_batch(data, copy_sql, cursor)
+    │                  │     │         └ <cursor object at 0x0000028F98FDD620; closed: -1>
+    │                  │     └ 'COPY staging."db_estq_entr" ("cd", "coddv", "qtd_est_atual", "qtd_est_disp", "dat_ult_compra", "run_id", "source_file", "sou...
+    │                  └         cd   coddv  ...  source_row_number                      ingested_at
+    │                    0        1  421863  ...                  2 2026-0...
+    └ <function _copy_single_batch at 0x0000028F98156660>
+
+  File "C:\PROJETOS\AUDITORIA\backend\app\etl\load\staging_loader.py", line 81, in _copy_single_batch
+    cursor.copy_expert(copy_sql, csv_buffer)
+    │      │           │         └ <_io.StringIO object at 0x0000028F98A7B580>
+    │      │           └ 'COPY staging."db_estq_entr" ("cd", "coddv", "qtd_est_atual", "qtd_est_disp", "dat_ult_compra", "run_id", "source_file", "sou...
+    │      └ <method 'copy_expert' of 'psycopg2.extensions.cursor' objects>
+    └ <cursor object at 0x0000028F98FDD620; closed: -1>
+
+psycopg2.errors.QueryCanceled: canceling statement due to statement timeout
+CONTEXT:  COPY db_estq_entr, line 739474: "10,332305,0,0,\N,bcc0c498-6d89-4bd0-a4e1-4d21501c13ba,DB_ESTQ_ENTR.xlsx,739475,2026-04-07 14:36:48.0..."
+

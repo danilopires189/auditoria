@@ -237,8 +237,8 @@ begin
     return query
     with rows_base as (
         select *
-        from app.indicadores_gestao_estq_report_rows(v_cd, p_dt_ini, p_dt_fim, p_movement_filter)
-        where movement_group = v_rank_group
+        from app.indicadores_gestao_estq_report_rows(v_cd, p_dt_ini, p_dt_fim, p_movement_filter) as report_row
+        where report_row.movement_group = v_rank_group
     )
     select
         r.coddv,
