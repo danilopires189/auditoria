@@ -6,7 +6,8 @@ import type {
   GestaoEstoqueDayReviewState,
   GestaoEstoqueDayReviewStatus,
   GestaoEstoqueItemRow,
-  GestaoEstoqueMovementType
+  GestaoEstoqueMovementType,
+  GestaoEstoqueProductHistoryRow
 } from "./types";
 
 function extractRawErrorMessage(error: unknown): string {
@@ -59,6 +60,12 @@ function parseNullableNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseNullableInteger(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function parseString(value: unknown, fallback = ""): string {
   if (typeof value === "string") return value;
   if (value == null) return fallback;
@@ -79,6 +86,10 @@ function parseBoolean(value: unknown): boolean {
 
 function parseMovementType(value: unknown): GestaoEstoqueMovementType {
   return String(value).trim().toLowerCase() === "entrada" ? "entrada" : "baixa";
+}
+
+function parseHistoryMovementGroup(value: unknown): GestaoEstoqueProductHistoryRow["movement_group"] {
+  return String(value).trim().toLowerCase() === "entrada" ? "entrada" : "saida";
 }
 
 function parseDayReviewStatus(value: unknown): GestaoEstoqueDayReviewStatus {
@@ -120,6 +131,15 @@ function mapItemRow(raw: Record<string, unknown>): GestaoEstoqueItemRow {
     updated_at: parseString(raw.updated_at),
     resolved_refreshed_at: parseNullableString(raw.resolved_refreshed_at),
     is_frozen: parseBoolean(raw.is_frozen)
+  };
+}
+
+function mapProductHistoryRow(raw: Record<string, unknown>): GestaoEstoqueProductHistoryRow {
+  return {
+    movement_group: parseHistoryMovementGroup(raw.movement_group),
+    data_mov: parseString(raw.data_mov),
+    qtd_mov: parseNullableInteger(raw.qtd_mov),
+    tipo_movimentacao: parseString(raw.tipo_movimentacao, "-")
   };
 }
 
@@ -182,6 +202,22 @@ export async function fetchGestaoEstoqueStockUpdatedAt(cd: number | null): Promi
   if (error) throw new Error(normalizeGestaoEstoqueError(error));
   const first = firstRecord(data);
   return parseNullableString(first?.updated_at);
+}
+
+export async function fetchGestaoEstoqueProductHistory(params: {
+  cd: number | null;
+  coddv: number;
+}): Promise<GestaoEstoqueProductHistoryRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_gestao_estoque_product_history", {
+    p_cd: params.cd,
+    p_coddv: params.coddv
+  });
+  if (error) throw new Error(normalizeGestaoEstoqueError(error));
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+    .map(mapProductHistoryRow);
 }
 
 export async function fetchGestaoEstoqueDayReviewState(params: {

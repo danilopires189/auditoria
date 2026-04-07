@@ -32,6 +32,13 @@ export interface GestaoEstoqueDayReviewState {
   reviewers: GestaoEstoqueDayReviewEntry[];
 }
 
+export interface GestaoEstoqueProductHistoryRow {
+  movement_group: "entrada" | "saida";
+  data_mov: string;
+  qtd_mov: number | null;
+  tipo_movimentacao: string;
+}
+
 export interface GestaoEstoqueItemRow {
   id: string;
   movement_date: string;

@@ -17,6 +17,7 @@ import {
   fetchGestaoEstoqueAvailableDays,
   fetchGestaoEstoqueDayReviewState,
   fetchGestaoEstoqueList,
+  fetchGestaoEstoqueProductHistory,
   fetchGestaoEstoqueStockUpdatedAt,
   normalizeGestaoEstoqueError,
   setGestaoEstoqueDayReviewStatus,
@@ -28,7 +29,8 @@ import type {
   GestaoEstoqueDayReviewStatus,
   GestaoEstoqueItemRow,
   GestaoEstoqueModuleProfile,
-  GestaoEstoqueMovementType
+  GestaoEstoqueMovementType,
+  GestaoEstoqueProductHistoryRow
 } from "./types";
 
 interface GestaoEstoquePageProps {
@@ -106,6 +108,11 @@ function formatNumber(value: number): string {
 function formatCurrency(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "-";
   return `R$ ${formatNumber(value)}`;
+}
+
+function formatOptionalInteger(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return formatInteger(value);
 }
 
 function formatInputCoddv(value: number): string {
@@ -309,6 +316,65 @@ function PreviewLabel({
   );
 }
 
+function previewHistoryErrorMessage(error: unknown): string {
+  const message = normalizeGestaoEstoqueError(error);
+  if (
+    message === "Sessão inválida. Faça login novamente." ||
+    message === "Sessão expirada. Faça login novamente." ||
+    message === "CD não definido para este usuário." ||
+    message === "Sem acesso ao CD selecionado."
+  ) {
+    return message;
+  }
+  return "Histórico indisponível.";
+}
+
+function PreviewHistoryBlock({
+  title,
+  rows,
+  loading,
+  errorMessage
+}: {
+  title: string;
+  rows: GestaoEstoqueProductHistoryRow[];
+  loading: boolean;
+  errorMessage: string | null;
+}) {
+  let content = null;
+
+  if (loading) {
+    content = <p className="gestao-op-preview-history-empty">Carregando...</p>;
+  } else if (errorMessage) {
+    content = <p className="gestao-op-preview-history-empty">{errorMessage}</p>;
+  } else if (rows.length === 0) {
+    content = <p className="gestao-op-preview-history-empty">Sem histórico.</p>;
+  } else {
+    content = (
+      <div className="gestao-op-preview-history-list">
+        {rows.map((row, index) => (
+          <div key={`${title}:${row.data_mov}:${row.tipo_movimentacao}:${index}`} className="gestao-op-preview-history-row">
+            <div className="gestao-op-preview-history-copy">
+              <span>{formatDate(row.data_mov)}</span>
+              <small>{row.tipo_movimentacao}</small>
+            </div>
+            <strong>{formatOptionalInteger(row.qtd_mov)}</strong>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="gestao-op-preview-history">
+      <div className="gestao-op-preview-history-head">
+        <span>{title}</span>
+        <strong>{rows.length}</strong>
+      </div>
+      {content}
+    </div>
+  );
+}
+
 export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePageProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -331,6 +397,9 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [quantidadeInput, setQuantidadeInput] = useState("");
   const [preview, setPreview] = useState<BuscaProdutoLookupResult | null>(null);
+  const [previewHistoryRows, setPreviewHistoryRows] = useState<GestaoEstoqueProductHistoryRow[]>([]);
+  const [busyPreviewHistory, setBusyPreviewHistory] = useState(false);
+  const [previewHistoryError, setPreviewHistoryError] = useState<string | null>(null);
   const [busyLookup, setBusyLookup] = useState(false);
   const [busyList, setBusyList] = useState(false);
   const [busyExport, setBusyExport] = useState(false);
@@ -382,6 +451,14 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const hasSearchInput = searchInput.trim().length > 0;
   const currentReviewStatus = dayReviewState?.review_status ?? "pendente";
   const hasReviewers = (dayReviewState?.reviewers.length ?? 0) > 0;
+  const previewEntryHistoryRows = useMemo(
+    () => previewHistoryRows.filter((row) => row.movement_group === "entrada"),
+    [previewHistoryRows]
+  );
+  const previewExitHistoryRows = useMemo(
+    () => previewHistoryRows.filter((row) => row.movement_group === "saida"),
+    [previewHistoryRows]
+  );
 
   const focusSearch = useCallback(() => {
     disableSearchSoftKeyboard();
@@ -560,6 +637,9 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
 
   const clearPreview = useCallback(() => {
     setPreview(null);
+    setPreviewHistoryRows([]);
+    setPreviewHistoryError(null);
+    setBusyPreviewHistory(false);
     setSearchInput("");
     setBarcodeValidationState("idle");
     setQuantidadeInput("");
@@ -616,6 +696,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       }
 
       setPreview(found);
+      setPreviewHistoryRows([]);
+      setPreviewHistoryError(null);
       setStatusMessage("Produto localizado com sucesso.");
       setBarcodeValidationState("valid");
       setQuantidadeInput("");
@@ -658,6 +740,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
 
     setSearchInput(normalized);
     setPreview(null);
+    setPreviewHistoryRows([]);
+    setPreviewHistoryError(null);
     setErrorMessage(null);
     setStatusMessage(null);
     setBarcodeValidationState("idle");
@@ -678,6 +762,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     const nextValue = sanitizeSearchCode(event.target.value);
     setSearchInput(nextValue);
     setPreview(null);
+    setPreviewHistoryRows([]);
+    setPreviewHistoryError(null);
     setErrorMessage(null);
     setStatusMessage(null);
     setBarcodeValidationState("idle");
@@ -1012,6 +1098,42 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     if (!pendingId) return;
     focusRow(pendingId);
   }, [rows, focusRow]);
+
+  useEffect(() => {
+    if (activeCd == null || preview == null) {
+      setPreviewHistoryRows([]);
+      setPreviewHistoryError(null);
+      setBusyPreviewHistory(false);
+      return;
+    }
+
+    let cancelled = false;
+    setBusyPreviewHistory(true);
+    setPreviewHistoryError(null);
+    setPreviewHistoryRows([]);
+
+    void fetchGestaoEstoqueProductHistory({
+      cd: activeCd,
+      coddv: preview.coddv
+    })
+      .then((nextRows) => {
+        if (cancelled) return;
+        setPreviewHistoryRows(nextRows);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setPreviewHistoryRows([]);
+        setPreviewHistoryError(previewHistoryErrorMessage(error));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setBusyPreviewHistory(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCd, preview?.coddv]);
 
   useEffect(() => {
     if (isHistorical) return;
@@ -1436,8 +1558,20 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
             {preview ? (
               <div className="gestao-op-preview">
                 <div className="gestao-op-preview-head">
-                  <strong>{preview.descricao}</strong>
-                  <span>CODDV {preview.coddv}</span>
+                  <div className="gestao-op-preview-head-copy">
+                    <strong>{preview.descricao}</strong>
+                    <span>CODDV {preview.coddv}</span>
+                  </div>
+                  <div className="gestao-op-preview-head-meta">
+                    <div className="gestao-op-preview-head-chip">
+                      <small>Últ. compra</small>
+                      <strong>{formatDate(preview.dat_ult_compra)}</strong>
+                    </div>
+                    <div className="gestao-op-preview-head-chip">
+                      <small>R$ unit.</small>
+                      <strong>{formatCurrency(preview.custo_unitario)}</strong>
+                    </div>
+                  </div>
                 </div>
                 <dl>
                   <div className="gestao-op-preview-item gestao-op-preview-item--sep">
@@ -1456,13 +1590,27 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     <dt><PreviewLabel desktop="Estoque disponível" mobile="Est. disponível" /></dt>
                     <dd>{formatInteger(preview.qtd_est_disp)}</dd>
                   </div>
-                  <div className="gestao-op-preview-item gestao-op-preview-item--meta">
-                    <dt><PreviewLabel desktop="Últ. compra" mobile="Últ. compra" /></dt>
-                    <dd>{formatDate(preview.dat_ult_compra)}</dd>
+                  <div className="gestao-op-preview-item gestao-op-preview-item--history">
+                    <dt><PreviewLabel desktop="Histórico de Entrada" mobile="Entradas" /></dt>
+                    <dd>
+                      <PreviewHistoryBlock
+                        title="Entradas"
+                        rows={previewEntryHistoryRows}
+                        loading={busyPreviewHistory}
+                        errorMessage={previewHistoryError}
+                      />
+                    </dd>
                   </div>
-                  <div className="gestao-op-preview-item gestao-op-preview-item--meta">
-                    <dt><PreviewLabel desktop="R$ unitário" mobile="R$ unit." /></dt>
-                    <dd>{formatCurrency(preview.custo_unitario)}</dd>
+                  <div className="gestao-op-preview-item gestao-op-preview-item--history">
+                    <dt><PreviewLabel desktop="Histórico de Saída" mobile="Saídas" /></dt>
+                    <dd>
+                      <PreviewHistoryBlock
+                        title="Saídas"
+                        rows={previewExitHistoryRows}
+                        loading={busyPreviewHistory}
+                        errorMessage={previewHistoryError}
+                      />
+                    </dd>
                   </div>
                 </dl>
               </div>
