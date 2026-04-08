@@ -13190,6 +13190,10 @@ small {
   min-width: 0;
 }
 
+.gestao-op-table-head.is-historical {
+  grid-template-columns: minmax(260px, 2.7fr) minmax(72px, 0.65fr) minmax(84px, 0.75fr) minmax(118px, 1fr) minmax(108px, 0.85fr);
+}
+
 .gestao-op-table-head span {
   color: #6a8098;
   font-size: 0.78rem;
@@ -13250,6 +13254,10 @@ small {
   min-width: 0;
 }
 
+.gestao-op-row.is-historical {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .gestao-op-row.is-editing {
   border-color: rgba(31, 95, 168, 0.28);
   box-shadow: 0 0 0 4px rgba(41, 115, 199, 0.08);
@@ -13265,6 +13273,10 @@ small {
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+.gestao-op-row-main-table.is-historical {
+  grid-template-columns: minmax(260px, 2.7fr) minmax(72px, 0.65fr) minmax(84px, 0.75fr) minmax(118px, 1fr) minmax(108px, 0.85fr);
 }
 
 .gestao-op-row-title {
@@ -13727,6 +13739,10 @@ small {
     gap: 8px;
   }
 
+  .gestao-op-row-main-table.is-historical {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .gestao-op-row-expand {
     grid-column: 1 / -1;
   }
@@ -14028,6 +14044,10 @@ small {
   .gestao-op-row-cell--unit,
   .gestao-op-row-cell--stock {
     display: none;
+  }
+
+  .gestao-op-row-main-table.is-historical .gestao-op-row-cell--stock {
+    display: block;
   }
 
   .gestao-op-row-cell-label {

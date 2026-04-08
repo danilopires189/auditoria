@@ -63,6 +63,8 @@ export interface GestaoEstoqueItemRow {
   updated_at: string;
   resolved_refreshed_at: string | null;
   is_frozen: boolean;
+  qtd_mov_dia: number;
+  valor_mov_dia: number;
 }
 
 export interface GestaoEstoqueAddResult {

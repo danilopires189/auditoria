@@ -449,6 +449,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     if (!listSearchQuery) return rows;
     return rows.filter((row) => buildRowSearchBlob(row).includes(listSearchQuery));
   }, [listSearchQuery, rows]);
+  const listPanelTitle = isHistorical ? "Lista de Gestão - Somente leitura" : "Lista da visão atual";
   const listCountLabel = useMemo(() => {
     if (listSearchQuery) {
       return `${formatInteger(filteredRows.length)} de ${formatInteger(rows.length)} registro(s)`;
@@ -1638,7 +1639,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
 
         <article className="module-card module-card-static gestao-op-list-panel">
           <div className="gestao-op-panel-head">
-            <h3>Lista da visão atual</h3>
+            <h3>{listPanelTitle}</h3>
             <span>{listCountLabel}</span>
           </div>
           <div className="gestao-op-list-toolbar">
@@ -1660,14 +1661,14 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
             <div className="coleta-empty">Nenhum item encontrado para o filtro informado.</div>
           ) : (
             <div className="gestao-op-table">
-              <div className="gestao-op-table-head" role="row">
+              <div className={`gestao-op-table-head${isHistorical ? " is-historical" : ""}`} role="row">
                 <span>Produto</span>
-                <span>Qtd</span>
-                <span>Últ. compra</span>
-                <span>Custo unit.</span>
+                <span>{isHistorical ? "Solic." : "Qtd"}</span>
+                {isHistorical ? <span>Atendido</span> : <span>Últ. compra</span>}
+                {isHistorical ? null : <span>Custo unit.</span>}
                 <span>Custo total</span>
-                <span>Estoque</span>
-                <span className="gestao-op-table-head-actions">Ações</span>
+                <span>{isHistorical ? "Est. dia" : "Estoque"}</span>
+                {isHistorical ? null : <span className="gestao-op-table-head-actions">Ações</span>}
               </div>
               {filteredRows.map((row) => {
                 const isEditing = editingItemId === row.id;
@@ -1679,10 +1680,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                       if (node) rowRefs.current.set(row.id, node);
                       else rowRefs.current.delete(row.id);
                     }}
-                    className={`gestao-op-row${isEditing ? " is-editing" : ""}`}
+                    className={`gestao-op-row${isEditing ? " is-editing" : ""}${isHistorical ? " is-historical" : ""}`}
                     tabIndex={-1}
                   >
-                    <div className="gestao-op-row-main gestao-op-row-main-table">
+                    <div className={`gestao-op-row-main gestao-op-row-main-table${isHistorical ? " is-historical" : ""}`}>
                       <button
                         className="gestao-op-row-expand"
                         type="button"
@@ -1700,30 +1701,39 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         </span>
                       </button>
                       <span className="gestao-op-row-cell gestao-op-row-cell--qty">
-                        <span className="gestao-op-row-cell-label">Qtd</span>
+                        <span className="gestao-op-row-cell-label">{isHistorical ? "Solic." : "Qtd"}</span>
                         <span className="gestao-op-row-cell-value">{formatInteger(row.quantidade)}</span>
                       </span>
-                      <span className="gestao-op-row-cell gestao-op-row-cell--purchase">
-                        <span className="gestao-op-row-cell-label">Últ. compra</span>
-                        <span className="gestao-op-row-cell-value">{formatDate(row.dat_ult_compra)}</span>
-                      </span>
-                      <span className="gestao-op-row-cell gestao-op-row-cell--unit">
-                        <span className="gestao-op-row-cell-label">Custo unit.</span>
-                        <span className="gestao-op-row-cell-value">{formatCurrency(row.custo_unitario)}</span>
-                      </span>
+                      {isHistorical ? (
+                        <span className="gestao-op-row-cell gestao-op-row-cell--fulfilled">
+                          <span className="gestao-op-row-cell-label">Atendido</span>
+                          <span className="gestao-op-row-cell-value">{formatInteger(row.qtd_mov_dia)}</span>
+                        </span>
+                      ) : (
+                        <span className="gestao-op-row-cell gestao-op-row-cell--purchase">
+                          <span className="gestao-op-row-cell-label">Últ. compra</span>
+                          <span className="gestao-op-row-cell-value">{formatDate(row.dat_ult_compra)}</span>
+                        </span>
+                      )}
+                      {isHistorical ? null : (
+                        <span className="gestao-op-row-cell gestao-op-row-cell--unit">
+                          <span className="gestao-op-row-cell-label">Custo unit.</span>
+                          <span className="gestao-op-row-cell-value">{formatCurrency(row.custo_unitario)}</span>
+                        </span>
+                      )}
                       <span className="gestao-op-row-cell gestao-op-row-cell--total">
                         <span className="gestao-op-row-cell-label">Custo total</span>
-                        <span className="gestao-op-row-cell-value">{formatCurrency(row.custo_total)}</span>
+                        <span className="gestao-op-row-cell-value">{formatCurrency(isHistorical ? row.valor_mov_dia : row.custo_total)}</span>
                       </span>
                       <span className="gestao-op-row-cell gestao-op-row-cell--stock">
-                        <span className="gestao-op-row-cell-label">Estoque</span>
-                        <span className="gestao-op-row-cell-value">{formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
+                        <span className="gestao-op-row-cell-label">{isHistorical ? "Est. dia" : "Estoque"}</span>
+                        <span className="gestao-op-row-cell-value">
+                          {isHistorical ? formatInteger(row.qtd_est_atual) : `${formatInteger(row.qtd_est_atual)} atual • ${formatInteger(row.qtd_est_disp)} disp.`}
+                        </span>
                       </span>
                     </div>
-                    <div className="gestao-op-row-actions">
-                      {isHistorical ? (
-                        <span className="gestao-op-readonly-badge">Somente leitura</span>
-                      ) : (
+                    {isHistorical ? null : (
+                      <div className="gestao-op-row-actions">
                         <button
                           className="gestao-op-row-more-btn"
                           type="button"
@@ -1732,16 +1742,27 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         >
                           <MoreIcon />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     {isExpanded ? (
                       <div className="gestao-op-row-details">
                         <div className="gestao-op-row-detail-grid">
-                          <span><b>Quantidade:</b> {formatInteger(row.quantidade)}</span>
-                          <span><b>Custo total:</b> {formatCurrency(row.custo_total)}</span>
-                          <span><b>Últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
-                          <span><b>Custo unit.:</b> {formatCurrency(row.custo_unitario)}</span>
-                          <span><b>Estoque:</b> {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
+                          {isHistorical ? (
+                            <>
+                              <span><b>Solicitado:</b> {formatInteger(row.quantidade)}</span>
+                              <span><b>Atendido:</b> {formatInteger(row.qtd_mov_dia)}</span>
+                              <span><b>Custo total:</b> {formatCurrency(row.valor_mov_dia)}</span>
+                              <span><b>Est. dia:</b> {formatInteger(row.qtd_est_atual)} atual</span>
+                            </>
+                          ) : (
+                            <>
+                              <span><b>Quantidade:</b> {formatInteger(row.quantidade)}</span>
+                              <span><b>Custo total:</b> {formatCurrency(row.custo_total)}</span>
+                              <span><b>Últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
+                              <span><b>Custo unit.:</b> {formatCurrency(row.custo_unitario)}</span>
+                              <span><b>Estoque:</b> {formatInteger(row.qtd_est_atual)} atual • {formatInteger(row.qtd_est_disp)} disp.</span>
+                            </>
+                          )}
                           <span><b>End. Separação:</b> {row.endereco_sep ?? "-"}</span>
                           <span><b>End. Pulmão:</b> {row.endereco_pul ?? "-"}</span>
                           <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>

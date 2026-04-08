@@ -130,7 +130,9 @@ function mapItemRow(raw: Record<string, unknown>): GestaoEstoqueItemRow {
     updated_mat: parseString(raw.updated_mat, "-"),
     updated_at: parseString(raw.updated_at),
     resolved_refreshed_at: parseNullableString(raw.resolved_refreshed_at),
-    is_frozen: parseBoolean(raw.is_frozen)
+    is_frozen: parseBoolean(raw.is_frozen),
+    qtd_mov_dia: parseInteger(raw.qtd_mov_dia),
+    valor_mov_dia: parseNumber(raw.valor_mov_dia)
   };
 }
 
