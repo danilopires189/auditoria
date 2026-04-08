@@ -4,8 +4,15 @@
       "intervalo_minutos": 0,
       "descricao": "Atualiza toda vez que abrir o arquivo",
       "arquivos": [
-        "DB_ENTRADA_NOTAS.xlsx",
         "DB_DEVOLUCAO.xlsx"
+      ]
+    },
+    "a_cada_30_minutos": {
+      "intervalo_minutos": 30,
+      "descricao": "Atualiza a cada 30 minutos",
+      "arquivos": [
+        "DB_ENTRADA_NOTAS.xlsx",
+        "DB_ATENDIMENTO.xlsx"
       ]
     },
     "1_vez_por_dia": {
@@ -32,7 +39,6 @@
       "intervalo_minutos": 60,
       "descricao": "Atualiza a cada 1 hora",
       "arquivos": [
-        "DB_ATENDIMENTO.xlsx",
         "DB_TERMO.xlsx",
         "DB_PEDIDO_DIRETO.xlsx",
         "DB_PROD_BLITZ.xlsx",

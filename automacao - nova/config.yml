@@ -19,7 +19,7 @@ tables:
   db_entrada_notas:
     file: "DB_ENTRADA_NOTAS.xlsx"
     sheet: "DB_ENTRADA"
-    mode: "upsert"
+    mode: "full_replace"
     unique_keys: ["cd", "seq_entrada", "nf", "coddv"]
     required_columns: ["cd", "seq_entrada", "nf", "coddv"]
     refresh_before_load: false

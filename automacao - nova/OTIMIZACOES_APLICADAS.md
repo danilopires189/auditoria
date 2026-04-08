@@ -11,7 +11,6 @@
 Mudança de `full_replace` para `upsert` nas seguintes tabelas:
 
 #### ✅ Tabelas Otimizadas:
-- `db_entrada_notas`: 12.801 linhas → só atualiza o que mudou
 - `db_devolucao`: 18.743 linhas → só atualiza o que mudou  
 - `db_pedido_direto`: só atualiza o que mudou
 - `db_rotas`: só atualiza o que mudou
@@ -22,8 +21,9 @@ Mudança de `full_replace` para `upsert` nas seguintes tabelas:
 - `db_end`: já estava otimizada
 
 ### 3. Frequência por Arquivo
-- **ANTES:** DB_ENTRADA_NOTAS e DB_DEVOLUCAO = SEMPRE (toda execução)
-- **DEPOIS:** DB_ENTRADA_NOTAS e DB_DEVOLUCAO = a cada 30 minutos
+- **DB_ENTRADA_NOTAS:** a cada 30 minutos em `full_replace`
+- **DB_ATENDIMENTO:** a cada 30 minutos em `full_replace`
+- **DB_DEVOLUCAO:** monitor dedicado
 
 ### 4. Lógica "1x por Dia" Melhorada
 - **ANTES:** Verifica se passaram 24 horas desde a última atualização
@@ -59,6 +59,10 @@ Mudança de `full_replace` para `upsert` nas seguintes tabelas:
 1. **Teste as chaves únicas:** Verifique se não há duplicatas após a primeira sincronização
 2. **Monitore o Supabase:** Acompanhe o uso de I/O nas próximas horas
 3. **Backup:** Mantenha backup dos dados antes de aplicar
+
+## 🔧 Observação Atual
+
+`DB_ENTRADA_NOTAS` e `DB_ATENDIMENTO` foram padronizados para `full_replace` a cada 30 minutos para manter banco e planilha sempre espelhados.
 
 ## 🔧 Como Reverter (se necessário)
 

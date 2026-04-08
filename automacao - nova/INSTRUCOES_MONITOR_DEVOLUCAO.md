@@ -24,7 +24,7 @@ INICIAR_MONITOR_DEVOLUCAO.bat
 
 ### Frequências atualizadas:
 - **5 minutos:** DB_DEVOLUCAO (monitor dedicado)
-- **30 minutos:** DB_ENTRADA_NOTAS
+- **30 minutos:** DB_ENTRADA_NOTAS, DB_ATENDIMENTO
 - **1 hora:** DB_TERMO, DB_PEDIDO_DIRETO, DB_PROD_BLITZ, DB_ESTQ_ENTR
 - **6 horas:** BD_END
 - **1x por dia:** DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO, DB_PROD_VOL
