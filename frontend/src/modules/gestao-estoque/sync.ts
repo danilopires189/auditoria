@@ -5,8 +5,10 @@ import type {
   GestaoEstoqueDayReviewEntry,
   GestaoEstoqueDayReviewState,
   GestaoEstoqueDayReviewStatus,
+  GestaoEstoqueEmRecebimentoRow,
   GestaoEstoqueItemRow,
   GestaoEstoqueMovementType,
+  GestaoEstoqueNaoAtendidoRow,
   GestaoEstoqueProductHistoryRow
 } from "./types";
 
@@ -132,7 +134,8 @@ function mapItemRow(raw: Record<string, unknown>): GestaoEstoqueItemRow {
     resolved_refreshed_at: parseNullableString(raw.resolved_refreshed_at),
     is_frozen: parseBoolean(raw.is_frozen),
     qtd_mov_dia: parseInteger(raw.qtd_mov_dia),
-    valor_mov_dia: parseNumber(raw.valor_mov_dia)
+    valor_mov_dia: parseNumber(raw.valor_mov_dia),
+    is_em_recebimento_previsto: parseBoolean(raw.is_em_recebimento_previsto)
   };
 }
 
@@ -142,6 +145,38 @@ function mapProductHistoryRow(raw: Record<string, unknown>): GestaoEstoqueProduc
     data_mov: parseString(raw.data_mov),
     qtd_mov: parseNullableInteger(raw.qtd_mov),
     tipo_movimentacao: parseString(raw.tipo_movimentacao, "-")
+  };
+}
+
+function mapNaoAtendidoRow(raw: Record<string, unknown>): GestaoEstoqueNaoAtendidoRow {
+  return {
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    ocorrencia: parseNullableString(raw.ocorrencia),
+    filial: parseNullableInteger(raw.filial),
+    dif: parseInteger(raw.dif),
+    nao_atendido_total: parseInteger(raw.nao_atendido_total),
+    estoque: parseInteger(raw.estoque),
+    caixa: parseNullableString(raw.caixa),
+    qtd_caixa: parseInteger(raw.qtd_caixa),
+    endereco: parseNullableString(raw.endereco),
+    mat: parseNullableString(raw.mat),
+    dat_ult_compra: parseNullableString(raw.dat_ult_compra),
+    qtd_ult_compra: parseInteger(raw.qtd_ult_compra),
+    is_em_baixa: parseBoolean(raw.is_em_baixa)
+  };
+}
+
+function mapEmRecebimentoRow(raw: Record<string, unknown>): GestaoEstoqueEmRecebimentoRow {
+  return {
+    coddv: parseInteger(raw.coddv),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    qtd_cx: parseInteger(raw.qtd_cx),
+    qtd_total: parseInteger(raw.qtd_total),
+    seq_entrada: parseNullableInteger(raw.seq_entrada),
+    transportadora: parseString(raw.transportadora, "SEM TRANSPORTADORA"),
+    dh_consistida: parseNullableString(raw.dh_consistida),
+    dh_liberacao: parseNullableString(raw.dh_liberacao)
   };
 }
 
@@ -220,6 +255,30 @@ export async function fetchGestaoEstoqueProductHistory(params: {
   return data
     .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
     .map(mapProductHistoryRow);
+}
+
+export async function fetchGestaoEstoqueNaoAtendidoList(cd: number | null): Promise<GestaoEstoqueNaoAtendidoRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_gestao_estoque_nao_atendido_list", {
+    p_cd: cd
+  });
+  if (error) throw new Error(normalizeGestaoEstoqueError(error));
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+    .map(mapNaoAtendidoRow);
+}
+
+export async function fetchGestaoEstoqueEmRecebimentoList(cd: number | null): Promise<GestaoEstoqueEmRecebimentoRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_gestao_estoque_em_recebimento_list", {
+    p_cd: cd
+  });
+  if (error) throw new Error(normalizeGestaoEstoqueError(error));
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+    .map(mapEmRecebimentoRow);
 }
 
 export async function fetchGestaoEstoqueDayReviewState(params: {

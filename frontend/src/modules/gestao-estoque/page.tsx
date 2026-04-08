@@ -4,7 +4,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
+import { formatDateOnlyPtBR, formatDateTimeBrasilia, formatTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { normalizeBarcode } from "../../shared/db-barras/sync";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { BackIcon, CalendarIcon, EyeIcon, ModuleIcon } from "../../ui/icons";
@@ -16,7 +16,9 @@ import {
   deleteGestaoEstoqueItem,
   fetchGestaoEstoqueAvailableDays,
   fetchGestaoEstoqueDayReviewState,
+  fetchGestaoEstoqueEmRecebimentoList,
   fetchGestaoEstoqueList,
+  fetchGestaoEstoqueNaoAtendidoList,
   fetchGestaoEstoqueProductHistory,
   fetchGestaoEstoqueStockUpdatedAt,
   normalizeGestaoEstoqueError,
@@ -27,9 +29,11 @@ import type {
   GestaoEstoqueAvailableDay,
   GestaoEstoqueDayReviewState,
   GestaoEstoqueDayReviewStatus,
+  GestaoEstoqueEmRecebimentoRow,
   GestaoEstoqueItemRow,
   GestaoEstoqueModuleProfile,
   GestaoEstoqueMovementType,
+  GestaoEstoqueNaoAtendidoRow,
   GestaoEstoqueProductHistoryRow
 } from "./types";
 
@@ -39,6 +43,7 @@ interface GestaoEstoquePageProps {
 }
 
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
+type GestaoEstoqueListViewMode = "operacional" | "nao_atendido" | "em_recebimento";
 
 const MODULE_DEF = getModuleByKeyOrThrow("gestao-estoque");
 const REFRESH_INTERVAL_MS = 15000;
@@ -147,6 +152,10 @@ function formatDateTime(value: string | null): string {
   });
 }
 
+function formatTime(value: string | null): string {
+  return formatTimeBrasilia(normalizeUtcTimestamp(value), "-", "value");
+}
+
 function movementLabel(value: GestaoEstoqueMovementType): string {
   return value === "entrada" ? "Entrada" : "Baixa";
 }
@@ -196,6 +205,30 @@ function buildRowSearchBlob(row: GestaoEstoqueItemRow): string {
     row.updated_nome,
     row.updated_mat,
     formatDate(row.dat_ult_compra)
+  ].join(" "));
+}
+
+function buildNaoAtendidoSearchBlob(row: GestaoEstoqueNaoAtendidoRow): string {
+  return normalizeSearchText([
+    row.descricao,
+    String(row.coddv),
+    String(row.filial ?? ""),
+    row.caixa ?? "",
+    row.endereco ?? "",
+    row.mat ?? "",
+    formatDate(row.dat_ult_compra),
+    formatTime(row.ocorrencia)
+  ].join(" "));
+}
+
+function buildEmRecebimentoSearchBlob(row: GestaoEstoqueEmRecebimentoRow): string {
+  return normalizeSearchText([
+    row.descricao,
+    String(row.coddv),
+    String(row.seq_entrada ?? ""),
+    row.transportadora,
+    formatDateTime(row.dh_consistida),
+    formatDateTime(row.dh_liberacao)
   ].join(" "));
 }
 
@@ -282,6 +315,27 @@ function checkIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 12.5l4.2 4.2L19 7" />
+    </svg>
+  );
+}
+
+function notAttendedIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M9 9l6 6" />
+      <path d="M15 9l-6 6" />
+    </svg>
+  );
+}
+
+function truckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 7h12v8H3z" />
+      <path d="M15 10h4l2 2v3h-6z" />
+      <circle cx="7" cy="17" r="2" />
+      <circle cx="18" cy="17" r="2" />
     </svg>
   );
 }
@@ -402,9 +456,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     disableSoftKeyboard: disableSearchSoftKeyboard
   } = useOnDemandSoftKeyboard("numeric");
   const [movementType, setMovementType] = useState<GestaoEstoqueMovementType>("baixa");
+  const [listViewMode, setListViewMode] = useState<GestaoEstoqueListViewMode>("operacional");
   const [selectedDate, setSelectedDate] = useState(todayIsoBrasilia());
   const [availableDays, setAvailableDays] = useState<GestaoEstoqueAvailableDay[]>([]);
   const [rows, setRows] = useState<GestaoEstoqueItemRow[]>([]);
+  const [naoAtendidoRows, setNaoAtendidoRows] = useState<GestaoEstoqueNaoAtendidoRow[]>([]);
+  const [emRecebimentoRows, setEmRecebimentoRows] = useState<GestaoEstoqueEmRecebimentoRow[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [quantidadeInput, setQuantidadeInput] = useState("");
@@ -414,6 +471,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [previewHistoryError, setPreviewHistoryError] = useState<string | null>(null);
   const [busyLookup, setBusyLookup] = useState(false);
   const [busyList, setBusyList] = useState(false);
+  const [busyNaoAtendidoList, setBusyNaoAtendidoList] = useState(false);
+  const [busyEmRecebimentoList, setBusyEmRecebimentoList] = useState(false);
   const [busyExport, setBusyExport] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -424,6 +483,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [listSearchInput, setListSearchInput] = useState("");
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [actionRow, setActionRow] = useState<GestaoEstoqueItemRow | null>(null);
+  const [naoAtendidoActionRow, setNaoAtendidoActionRow] = useState<GestaoEstoqueNaoAtendidoRow | null>(null);
+  const [naoAtendidoSendRow, setNaoAtendidoSendRow] = useState<GestaoEstoqueNaoAtendidoRow | null>(null);
+  const [naoAtendidoSendQuantidade, setNaoAtendidoSendQuantidade] = useState("");
+  const [busyNaoAtendidoSend, setBusyNaoAtendidoSend] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
@@ -449,13 +512,36 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     if (!listSearchQuery) return rows;
     return rows.filter((row) => buildRowSearchBlob(row).includes(listSearchQuery));
   }, [listSearchQuery, rows]);
-  const listPanelTitle = isHistorical ? "Lista de Gestão - Somente leitura" : "Lista da visão atual";
+  const filteredNaoAtendidoRows = useMemo(() => {
+    if (!listSearchQuery) return naoAtendidoRows;
+    return naoAtendidoRows.filter((row) => buildNaoAtendidoSearchBlob(row).includes(listSearchQuery));
+  }, [listSearchQuery, naoAtendidoRows]);
+  const filteredEmRecebimentoRows = useMemo(() => {
+    if (!listSearchQuery) return emRecebimentoRows;
+    return emRecebimentoRows.filter((row) => buildEmRecebimentoSearchBlob(row).includes(listSearchQuery));
+  }, [emRecebimentoRows, listSearchQuery]);
+  const listPanelTitle = useMemo(() => {
+    if (isHistorical) return "Lista de Gestão - Somente leitura";
+    if (listViewMode === "nao_atendido") return "Lista de Não Atendido";
+    if (listViewMode === "em_recebimento") return "Lista em Recebimento";
+    return "Lista da visão atual";
+  }, [isHistorical, listViewMode]);
+  const activeListCount = useMemo(() => {
+    if (isHistorical || listViewMode === "operacional") return rows.length;
+    if (listViewMode === "nao_atendido") return naoAtendidoRows.length;
+    return emRecebimentoRows.length;
+  }, [emRecebimentoRows.length, isHistorical, listViewMode, naoAtendidoRows.length, rows.length]);
+  const activeFilteredListCount = useMemo(() => {
+    if (isHistorical || listViewMode === "operacional") return filteredRows.length;
+    if (listViewMode === "nao_atendido") return filteredNaoAtendidoRows.length;
+    return filteredEmRecebimentoRows.length;
+  }, [filteredEmRecebimentoRows.length, filteredNaoAtendidoRows.length, filteredRows.length, isHistorical, listViewMode]);
   const listCountLabel = useMemo(() => {
     if (listSearchQuery) {
-      return `${formatInteger(filteredRows.length)} de ${formatInteger(rows.length)} registro(s)`;
+      return `${formatInteger(activeFilteredListCount)} de ${formatInteger(activeListCount)} registro(s)`;
     }
-    return `${formatInteger(rows.length)} registro(s)`;
-  }, [filteredRows.length, listSearchQuery, rows.length]);
+    return `${formatInteger(activeListCount)} registro(s)`;
+  }, [activeFilteredListCount, activeListCount, listSearchQuery]);
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -464,6 +550,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const hasSearchInput = searchInput.trim().length > 0;
   const currentReviewStatus = dayReviewState?.review_status ?? "pendente";
   const hasReviewers = (dayReviewState?.reviewers.length ?? 0) > 0;
+  const exportDisabled = busyExport || rows.length === 0 || listViewMode !== "operacional";
   const previewEntryHistory = useMemo(
     () => buildPreviewHistorySummary(previewHistoryRows.filter((row) => row.movement_group === "entrada")),
     [previewHistoryRows]
@@ -620,6 +707,34 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       setBusyList(false);
     }
   }, [activeCd, movementType, selectedDate]);
+
+  const refreshNaoAtendidoRows = useCallback(async () => {
+    if (activeCd == null || isHistorical) {
+      setNaoAtendidoRows([]);
+      return;
+    }
+    setBusyNaoAtendidoList(true);
+    try {
+      const nextRows = await fetchGestaoEstoqueNaoAtendidoList(activeCd);
+      setNaoAtendidoRows(nextRows);
+    } finally {
+      setBusyNaoAtendidoList(false);
+    }
+  }, [activeCd, isHistorical]);
+
+  const refreshEmRecebimentoRows = useCallback(async () => {
+    if (activeCd == null || isHistorical) {
+      setEmRecebimentoRows([]);
+      return;
+    }
+    setBusyEmRecebimentoList(true);
+    try {
+      const nextRows = await fetchGestaoEstoqueEmRecebimentoList(activeCd);
+      setEmRecebimentoRows(nextRows);
+    } finally {
+      setBusyEmRecebimentoList(false);
+    }
+  }, [activeCd, isHistorical]);
 
   const refreshStockUpdatedAt = useCallback(async () => {
     if (activeCd == null) {
@@ -952,15 +1067,70 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setActionRow(row);
   }, []);
 
+  const openNaoAtendidoActions = useCallback((row: GestaoEstoqueNaoAtendidoRow) => {
+    if (row.is_em_baixa) return;
+    setNaoAtendidoActionRow(row);
+  }, []);
+
+  const toggleListViewMode = useCallback((mode: Exclude<GestaoEstoqueListViewMode, "operacional">) => {
+    setExpandedRowId(null);
+    setListSearchInput("");
+    setListViewMode((current) => (current === mode ? "operacional" : mode));
+  }, []);
+
   const openReviewModal = useCallback(() => {
     setPendingReviewStatus(currentReviewStatus);
     setReviewModalOpen(true);
   }, [currentReviewStatus]);
 
   const openExportChoices = useCallback(() => {
-    if (busyExport || rows.length === 0) return;
+    if (busyExport || rows.length === 0 || listViewMode !== "operacional") return;
     setExportChoiceOpen(true);
-  }, [busyExport, rows.length]);
+  }, [busyExport, listViewMode, rows.length]);
+
+  const submitNaoAtendidoSend = useCallback(async () => {
+    if (activeCd == null || naoAtendidoSendRow == null || busyNaoAtendidoSend) return;
+    const quantidade = parsePositiveInt(naoAtendidoSendQuantidade);
+    if (quantidade == null) {
+      setErrorMessage("Informe uma quantidade válida.");
+      return;
+    }
+    if (quantidade > naoAtendidoSendRow.estoque) {
+      setErrorMessage("A quantidade de baixa excede o estoque atual.");
+      return;
+    }
+
+    setBusyNaoAtendidoSend(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const result = await addGestaoEstoqueItem({
+        cd: activeCd,
+        date: selectedDate,
+        movementType: "baixa",
+        coddv: naoAtendidoSendRow.coddv,
+        quantidade
+      });
+      await Promise.all([refreshDays(), refreshRows(), refreshNaoAtendidoRows()]);
+      setStatusMessage(result.message);
+      setNaoAtendidoSendQuantidade("");
+      setNaoAtendidoSendRow(null);
+      setNaoAtendidoActionRow(null);
+    } catch (error) {
+      setErrorMessage(normalizeGestaoEstoqueError(error));
+    } finally {
+      setBusyNaoAtendidoSend(false);
+    }
+  }, [
+    activeCd,
+    busyNaoAtendidoSend,
+    naoAtendidoSendQuantidade,
+    naoAtendidoSendRow,
+    refreshDays,
+    refreshNaoAtendidoRows,
+    refreshRows,
+    selectedDate
+  ]);
 
   const saveDayReviewStatus = useCallback(async () => {
     if (activeCd == null || busyReview) return;
@@ -1095,6 +1265,37 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   }, [refreshAll]);
 
   useEffect(() => {
+    if (isHistorical) {
+      setListViewMode("operacional");
+      setNaoAtendidoRows([]);
+      setEmRecebimentoRows([]);
+      setNaoAtendidoActionRow(null);
+      setNaoAtendidoSendRow(null);
+      setNaoAtendidoSendQuantidade("");
+      return;
+    }
+
+    if (listViewMode === "nao_atendido") {
+      void refreshNaoAtendidoRows().catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
+      return;
+    }
+
+    if (listViewMode === "em_recebimento") {
+      void refreshEmRecebimentoRows().catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
+    }
+  }, [isHistorical, listViewMode, refreshEmRecebimentoRows, refreshNaoAtendidoRows]);
+
+  useEffect(() => {
+    setExpandedRowId(null);
+    setEditingItemId(null);
+    setEditingQuantity("");
+    setActionRow(null);
+    setNaoAtendidoActionRow(null);
+    setNaoAtendidoSendRow(null);
+    setNaoAtendidoSendQuantidade("");
+  }, [listViewMode, selectedDate]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const scrollToTop = () => {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -1154,7 +1355,10 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
 
     const refreshIfVisible = () => {
       if (document.visibilityState !== "visible") return;
-      void Promise.all([refreshRows(), refreshStockUpdatedAt(), refreshDayReviewState()]).catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
+      const tasks: Promise<unknown>[] = [refreshRows(), refreshStockUpdatedAt(), refreshDayReviewState()];
+      if (listViewMode === "nao_atendido") tasks.push(refreshNaoAtendidoRows());
+      if (listViewMode === "em_recebimento") tasks.push(refreshEmRecebimentoRows());
+      void Promise.all(tasks).catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
     };
 
     const timerId = window.setInterval(refreshIfVisible, REFRESH_INTERVAL_MS);
@@ -1163,7 +1367,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       window.clearInterval(timerId);
       document.removeEventListener("visibilitychange", refreshIfVisible);
     };
-  }, [isHistorical, isOnline, refreshDayReviewState, refreshRows, refreshStockUpdatedAt]);
+  }, [isHistorical, isOnline, listViewMode, refreshDayReviewState, refreshEmRecebimentoRows, refreshNaoAtendidoRows, refreshRows, refreshStockUpdatedAt]);
 
   useEffect(() => {
     focusSearch();
@@ -1444,6 +1648,32 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                 <span className="gestao-op-review-trigger-value">{reviewStatusLabel(currentReviewStatus)}</span>
               </span>
             </button>
+
+            {!isHistorical ? (
+              <>
+                <button
+                  type="button"
+                  className={`gestao-op-view-trigger gestao-op-view-trigger--desktop${listViewMode === "nao_atendido" ? " is-active" : ""}`}
+                  onClick={() => toggleListViewMode("nao_atendido")}
+                  title="Visualizar não atendido"
+                  aria-label="Visualizar não atendido"
+                >
+                  <span className="gestao-op-view-trigger-icon" aria-hidden="true">{notAttendedIcon()}</span>
+                  <span className="gestao-op-view-trigger-copy">Não Atendido</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`gestao-op-view-trigger gestao-op-view-trigger--desktop${listViewMode === "em_recebimento" ? " is-active" : ""}`}
+                  onClick={() => toggleListViewMode("em_recebimento")}
+                  title="Visualizar em recebimento"
+                  aria-label="Visualizar em recebimento"
+                >
+                  <span className="gestao-op-view-trigger-icon" aria-hidden="true">{truckIcon()}</span>
+                  <span className="gestao-op-view-trigger-copy">Em Recebimento</span>
+                </button>
+              </>
+            ) : null}
           </div>
 
           <label className="gestao-op-day-picker">
@@ -1458,13 +1688,13 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           </label>
 
           <div className="gestao-op-actions">
-            <button className="btn btn-primary gestao-op-export-trigger" type="button" onClick={openExportChoices} disabled={busyExport || rows.length === 0}>
+            <button className="btn btn-primary gestao-op-export-trigger" type="button" onClick={openExportChoices} disabled={exportDisabled}>
               {busyExport ? "Gerando..." : "Exportar"}
             </button>
-            <button className="btn btn-muted gestao-op-export-btn gestao-op-export-btn--pdf" type="button" onClick={() => void exportPdf()} disabled={busyExport || rows.length === 0}>
+            <button className="btn btn-muted gestao-op-export-btn gestao-op-export-btn--pdf" type="button" onClick={() => void exportPdf()} disabled={exportDisabled}>
               {busyExport ? "Gerando..." : "Exportar PDF"}
             </button>
-            <button className="btn btn-primary gestao-op-export-btn gestao-op-export-btn--xlsx" type="button" onClick={() => void exportXlsx()} disabled={busyExport || rows.length === 0}>
+            <button className="btn btn-primary gestao-op-export-btn gestao-op-export-btn--xlsx" type="button" onClick={() => void exportXlsx()} disabled={exportDisabled}>
               {busyExport ? "Gerando..." : "Exportar Excel"}
             </button>
           </div>
@@ -1655,7 +1885,182 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
               />
             </label>
           </div>
-          {rows.length === 0 ? (
+          {listViewMode === "nao_atendido" && !isHistorical ? (
+            busyNaoAtendidoList && naoAtendidoRows.length === 0 ? (
+              <div className="coleta-empty">Carregando não atendido...</div>
+            ) : naoAtendidoRows.length === 0 ? (
+              <div className="coleta-empty">Nenhum item de não atendido encontrado para o CD atual.</div>
+            ) : filteredNaoAtendidoRows.length === 0 ? (
+              <div className="coleta-empty">Nenhum item encontrado para o filtro informado.</div>
+            ) : (
+              <div className="gestao-op-table">
+                <div className="gestao-op-table-head is-nao-atendido" role="row">
+                  <span>Produto</span>
+                  <span>Ocorrência</span>
+                  <span>Filial</span>
+                  <span>Não Atendido</span>
+                  <span>Não Atendido Total</span>
+                  <span>Estoque</span>
+                  <span className="gestao-op-table-head-actions">Ações</span>
+                  <span>Status</span>
+                </div>
+                {filteredNaoAtendidoRows.map((row, index) => {
+                  const rowKey = `nao-atendido:${row.coddv}:${row.ocorrencia ?? "sem-ocorrencia"}:${index}`;
+                  const isExpanded = expandedRowId === rowKey;
+                  return (
+                    <div
+                      key={rowKey}
+                      ref={(node) => {
+                        if (node) rowRefs.current.set(rowKey, node);
+                        else rowRefs.current.delete(rowKey);
+                      }}
+                      className="gestao-op-row is-nao-atendido"
+                      tabIndex={-1}
+                    >
+                      <div className="gestao-op-row-main gestao-op-row-main-table is-nao-atendido">
+                        <button
+                          className="gestao-op-row-expand"
+                          type="button"
+                          onClick={() => toggleExpandedRow(rowKey)}
+                          aria-expanded={isExpanded}
+                        >
+                          <span className="gestao-op-row-expand-icon" aria-hidden="true">
+                            <EyeIcon open={isExpanded} />
+                          </span>
+                          <span className="gestao-op-row-title">
+                            <strong>{row.descricao}</strong>
+                            <span>CODDV {row.coddv}</span>
+                          </span>
+                        </button>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Ocorrência</span>
+                          <span className="gestao-op-row-cell-value">{formatTime(row.ocorrencia)}</span>
+                        </span>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Filial</span>
+                          <span className="gestao-op-row-cell-value">{row.filial != null ? formatInteger(row.filial) : "-"}</span>
+                        </span>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Não Atendido</span>
+                          <span className="gestao-op-row-cell-value">{formatInteger(row.dif)}</span>
+                        </span>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Não Atendido Total</span>
+                          <span className="gestao-op-row-cell-value">{formatInteger(row.nao_atendido_total)}</span>
+                        </span>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Estoque</span>
+                          <span className="gestao-op-row-cell-value">{formatInteger(row.estoque)}</span>
+                        </span>
+                        <div className="gestao-op-row-actions">
+                          {row.is_em_baixa ? null : (
+                            <button
+                              className="gestao-op-row-more-btn"
+                              type="button"
+                              onClick={() => openNaoAtendidoActions(row)}
+                              aria-label={`Ações para ${row.descricao}`}
+                            >
+                              <MoreIcon />
+                            </button>
+                          )}
+                        </div>
+                        <span className="gestao-op-row-cell gestao-op-row-cell--status">
+                          <span className="gestao-op-row-cell-label">Status</span>
+                          <span className={`gestao-op-inline-status${row.is_em_baixa ? " is-active" : ""}`}>{row.is_em_baixa ? "Em baixa" : ""}</span>
+                        </span>
+                      </div>
+                      {isExpanded ? (
+                        <div className="gestao-op-row-details">
+                          <div className="gestao-op-row-detail-grid">
+                            <span><b>Caixa:</b> {row.caixa ?? "-"}</span>
+                            <span><b>Qtd. caixa:</b> {formatInteger(row.qtd_caixa)}</span>
+                            <span><b>Endereço:</b> {row.endereco ?? "-"}</span>
+                            <span><b>Mat:</b> {row.mat ?? "-"}</span>
+                            <span><b>Dat. últ. compra:</b> {formatDate(row.dat_ult_compra)}</span>
+                            <span><b>Qtd. últ. compra:</b> {formatInteger(row.qtd_ult_compra)}</span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : listViewMode === "em_recebimento" && !isHistorical ? (
+            busyEmRecebimentoList && emRecebimentoRows.length === 0 ? (
+              <div className="coleta-empty">Carregando recebimentos...</div>
+            ) : emRecebimentoRows.length === 0 ? (
+              <div className="coleta-empty">Nenhum item em recebimento encontrado para o CD atual.</div>
+            ) : filteredEmRecebimentoRows.length === 0 ? (
+              <div className="coleta-empty">Nenhum item encontrado para o filtro informado.</div>
+            ) : (
+              <div className="gestao-op-table">
+                <div className="gestao-op-table-head is-em-recebimento" role="row">
+                  <span>Produto</span>
+                  <span>Qtd. cx</span>
+                  <span>Qtd. total</span>
+                  <span>Seq. entrada</span>
+                  <span>Transportadora</span>
+                </div>
+                {filteredEmRecebimentoRows.map((row, index) => {
+                  const rowKey = `em-recebimento:${row.seq_entrada ?? "sem-seq"}:${row.coddv}:${index}`;
+                  const isExpanded = expandedRowId === rowKey;
+                  return (
+                    <div
+                      key={rowKey}
+                      ref={(node) => {
+                        if (node) rowRefs.current.set(rowKey, node);
+                        else rowRefs.current.delete(rowKey);
+                      }}
+                      className="gestao-op-row is-em-recebimento"
+                      tabIndex={-1}
+                    >
+                      <div className="gestao-op-row-main gestao-op-row-main-table is-em-recebimento">
+                        <button
+                          className="gestao-op-row-expand"
+                          type="button"
+                          onClick={() => toggleExpandedRow(rowKey)}
+                          aria-expanded={isExpanded}
+                        >
+                          <span className="gestao-op-row-expand-icon" aria-hidden="true">
+                            <EyeIcon open={isExpanded} />
+                          </span>
+                          <span className="gestao-op-row-title">
+                            <strong>{row.descricao}</strong>
+                            <span>CODDV {row.coddv}</span>
+                          </span>
+                        </button>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Qtd. cx</span>
+                          <span className="gestao-op-row-cell-value">{formatInteger(row.qtd_cx)}</span>
+                        </span>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Qtd. total</span>
+                          <span className="gestao-op-row-cell-value">{formatInteger(row.qtd_total)}</span>
+                        </span>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Seq. entrada</span>
+                          <span className="gestao-op-row-cell-value">{row.seq_entrada != null ? formatInteger(row.seq_entrada) : "-"}</span>
+                        </span>
+                        <span className="gestao-op-row-cell">
+                          <span className="gestao-op-row-cell-label">Transportadora</span>
+                          <span className="gestao-op-row-cell-value">{row.transportadora}</span>
+                        </span>
+                      </div>
+                      {isExpanded ? (
+                        <div className="gestao-op-row-details">
+                          <div className="gestao-op-row-detail-grid">
+                            <span><b>Dh. consistida:</b> {formatDateTime(row.dh_consistida)}</span>
+                            <span><b>Dh. liberação:</b> {formatDateTime(row.dh_liberacao)}</span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : rows.length === 0 ? (
             <div className="coleta-empty">Nenhum item lançado para esta data e visão.</div>
           ) : filteredRows.length === 0 ? (
             <div className="coleta-empty">Nenhum item encontrado para o filtro informado.</div>
@@ -1674,6 +2079,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                 const isEditing = editingItemId === row.id;
                 const isExpanded = expandedRowId === row.id;
                 const isHistoricalMismatch = isHistorical && row.qtd_mov_dia !== row.quantidade;
+                const isExpectedEntry = !isHistorical && listViewMode === "operacional" && movementType === "entrada" && row.is_em_recebimento_previsto;
                 return (
                   <div
                     key={row.id}
@@ -1681,7 +2087,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                       if (node) rowRefs.current.set(row.id, node);
                       else rowRefs.current.delete(row.id);
                     }}
-                    className={`gestao-op-row${isEditing ? " is-editing" : ""}${isHistorical ? " is-historical" : ""}${isHistoricalMismatch ? " is-historical-mismatch" : ""}`}
+                    className={`gestao-op-row${isEditing ? " is-editing" : ""}${isHistorical ? " is-historical" : ""}${isHistoricalMismatch ? " is-historical-mismatch" : ""}${isExpectedEntry ? " is-entry-expected" : ""}`}
                     tabIndex={-1}
                   >
                     <div className={`gestao-op-row-main gestao-op-row-main-table${isHistorical ? " is-historical" : ""}`}>
@@ -1747,6 +2153,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     )}
                     {isExpanded ? (
                       <div className="gestao-op-row-details">
+                        {isExpectedEntry ? <div className="gestao-op-row-alert">Produto com entrada prevista.</div> : null}
                         <div className="gestao-op-row-detail-grid">
                           {isHistorical ? (
                             <>
@@ -2048,6 +2455,99 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                   </button>
                   <button className="btn btn-muted" type="button" onClick={() => setActionRow(null)}>
                     Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {naoAtendidoActionRow && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estoque-nao-atendido-action-title"
+              onClick={() => {
+                if (busyNaoAtendidoSend) return;
+                setNaoAtendidoActionRow(null);
+              }}
+            >
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="gestao-estoque-nao-atendido-action-title">O que deseja fazer?</h3>
+                <p>{`${naoAtendidoActionRow.descricao} (CODDV ${naoAtendidoActionRow.coddv})`}</p>
+                <div className="gestao-op-choice-actions">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => {
+                      setNaoAtendidoSendQuantidade(naoAtendidoActionRow.estoque > 0 ? "1" : "");
+                      setNaoAtendidoSendRow(naoAtendidoActionRow);
+                      setNaoAtendidoActionRow(null);
+                    }}
+                    disabled={naoAtendidoActionRow.estoque <= 0}
+                  >
+                    Enviar para baixa
+                  </button>
+                  <button className="btn btn-muted" type="button" onClick={() => setNaoAtendidoActionRow(null)}>
+                    Cancelar
+                  </button>
+                </div>
+                {naoAtendidoActionRow.estoque <= 0 ? <div className="alert warning">Sem estoque disponível para enviar para baixa.</div> : null}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {naoAtendidoSendRow && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estoque-nao-atendido-send-title"
+              onClick={() => {
+                if (busyNaoAtendidoSend) return;
+                setNaoAtendidoSendRow(null);
+                setNaoAtendidoSendQuantidade("");
+              }}
+            >
+              <div className="confirm-dialog surface-enter gestao-op-send-dialog" onClick={(event) => event.stopPropagation()}>
+                <h3 id="gestao-estoque-nao-atendido-send-title">Enviar para baixa</h3>
+                <p>{`${naoAtendidoSendRow.descricao} (CODDV ${naoAtendidoSendRow.coddv})`}</p>
+                <label className="gestao-op-field gestao-op-send-field">
+                  <span>Quantidade</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(naoAtendidoSendRow.estoque, 1)}
+                    value={naoAtendidoSendQuantidade}
+                    onChange={(event) => setNaoAtendidoSendQuantidade(event.target.value)}
+                    inputMode="numeric"
+                    autoFocus
+                  />
+                  <small>{`Estoque disponível: ${formatInteger(naoAtendidoSendRow.estoque)}`}</small>
+                </label>
+                <div className="confirm-actions">
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    onClick={() => {
+                      setNaoAtendidoSendRow(null);
+                      setNaoAtendidoSendQuantidade("");
+                    }}
+                    disabled={busyNaoAtendidoSend}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => void submitNaoAtendidoSend()}
+                    disabled={busyNaoAtendidoSend || naoAtendidoSendRow.estoque <= 0}
+                  >
+                    {busyNaoAtendidoSend ? "Enviando..." : "Confirmar envio"}
                   </button>
                 </div>
               </div>

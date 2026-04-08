@@ -39,6 +39,34 @@ export interface GestaoEstoqueProductHistoryRow {
   tipo_movimentacao: string;
 }
 
+export interface GestaoEstoqueNaoAtendidoRow {
+  coddv: number;
+  descricao: string;
+  ocorrencia: string | null;
+  filial: number | null;
+  dif: number;
+  nao_atendido_total: number;
+  estoque: number;
+  caixa: string | null;
+  qtd_caixa: number;
+  endereco: string | null;
+  mat: string | null;
+  dat_ult_compra: string | null;
+  qtd_ult_compra: number;
+  is_em_baixa: boolean;
+}
+
+export interface GestaoEstoqueEmRecebimentoRow {
+  coddv: number;
+  descricao: string;
+  qtd_cx: number;
+  qtd_total: number;
+  seq_entrada: number | null;
+  transportadora: string;
+  dh_consistida: string | null;
+  dh_liberacao: string | null;
+}
+
 export interface GestaoEstoqueItemRow {
   id: string;
   movement_date: string;
@@ -65,6 +93,7 @@ export interface GestaoEstoqueItemRow {
   is_frozen: boolean;
   qtd_mov_dia: number;
   valor_mov_dia: number;
+  is_em_recebimento_previsto: boolean;
 }
 
 export interface GestaoEstoqueAddResult {
