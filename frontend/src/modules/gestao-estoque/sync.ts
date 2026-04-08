@@ -180,6 +180,8 @@ function mapEmRecebimentoRow(raw: Record<string, unknown>): GestaoEstoqueEmReceb
   };
 }
 
+const GESTAO_ESTOQUE_EM_RECEBIMENTO_PAGE_SIZE = 1000;
+
 function firstRecord(data: unknown): Record<string, unknown> | null {
   if (!Array.isArray(data) || data.length === 0) return null;
   const first = data[0];
@@ -271,14 +273,29 @@ export async function fetchGestaoEstoqueNaoAtendidoList(cd: number | null): Prom
 
 export async function fetchGestaoEstoqueEmRecebimentoList(cd: number | null): Promise<GestaoEstoqueEmRecebimentoRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_gestao_estoque_em_recebimento_list", {
-    p_cd: cd
-  });
-  if (error) throw new Error(normalizeGestaoEstoqueError(error));
-  if (!Array.isArray(data)) return [];
-  return data
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
-    .map(mapEmRecebimentoRow);
+  if (cd == null) return [];
+
+  const rows: GestaoEstoqueEmRecebimentoRow[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const { data, error } = await supabase.rpc("rpc_gestao_estoque_em_recebimento_list", {
+      p_cd: cd,
+      p_offset: offset,
+      p_limit: GESTAO_ESTOQUE_EM_RECEBIMENTO_PAGE_SIZE
+    });
+    if (error) throw new Error(normalizeGestaoEstoqueError(error));
+    const page = Array.isArray(data)
+      ? data
+          .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+          .map(mapEmRecebimentoRow)
+      : [];
+    rows.push(...page);
+    if (page.length < GESTAO_ESTOQUE_EM_RECEBIMENTO_PAGE_SIZE) break;
+    offset += GESTAO_ESTOQUE_EM_RECEBIMENTO_PAGE_SIZE;
+  }
+
+  return rows;
 }
 
 export async function fetchGestaoEstoqueDayReviewState(params: {

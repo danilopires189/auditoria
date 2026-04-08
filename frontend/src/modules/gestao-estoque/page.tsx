@@ -462,6 +462,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const [rows, setRows] = useState<GestaoEstoqueItemRow[]>([]);
   const [naoAtendidoRows, setNaoAtendidoRows] = useState<GestaoEstoqueNaoAtendidoRow[]>([]);
   const [emRecebimentoRows, setEmRecebimentoRows] = useState<GestaoEstoqueEmRecebimentoRow[]>([]);
+  const [naoAtendidoLoadedKey, setNaoAtendidoLoadedKey] = useState<string | null>(null);
+  const [emRecebimentoLoadedKey, setEmRecebimentoLoadedKey] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [quantidadeInput, setQuantidadeInput] = useState("");
@@ -550,6 +552,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
   const hasSearchInput = searchInput.trim().length > 0;
   const currentReviewStatus = dayReviewState?.review_status ?? "pendente";
   const hasReviewers = (dayReviewState?.reviewers.length ?? 0) > 0;
+  const isListOnlyView = !isHistorical && listViewMode !== "operacional";
   const exportDisabled = busyExport || rows.length === 0 || listViewMode !== "operacional";
   const previewEntryHistory = useMemo(
     () => buildPreviewHistorySummary(previewHistoryRows.filter((row) => row.movement_group === "entrada")),
@@ -708,33 +711,41 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     }
   }, [activeCd, movementType, selectedDate]);
 
-  const refreshNaoAtendidoRows = useCallback(async () => {
+  const refreshNaoAtendidoRows = useCallback(async (force = false) => {
     if (activeCd == null || isHistorical) {
       setNaoAtendidoRows([]);
+      setNaoAtendidoLoadedKey(null);
       return;
     }
+    const cacheKey = `${activeCd}:${selectedDate}`;
+    if (!force && naoAtendidoLoadedKey === cacheKey) return;
     setBusyNaoAtendidoList(true);
     try {
       const nextRows = await fetchGestaoEstoqueNaoAtendidoList(activeCd);
       setNaoAtendidoRows(nextRows);
+      setNaoAtendidoLoadedKey(cacheKey);
     } finally {
       setBusyNaoAtendidoList(false);
     }
-  }, [activeCd, isHistorical]);
+  }, [activeCd, isHistorical, naoAtendidoLoadedKey, selectedDate]);
 
-  const refreshEmRecebimentoRows = useCallback(async () => {
+  const refreshEmRecebimentoRows = useCallback(async (force = false) => {
     if (activeCd == null || isHistorical) {
       setEmRecebimentoRows([]);
+      setEmRecebimentoLoadedKey(null);
       return;
     }
+    const cacheKey = `${activeCd}:${selectedDate}`;
+    if (!force && emRecebimentoLoadedKey === cacheKey) return;
     setBusyEmRecebimentoList(true);
     try {
       const nextRows = await fetchGestaoEstoqueEmRecebimentoList(activeCd);
       setEmRecebimentoRows(nextRows);
+      setEmRecebimentoLoadedKey(cacheKey);
     } finally {
       setBusyEmRecebimentoList(false);
     }
-  }, [activeCd, isHistorical]);
+  }, [activeCd, emRecebimentoLoadedKey, isHistorical, selectedDate]);
 
   const refreshStockUpdatedAt = useCallback(async () => {
     if (activeCd == null) {
@@ -1078,6 +1089,13 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setListViewMode((current) => (current === mode ? "operacional" : mode));
   }, []);
 
+  const activateOperationalView = useCallback((nextMovementType: GestaoEstoqueMovementType) => {
+    setExpandedRowId(null);
+    setListSearchInput("");
+    setListViewMode("operacional");
+    setMovementType(nextMovementType);
+  }, []);
+
   const openReviewModal = useCallback(() => {
     setPendingReviewStatus(currentReviewStatus);
     setReviewModalOpen(true);
@@ -1269,6 +1287,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       setListViewMode("operacional");
       setNaoAtendidoRows([]);
       setEmRecebimentoRows([]);
+      setNaoAtendidoLoadedKey(null);
+      setEmRecebimentoLoadedKey(null);
       setNaoAtendidoActionRow(null);
       setNaoAtendidoSendRow(null);
       setNaoAtendidoSendQuantidade("");
@@ -1284,6 +1304,14 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
       void refreshEmRecebimentoRows().catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
     }
   }, [isHistorical, listViewMode, refreshEmRecebimentoRows, refreshNaoAtendidoRows]);
+
+  useEffect(() => {
+    if (isHistorical) return;
+    setNaoAtendidoRows([]);
+    setEmRecebimentoRows([]);
+    setNaoAtendidoLoadedKey(null);
+    setEmRecebimentoLoadedKey(null);
+  }, [activeCd, isHistorical, selectedDate]);
 
   useEffect(() => {
     setExpandedRowId(null);
@@ -1356,8 +1384,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     const refreshIfVisible = () => {
       if (document.visibilityState !== "visible") return;
       const tasks: Promise<unknown>[] = [refreshRows(), refreshStockUpdatedAt(), refreshDayReviewState()];
-      if (listViewMode === "nao_atendido") tasks.push(refreshNaoAtendidoRows());
-      if (listViewMode === "em_recebimento") tasks.push(refreshEmRecebimentoRows());
+      if (listViewMode === "nao_atendido") tasks.push(refreshNaoAtendidoRows(true));
+      if (listViewMode === "em_recebimento") tasks.push(refreshEmRecebimentoRows(true));
       void Promise.all(tasks).catch((error) => setErrorMessage(normalizeGestaoEstoqueError(error)));
     };
 
@@ -1619,15 +1647,15 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
             <div className="gestao-op-segmented" role="tablist" aria-label="Tipo de movimentação">
               <button
                 type="button"
-                className={movementType === "baixa" ? "is-active" : ""}
-                onClick={() => setMovementType("baixa")}
+                className={listViewMode === "operacional" && movementType === "baixa" ? "is-active" : ""}
+                onClick={() => activateOperationalView("baixa")}
               >
                 Baixa
               </button>
               <button
                 type="button"
-                className={movementType === "entrada" ? "is-active" : ""}
-                onClick={() => setMovementType("entrada")}
+                className={listViewMode === "operacional" && movementType === "entrada" ? "is-active" : ""}
+                onClick={() => activateOperationalView("entrada")}
               >
                 Entrada
               </button>
@@ -1697,22 +1725,24 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
         {statusMessage ? <div className="module-inline-message">{statusMessage}</div> : null}
         {errorMessage ? <div className="module-inline-error">{errorMessage}</div> : null}
 
-        <div className="gestao-op-metrics">
-          <article className="module-card module-card-static gestao-op-metric-card">
-            <span>Itens únicos</span>
-            <strong>{formatInteger(totalUnique)}</strong>
-          </article>
-          <article className="module-card module-card-static gestao-op-metric-card">
-            <span>Quantidade total</span>
-            <strong>{formatInteger(totalQuantidade)}</strong>
-          </article>
-          <article className="module-card module-card-static gestao-op-metric-card">
-            <span>Valor total</span>
-            <strong>{formatCurrency(totalValor)}</strong>
-          </article>
-        </div>
+        {!isListOnlyView ? (
+          <div className="gestao-op-metrics">
+            <article className="module-card module-card-static gestao-op-metric-card">
+              <span>Itens únicos</span>
+              <strong>{formatInteger(totalUnique)}</strong>
+            </article>
+            <article className="module-card module-card-static gestao-op-metric-card">
+              <span>Quantidade total</span>
+              <strong>{formatInteger(totalQuantidade)}</strong>
+            </article>
+            <article className="module-card module-card-static gestao-op-metric-card">
+              <span>Valor total</span>
+              <strong>{formatCurrency(totalValor)}</strong>
+            </article>
+          </div>
+        ) : null}
 
-        {!isHistorical ? (
+        {!isHistorical && !isListOnlyView ? (
           <div className="gestao-op-grid">
             <article className="module-card module-card-static gestao-op-panel">
               <div className="gestao-op-panel-head">
