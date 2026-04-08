@@ -128,6 +128,20 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     allowedIndicatorKeys: null,
     defaultRoute: null
   },
+  "prevencaocds.vercel.app": {
+    appLabel: "Prevenção CDs",
+    authCaption: "Prevenção de Perdas CDs",
+    hiddenModuleKeys: [],
+    allowedIndicatorKeys: null,
+    defaultRoute: null
+  },
+  "www.prevencaocds.vercel.app": {
+    appLabel: "Prevenção CDs",
+    authCaption: "Prevenção de Perdas CDs",
+    hiddenModuleKeys: [],
+    allowedIndicatorKeys: null,
+    defaultRoute: null
+  },
   "logisticacd.vercel.app": {
     appLabel: "Logística CDs",
     authCaption: "Logística CDs",

@@ -10391,6 +10391,8 @@ small {
 .indicadores-filters-actions {
   display: flex;
   align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .indicadores-filters span {
@@ -10412,6 +10414,32 @@ small {
 .gestao-estq-report-export-trigger {
   min-height: 42px;
   white-space: nowrap;
+}
+
+.gestao-estq-inventario-trigger {
+  min-height: 42px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gestao-estq-action-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gestao-estq-action-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .gestao-estq-report-overlay {
@@ -10464,6 +10492,61 @@ small {
   outline: 2px solid rgba(38, 99, 201, 0.18);
   outline-offset: 1px;
   border-color: #7ea6df;
+}
+
+.gestao-estq-inventario-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #24456f;
+  font-weight: 700;
+}
+
+.gestao-estq-inventario-check input {
+  margin: 0;
+}
+
+.gestao-estq-inventario-preview {
+  border: 1px solid #d7e3f4;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f1f6ff 100%);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.gestao-estq-inventario-preview strong {
+  color: #14365f;
+}
+
+.gestao-estq-inventario-preview small {
+  color: #4a6187;
+}
+
+.gestao-estq-inventario-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gestao-estq-inventario-preview-grid p {
+  margin: 0;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #dce7f5;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.gestao-estq-inventario-preview-grid span {
+  color: #53719a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.gestao-estq-inventario-preview-grid strong {
+  font-size: 1.05rem;
 }
 
 .indicadores-feedback {
@@ -11124,6 +11207,11 @@ small {
     width: 100%;
   }
 
+  .gestao-estq-inventario-trigger {
+    width: 100%;
+    justify-content: center;
+  }
+
   .indicadores-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
@@ -11742,6 +11830,10 @@ small {
   }
 
   .gestao-estq-report-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .gestao-estq-inventario-preview-grid {
     grid-template-columns: 1fr;
   }
 }

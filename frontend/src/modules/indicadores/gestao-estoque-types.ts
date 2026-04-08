@@ -1,4 +1,5 @@
 export type IndicadoresGestaoEstoqueMovementFilter = "todas" | "entrada" | "saida";
+export type IndicadoresGestaoEstoqueInventarioStockType = "disponivel" | "atual";
 
 export interface IndicadoresGestaoEstoqueSummary {
   month_start: string;
@@ -121,4 +122,21 @@ export interface IndicadoresGestaoEstoqueReportBaseRow {
   qtd_mov: number | null;
   valor_mov: number;
   updated_at: string | null;
+}
+
+export interface IndicadoresGestaoEstoqueInventarioPreviewSummary {
+  produtos_qtd: number;
+  enderecos_qtd: number;
+  itens_qtd: number;
+  zonas_qtd: number;
+}
+
+export interface IndicadoresGestaoEstoqueInventarioApplySummary extends IndicadoresGestaoEstoqueInventarioPreviewSummary {
+  itens_afetados: number;
+  zonas_afetadas: number;
+  total_geral: number;
+  usuario_id: string | null;
+  usuario_mat: string | null;
+  usuario_nome: string | null;
+  atualizado_em: string | null;
 }

@@ -2,6 +2,9 @@ import { supabase } from "../../lib/supabase";
 import type {
   IndicadoresGestaoEstoqueDailyRow,
   IndicadoresGestaoEstoqueDetailRow,
+  IndicadoresGestaoEstoqueInventarioApplySummary,
+  IndicadoresGestaoEstoqueInventarioPreviewSummary,
+  IndicadoresGestaoEstoqueInventarioStockType,
   IndicadoresGestaoEstoqueLossDimensionItem,
   IndicadoresGestaoEstoqueMonthOption,
   IndicadoresGestaoEstoqueReportBaseRow,
@@ -25,6 +28,10 @@ function toErrorMessage(error: unknown): string {
     if (normalized.includes("CD_NAO_DEFINIDO_USUARIO")) return "CD não definido para este usuário.";
     if (normalized.includes("CD_SEM_ACESSO")) return "Sem acesso ao CD selecionado.";
     if (normalized.includes("PROFILE_NAO_ENCONTRADO")) return "Perfil do usuário não encontrado.";
+    if (normalized.includes("PERIODO_OBRIGATORIO")) return "Informe a data inicial e a data final.";
+    if (normalized.includes("INTERVALO_INVALIDO")) return "A data inicial não pode ser maior que a data final.";
+    if (normalized.includes("TIPO_ESTOQUE_OBRIGATORIO")) return "Selecione o tipo de estoque: Disponível ou Atual.";
+    if (normalized.includes("APENAS_ADMIN")) return "Apenas admin pode enviar itens para o inventário.";
     return raw;
   };
 
@@ -210,6 +217,28 @@ function mapReportBaseRow(raw: Record<string, unknown>): IndicadoresGestaoEstoqu
     qtd_mov: raw.qtd_mov == null ? null : parseInteger(raw.qtd_mov),
     valor_mov: parseNumber(raw.valor_mov),
     updated_at: parseNullableString(raw.updated_at)
+  };
+}
+
+function mapInventarioPreviewSummary(raw: Record<string, unknown> | null | undefined): IndicadoresGestaoEstoqueInventarioPreviewSummary {
+  return {
+    produtos_qtd: Math.max(parseInteger(raw?.produtos_qtd), 0),
+    enderecos_qtd: Math.max(parseInteger(raw?.enderecos_qtd), 0),
+    itens_qtd: Math.max(parseInteger(raw?.itens_qtd), 0),
+    zonas_qtd: Math.max(parseInteger(raw?.zonas_qtd), 0)
+  };
+}
+
+function mapInventarioApplySummary(raw: Record<string, unknown> | null | undefined): IndicadoresGestaoEstoqueInventarioApplySummary {
+  return {
+    ...mapInventarioPreviewSummary(raw),
+    itens_afetados: Math.max(parseInteger(raw?.itens_afetados), 0),
+    zonas_afetadas: Math.max(parseInteger(raw?.zonas_afetadas), 0),
+    total_geral: Math.max(parseInteger(raw?.total_geral), 0),
+    usuario_id: parseNullableString(raw?.usuario_id),
+    usuario_mat: parseNullableString(raw?.usuario_mat),
+    usuario_nome: parseNullableString(raw?.usuario_nome),
+    atualizado_em: parseNullableString(raw?.atualizado_em)
   };
 }
 
@@ -489,4 +518,46 @@ export async function fetchIndicadoresGestaoEstoqueReportBase(params: {
   if (!Array.isArray(data)) return [];
 
   return data.map((row) => mapReportBaseRow(row as Record<string, unknown>));
+}
+
+export async function previewIndicadoresGestaoEstoqueInventarioSeed(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  estoqueTipo: IndicadoresGestaoEstoqueInventarioStockType;
+  incluirPul: boolean;
+}): Promise<IndicadoresGestaoEstoqueInventarioPreviewSummary> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_inventario_preview", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_estoque_tipo: params.estoqueTipo,
+    p_incluir_pul: params.incluirPul
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  return mapInventarioPreviewSummary(firstRow(data));
+}
+
+export async function applyIndicadoresGestaoEstoqueInventarioSeed(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  estoqueTipo: IndicadoresGestaoEstoqueInventarioStockType;
+  incluirPul: boolean;
+}): Promise<IndicadoresGestaoEstoqueInventarioApplySummary> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_inventario_apply", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_estoque_tipo: params.estoqueTipo,
+    p_incluir_pul: params.incluirPul
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  return mapInventarioApplySummary(firstRow(data));
 }

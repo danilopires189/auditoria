@@ -7,10 +7,12 @@ import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "..
 import { getModuleByKeyOrThrow } from "../registry";
 import type { IndicadoresModuleProfile } from "./types";
 import {
+  applyIndicadoresGestaoEstoqueInventarioSeed,
   fetchIndicadoresGestaoEstoqueDailySeries,
   fetchIndicadoresGestaoEstoqueDetails,
   fetchIndicadoresGestaoEstoqueLossDimension,
   fetchIndicadoresGestaoEstoqueMonthOptions,
+  previewIndicadoresGestaoEstoqueInventarioSeed,
   fetchIndicadoresGestaoEstoqueReportBase,
   fetchIndicadoresGestaoEstoqueReportDailySeries,
   fetchIndicadoresGestaoEstoqueReportDetails,
@@ -25,6 +27,9 @@ import {
 import type {
   IndicadoresGestaoEstoqueDailyRow,
   IndicadoresGestaoEstoqueDetailRow,
+  IndicadoresGestaoEstoqueInventarioApplySummary,
+  IndicadoresGestaoEstoqueInventarioPreviewSummary,
+  IndicadoresGestaoEstoqueInventarioStockType,
   IndicadoresGestaoEstoqueLossDimensionItem,
   IndicadoresGestaoEstoqueMonthOption,
   IndicadoresGestaoEstoqueMovementFilter,
@@ -48,6 +53,7 @@ interface MetricCardDefinition {
 }
 
 type MobileAccordionSection = "reentry" | "topEntradas" | "topSaidas" | "supplierLoss" | "categoryLoss" | "details";
+type InventarioStockTypeValue = IndicadoresGestaoEstoqueInventarioStockType | "";
 
 interface MobileAccordionControl {
   enabled: boolean;
@@ -62,6 +68,7 @@ const DETAIL_ROWS_LIMIT = 100;
 const INSIGHT_ROWS_LIMIT = 10;
 const REENTRY_ROWS_LIMIT = 12;
 const MOBILE_ACCORDION_MEDIA_QUERY = "(max-width: 720px)";
+const INVENTARIO_SEED_ALLOWED_HOSTNAMES = new Set(["prevencaocd.vercel.app", "prevencaocds.vercel.app"]);
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -187,6 +194,15 @@ function formatMovementLabel(value: IndicadoresGestaoEstoqueMovementFilter): str
   return "Todas";
 }
 
+function formatInventoryStockTypeLabel(value: IndicadoresGestaoEstoqueInventarioStockType): string {
+  return value === "atual" ? "Atual" : "Disponível";
+}
+
+function isInventarioSeedAllowedHostname(hostname: string | undefined): boolean {
+  if (!hostname) return false;
+  return INVENTARIO_SEED_ALLOWED_HOSTNAMES.has(hostname.trim().toLowerCase());
+}
+
 function defaultReportStartDate(
   summary: IndicadoresGestaoEstoqueSummary | null,
   selectedMonthStart: string,
@@ -230,6 +246,17 @@ function CurrencyMetricValue({ value, signed = false }: { value: number; signed?
       <small>{`${signal}R$`}</small>
       <span>{formatNumber(Math.abs(safe))}</span>
     </strong>
+  );
+}
+
+function inventorySendIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 4h6v6" />
+      <path d="M10 14 20 4" />
+      <path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4" />
+      <path d="M9 12h5v5" />
+    </svg>
   );
 }
 
@@ -498,11 +525,25 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [reportDateStart, setReportDateStart] = useState("");
   const [reportDateEnd, setReportDateEnd] = useState("");
   const [reportMovementFilter, setReportMovementFilter] = useState<IndicadoresGestaoEstoqueMovementFilter>("todas");
+  const [inventarioDialogOpen, setInventarioDialogOpen] = useState(false);
+  const [inventarioBusy, setInventarioBusy] = useState(false);
+  const [inventarioErrorMessage, setInventarioErrorMessage] = useState<string | null>(null);
+  const [inventarioStatusMessage, setInventarioStatusMessage] = useState<string | null>(null);
+  const [inventarioDateStart, setInventarioDateStart] = useState("");
+  const [inventarioDateEnd, setInventarioDateEnd] = useState("");
+  const [inventarioStockType, setInventarioStockType] = useState<InventarioStockTypeValue>("");
+  const [inventarioIncludePul, setInventarioIncludePul] = useState(false);
+  const [inventarioPreview, setInventarioPreview] = useState<IndicadoresGestaoEstoqueInventarioPreviewSummary | null>(null);
+  const [inventarioApplySummary, setInventarioApplySummary] = useState<IndicadoresGestaoEstoqueInventarioApplySummary | null>(null);
   const [isMobileAccordion, setIsMobileAccordion] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia(MOBILE_ACCORDION_MEDIA_QUERY).matches;
   });
   const [expandedMobileSection, setExpandedMobileSection] = useState<MobileAccordionSection | null>(null);
+  const inventarioHostAllowed = useMemo(
+    () => isInventarioSeedAllowedHostname(typeof window === "undefined" ? undefined : window.location.hostname),
+    []
+  );
 
   function toggleMobileSection(section: MobileAccordionSection) {
     setExpandedMobileSection((current) => (current === section ? null : section));
@@ -532,6 +573,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     if (isMobileAccordion) {
       setExpandedMobileSection(null);
       setReportDialogOpen(false);
+      setInventarioDialogOpen(false);
     }
   }, [isMobileAccordion]);
 
@@ -745,6 +787,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   }, [activeCd, expandedMobileSection, isMobileAccordion, movementFilter, selectedDay, selectedMonthStart]);
 
   const canExportReport = !isMobileAccordion && Boolean(selectedMonthStart);
+  const canOpenInventarioDialog = !isMobileAccordion && Boolean(selectedMonthStart) && inventarioHostAllowed && profile.role === "admin";
+  const inventarioPreviewHasItems = (inventarioPreview?.itens_qtd ?? 0) > 0;
 
   const openReportDialog = useCallback(() => {
     if (!canExportReport || reportBusy) return;
@@ -763,6 +807,26 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     setReportErrorMessage(null);
   }, [reportBusy]);
 
+  const openInventarioDialog = useCallback(() => {
+    if (!canOpenInventarioDialog || inventarioBusy) return;
+
+    setInventarioDateStart(defaultReportStartDate(summary, selectedMonthStart, selectedDay));
+    setInventarioDateEnd(defaultReportEndDate(summary, selectedMonthStart, selectedDay));
+    setInventarioStockType("");
+    setInventarioIncludePul(false);
+    setInventarioPreview(null);
+    setInventarioApplySummary(null);
+    setInventarioErrorMessage(null);
+    setInventarioStatusMessage(null);
+    setInventarioDialogOpen(true);
+  }, [canOpenInventarioDialog, inventarioBusy, selectedDay, selectedMonthStart, summary]);
+
+  const closeInventarioDialog = useCallback(() => {
+    if (inventarioBusy) return;
+    setInventarioDialogOpen(false);
+    setInventarioErrorMessage(null);
+  }, [inventarioBusy]);
+
   const validateReportFilters = useCallback((): string | null => {
     if (!reportDateStart || !reportDateEnd) {
       return "Informe a data inicial e a data final do relatório.";
@@ -772,6 +836,94 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     }
     return null;
   }, [reportDateEnd, reportDateStart]);
+
+  const validateInventarioFilters = useCallback((): string | null => {
+    if (!inventarioDateStart || !inventarioDateEnd) {
+      return "Informe a data inicial e a data final.";
+    }
+    if (inventarioDateStart > inventarioDateEnd) {
+      return "A data inicial não pode ser maior que a data final.";
+    }
+    if (!inventarioStockType) {
+      return "Selecione o tipo de estoque: Disponível ou Atual.";
+    }
+    return null;
+  }, [inventarioDateEnd, inventarioDateStart, inventarioStockType]);
+
+  const runInventarioPreview = useCallback(async () => {
+    const validationError = validateInventarioFilters();
+    if (validationError) {
+      setInventarioErrorMessage(validationError);
+      return;
+    }
+
+    if (!inventarioStockType) return;
+
+    setInventarioBusy(true);
+    setInventarioErrorMessage(null);
+    setInventarioStatusMessage(null);
+    setInventarioApplySummary(null);
+
+    try {
+      const preview = await previewIndicadoresGestaoEstoqueInventarioSeed({
+        cd: activeCd,
+        dtIni: inventarioDateStart,
+        dtFim: inventarioDateEnd,
+        estoqueTipo: inventarioStockType,
+        incluirPul: inventarioIncludePul
+      });
+      setInventarioPreview(preview);
+    } catch (error) {
+      setInventarioPreview(null);
+      setInventarioErrorMessage(asErrorMessage(error));
+    } finally {
+      setInventarioBusy(false);
+    }
+  }, [activeCd, inventarioDateEnd, inventarioDateStart, inventarioIncludePul, inventarioStockType, validateInventarioFilters]);
+
+  const applyInventarioSeed = useCallback(async () => {
+    const validationError = validateInventarioFilters();
+    if (validationError) {
+      setInventarioErrorMessage(validationError);
+      return;
+    }
+    if (!inventarioStockType) return;
+    if (!inventarioPreviewHasItems) {
+      setInventarioErrorMessage("Gere a prévia com itens elegíveis antes de confirmar.");
+      return;
+    }
+
+    setInventarioBusy(true);
+    setInventarioErrorMessage(null);
+    setInventarioStatusMessage(null);
+
+    try {
+      const summaryApply = await applyIndicadoresGestaoEstoqueInventarioSeed({
+        cd: activeCd,
+        dtIni: inventarioDateStart,
+        dtFim: inventarioDateEnd,
+        estoqueTipo: inventarioStockType,
+        incluirPul: inventarioIncludePul
+      });
+      setInventarioApplySummary(summaryApply);
+      setInventarioDialogOpen(false);
+      setInventarioStatusMessage(
+        `Inventário atualizado. Produtos: ${formatInteger(summaryApply.produtos_qtd)} | Endereços: ${formatInteger(summaryApply.enderecos_qtd)} | Itens afetados: ${formatInteger(summaryApply.itens_afetados)} | Total atual: ${formatInteger(summaryApply.total_geral)}.`
+      );
+    } catch (error) {
+      setInventarioErrorMessage(asErrorMessage(error));
+    } finally {
+      setInventarioBusy(false);
+    }
+  }, [
+    activeCd,
+    inventarioDateEnd,
+    inventarioDateStart,
+    inventarioIncludePul,
+    inventarioPreviewHasItems,
+    inventarioStockType,
+    validateInventarioFilters
+  ]);
 
   const exportReportXlsx = useCallback(async () => {
     const validationError = validateReportFilters();
@@ -1113,6 +1265,14 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     [monthOptions, selectedMonthStart]
   );
 
+  useEffect(() => {
+    if (!inventarioDialogOpen) return;
+    setInventarioPreview(null);
+    setInventarioApplySummary(null);
+    setInventarioErrorMessage(null);
+    setInventarioStatusMessage(null);
+  }, [inventarioDateEnd, inventarioDateStart, inventarioDialogOpen, inventarioIncludePul, inventarioStockType]);
+
   const dayOptions = useMemo(() => {
     if (!summary) return [];
     return buildCalendarDays(summary.month_start, summary.month_end);
@@ -1150,6 +1310,18 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       { label: "Produtos Distintos", value: summary.produtos_distintos_mes, kind: "integer" }
     ];
   }, [summary]);
+
+  const inventarioApplyActorLabel = useMemo(() => {
+    if (!inventarioApplySummary) return null;
+    const nome = (inventarioApplySummary.usuario_nome ?? "").trim();
+    const mat = (inventarioApplySummary.usuario_mat ?? "").trim();
+    const atualizadoEm = formatDateTime(inventarioApplySummary.atualizado_em);
+    const actor = [nome, mat ? `MAT ${mat}` : null].filter(Boolean).join(" | ");
+    if (actor && atualizadoEm !== "-") return `${actor} em ${atualizadoEm}`;
+    if (actor) return actor;
+    if (atualizadoEm !== "-") return atualizadoEm;
+    return null;
+  }, [inventarioApplySummary]);
 
   return (
     <>
@@ -1228,6 +1400,20 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                 </label>
                 {!isMobileAccordion ? (
                   <div className="indicadores-filters-actions">
+                    {canOpenInventarioDialog ? (
+                      <button
+                        type="button"
+                        className="btn btn-muted gestao-estq-inventario-trigger"
+                        onClick={openInventarioDialog}
+                        disabled={inventarioBusy}
+                        title="Enviar produtos de saída para auditoria no Inventário (zerados)"
+                      >
+                        <span className="gestao-estq-action-icon" aria-hidden="true">
+                          {inventorySendIcon()}
+                        </span>
+                        <span>{inventarioBusy ? "Processando..." : "Enviar para Inventário"}</span>
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn-primary gestao-estq-report-export-trigger"
@@ -1243,6 +1429,10 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           </div>
 
           {dashboardErrorMessage ? <div className="indicadores-feedback is-error">{dashboardErrorMessage}</div> : null}
+          {inventarioStatusMessage ? <div className="module-inline-message">{inventarioStatusMessage}</div> : null}
+          {inventarioApplySummary && inventarioApplyActorLabel ? (
+            <div className="module-inline-message">{`Base atualizada por ${inventarioApplyActorLabel}`}</div>
+          ) : null}
           {reportStatusMessage ? <div className="module-inline-message">{reportStatusMessage}</div> : null}
 
           <div className="indicadores-metrics-grid gestao-estq-metrics-grid">
@@ -1423,6 +1613,100 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           </div>
         </article>
       </section>
+      {!isMobileAccordion && inventarioDialogOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay gestao-estq-report-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estq-inventario-title"
+              onClick={closeInventarioDialog}
+            >
+              <div className="confirm-dialog surface-enter gestao-estq-report-dialog" onClick={(event) => event.stopPropagation()}>
+                <h3 id="gestao-estq-inventario-title">Enviar para Inventário</h3>
+                <p>{`${displayCdName} · apenas movimentações de Saída`}</p>
+
+                <div className="gestao-estq-report-form">
+                  <div className="gestao-estq-report-form-row">
+                    <label>
+                      <span>Data inicial</span>
+                      <input
+                        type="date"
+                        value={inventarioDateStart}
+                        onChange={(event) => setInventarioDateStart(event.target.value)}
+                        disabled={inventarioBusy}
+                      />
+                    </label>
+                    <label>
+                      <span>Data final</span>
+                      <input
+                        type="date"
+                        value={inventarioDateEnd}
+                        onChange={(event) => setInventarioDateEnd(event.target.value)}
+                        disabled={inventarioBusy}
+                      />
+                    </label>
+                  </div>
+
+                  <label>
+                    <span>Estoque a considerar</span>
+                    <select
+                      value={inventarioStockType}
+                      onChange={(event) => setInventarioStockType(event.target.value as InventarioStockTypeValue)}
+                      disabled={inventarioBusy}
+                    >
+                      <option value="">Selecione</option>
+                      <option value="disponivel">Disponível</option>
+                      <option value="atual">Atual</option>
+                    </select>
+                  </label>
+
+                  <label className="gestao-estq-inventario-check">
+                    <input
+                      type="checkbox"
+                      checked={inventarioIncludePul}
+                      onChange={(event) => setInventarioIncludePul(event.target.checked)}
+                      disabled={inventarioBusy}
+                    />
+                    <span>Incluir endereço Pulmão</span>
+                  </label>
+
+                  {inventarioPreview ? (
+                    <div className="gestao-estq-inventario-preview">
+                      <strong>Prévia da auditoria</strong>
+                      <div className="gestao-estq-inventario-preview-grid">
+                        <p><span>Produtos</span><strong>{formatInteger(inventarioPreview.produtos_qtd)}</strong></p>
+                        <p><span>Endereços</span><strong>{formatInteger(inventarioPreview.enderecos_qtd)}</strong></p>
+                        <p><span>Itens</span><strong>{formatInteger(inventarioPreview.itens_qtd)}</strong></p>
+                        <p><span>Zonas</span><strong>{formatInteger(inventarioPreview.zonas_qtd)}</strong></p>
+                      </div>
+                      <small>
+                        {inventarioPreviewHasItems
+                          ? `Estoque ${formatInventoryStockTypeLabel(inventarioStockType as IndicadoresGestaoEstoqueInventarioStockType)}${inventarioIncludePul ? " com Pulmão" : " sem Pulmão"}.`
+                          : "Nenhum item elegível encontrado para os filtros informados."}
+                      </small>
+                    </div>
+                  ) : null}
+
+                  {inventarioErrorMessage ? <div className="module-inline-error">{inventarioErrorMessage}</div> : null}
+                </div>
+
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => void runInventarioPreview()} disabled={inventarioBusy}>
+                    {inventarioBusy ? "Processando..." : "Gerar prévia"}
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={() => void applyInventarioSeed()} disabled={inventarioBusy || !inventarioPreviewHasItems}>
+                    {inventarioBusy ? "Enviando..." : "Confirmar envio"}
+                  </button>
+                  <button className="btn btn-muted" type="button" onClick={closeInventarioDialog} disabled={inventarioBusy}>
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       {!isMobileAccordion && reportDialogOpen && typeof document !== "undefined"
         ? createPortal(
             <div

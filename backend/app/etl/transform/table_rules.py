@@ -116,12 +116,33 @@ def _prepare_db_gestao_estq_compat_columns(
     return work, {"populated_tipo_movimentacao_from_tipo": 0}
 
 
+def _prepare_db_avulso_compat_columns(
+    frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    work = frame.copy()
+
+    if "dt_mov" not in work.columns and "data_mov" in work.columns:
+        work["dt_mov"] = work["data_mov"]
+        return work, {"populated_dt_mov_from_data_mov": int(work["data_mov"].notna().sum())}
+
+    if "dt_mov" in work.columns and "data_mov" in work.columns:
+        fill_mask = work["dt_mov"].isna() & work["data_mov"].notna()
+        populated = int(fill_mask.sum())
+        if populated > 0:
+            work.loc[fill_mask, "dt_mov"] = work.loc[fill_mask, "data_mov"]
+        return work, {"populated_dt_mov_from_data_mov": populated}
+
+    return work, {"populated_dt_mov_from_data_mov": 0}
+
+
 def apply_table_specific_rules(
     table_name: str,
     frame: pd.DataFrame,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     if table_name == "db_usuario":
         return _drop_db_usuario_empty_cd_duplicates(frame)
+    if table_name == "db_avulso":
+        return _prepare_db_avulso_compat_columns(frame)
     if table_name == "db_prod_vol":
         return _prepare_db_prod_vol_compat_columns(frame)
     if table_name == "db_end":
