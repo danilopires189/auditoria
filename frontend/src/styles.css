@@ -12651,17 +12651,17 @@ small {
 
 .gestao-op-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto;
+  gap: 8px;
   align-items: center;
 }
 
 .gestao-op-toolbar-primary {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .gestao-op-segmented {
@@ -12680,10 +12680,10 @@ small {
   border-radius: 10px;
   background: transparent;
   color: #46607d;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
   line-height: 1;
-  padding: 10px 14px;
+  padding: 9px 12px;
   min-height: 40px;
   cursor: pointer;
   transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
@@ -12708,9 +12708,9 @@ small {
 .gestao-op-day-picker {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 42px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid rgba(145, 171, 205, 0.22);
   border-radius: 12px;
   background: #fff;
@@ -12724,7 +12724,7 @@ small {
   color: inherit;
   font: inherit;
   font-weight: 600;
-  min-width: 164px;
+  min-width: 136px;
   outline: none;
 }
 
@@ -12746,21 +12746,23 @@ small {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .gestao-op-actions .btn {
   min-height: 42px;
-  padding: 10px 14px;
+  padding: 10px 12px;
   border-radius: 12px;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   line-height: 1;
   white-space: nowrap;
 }
 
 .gestao-op-export-trigger {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .gestao-op-review-trigger {
@@ -12840,9 +12842,9 @@ small {
 .gestao-op-view-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 42px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid rgba(145, 171, 205, 0.24);
   border-radius: 12px;
   background: rgba(248, 251, 255, 0.96);
@@ -12885,7 +12887,7 @@ small {
 
 .gestao-op-view-trigger-copy {
   color: inherit;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -13783,6 +13785,7 @@ small {
 
   .gestao-op-toolbar-primary {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .gestao-op-view-trigger--desktop {
@@ -14050,7 +14053,6 @@ small {
   }
 
   .gestao-op-export-trigger {
-    display: inline-flex;
     width: 100%;
     min-height: 48px;
     align-items: center;
@@ -14058,10 +14060,6 @@ small {
     padding: 0 12px;
     font-size: 0.88rem;
     font-weight: 800;
-  }
-
-  .gestao-op-export-btn {
-    display: none;
   }
 
   .gestao-op-actions .btn {

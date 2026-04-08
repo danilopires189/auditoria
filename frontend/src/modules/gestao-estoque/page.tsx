@@ -1691,12 +1691,6 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
             <button className="btn btn-primary gestao-op-export-trigger" type="button" onClick={openExportChoices} disabled={exportDisabled}>
               {busyExport ? "Gerando..." : "Exportar"}
             </button>
-            <button className="btn btn-muted gestao-op-export-btn gestao-op-export-btn--pdf" type="button" onClick={() => void exportPdf()} disabled={exportDisabled}>
-              {busyExport ? "Gerando..." : "Exportar PDF"}
-            </button>
-            <button className="btn btn-primary gestao-op-export-btn gestao-op-export-btn--xlsx" type="button" onClick={() => void exportXlsx()} disabled={exportDisabled}>
-              {busyExport ? "Gerando..." : "Exportar Excel"}
-            </button>
           </div>
         </div>
 
