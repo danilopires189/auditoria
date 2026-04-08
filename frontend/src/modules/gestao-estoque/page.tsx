@@ -1487,152 +1487,154 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
           </article>
         </div>
 
-        <div className="gestao-op-grid">
-          <article className="module-card module-card-static gestao-op-panel">
-            <div className="gestao-op-panel-head">
-              <h3>Localizar produto</h3>
-              <span></span>
-            </div>
-            <div className="gestao-op-panel-body">
-              <form className="gestao-op-search-form" onSubmit={onSubmitAdd}>
-                <div className="gestao-op-field">
-                  <label htmlFor="gestao-op-search">Barras ou CODDV</label>
-                  <div className="gestao-op-inline-field">
-                    <div className="input-icon-wrap with-action gestao-op-mobile-search-wrap">
-                      <span className={barcodeIconClassName} aria-hidden="true">
-                        {barcodeIcon()}
-                      </span>
-                      <input
-                        id="gestao-op-search"
-                        ref={searchInputRef}
-                        type="text"
-                        value={searchInput}
-                        onChange={onSearchInputChange}
-                        onKeyDown={onSearchKeyDown}
-                        onFocus={enableSearchSoftKeyboard}
-                        onPointerDown={enableSearchSoftKeyboard}
-                        onBlur={disableSearchSoftKeyboard}
-                        placeholder="Bipe, digite ou use câmera"
-                        autoComplete="off"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck={false}
-                        inputMode={searchInputMode}
-                        enterKeyHint="search"
-                        disabled={isHistorical}
-                      />
-                      <button
-                        type="button"
-                        className="input-action-btn gestao-op-mobile-camera-btn"
-                        onClick={hasSearchInput ? () => void executeLookup() : openCameraScanner}
-                        title={hasSearchInput ? "Buscar produto" : "Ler código pela câmera"}
-                        aria-label={hasSearchInput ? "Buscar produto" : "Ler código pela câmera"}
-                        disabled={hasSearchInput ? busyLookup || isHistorical : !cameraSupported || busyLookup || isHistorical}
-                      >
-                        {hasSearchInput ? searchIcon() : cameraIcon()}
+        {!isHistorical ? (
+          <div className="gestao-op-grid">
+            <article className="module-card module-card-static gestao-op-panel">
+              <div className="gestao-op-panel-head">
+                <h3>Localizar produto</h3>
+                <span></span>
+              </div>
+              <div className="gestao-op-panel-body">
+                <form className="gestao-op-search-form" onSubmit={onSubmitAdd}>
+                  <div className="gestao-op-field">
+                    <label htmlFor="gestao-op-search">Barras ou CODDV</label>
+                    <div className="gestao-op-inline-field">
+                      <div className="input-icon-wrap with-action gestao-op-mobile-search-wrap">
+                        <span className={barcodeIconClassName} aria-hidden="true">
+                          {barcodeIcon()}
+                        </span>
+                        <input
+                          id="gestao-op-search"
+                          ref={searchInputRef}
+                          type="text"
+                          value={searchInput}
+                          onChange={onSearchInputChange}
+                          onKeyDown={onSearchKeyDown}
+                          onFocus={enableSearchSoftKeyboard}
+                          onPointerDown={enableSearchSoftKeyboard}
+                          onBlur={disableSearchSoftKeyboard}
+                          placeholder="Bipe, digite ou use câmera"
+                          autoComplete="off"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          inputMode={searchInputMode}
+                          enterKeyHint="search"
+                          disabled={isHistorical}
+                        />
+                        <button
+                          type="button"
+                          className="input-action-btn gestao-op-mobile-camera-btn"
+                          onClick={hasSearchInput ? () => void executeLookup() : openCameraScanner}
+                          title={hasSearchInput ? "Buscar produto" : "Ler código pela câmera"}
+                          aria-label={hasSearchInput ? "Buscar produto" : "Ler código pela câmera"}
+                          disabled={hasSearchInput ? busyLookup || isHistorical : !cameraSupported || busyLookup || isHistorical}
+                        >
+                          {hasSearchInput ? searchIcon() : cameraIcon()}
+                        </button>
+                      </div>
+                      <button className="btn btn-muted gestao-op-search-btn" type="button" onClick={() => void executeLookup()} disabled={busyLookup || isHistorical}>
+                        {busyLookup ? "Buscando..." : "Buscar"}
                       </button>
                     </div>
-                    <button className="btn btn-muted gestao-op-search-btn" type="button" onClick={() => void executeLookup()} disabled={busyLookup || isHistorical}>
-                      {busyLookup ? "Buscando..." : "Buscar"}
-                    </button>
                   </div>
-                </div>
 
-                <div className="gestao-op-field">
-                  <label htmlFor="gestao-op-qty">Quantidade</label>
-                  <input
-                    id="gestao-op-qty"
-                    type="number"
-                    min={1}
-                    max={movementType === "baixa" && preview ? Math.max(preview.qtd_est_atual, 1) : undefined}
-                    value={quantidadeInput}
-                    onChange={(event) => setQuantidadeInput(event.target.value)}
-                    inputMode="numeric"
-                    disabled={isHistorical}
-                  />
-                  {movementType === "baixa" && preview ? (
-                    <small>Máximo para baixa: {formatInteger(preview.qtd_est_atual)}</small>
-                  ) : (
-                    <small>Para entrada não há limitador.</small>
-                  )}
-                </div>
+                  <div className="gestao-op-field">
+                    <label htmlFor="gestao-op-qty">Quantidade</label>
+                    <input
+                      id="gestao-op-qty"
+                      type="number"
+                      min={1}
+                      max={movementType === "baixa" && preview ? Math.max(preview.qtd_est_atual, 1) : undefined}
+                      value={quantidadeInput}
+                      onChange={(event) => setQuantidadeInput(event.target.value)}
+                      inputMode="numeric"
+                      disabled={isHistorical}
+                    />
+                    {movementType === "baixa" && preview ? (
+                      <small>Máximo para baixa: {formatInteger(preview.qtd_est_atual)}</small>
+                    ) : (
+                      <small>Para entrada não há limitador.</small>
+                    )}
+                  </div>
 
-                <button className="btn btn-primary gestao-op-add-btn" type="submit" disabled={preview == null || isHistorical}>
-                  Adicionar à lista
-                </button>
-              </form>
-            </div>
-          </article>
+                  <button className="btn btn-primary gestao-op-add-btn" type="submit" disabled={preview == null || isHistorical}>
+                    Adicionar à lista
+                  </button>
+                </form>
+              </div>
+            </article>
 
-          <article className="module-card module-card-static gestao-op-panel">
-            <div className="gestao-op-panel-head">
-              <h3>Pré-visualização</h3>
-              <span>Detalhes</span>
-            </div>
-            <div className="gestao-op-panel-body gestao-op-panel-body--preview">
-              {preview ? (
-                <div className="gestao-op-preview">
-                  <div className="gestao-op-preview-head">
-                    <div className="gestao-op-preview-head-copy">
-                      <strong>{preview.descricao}</strong>
-                      <span>CODDV {preview.coddv}</span>
-                    </div>
-                    <div className="gestao-op-preview-head-meta">
-                      <div className="gestao-op-preview-head-chip">
-                        <small>Últ. compra</small>
-                        <strong>{formatDate(preview.dat_ult_compra)}</strong>
+            <article className="module-card module-card-static gestao-op-panel">
+              <div className="gestao-op-panel-head">
+                <h3>Pré-visualização</h3>
+                <span>Detalhes</span>
+              </div>
+              <div className="gestao-op-panel-body gestao-op-panel-body--preview">
+                {preview ? (
+                  <div className="gestao-op-preview">
+                    <div className="gestao-op-preview-head">
+                      <div className="gestao-op-preview-head-copy">
+                        <strong>{preview.descricao}</strong>
+                        <span>CODDV {preview.coddv}</span>
                       </div>
-                      <div className="gestao-op-preview-head-chip">
-                        <small>R$ unit.</small>
-                        <strong>{formatCurrency(preview.custo_unitario)}</strong>
+                      <div className="gestao-op-preview-head-meta">
+                        <div className="gestao-op-preview-head-chip">
+                          <small>Últ. compra</small>
+                          <strong>{formatDate(preview.dat_ult_compra)}</strong>
+                        </div>
+                        <div className="gestao-op-preview-head-chip">
+                          <small>R$ unit.</small>
+                          <strong>{formatCurrency(preview.custo_unitario)}</strong>
+                        </div>
                       </div>
                     </div>
+                    <dl>
+                      <div className="gestao-op-preview-item gestao-op-preview-item--sep">
+                        <dt><PreviewLabel desktop="Endereço de Separação" mobile="End. separação" /></dt>
+                        <dd>{joinAddresses(preview.enderecos_sep)}</dd>
+                      </div>
+                      <div className="gestao-op-preview-item gestao-op-preview-item--pul">
+                        <dt><PreviewLabel desktop="Endereço de Pulmão" mobile="End. pulmão" /></dt>
+                        <dd>{joinAddresses(preview.enderecos_pul)}</dd>
+                      </div>
+                      <div className="gestao-op-preview-item gestao-op-preview-item--stock">
+                        <dt><PreviewLabel desktop="Estoque atual" mobile="Est. atual" /></dt>
+                        <dd>{formatInteger(preview.qtd_est_atual)}</dd>
+                      </div>
+                      <div className="gestao-op-preview-item gestao-op-preview-item--stock">
+                        <dt><PreviewLabel desktop="Estoque disponível" mobile="Est. disponível" /></dt>
+                        <dd>{formatInteger(preview.qtd_est_disp)}</dd>
+                      </div>
+                      <div className="gestao-op-preview-item gestao-op-preview-item--history">
+                        <dt><PreviewLabel desktop={`Hist. de Entrada (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} mobile={`Hist. entrada (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} /></dt>
+                        <dd>
+                          <PreviewHistoryBlock
+                            rows={previewEntryHistory.rows}
+                            loading={busyPreviewHistory}
+                            errorMessage={previewHistoryError}
+                          />
+                        </dd>
+                      </div>
+                      <div className="gestao-op-preview-item gestao-op-preview-item--history">
+                        <dt><PreviewLabel desktop={`Hist. de Saída (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} mobile={`Hist. saída (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} /></dt>
+                        <dd>
+                          <PreviewHistoryBlock
+                            rows={previewExitHistory.rows}
+                            loading={busyPreviewHistory}
+                            errorMessage={previewHistoryError}
+                          />
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
-                  <dl>
-                    <div className="gestao-op-preview-item gestao-op-preview-item--sep">
-                      <dt><PreviewLabel desktop="Endereço de Separação" mobile="End. separação" /></dt>
-                      <dd>{joinAddresses(preview.enderecos_sep)}</dd>
-                    </div>
-                    <div className="gestao-op-preview-item gestao-op-preview-item--pul">
-                      <dt><PreviewLabel desktop="Endereço de Pulmão" mobile="End. pulmão" /></dt>
-                      <dd>{joinAddresses(preview.enderecos_pul)}</dd>
-                    </div>
-                    <div className="gestao-op-preview-item gestao-op-preview-item--stock">
-                      <dt><PreviewLabel desktop="Estoque atual" mobile="Est. atual" /></dt>
-                      <dd>{formatInteger(preview.qtd_est_atual)}</dd>
-                    </div>
-                    <div className="gestao-op-preview-item gestao-op-preview-item--stock">
-                      <dt><PreviewLabel desktop="Estoque disponível" mobile="Est. disponível" /></dt>
-                      <dd>{formatInteger(preview.qtd_est_disp)}</dd>
-                    </div>
-                    <div className="gestao-op-preview-item gestao-op-preview-item--history">
-                      <dt><PreviewLabel desktop={`Hist. de Entrada (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} mobile={`Hist. entrada (${formatUnitQuantity(previewEntryHistory.totalQuantity)})`} /></dt>
-                      <dd>
-                        <PreviewHistoryBlock
-                          rows={previewEntryHistory.rows}
-                          loading={busyPreviewHistory}
-                          errorMessage={previewHistoryError}
-                        />
-                      </dd>
-                    </div>
-                    <div className="gestao-op-preview-item gestao-op-preview-item--history">
-                      <dt><PreviewLabel desktop={`Hist. de Saída (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} mobile={`Hist. saída (${formatUnitQuantity(previewExitHistory.totalQuantity)})`} /></dt>
-                      <dd>
-                        <PreviewHistoryBlock
-                          rows={previewExitHistory.rows}
-                          loading={busyPreviewHistory}
-                          errorMessage={previewHistoryError}
-                        />
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-              ) : (
-                <div className="coleta-empty gestao-op-preview-empty">Nenhum produto selecionado.</div>
-              )}
-            </div>
-          </article>
-        </div>
+                ) : (
+                  <div className="coleta-empty gestao-op-preview-empty">Nenhum produto selecionado.</div>
+                )}
+              </div>
+            </article>
+          </div>
+        ) : null}
 
         <article className="module-card module-card-static gestao-op-list-panel">
           <div className="gestao-op-panel-head">
