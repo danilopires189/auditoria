@@ -1663,12 +1663,14 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
                   <label className="gestao-estq-inventario-check">
                     <input
+                      className="gestao-estq-inventario-check-input"
                       type="checkbox"
                       checked={inventarioIncludePul}
                       onChange={(event) => setInventarioIncludePul(event.target.checked)}
                       disabled={inventarioBusy}
                     />
-                    <span>Incluir endereço Pulmão</span>
+                    <span className="gestao-estq-inventario-check-control" aria-hidden="true" />
+                    <span className="gestao-estq-inventario-check-label">Incluir endereço Pulmão</span>
                   </label>
 
                   {inventarioPreview ? (
