@@ -13258,6 +13258,11 @@ small {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.gestao-op-row.is-historical-mismatch {
+  border-color: rgba(226, 115, 115, 0.28);
+  background: linear-gradient(180deg, rgba(255, 249, 249, 0.99) 0%, rgba(255, 241, 241, 0.99) 100%);
+}
+
 .gestao-op-row.is-editing {
   border-color: rgba(31, 95, 168, 0.28);
   box-shadow: 0 0 0 4px rgba(41, 115, 199, 0.08);

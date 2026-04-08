@@ -1663,16 +1663,17 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
             <div className="gestao-op-table">
               <div className={`gestao-op-table-head${isHistorical ? " is-historical" : ""}`} role="row">
                 <span>Produto</span>
-                <span>{isHistorical ? "Solic." : "Qtd"}</span>
-                {isHistorical ? <span>Atendido</span> : <span>Últ. compra</span>}
+                <span>{isHistorical ? "Solicitado" : "Qtd"}</span>
+                {isHistorical ? <span>Movimentado</span> : <span>Últ. compra</span>}
                 {isHistorical ? null : <span>Custo unit.</span>}
                 <span>Custo total</span>
-                <span>{isHistorical ? "Est. dia" : "Estoque"}</span>
+                <span>{isHistorical ? "Estoque no dia" : "Estoque"}</span>
                 {isHistorical ? null : <span className="gestao-op-table-head-actions">Ações</span>}
               </div>
               {filteredRows.map((row) => {
                 const isEditing = editingItemId === row.id;
                 const isExpanded = expandedRowId === row.id;
+                const isHistoricalMismatch = isHistorical && row.qtd_mov_dia !== row.quantidade;
                 return (
                   <div
                     key={row.id}
@@ -1680,7 +1681,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                       if (node) rowRefs.current.set(row.id, node);
                       else rowRefs.current.delete(row.id);
                     }}
-                    className={`gestao-op-row${isEditing ? " is-editing" : ""}${isHistorical ? " is-historical" : ""}`}
+                    className={`gestao-op-row${isEditing ? " is-editing" : ""}${isHistorical ? " is-historical" : ""}${isHistoricalMismatch ? " is-historical-mismatch" : ""}`}
                     tabIndex={-1}
                   >
                     <div className={`gestao-op-row-main gestao-op-row-main-table${isHistorical ? " is-historical" : ""}`}>
@@ -1701,12 +1702,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         </span>
                       </button>
                       <span className="gestao-op-row-cell gestao-op-row-cell--qty">
-                        <span className="gestao-op-row-cell-label">{isHistorical ? "Solic." : "Qtd"}</span>
+                        <span className="gestao-op-row-cell-label">{isHistorical ? "Solicitado" : "Qtd"}</span>
                         <span className="gestao-op-row-cell-value">{formatInteger(row.quantidade)}</span>
                       </span>
                       {isHistorical ? (
                         <span className="gestao-op-row-cell gestao-op-row-cell--fulfilled">
-                          <span className="gestao-op-row-cell-label">Atendido</span>
+                          <span className="gestao-op-row-cell-label">Movimentado</span>
                           <span className="gestao-op-row-cell-value">{formatInteger(row.qtd_mov_dia)}</span>
                         </span>
                       ) : (
@@ -1726,7 +1727,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         <span className="gestao-op-row-cell-value">{formatCurrency(isHistorical ? row.valor_mov_dia : row.custo_total)}</span>
                       </span>
                       <span className="gestao-op-row-cell gestao-op-row-cell--stock">
-                        <span className="gestao-op-row-cell-label">{isHistorical ? "Est. dia" : "Estoque"}</span>
+                        <span className="gestao-op-row-cell-label">{isHistorical ? "Estoque no dia" : "Estoque"}</span>
                         <span className="gestao-op-row-cell-value">
                           {isHistorical ? formatInteger(row.qtd_est_atual) : `${formatInteger(row.qtd_est_atual)} atual • ${formatInteger(row.qtd_est_disp)} disp.`}
                         </span>
@@ -1750,9 +1751,9 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                           {isHistorical ? (
                             <>
                               <span><b>Solicitado:</b> {formatInteger(row.quantidade)}</span>
-                              <span><b>Atendido:</b> {formatInteger(row.qtd_mov_dia)}</span>
+                              <span><b>Movimentado:</b> {formatInteger(row.qtd_mov_dia)}</span>
                               <span><b>Custo total:</b> {formatCurrency(row.valor_mov_dia)}</span>
-                              <span><b>Est. dia:</b> {formatInteger(row.qtd_est_atual)} atual</span>
+                              <span><b>Estoque no dia:</b> {formatInteger(row.qtd_est_atual)} atual</span>
                             </>
                           ) : (
                             <>
