@@ -13260,7 +13260,20 @@ small {
 
 .gestao-op-row.is-historical-mismatch {
   border-color: rgba(226, 115, 115, 0.28);
+}
+
+.gestao-op-row.is-historical-mismatch .gestao-op-row-main {
+  padding: 8px 10px;
+  border: 1px solid rgba(226, 115, 115, 0.18);
+  border-radius: 14px;
   background: linear-gradient(180deg, rgba(255, 249, 249, 0.99) 0%, rgba(255, 241, 241, 0.99) 100%);
+}
+
+.gestao-op-row.is-historical-mismatch .gestao-op-row-details {
+  padding: 10px 12px 2px 12px;
+  border-top: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .gestao-op-row.is-editing {
