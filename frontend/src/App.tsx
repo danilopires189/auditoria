@@ -1275,6 +1275,13 @@ export default function App() {
     setSuccessMessage(null);
   };
 
+  const markSessionAsActiveNow = useCallback((userId: string) => {
+    const activityAt = Date.now();
+    inactivityLastActivityAtRef.current = activityAt;
+    lastActivityPingAtRef.current = 0;
+    writeLastActivityAt(userId, activityAt);
+  }, []);
+
   const clearRegisterValidation = () => {
     setRegisterChallenge(null);
     setRegisterPassword("");
@@ -1540,6 +1547,7 @@ export default function App() {
     setBusy(true);
     try {
       const activeSession = await loginWithMatAndPassword(loginMat, loginPassword);
+      markSessionAsActiveNow(activeSession.user.id);
       clearCachedProfileContext(activeSession.user.id);
       setSession(activeSession);
       setProfile(null);
@@ -1640,6 +1648,7 @@ export default function App() {
 
       const { data: sessionData } = await supabase!.auth.getSession();
       if (sessionData.session) {
+        markSessionAsActiveNow(sessionData.session.user.id);
         clearCachedProfileContext(sessionData.session.user.id);
         setSession(sessionData.session);
       }
