@@ -1,0 +1,367 @@
+-- Extend the explicit global-admin exception list to include MAT 70018337.
+
+create or replace function authz.is_global_admin_exception(p_mat text)
+returns boolean
+language sql
+immutable
+set search_path = authz, public
+as $$
+    select authz.normalize_mat(p_mat) in ('20750', '70018337');
+$$;
+
+create or replace function authz.ensure_profile_for_user(
+    p_user_id uuid,
+    p_mat text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = authz, app, auth, public
+as $$
+declare
+    v_mat text;
+    v_email text;
+    v_nome text;
+    v_cargo text;
+    v_cd_default integer;
+    v_cds integer[];
+    v_role text;
+    v_global authz.global_login_accounts%rowtype;
+begin
+    if p_user_id is null then
+        return false;
+    end if;
+
+    select lower(nullif(trim(u.email), ''))
+    into v_email
+    from auth.users u
+    where u.id = p_user_id
+      and u.deleted_at is null
+    limit 1;
+
+    if v_email is null then
+        return false;
+    end if;
+
+    select *
+    into v_global
+    from authz.global_login_accounts g
+    where lower(trim(g.login_email)) = v_email
+      and g.active = true
+    limit 1;
+
+    if v_global.login_email is not null then
+        v_mat := authz.normalize_mat(v_global.mat);
+        if v_mat = '' then
+            v_mat := authz.normalize_mat(p_mat);
+        end if;
+        if v_mat = '' then
+            v_mat := '1';
+        end if;
+
+        insert into authz.profiles (
+            user_id,
+            nome,
+            mat,
+            role,
+            cd_default,
+            created_at
+        )
+        values (
+            p_user_id,
+            coalesce(nullif(trim(v_global.nome), ''), 'admin global'),
+            v_mat,
+            'admin',
+            null,
+            now()
+        )
+        on conflict (user_id)
+        do update set
+            nome = excluded.nome,
+            mat = excluded.mat,
+            role = 'admin',
+            cd_default = null;
+
+        delete from authz.user_deposits
+        where user_id = p_user_id;
+
+        insert into authz.user_deposits (user_id, cd, created_at)
+        select p_user_id, cds.cd, now()
+        from (
+            select distinct u.cd
+            from app.db_usuario u
+            where u.cd is not null
+        ) cds
+        on conflict (user_id, cd) do nothing;
+
+        return true;
+    end if;
+
+    v_mat := authz.normalize_mat(p_mat);
+
+    if v_mat = '' then
+        select authz.normalize_mat(p.mat)
+        into v_mat
+        from authz.profiles p
+        where p.user_id = p_user_id
+        limit 1;
+    end if;
+
+    if v_mat = '' then
+        v_mat := authz.normalize_mat(split_part(v_email, '@', 1));
+    end if;
+
+    if v_mat = '' then
+        select authz.normalize_mat(coalesce(u.raw_user_meta_data ->> 'mat', ''))
+        into v_mat
+        from auth.users u
+        where u.id = p_user_id
+        limit 1;
+    end if;
+
+    if v_mat = '' then
+        return false;
+    end if;
+
+    if v_mat = '1' then
+        insert into authz.profiles (
+            user_id,
+            nome,
+            mat,
+            role,
+            cd_default,
+            created_at
+        )
+        values (
+            p_user_id,
+            'admin',
+            '1',
+            'admin',
+            null,
+            now()
+        )
+        on conflict (user_id)
+        do update set
+            mat = '1',
+            role = 'admin',
+            cd_default = null;
+
+        delete from authz.user_deposits
+        where user_id = p_user_id;
+
+        return true;
+    end if;
+
+    select
+        min(u.nome),
+        min(u.cargo),
+        min(u.cd),
+        array_agg(distinct u.cd order by u.cd)
+    into
+        v_nome,
+        v_cargo,
+        v_cd_default,
+        v_cds
+    from app.db_usuario u
+    where authz.normalize_mat(u.mat) = v_mat;
+
+    if v_nome is null then
+        return false;
+    end if;
+
+    if authz.is_global_admin_exception(v_mat) then
+        v_role := 'admin';
+        v_cd_default := null;
+
+        select array_agg(distinct u.cd order by u.cd)
+        into v_cds
+        from app.db_usuario u
+        where u.cd is not null;
+    else
+        if v_mat = '126719' then
+            v_cd_default := 10;
+            v_cds := array[10, 11];
+        elsif coalesce(array_length(v_cds, 1), 0) > 0 and (10 = any(v_cds) or 11 = any(v_cds)) then
+            select array_agg(distinct cd_item order by cd_item)
+            into v_cds
+            from unnest(array_cat(v_cds, array[10, 11])) as cd_item;
+        end if;
+
+        v_role := authz.role_from_mat_and_cargo(v_mat, v_cargo);
+    end if;
+
+    insert into authz.profiles (
+        user_id,
+        nome,
+        mat,
+        role,
+        cd_default,
+        created_at
+    )
+    values (
+        p_user_id,
+        v_nome,
+        v_mat,
+        v_role,
+        v_cd_default,
+        now()
+    )
+    on conflict (user_id)
+    do update set
+        nome = excluded.nome,
+        mat = excluded.mat,
+        role = excluded.role,
+        cd_default = excluded.cd_default;
+
+    if coalesce(array_length(v_cds, 1), 0) > 0 then
+        delete from authz.user_deposits
+        where user_id = p_user_id;
+
+        insert into authz.user_deposits (user_id, cd, created_at)
+        select p_user_id, cd_item, now()
+        from unnest(v_cds) as cd_item
+        on conflict (user_id, cd) do nothing;
+    end if;
+
+    return true;
+end;
+$$;
+
+create or replace function authz.ensure_profile_from_mat(p_mat text)
+returns boolean
+language plpgsql
+security definer
+set search_path = authz, auth, public
+as $$
+declare
+    v_mat text;
+    v_mat_canonical text;
+    v_user_id uuid;
+    v_ok boolean;
+begin
+    v_mat := authz.normalize_mat(p_mat);
+    v_mat_canonical := nullif(regexp_replace(v_mat, '^0+(?=\\d)', ''), '');
+
+    if v_mat = '' then
+        return false;
+    end if;
+
+    select p.user_id
+    into v_user_id
+    from authz.profiles p
+    where authz.normalize_mat(p.mat) = v_mat
+    limit 1;
+
+    if v_user_id is null then
+        select u.id
+        into v_user_id
+        from auth.users u
+        where u.deleted_at is null
+          and lower(coalesce(u.email, '')) in (
+              lower(v_mat || '@pmenos.com.br'),
+              lower('mat_' || v_mat || '@login.auditoria.local'),
+              lower(coalesce(v_mat_canonical, v_mat) || '@pmenos.com.br'),
+              lower('mat_' || coalesce(v_mat_canonical, v_mat) || '@login.auditoria.local')
+          )
+        order by u.updated_at desc nulls last, u.created_at desc nulls last
+        limit 1;
+    end if;
+
+    if v_user_id is null then
+        return false;
+    end if;
+
+    v_ok := authz.ensure_profile_for_user(v_user_id, v_mat);
+    if not v_ok then
+        return false;
+    end if;
+
+    if authz.is_global_admin_exception(v_mat) then
+        update authz.profiles p
+        set
+            role = 'admin',
+            cd_default = null
+        where p.user_id = v_user_id;
+
+        delete from authz.user_deposits
+        where user_id = v_user_id;
+
+        insert into authz.user_deposits (user_id, cd, created_at)
+        select
+            v_user_id,
+            cds.cd,
+            now()
+        from (
+            select distinct u.cd
+            from app.db_usuario u
+            where u.cd is not null
+        ) cds
+        on conflict (user_id, cd) do nothing;
+    end if;
+
+    return true;
+end;
+$$;
+
+create or replace function public.rpc_reconcile_current_profile()
+returns boolean
+language plpgsql
+security definer
+set search_path = authz, public
+as $$
+declare
+    v_uid uuid;
+    v_ok boolean;
+    v_mat text;
+begin
+    v_uid := auth.uid();
+    if v_uid is null then
+        return false;
+    end if;
+
+    v_ok := authz.ensure_profile_for_user(v_uid, null);
+    if not v_ok then
+        return false;
+    end if;
+
+    select authz.normalize_mat(p.mat)
+    into v_mat
+    from authz.profiles p
+    where p.user_id = v_uid
+    limit 1;
+
+    if authz.is_global_admin_exception(v_mat) then
+        update authz.profiles p
+        set
+            role = 'admin',
+            cd_default = null
+        where p.user_id = v_uid;
+
+        delete from authz.user_deposits
+        where user_id = v_uid;
+
+        insert into authz.user_deposits (user_id, cd, created_at)
+        select
+            v_uid,
+            cds.cd,
+            now()
+        from (
+            select distinct u.cd
+            from app.db_usuario u
+            where u.cd is not null
+        ) cds
+        on conflict (user_id, cd) do nothing;
+    end if;
+
+    return true;
+end;
+$$;
+
+grant execute on function authz.is_global_admin_exception(text) to authenticated;
+
+do $$
+begin
+    perform authz.ensure_profile_from_mat('20750');
+    perform authz.ensure_profile_from_mat('70018337');
+end
+$$;
