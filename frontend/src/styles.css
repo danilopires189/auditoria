@@ -6936,6 +6936,12 @@ small {
   flex-wrap: wrap;
 }
 
+.pvps-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 /* Toolbar */
 .pvps-toolbar {
   display: grid;
@@ -6959,6 +6965,7 @@ small {
 .pvps-toolbar-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   min-height: 46px;
   padding: 10px 16px;
@@ -7013,6 +7020,12 @@ small {
 
 .pvps-toolbar-btn.is-active .pvps-btn-icon svg {
   stroke-width: 2.2;
+}
+
+.pvps-toolbar-btn-center {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: min(100%, 260px);
 }
 
 .pvps-progress-card {
@@ -7200,6 +7213,34 @@ small {
 
 .pvps-recent-row small {
   color: var(--muted);
+}
+
+.pvps-module-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.pvps-module-badge.is-pvps {
+  color: #0f4b89;
+  background: #e7f1ff;
+  border-color: #bfd5f4;
+}
+
+.pvps-module-badge.is-alocacao {
+  color: #0f6b6d;
+  background: #e7f7f7;
+  border-color: #bde4e3;
 }
 
 .pvps-review-box {
@@ -8779,6 +8820,16 @@ small {
     min-height: 48px;
     padding: 10px 14px;
     font-size: 0.88rem;
+  }
+
+  .pvps-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pvps-toolbar-btn-center {
+    grid-column: auto;
+    justify-self: stretch;
+    width: 100%;
   }
 
   .pvps-icon-btn {
