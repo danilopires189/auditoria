@@ -1910,7 +1910,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                 {checkIcon()}
               </span>
               <span className="gestao-op-review-trigger-copy">
-                <span className="gestao-op-review-trigger-label">Status</span>
+                <span className="gestao-op-review-trigger-label">Revisão</span>
                 <span className="gestao-op-review-trigger-value">{reviewStatusLabel(currentReviewStatus)}</span>
               </span>
             </button>
