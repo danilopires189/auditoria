@@ -7256,10 +7256,10 @@ small {
 }
 
 .gestao-op-zone-badge {
-  min-height: 17px;
-  padding: 2px 7px;
-  font-size: 0.52rem;
-  letter-spacing: 0.02em;
+  min-height: 12px;
+  padding: 1px 5px;
+  font-size: 0.42rem;
+  letter-spacing: 0.015em;
 }
 
 .gestao-op-zone-badge.is-baixa {
