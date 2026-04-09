@@ -262,6 +262,50 @@ const SWIPE_ACTION_WIDTH = 104;
 const SWIPE_OPEN_THRESHOLD = 40;
 const ENDERECO_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 let reportLogoDataUrlPromise: Promise<string | null> | null = null;
+let sharedFeedRevealObserver: IntersectionObserver | null = null;
+const sharedFeedRevealCallbacks = new Map<Element, () => void>();
+
+function releaseSharedFeedRevealObserver(): void {
+  if (!sharedFeedRevealObserver || sharedFeedRevealCallbacks.size > 0) return;
+  sharedFeedRevealObserver.disconnect();
+  sharedFeedRevealObserver = null;
+}
+
+function observeFeedReveal(node: Element, onVisible: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+    onVisible();
+    return () => undefined;
+  }
+
+  if (!sharedFeedRevealObserver) {
+    sharedFeedRevealObserver = new window.IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const callback = sharedFeedRevealCallbacks.get(entry.target);
+          if (!callback) continue;
+          sharedFeedRevealCallbacks.delete(entry.target);
+          sharedFeedRevealObserver?.unobserve(entry.target);
+          callback();
+        }
+        releaseSharedFeedRevealObserver();
+      },
+      {
+        threshold: 0.18,
+        rootMargin: "0px 0px -10% 0px"
+      }
+    );
+  }
+
+  sharedFeedRevealCallbacks.set(node, onVisible);
+  sharedFeedRevealObserver.observe(node);
+
+  return () => {
+    sharedFeedRevealCallbacks.delete(node);
+    sharedFeedRevealObserver?.unobserve(node);
+    releaseSharedFeedRevealObserver();
+  };
+}
 
 function AnimatedFeedReveal({ cardKey, className, children }: AnimatedFeedRevealProps) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -271,30 +315,7 @@ function AnimatedFeedReveal({ cardKey, className, children }: AnimatedFeedReveal
     const node = ref.current;
     if (!node) return;
     if (visible) return;
-    if (typeof window === "undefined") {
-      setVisible(true);
-      return;
-    }
-    if (window.matchMedia("(max-width: 979px)").matches || typeof window.IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
-
-    const observer = new window.IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      {
-        threshold: 0.18,
-        rootMargin: "0px 0px -10% 0px"
-      }
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
+    return observeFeedReveal(node, () => setVisible(true));
   }, [cardKey, visible]);
 
   return (
