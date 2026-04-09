@@ -12955,6 +12955,10 @@ small {
   line-height: 1;
 }
 
+.gestao-op-view-mobile-row {
+  display: none;
+}
+
 .gestao-op-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -14250,10 +14254,30 @@ small {
     order: 1;
   }
 
+  .gestao-op-view-mobile-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    grid-column: 1 / -1;
+    order: 2;
+  }
+
+  .gestao-op-view-trigger--mobile {
+    min-height: 46px;
+    justify-content: center;
+    padding: 0 10px;
+  }
+
+  .gestao-op-view-trigger--mobile .gestao-op-view-trigger-copy {
+    font-size: 0.78rem;
+    text-align: center;
+  }
+
   .gestao-op-day-picker {
     width: 100%;
     grid-column: 1 / -1;
-    order: 3;
+    order: 4;
   }
 
   .gestao-op-day-icon {
@@ -14274,7 +14298,7 @@ small {
     min-height: 48px;
     padding: 0 12px;
     gap: 8px;
-    order: 2;
+    order: 3;
     align-items: center;
     justify-content: center;
     text-align: left;
@@ -14312,7 +14336,7 @@ small {
     gap: 8px;
     align-self: stretch;
     width: 100%;
-    order: 2;
+    order: 3;
   }
 
   .gestao-op-export-trigger {

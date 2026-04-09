@@ -1843,6 +1843,32 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
               </button>
             </div>
 
+            {!isHistorical ? (
+              <div className="gestao-op-view-mobile-row" aria-label="Atalhos da lista">
+                <button
+                  type="button"
+                  className={`gestao-op-view-trigger gestao-op-view-trigger--mobile${listViewMode === "nao_atendido" ? " is-active" : ""}`}
+                  onClick={() => toggleListViewMode("nao_atendido")}
+                  title="Visualizar não atendido"
+                  aria-label="Visualizar não atendido"
+                >
+                  <span className="gestao-op-view-trigger-icon" aria-hidden="true">{notAttendedIcon()}</span>
+                  <span className="gestao-op-view-trigger-copy">Não Atendido</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`gestao-op-view-trigger gestao-op-view-trigger--mobile${listViewMode === "em_recebimento" ? " is-active" : ""}`}
+                  onClick={() => toggleListViewMode("em_recebimento")}
+                  title="Visualizar em recebimento"
+                  aria-label="Visualizar em recebimento"
+                >
+                  <span className="gestao-op-view-trigger-icon" aria-hidden="true">{truckIcon()}</span>
+                  <span className="gestao-op-view-trigger-copy">Em Recebimento</span>
+                </button>
+              </div>
+            ) : null}
+
             <button
               type="button"
               className={`gestao-op-review-trigger is-${currentReviewStatus}`}
