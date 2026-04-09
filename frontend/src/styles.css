@@ -13077,6 +13077,8 @@ small {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  color: #6f87a2;
+  transition: color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 
 .gestao-op-record-switcher-icon svg {
@@ -13087,6 +13089,13 @@ small {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.gestao-op-record-switcher button.is-active .gestao-op-record-switcher-icon {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .gestao-op-record-switcher button .gestao-op-record-switcher-label {
