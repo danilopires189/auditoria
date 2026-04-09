@@ -7,23 +7,23 @@ import type { DisplayContext, HomeModulesViewMode } from "../types/ui";
 import { LogoutIcon, ModuleIcon, ViewGridIcon, ViewListIcon } from "../ui/icons";
 
 const AVAILABLE_MODULE_KEYS = new Set([
-  "controle-validade",
-  "gestao-estoque",
-  "coleta-mercadoria",
-  "pvps-alocacao",
-  "indicadores",
   "atividade-extra",
+  "busca-produto",
+  "coleta-mercadoria",
+  "conferencia-entrada-notas",
+  "conferencia-pedido-direto",
   "conferencia-termo",
   "conferencia-volume-avulso",
-  "conferencia-pedido-direto",
-  "conferencia-entrada-notas",
+  "controle-validade",
   "devolucao-mercadoria",
-  "zerados",
-  "produtividade",
+  "gestao-estoque",
+  "indicadores",
   "meta-mes",
-  "busca-produto",
+  "produtividade",
+  "pvps-alocacao",
   "validar-enderecamento",
-  "validar-etiqueta-pulmao"
+  "validar-etiqueta-pulmao",
+  "zerados"
 ]);
 
 interface HomePageProps {

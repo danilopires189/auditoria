@@ -1,10 +1,9 @@
 import type { DashboardModule, DashboardModuleKey } from "./types";
 
 export const DASHBOARD_MODULES: DashboardModule[] = [
-  { key: "atividade-extra", path: "/modulos/atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
-  { key: "gestao-estoque", path: "/modulos/gestao-estoque", title: "Gestão de Estoque", icon: "audit", tone: "blue" },
-  { key: "indicadores", path: "/modulos/indicadores", title: "Indicadores", icon: "chart", tone: "blue" },
+  { key: "auditoria-caixa", path: "/modulos/auditoria-caixa", title: "Auditoria de caixa", icon: "box", tone: "blue" },
   { key: "pvps-alocacao", path: "/modulos/pvps-alocacao", title: "Auditoria de PVPS e Alocação", icon: "calendar", tone: "blue" },
+  { key: "atividade-extra", path: "/modulos/atividade-extra", title: "Atividade Extra", icon: "extra", tone: "amber" },
   { key: "busca-produto", path: "/modulos/busca-produto", title: "Busca por Produto", icon: "search", tone: "blue" },
   { key: "check-list", path: "/modulos/check-list", title: "Check List", icon: "checklist", tone: "blue" },
   { key: "coleta-mercadoria", path: "/modulos/coleta-mercadoria", title: "Coleta de Mercadoria", icon: "barcode", tone: "teal" },
@@ -14,10 +13,13 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "conferencia-volume-avulso", path: "/modulos/conferencia-volume-avulso", title: "Conferência de Volume Avulso", icon: "carton-meds", tone: "teal" },
   { key: "controle-validade", path: "/modulos/controle-validade", title: "Controle de Validade", icon: "expiry", tone: "blue" },
   { key: "devolucao-mercadoria", path: "/modulos/devolucao-mercadoria", title: "Devolução de Mercadoria", icon: "return", tone: "red" },
+  { key: "gestao-estoque", path: "/modulos/gestao-estoque", title: "Gestão de Estoque", icon: "audit", tone: "blue" },
+  { key: "indicadores", path: "/modulos/indicadores", title: "Indicadores", icon: "chart", tone: "blue" },
   { key: "zerados", path: "/modulos/zerados", title: "Inventário (zerados)", icon: "zero", tone: "red" },
   { key: "meta-mes", path: "/modulos/meta-mes", title: "Meta Mês", icon: "goal", tone: "amber" },
   { key: "produtividade", path: "/modulos/produtividade", title: "Produtividade", icon: "worker", tone: "amber" },
   { key: "registro-embarque", path: "/modulos/registro-embarque", title: "Registro de Embarque", icon: "ship", tone: "teal" },
+  { key: "ronda", path: "/modulos/ronda", title: "Ronda", icon: "path", tone: "blue" },
   { key: "validar-enderecamento", path: "/modulos/validar-enderecamento", title: "Validar Endereçamento", icon: "location", tone: "blue" },
   { key: "validar-etiqueta-pulmao", path: "/modulos/validar-etiqueta-pulmao", title: "Validar Etiqueta Pulmão", icon: "qr", tone: "blue" }
 ];

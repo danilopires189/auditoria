@@ -1,5 +1,6 @@
 export type ModuleIconName =
   | "audit"
+  | "box"
   | "chart"
   | "calendar"
   | "expiry"
@@ -12,6 +13,7 @@ export type ModuleIconName =
   | "location"
   | "collect"
   | "checklist"
+  | "path"
   | "term"
   | "volume"
   | "direct"
@@ -26,24 +28,26 @@ export type ModuleIconName =
 export type ModuleTone = "blue" | "red" | "teal" | "amber";
 
 export type DashboardModuleKey =
-  | "controle-validade"
-  | "gestao-estoque"
-  | "pvps-alocacao"
   | "atividade-extra"
-  | "indicadores"
+  | "auditoria-caixa"
   | "busca-produto"
-  | "validar-enderecamento"
-  | "validar-etiqueta-pulmao"
-  | "coleta-mercadoria"
   | "check-list"
+  | "coleta-mercadoria"
+  | "conferencia-entrada-notas"
+  | "conferencia-pedido-direto"
   | "conferencia-termo"
   | "conferencia-volume-avulso"
-  | "conferencia-pedido-direto"
-  | "conferencia-entrada-notas"
+  | "controle-validade"
   | "devolucao-mercadoria"
-  | "registro-embarque"
+  | "gestao-estoque"
+  | "indicadores"
   | "meta-mes"
+  | "pvps-alocacao"
   | "produtividade"
+  | "registro-embarque"
+  | "ronda"
+  | "validar-enderecamento"
+  | "validar-etiqueta-pulmao"
   | "zerados";
 
 export interface DashboardModule {

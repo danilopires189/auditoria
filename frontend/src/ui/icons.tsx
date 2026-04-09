@@ -40,6 +40,14 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M9 10l2 2 4-4" />
         </svg>
       );
+    case "box":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 8l8-4 8 4-8 4-8-4z" />
+          <path d="M4 8v8l8 4 8-4V8" />
+          <path d="M12 12v8" />
+        </svg>
+      );
     case "extra":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -129,6 +137,16 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M4 5l1.8 1.8L8 4.6" />
           <path d="M4 12l1.8 1.8L8 11.6" />
           <path d="M4 19l1.8 1.8L8 18.6" />
+        </svg>
+      );
+    case "path":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 20c0-3 4-3 4-6s-4-3-4-6 4-3 4-4" />
+          <circle cx="7" cy="20" r="1.5" />
+          <circle cx="11" cy="14" r="1.5" />
+          <circle cx="7" cy="8" r="1.5" />
+          <circle cx="11" cy="4" r="1.5" />
         </svg>
       );
     case "term":

@@ -16,6 +16,7 @@ import IndicadoresBlitzPage from "./modules/indicadores/blitz-page";
 import IndicadoresGestaoEstoquePage from "./modules/indicadores/gestao-estoque-page";
 import ValidarEnderecamentoPage from "./modules/validar-enderecamento/page";
 import ValidarEtiquetaPulmaoPage from "./modules/validar-etiqueta-pulmao/page";
+import AuditoriaCaixaPage from "./modules/auditoria-caixa/page";
 import CheckListPage from "./modules/check-list/page";
 import ColetaMercadoriaPage from "./modules/coleta-mercadoria/page";
 import ConferenciaEntradaNotasPage from "./modules/conferencia-entrada-notas/page";
@@ -27,6 +28,7 @@ import MetaMesPage from "./modules/meta-mes/page";
 import ProdutividadePage from "./modules/produtividade/page";
 import PvpsAlocacaoPage from "./modules/pvps-alocacao/page";
 import RegistroEmbarquePage from "./modules/registro-embarque/page";
+import RondaPage from "./modules/ronda/page";
 import ZeradosPage from "./modules/zerados/page";
 import HomePage from "./pages/HomePage";
 import MaintenancePage from "./pages/MaintenancePage";
@@ -2570,6 +2572,7 @@ export default function App() {
               )
             }
           />
+          <Route path="/modulos/auditoria-caixa" element={<AuditoriaCaixaPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/check-list" element={<CheckListPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/coleta-mercadoria"
@@ -2632,6 +2635,7 @@ export default function App() {
             }
           />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route path="/modulos/ronda" element={<RondaPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/meta-mes"
             element={
