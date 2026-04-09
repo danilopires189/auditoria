@@ -162,6 +162,14 @@ export interface VolumeAvulsoLocalItem {
   updated_at: string;
 }
 
+export interface VolumeAvulsoNaoMovimentadoItem {
+  coddv: number;
+  barras: string | null;
+  descricao: string;
+  qtd_nao_movimentada: number;
+  updated_at: string;
+}
+
 export interface VolumeAvulsoLocalVolume {
   local_key: string;
   user_id: string;
@@ -184,6 +192,7 @@ export interface VolumeAvulsoLocalVolume {
   updated_at: string;
   is_read_only: boolean;
   items: VolumeAvulsoLocalItem[];
+  nao_movimentados: VolumeAvulsoNaoMovimentadoItem[];
   pending_snapshot: boolean;
   pending_finalize: boolean;
   pending_finalize_reason: string | null;

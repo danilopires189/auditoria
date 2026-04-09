@@ -4,6 +4,7 @@ import type {
   VolumeAvulsoManifestItemRow,
   VolumeAvulsoManifestMeta,
   VolumeAvulsoManifestVolumeRow,
+  VolumeAvulsoNaoMovimentadoItem,
   VolumeAvulsoPendingSummary,
   VolumeAvulsoPreferences,
   VolumeAvulsoRouteOverviewRow
@@ -244,6 +245,41 @@ function sortVolumes(rows: VolumeAvulsoLocalVolume[]): VolumeAvulsoLocalVolume[]
     }
     return b.local_key.localeCompare(a.local_key);
   });
+}
+
+function sortNaoMovimentados(rows: VolumeAvulsoNaoMovimentadoItem[]): VolumeAvulsoNaoMovimentadoItem[] {
+  return [...rows].sort((a, b) => {
+    const byDesc = a.descricao.localeCompare(b.descricao);
+    if (byDesc !== 0) return byDesc;
+    return a.coddv - b.coddv;
+  });
+}
+
+function normalizeNaoMovimentadoItem(raw: unknown): VolumeAvulsoNaoMovimentadoItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Partial<VolumeAvulsoNaoMovimentadoItem>;
+  const coddv = Number.parseInt(String(row.coddv ?? ""), 10);
+  if (!Number.isFinite(coddv)) return null;
+  return {
+    coddv,
+    barras: typeof row.barras === "string" && row.barras.trim() ? row.barras.trim() : null,
+    descricao: String(row.descricao ?? "").trim() || `SKU ${coddv}`,
+    qtd_nao_movimentada: Math.max(0, Number.parseInt(String(row.qtd_nao_movimentada ?? ""), 10) || 0),
+    updated_at: typeof row.updated_at === "string" && row.updated_at ? row.updated_at : new Date().toISOString()
+  };
+}
+
+function normalizeLocalVolume(row: VolumeAvulsoLocalVolume | null | undefined): VolumeAvulsoLocalVolume | null {
+  if (!row) return null;
+  const naoMovimentados = Array.isArray((row as { nao_movimentados?: unknown[] }).nao_movimentados)
+    ? (row as { nao_movimentados: unknown[] }).nao_movimentados
+      .map((item) => normalizeNaoMovimentadoItem(item))
+      .filter((item): item is VolumeAvulsoNaoMovimentadoItem => item != null && item.qtd_nao_movimentada > 0)
+    : [];
+  return {
+    ...row,
+    nao_movimentados: sortNaoMovimentados(naoMovimentados)
+  };
 }
 
 export async function getVolumeAvulsoPreferences(userId: string): Promise<VolumeAvulsoPreferences> {
@@ -540,7 +576,12 @@ export async function saveLocalVolume(volume: VolumeAvulsoLocalVolume): Promise<
   const db = await getDb();
   const transaction = db.transaction(STORE_VOLUMES, "readwrite");
   const store = transaction.objectStore(STORE_VOLUMES);
-  store.put(volume);
+  const normalized = normalizeLocalVolume(volume);
+  if (!normalized) {
+    await transactionDone(transaction);
+    return;
+  }
+  store.put(normalized);
   await transactionDone(transaction);
 }
 
@@ -566,7 +607,7 @@ export async function getLocalVolume(
   const key = buildVolumeAvulsoVolumeKey(userId, cd, confDate, idEtiqueta.trim());
   const raw = await requestToPromise(store.get(key));
   await transactionDone(transaction);
-  return (raw as VolumeAvulsoLocalVolume | undefined) ?? null;
+  return normalizeLocalVolume((raw as VolumeAvulsoLocalVolume | undefined) ?? null);
 }
 
 export async function getLatestLocalVolumeByEtiqueta(
@@ -583,8 +624,11 @@ export async function getLatestLocalVolumeByEtiqueta(
     index.getAll(IDBKeyRange.only([userId, cd, etiqueta]))
   )) as VolumeAvulsoLocalVolume[];
   await transactionDone(transaction);
-  if (!rows.length) return null;
-  return sortVolumes(rows)[0];
+  const normalized = rows
+    .map((row) => normalizeLocalVolume(row))
+    .filter((row): row is VolumeAvulsoLocalVolume => row != null);
+  if (!normalized.length) return null;
+  return sortVolumes(normalized)[0];
 }
 
 export async function listUserLocalVolumes(userId: string): Promise<VolumeAvulsoLocalVolume[]> {
@@ -593,7 +637,11 @@ export async function listUserLocalVolumes(userId: string): Promise<VolumeAvulso
   const index = transaction.objectStore(STORE_VOLUMES).index(INDEX_VOLUMES_BY_USER);
   const rows = (await requestToPromise(index.getAll(IDBKeyRange.only(userId)))) as VolumeAvulsoLocalVolume[];
   await transactionDone(transaction);
-  return sortVolumes(rows);
+  return sortVolumes(
+    rows
+      .map((row) => normalizeLocalVolume(row))
+      .filter((row): row is VolumeAvulsoLocalVolume => row != null)
+  );
 }
 
 export async function listPendingLocalVolumes(userId: string): Promise<VolumeAvulsoLocalVolume[]> {

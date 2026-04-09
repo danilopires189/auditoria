@@ -68,6 +68,7 @@ import type {
   VolumeAvulsoLocalVolume,
   VolumeAvulsoManifestItemRow,
   VolumeAvulsoManifestVolumeRow,
+  VolumeAvulsoNaoMovimentadoItem,
   VolumeAvulsoReportCount,
   VolumeAvulsoReportFilters,
   VolumeAvulsoReportRow,
@@ -216,6 +217,12 @@ function itemSort(a: VolumeAvulsoLocalItem, b: VolumeAvulsoLocalItem): number {
   return a.coddv - b.coddv;
 }
 
+function notMovedSort(a: VolumeAvulsoNaoMovimentadoItem, b: VolumeAvulsoNaoMovimentadoItem): number {
+  const byDesc = a.descricao.localeCompare(b.descricao);
+  if (byDesc !== 0) return byDesc;
+  return a.coddv - b.coddv;
+}
+
 function createLocalVolumeFromRemote(
   profile: VolumeAvulsoModuleProfile,
   volume: VolumeAvulsoVolumeRow,
@@ -256,6 +263,7 @@ function createLocalVolumeFromRemote(
     updated_at: volume.updated_at,
     is_read_only: volume.is_read_only,
     items: localItems.sort(itemSort),
+    nao_movimentados: [],
     pending_snapshot: false,
     pending_finalize: false,
     pending_finalize_reason: null,
@@ -308,6 +316,7 @@ function createLocalVolumeFromManifest(
     updated_at: nowIso,
     is_read_only: false,
     items: items.sort(itemSort),
+    nao_movimentados: [],
     pending_snapshot: true,
     pending_finalize: false,
     pending_finalize_reason: null,
@@ -663,8 +672,10 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
   const [activeVolume, setActiveVolume] = useState<VolumeAvulsoLocalVolume | null>(null);
   const [expandedCoddv, setExpandedCoddv] = useState<number | null>(null);
   const [editingCoddv, setEditingCoddv] = useState<number | null>(null);
+  const [editingNotMovedCoddv, setEditingNotMovedCoddv] = useState<number | null>(null);
   const [lastAddedItemMarker, setLastAddedItemMarker] = useState<LastAddedItemMarker | null>(null);
   const [editQtdInput, setEditQtdInput] = useState("0");
+  const [editNotMovedQtdInput, setEditNotMovedQtdInput] = useState("0");
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<"etiqueta" | "barras">("barras");
@@ -759,6 +770,11 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     return empty;
   }, [activeVolume]);
 
+  const notMovedItems = useMemo(
+    () => activeVolume?.nao_movimentados ?? [],
+    [activeVolume]
+  );
+
   const activeLastAddedCoddv = useMemo(() => {
     if (!activeVolume || !lastAddedItemMarker) return null;
     if (lastAddedItemMarker.volumeKey !== activeVolume.local_key) return null;
@@ -767,12 +783,13 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
   const divergenciaTotals = useMemo(() => {
     if (!activeVolume) {
-      return { falta: 0, sobra: 0, correto: 0 };
+      return { falta: 0, sobra: 0, correto: 0, nao_movimentado: 0 };
     }
     return {
       falta: groupedItems.falta.length,
       sobra: groupedItems.sobra.length,
-      correto: groupedItems.correto.length
+      correto: groupedItems.correto.length,
+      nao_movimentado: activeVolume.nao_movimentados.length
     };
   }, [activeVolume, groupedItems]);
 
@@ -1061,15 +1078,25 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
   }, [canSeeReportTools, currentCdLabel, reportCount, validateReportFilters]);
 
   const hasAnyItemInformed = useMemo(() => (
-    Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
+    Boolean(
+      activeVolume?.items.some((item) => item.qtd_conferida > 0)
+      || activeVolume?.nao_movimentados.some((item) => item.qtd_nao_movimentada > 0)
+    )
   ), [activeVolume]);
 
   const hasInformedItemsFromPreviousSession = useMemo(() => {
     if (!activeVolume) return false;
     const startedAtMs = Date.parse(activeVolume.started_at ?? "");
     if (!Number.isFinite(startedAtMs)) return false;
-    return activeVolume.items.some((item) => {
+    const hasRegularItemsFromPreviousSession = activeVolume.items.some((item) => {
       if (item.qtd_conferida <= 0) return false;
+      const itemUpdatedMs = Date.parse(item.updated_at ?? "");
+      if (!Number.isFinite(itemUpdatedMs)) return false;
+      return itemUpdatedMs < startedAtMs;
+    });
+    if (hasRegularItemsFromPreviousSession) return true;
+    return activeVolume.nao_movimentados.some((item) => {
+      if (item.qtd_nao_movimentada <= 0) return false;
       const itemUpdatedMs = Date.parse(item.updated_at ?? "");
       if (!Number.isFinite(itemUpdatedMs)) return false;
       return itemUpdatedMs < startedAtMs;
@@ -1485,6 +1512,10 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
 
     const remoteItems = await fetchVolumeItems(remoteActive.conf_id);
     const localVolume = createLocalVolumeFromRemote(profile, remoteActive, remoteItems);
+    const existingLocalVolume = await getLocalVolume(profile.user_id, remoteActive.cd, localVolume.conf_date, localVolume.nr_volume);
+    if (existingLocalVolume?.nao_movimentados.length) {
+      localVolume.nao_movimentados = [...existingLocalVolume.nao_movimentados].sort(notMovedSort);
+    }
     await saveLocalVolume(localVolume);
     setActiveVolume(localVolume);
     setEtiquetaInput(localVolume.nr_volume);
@@ -1570,6 +1601,10 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
           const remoteVolume = await openVolume(etiqueta, currentCd);
           const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
           const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+          const existingLocalVolume = await getLocalVolume(profile.user_id, currentCd, today, localVolume.nr_volume);
+          if (existingLocalVolume?.nao_movimentados.length) {
+            localVolume.nao_movimentados = [...existingLocalVolume.nao_movimentados].sort(notMovedSort);
+          }
           await saveLocalVolume(localVolume);
           setActiveVolume(localVolume);
           etiquetaFinal = localVolume.nr_volume;
@@ -1608,6 +1643,10 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       const remoteVolume = await openVolume(etiqueta, currentCd);
       const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
       const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+      const existingLocalVolume = await getLocalVolume(profile.user_id, currentCd, today, localVolume.nr_volume);
+      if (existingLocalVolume?.nao_movimentados.length) {
+        localVolume.nao_movimentados = [...existingLocalVolume.nao_movimentados].sort(notMovedSort);
+      }
       await saveLocalVolume(localVolume);
       etiquetaFinal = localVolume.nr_volume;
 
@@ -1647,7 +1686,9 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       setBusyOpenVolume(false);
       setExpandedCoddv(null);
       setEditingCoddv(null);
+      setEditingNotMovedCoddv(null);
       setEditQtdInput("0");
+      setEditNotMovedQtdInput("0");
       setEtiquetaInput(etiquetaFinal);
       focusBarras();
     }
@@ -1692,6 +1733,85 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     await applyVolumeUpdate(nextVolume);
   }, [activeVolume, applyVolumeUpdate]);
 
+  const updateNotMovedQtyLocal = useCallback(async (coddv: number, qtd: number, barras: string | null = null) => {
+    if (!activeVolume) return;
+    const nowIso = new Date().toISOString();
+    const nextNotMovedItems = activeVolume.nao_movimentados
+      .map((item) => (
+        item.coddv === coddv
+          ? {
+              ...item,
+              barras: barras ?? item.barras ?? null,
+              qtd_nao_movimentada: Math.max(0, Math.trunc(qtd)),
+              updated_at: nowIso
+            }
+          : item
+      ))
+      .filter((item) => item.qtd_nao_movimentada > 0);
+
+    const nextVolume: VolumeAvulsoLocalVolume = {
+      ...activeVolume,
+      nao_movimentados: nextNotMovedItems.sort(notMovedSort),
+      updated_at: nowIso,
+      sync_error: null
+    };
+    await applyVolumeUpdate(nextVolume);
+  }, [activeVolume, applyVolumeUpdate]);
+
+  const registerNotMovedProductLocal = useCallback(async (params: {
+    coddv: number;
+    descricao: string;
+    barras: string | null;
+    qtd: number;
+  }) => {
+    if (!activeVolume) return;
+    const nowIso = new Date().toISOString();
+    const nextQty = Math.max(1, Math.trunc(params.qtd));
+    const existing = activeVolume.nao_movimentados.find((item) => item.coddv === params.coddv) ?? null;
+    const nextNotMovedItems = existing
+      ? activeVolume.nao_movimentados.map((item) => (
+          item.coddv === params.coddv
+            ? {
+                ...item,
+                barras: params.barras ?? item.barras ?? null,
+                qtd_nao_movimentada: item.qtd_nao_movimentada + nextQty,
+                updated_at: nowIso
+              }
+            : item
+        ))
+      : [
+          ...activeVolume.nao_movimentados,
+          {
+            coddv: params.coddv,
+            barras: params.barras,
+            descricao: params.descricao,
+            qtd_nao_movimentada: nextQty,
+            updated_at: nowIso
+          }
+        ];
+
+    const nextVolume: VolumeAvulsoLocalVolume = {
+      ...activeVolume,
+      nao_movimentados: nextNotMovedItems.sort(notMovedSort),
+      updated_at: nowIso,
+      sync_error: null
+    };
+    await applyVolumeUpdate(nextVolume);
+    setLastAddedItemMarker({
+      volumeKey: activeVolume.local_key,
+      coddv: params.coddv
+    });
+    setBarcodeInput("");
+    setMultiploInput("1");
+    await persistPreferences({ multiplo_padrao: 1 });
+    setStatusMessage(
+      `Produto registrado como Não Movimentado: ${params.descricao} | Barras: ${params.barras ?? "-"} | +${nextQty}`
+    );
+    showScanFeedback("success", params.descricao, `Não Movimentado + ${nextQty}`);
+    setBarcodeValidationState("valid");
+    focusBarras();
+  }, [activeVolume, applyVolumeUpdate, focusBarras, persistPreferences, showScanFeedback]);
+
   const resolveBarcodeProduct = useCallback(async (barras: string) => {
     const normalized = normalizeBarcode(barras);
     if (!normalized) return null;
@@ -1723,7 +1843,9 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     setFinalizeError(null);
     setExpandedCoddv(null);
     setEditingCoddv(null);
+    setEditingNotMovedCoddv(null);
     setEditQtdInput("0");
+    setEditNotMovedQtdInput("0");
     setBarcodeInput("");
     setActiveVolume(null);
     setEtiquetaInput("");
@@ -1731,6 +1853,31 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       etiquetaRef.current?.focus();
     });
   }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
+
+  const persistLocalReadOnlyVolume = useCallback(async (params: {
+    status: VolumeAvulsoLocalVolume["status"];
+    falta_motivo: string | null;
+    finalized_at?: string | null;
+  }) => {
+    if (!activeVolume) return;
+    const nowIso = params.finalized_at ?? new Date().toISOString();
+    const nextVolume: VolumeAvulsoLocalVolume = {
+      ...activeVolume,
+      status: params.status,
+      falta_motivo: params.falta_motivo,
+      finalized_at: nowIso,
+      is_read_only: true,
+      pending_snapshot: false,
+      pending_finalize: false,
+      pending_finalize_reason: null,
+      pending_cancel: false,
+      sync_error: null,
+      last_synced_at: nowIso,
+      updated_at: nowIso
+    };
+    await saveLocalVolume(nextVolume);
+    await refreshPendingState();
+  }, [activeVolume, refreshPendingState]);
 
   const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
@@ -1741,6 +1888,9 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         const remoteVolume = await openVolume(activeVolume.nr_volume, activeVolume.cd);
         const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
         const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
+        if (activeVolume.nao_movimentados.length > 0) {
+          localVolume.nao_movimentados = [...activeVolume.nao_movimentados].sort(notMovedSort);
+        }
         await saveLocalVolume(localVolume);
         setActiveVolume(localVolume);
         setEtiquetaInput(localVolume.nr_volume);
@@ -1773,6 +1923,39 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     setErrorMessage(normalizeRpcErrorMessage(rawMessage));
     return true;
   }, [activeVolume, clearConferenceScreen, isOnline, profile, refreshPendingState]);
+
+  const promptRegisterNotMovedProduct = useCallback((params: {
+    coddv: number;
+    descricao: string;
+    barras: string;
+    qtd: number;
+  }) => {
+    const produtoNome = `SKU ${params.coddv} - ${params.descricao || "Sem descrição"}`;
+    showDialog({
+      title: "Produto fora do volume",
+      message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
+      confirmLabel: "Não Movimentado",
+      cancelLabel: "Cancelar",
+      onConfirm: () => {
+        closeDialog();
+        void (async () => {
+          try {
+            await registerNotMovedProductLocal({
+              coddv: params.coddv,
+              descricao: params.descricao || produtoNome,
+              barras: params.barras,
+              qtd: params.qtd
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Falha ao registrar Não Movimentado.";
+            setErrorMessage(normalizeRpcErrorMessage(message));
+          }
+        })();
+      }
+    });
+    setBarcodeValidationState("invalid");
+    triggerScanErrorAlert("Produto fora do volume.");
+  }, [closeDialog, registerNotMovedProductLocal, showDialog, triggerScanErrorAlert]);
 
   const handleCollectBarcode = useCallback(async (value: string) => {
     if (!activeVolume) {
@@ -1818,14 +2001,12 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
         }
         const target = activeVolume.items.find((item) => item.coddv === lookup.coddv);
         if (!target) {
-          const produtoNome = `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`;
-          showDialog({
-            title: "Produto fora do volume",
-            message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
-            confirmLabel: "OK"
+          promptRegisterNotMovedProduct({
+            coddv: lookup.coddv,
+            descricao: lookup.descricao?.trim() || "Sem descrição",
+            barras: lookup.barras || barras,
+            qtd
           });
-          setBarcodeValidationState("invalid");
-          triggerScanErrorAlert("Produto fora do volume.");
           return;
         }
         produtoRegistrado = target.descricao;
@@ -1898,12 +2079,18 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
       }
       if (message.includes("PRODUTO_FORA_DO_VOLUME")) {
         const lookup = await resolveBarcodeProduct(barras);
-        const produtoNome = lookup
-          ? `SKU ${lookup.coddv} - ${lookup.descricao?.trim() || "Sem descrição"}`
-          : `Código de barras ${barras}`;
+        if (lookup) {
+          promptRegisterNotMovedProduct({
+            coddv: lookup.coddv,
+            descricao: lookup.descricao?.trim() || "Sem descrição",
+            barras: lookup.barras || barras,
+            qtd
+          });
+          return;
+        }
         showDialog({
           title: "Produto fora do volume",
-          message: `Produto "${produtoNome}" não faz parte do volume em conferência.`,
+          message: `Produto "Código de barras ${barras}" não faz parte do volume em conferência.`,
           confirmLabel: "OK"
         });
         triggerScanErrorAlert("Produto fora do volume.");
@@ -1926,6 +2113,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     runPendingSync,
     showDialog,
     showScanFeedback,
+    promptRegisterNotMovedProduct,
     triggerScanErrorAlert,
     updateItemQtyLocal,
     handleClosedConferenceError
@@ -2049,6 +2237,60 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     handleClosedConferenceError
   ]);
 
+  const handleSaveNotMovedEdit = useCallback(async (coddv: number) => {
+    if (!activeVolume) return;
+    if (!canEditActiveVolume) return;
+    const qtd = parsePositiveInteger(editNotMovedQtdInput, 0);
+
+    try {
+      await updateNotMovedQtyLocal(coddv, qtd);
+      setEditingNotMovedCoddv(null);
+      setEditNotMovedQtdInput("0");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao salvar contagem Não Movimentado.";
+      setErrorMessage(normalizeRpcErrorMessage(message));
+    }
+  }, [
+    activeVolume,
+    canEditActiveVolume,
+    editNotMovedQtdInput,
+    updateNotMovedQtyLocal
+  ]);
+
+  const requestResetNotMoved = useCallback((coddv: number) => {
+    if (!activeVolume || !canEditActiveVolume) return;
+    const item = activeVolume.nao_movimentados.find((row) => row.coddv === coddv);
+    if (!item) return;
+    if (item.qtd_nao_movimentada <= 0) return;
+
+    showDialog({
+      title: "Limpar Não Movimentado",
+      message: `O produto "${item.descricao}" está com contagem ${item.qtd_nao_movimentada} em Não Movimentado. Ao confirmar, a quantidade será alterada para 0. Deseja continuar?`,
+      confirmLabel: "Limpar",
+      cancelLabel: "Cancelar",
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await updateNotMovedQtyLocal(coddv, 0);
+            setEditingNotMovedCoddv(null);
+            setEditNotMovedQtdInput("0");
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Falha ao limpar Não Movimentado.";
+            setErrorMessage(normalizeRpcErrorMessage(message));
+          } finally {
+            closeDialog();
+          }
+        })();
+      }
+    });
+  }, [
+    activeVolume,
+    canEditActiveVolume,
+    closeDialog,
+    showDialog,
+    updateNotMovedQtyLocal
+  ]);
+
   const handleFinalizeVolume = useCallback(async () => {
     if (!activeVolume) return;
     if (!canEditActiveVolume) return;
@@ -2093,9 +2335,21 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             barras: item.barras ?? null
           }))
         );
-        await finalizeVolume(remoteConfId, falta > 0 ? motivo : null);
-        await removeLocalVolume(activeVolume.local_key);
-        await refreshPendingState();
+        const finalized = await finalizeVolume(remoteConfId, falta > 0 ? motivo : null);
+        if (activeVolume.nao_movimentados.length > 0) {
+          const nextStatus =
+            finalized.status === "finalizado_ok" || finalized.status === "finalizado_falta"
+              ? finalized.status
+              : (falta > 0 ? "finalizado_falta" : "finalizado_ok");
+          await persistLocalReadOnlyVolume({
+            status: nextStatus,
+            falta_motivo: finalized.falta_motivo,
+            finalized_at: finalized.finalized_at
+          });
+        } else {
+          await removeLocalVolume(activeVolume.local_key);
+          await refreshPendingState();
+        }
         setStatusMessage("Conferência finalizada com sucesso. Você já pode iniciar outro NR Volume.");
       }
       clearConferenceScreen();
@@ -2111,6 +2365,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     applyVolumeUpdate,
     canEditActiveVolume,
     clearConferenceScreen,
+    persistLocalReadOnlyVolume,
     divergenciaTotals.falta,
     divergenciaTotals.sobra,
     finalizeMotivo,
@@ -2811,9 +3066,21 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                 : null;
 
               if (activeVolume.remote_conf_id && isOnline) {
-                await finalizeVolume(activeVolume.remote_conf_id, preserveReason);
-                await removeLocalVolume(activeVolume.local_key);
-                await refreshPendingState();
+                const finalized = await finalizeVolume(activeVolume.remote_conf_id, preserveReason);
+                if (activeVolume.nao_movimentados.length > 0) {
+                  const nextStatus =
+                    finalized.status === "finalizado_ok" || finalized.status === "finalizado_falta"
+                      ? finalized.status
+                      : (hasFalta ? "finalizado_falta" : "finalizado_ok");
+                  await persistLocalReadOnlyVolume({
+                    status: nextStatus,
+                    falta_motivo: finalized.falta_motivo,
+                    finalized_at: finalized.finalized_at
+                  });
+                } else {
+                  await removeLocalVolume(activeVolume.local_key);
+                  await refreshPendingState();
+                }
                 clearConferenceScreen();
                 setStatusMessage("Retomada encerrada. Os dados já conferidos foram preservados.");
                 await syncRouteOverview();
@@ -2896,6 +3163,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     closeDialog,
     isOnline,
     markStorePendingAfterCancel,
+    persistLocalReadOnlyVolume,
     refreshPendingState,
     showDialog,
     shouldProtectPartialResumeOnCancel,
@@ -3524,6 +3792,89 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                 })
               )}
             </div>
+
+            <div className="termo-list-block">
+              <h4>Não Movimentado ({notMovedItems.length})</h4>
+              {notMovedItems.length === 0 ? (
+                <div className="coleta-empty">Sem produtos registrados como Não Movimentado.</div>
+              ) : (
+                notMovedItems.map((item) => {
+                  const isLastAddedItem = activeLastAddedCoddv === item.coddv;
+                  return (
+                  <article key={`nao-movimentado-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
+                    <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
+                      <div className="termo-item-main">
+                        <strong>{item.descricao}</strong>
+                        <p>SKU: {item.coddv}</p>
+                        {item.qtd_nao_movimentada > 0 ? (
+                          <p>Barras: {item.barras ?? "-"}</p>
+                        ) : null}
+                        <p>Contagem: {item.qtd_nao_movimentada}</p>
+                      </div>
+                      <div className="termo-item-side">
+                        {isLastAddedItem ? (
+                          <span className="termo-last-added-tag">
+                            <span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>
+                            Último adicionado
+                          </span>
+                        ) : null}
+                        <span className="termo-divergencia sobra">Não Movimentado</span>
+                        <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expandedCoddv === item.coddv)}</span>
+                      </div>
+                    </button>
+                    {expandedCoddv === item.coddv ? (
+                      <div className="termo-item-detail">
+                        <p>Última alteração: {formatDateTime(item.updated_at)}</p>
+                        {canEditActiveVolume ? (
+                          <div className="termo-item-actions">
+                            {editingNotMovedCoddv === item.coddv && item.qtd_nao_movimentada > 0 ? (
+                              <>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  value={editNotMovedQtdInput}
+                                  onFocus={(event) => event.currentTarget.select()}
+                                  onClick={(event) => event.currentTarget.select()}
+                                  onChange={(event) => setEditNotMovedQtdInput(event.target.value.replace(/\D/g, ""))}
+                                />
+                                <button className="btn btn-primary" type="button" onClick={() => void handleSaveNotMovedEdit(item.coddv)}>Salvar</button>
+                                <button className="btn btn-muted" type="button" onClick={() => { setEditingNotMovedCoddv(null); setEditNotMovedQtdInput("0"); }}>
+                                  Cancelar
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                {item.qtd_nao_movimentada > 0 ? (
+                                  <button
+                                    className="btn btn-muted"
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingCoddv(null);
+                                      setEditQtdInput("0");
+                                      setEditingNotMovedCoddv(item.coddv);
+                                      setEditNotMovedQtdInput(String(item.qtd_nao_movimentada));
+                                    }}
+                                  >
+                                    Editar
+                                  </button>
+                                ) : null}
+                                {item.qtd_nao_movimentada > 0 ? (
+                                  <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetNotMoved(item.coddv)}>
+                                    Limpar
+                                  </button>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
+                  );
+                })
+              )}
+            </div>
           </article>
         ) : (
           <div className="coleta-empty">
@@ -3622,7 +3973,10 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-finalizar-title" onClick={() => setShowFinalizeModal(false)}>
               <div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                 <h3 id="termo-finalizar-title">Finalizar conferência</h3>
-                <p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>
+                <p>
+                  Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}
+                  {" | "}Não Movimentado {divergenciaTotals.nao_movimentado}
+                </p>
                 {divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? (
                   <div className="termo-item-detail">
                     <p>Itens com divergência:</p>
@@ -3635,6 +3989,18 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
                       {groupedItems.sobra.map(({ item, qtd_sobra }) => (
                         <p key={`fim-sobra-${item.coddv}`}>
                           {item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {notMovedItems.length > 0 ? (
+                  <div className="termo-item-detail">
+                    <p>Produtos marcados como Não Movimentado:</p>
+                    <div className="termo-routes-list termo-finalize-list">
+                      {notMovedItems.map((item) => (
+                        <p key={`fim-nao-movimentado-${item.coddv}`}>
+                          {item.coddv} - {item.descricao || "Item sem descrição"}: {item.qtd_nao_movimentada}
                         </p>
                       ))}
                     </div>
