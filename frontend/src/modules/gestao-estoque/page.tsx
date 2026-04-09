@@ -2072,10 +2072,12 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                     )}
                   </div>
 
-                  <button className="btn btn-primary gestao-op-add-btn" type="submit" disabled={preview == null || isHistorical}>
-                    Adicionar à lista
-                  </button>
-                  {previewListObservation ? <small className="gestao-op-preview-note">{previewListObservation}</small> : null}
+                  <div className="gestao-op-search-footer">
+                    <button className="btn btn-primary gestao-op-add-btn" type="submit" disabled={preview == null || isHistorical}>
+                      Adicionar à lista
+                    </button>
+                    {previewListObservation ? <small className="gestao-op-preview-note">{previewListObservation}</small> : null}
+                  </div>
                 </form>
               </div>
             </article>

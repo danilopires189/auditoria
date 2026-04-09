@@ -13149,9 +13149,11 @@ small {
 }
 
 .gestao-op-search-form {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   min-width: 0;
+  min-height: 100%;
 }
 
 .gestao-op-field {
@@ -13227,9 +13229,15 @@ small {
   min-width: 180px;
 }
 
+.gestao-op-search-footer {
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  align-content: end;
+}
+
 .gestao-op-preview-note {
   display: block;
-  margin-top: -4px;
   color: #73879b;
   font-size: 0.73rem;
   line-height: 1.35;
