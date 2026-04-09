@@ -13028,6 +13028,80 @@ small {
   line-height: 1.35;
 }
 
+.gestao-op-record-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.gestao-op-record-switcher button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(145, 171, 205, 0.24);
+  border-radius: 999px;
+  background: rgba(248, 251, 255, 0.96);
+  color: #4c647e;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.gestao-op-record-switcher button:hover,
+.gestao-op-record-switcher button:focus-visible {
+  border-color: rgba(109, 139, 176, 0.42);
+  box-shadow: 0 0 0 4px rgba(41, 115, 199, 0.1);
+  outline: none;
+}
+
+.gestao-op-record-switcher button.is-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #1f5fa8 0%, #3d8ad9 100%);
+  border-color: rgba(29, 88, 154, 0.64);
+  box-shadow: 0 6px 14px rgba(22, 65, 118, 0.18);
+}
+
+.gestao-op-record-switcher button.is-danger.is-active {
+  background: linear-gradient(135deg, #c43b49 0%, #df6d78 100%);
+  border-color: rgba(145, 39, 56, 0.42);
+  box-shadow: 0 6px 14px rgba(145, 39, 56, 0.2);
+}
+
+.gestao-op-record-switcher-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.gestao-op-record-switcher-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gestao-op-record-switcher button .gestao-op-record-switcher-label {
+  color: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.gestao-op-record-switcher button strong {
+  color: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
 .gestao-op-panel-body {
   flex: 1;
   min-height: 0;
@@ -13312,6 +13386,14 @@ small {
   grid-template-columns: minmax(260px, 2.7fr) minmax(72px, 0.65fr) minmax(84px, 0.75fr) minmax(118px, 1fr) minmax(108px, 0.85fr);
 }
 
+.gestao-op-table-head.is-deleted {
+  grid-template-columns: minmax(260px, 2.7fr) minmax(64px, 0.55fr) minmax(96px, 0.9fr) minmax(108px, 0.95fr) minmax(118px, 1fr) minmax(156px, 1.15fr);
+}
+
+.gestao-op-table-head.is-historical.is-deleted {
+  grid-template-columns: minmax(260px, 2.7fr) minmax(72px, 0.65fr) minmax(84px, 0.75fr) minmax(118px, 1fr) minmax(108px, 0.85fr);
+}
+
 .gestao-op-table-head.is-nao-atendido {
   grid-template-columns: minmax(260px, 2.55fr) minmax(104px, 0.8fr) minmax(84px, 0.65fr) minmax(114px, 0.8fr) minmax(138px, 1fr) minmax(92px, 0.7fr) 56px minmax(96px, 0.75fr);
 }
@@ -13384,6 +13466,10 @@ small {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.gestao-op-row.is-deleted {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .gestao-op-row.is-nao-atendido,
 .gestao-op-row.is-em-recebimento {
   grid-template-columns: minmax(0, 1fr);
@@ -13443,6 +13529,14 @@ small {
 }
 
 .gestao-op-row-main-table.is-historical {
+  grid-template-columns: minmax(260px, 2.7fr) minmax(72px, 0.65fr) minmax(84px, 0.75fr) minmax(118px, 1fr) minmax(108px, 0.85fr);
+}
+
+.gestao-op-row-main-table.is-deleted {
+  grid-template-columns: minmax(260px, 2.7fr) minmax(64px, 0.55fr) minmax(96px, 0.9fr) minmax(108px, 0.95fr) minmax(118px, 1fr) minmax(156px, 1.15fr);
+}
+
+.gestao-op-row-main-table.is-historical.is-deleted {
   grid-template-columns: minmax(260px, 2.7fr) minmax(72px, 0.65fr) minmax(84px, 0.75fr) minmax(118px, 1fr) minmax(108px, 0.85fr);
 }
 
@@ -13840,6 +13934,88 @@ small {
   line-height: 1.4;
 }
 
+.gestao-op-reason-dialog {
+  width: min(100%, 620px);
+}
+
+.gestao-op-reason-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gestao-op-reason-summary span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(244, 247, 251, 0.98);
+  color: #5f768f;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.gestao-op-reason-options {
+  display: grid;
+  gap: 10px;
+}
+
+.gestao-op-reason-options button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 1px solid rgba(185, 202, 224, 0.65);
+  border-radius: 14px;
+  background: #fff;
+  color: #35516e;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+.gestao-op-reason-options button:hover,
+.gestao-op-reason-options button:focus-visible {
+  border-color: rgba(109, 139, 176, 0.42);
+  box-shadow: 0 0 0 4px rgba(41, 115, 199, 0.1);
+  outline: none;
+}
+
+.gestao-op-reason-options button.is-active {
+  border-color: rgba(196, 59, 73, 0.32);
+  background: rgba(255, 244, 246, 0.98);
+  color: #9f3140;
+  box-shadow: 0 0 0 4px rgba(196, 59, 73, 0.08);
+}
+
+.gestao-op-reason-option-check {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(185, 202, 224, 0.72);
+  background: rgba(248, 251, 255, 0.98);
+  color: inherit;
+}
+
+.gestao-op-reason-option-check svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 @media (max-width: 1040px) {
   .gestao-op-toolbar,
   .gestao-op-grid {
@@ -13849,6 +14025,16 @@ small {
   .gestao-op-toolbar-primary {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .gestao-op-record-switcher {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .gestao-op-record-switcher button {
+    flex: 1 1 180px;
+    justify-content: center;
   }
 
   .gestao-op-view-trigger--desktop {
@@ -13901,6 +14087,11 @@ small {
   .gestao-op-preview-head {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
+  }
+
+  .gestao-op-reason-options button {
+    grid-template-columns: 1fr;
+    justify-items: start;
   }
 
   .gestao-op-preview dl {

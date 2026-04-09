@@ -9,6 +9,11 @@ export interface GestaoEstoqueModuleProfile {
 
 export type GestaoEstoqueMovementType = "baixa" | "entrada";
 export type GestaoEstoqueDayReviewStatus = "pendente" | "revisado";
+export type GestaoEstoqueBaixaMotivo =
+  | "Ajuste por Entrada (EO, EA)"
+  | "Ajuste por Inventário (EA)"
+  | "Logística Reversa (ED)"
+  | "Produto Perdido";
 
 export interface GestaoEstoqueAvailableDay {
   movement_date: string;
@@ -79,6 +84,7 @@ export interface GestaoEstoqueItemRow {
   endereco_pul: string | null;
   qtd_est_atual: number;
   qtd_est_disp: number;
+  motivo: GestaoEstoqueBaixaMotivo | null;
   estoque_updated_at: string | null;
   dat_ult_compra: string | null;
   custo_unitario: number | null;
@@ -94,6 +100,39 @@ export interface GestaoEstoqueItemRow {
   qtd_mov_dia: number;
   valor_mov_dia: number;
   is_em_recebimento_previsto: boolean;
+}
+
+export interface GestaoEstoqueDeletedItemRow {
+  id: string;
+  movement_date: string;
+  movement_type: GestaoEstoqueMovementType;
+  coddv: number;
+  barras_informado: string | null;
+  quantidade: number;
+  descricao: string;
+  endereco_sep: string | null;
+  endereco_pul: string | null;
+  qtd_est_atual: number;
+  qtd_est_disp: number;
+  motivo: GestaoEstoqueBaixaMotivo | null;
+  estoque_updated_at: string | null;
+  dat_ult_compra: string | null;
+  custo_unitario: number | null;
+  custo_total: number;
+  created_nome: string;
+  created_mat: string;
+  created_at: string | null;
+  updated_nome: string;
+  updated_mat: string;
+  updated_at: string | null;
+  resolved_refreshed_at: string | null;
+  is_frozen: boolean;
+  qtd_mov_dia: number;
+  valor_mov_dia: number;
+  is_em_recebimento_previsto: boolean;
+  deleted_at: string | null;
+  deleted_nome: string;
+  deleted_mat: string;
 }
 
 export interface GestaoEstoqueAddResult {

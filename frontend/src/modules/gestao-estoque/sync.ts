@@ -1,9 +1,11 @@
 import { supabase } from "../../lib/supabase";
 import type {
   GestaoEstoqueAddResult,
+  GestaoEstoqueBaixaMotivo,
   GestaoEstoqueAvailableDay,
   GestaoEstoqueDayReviewEntry,
   GestaoEstoqueDayReviewState,
+  GestaoEstoqueDeletedItemRow,
   GestaoEstoqueDayReviewStatus,
   GestaoEstoqueEmRecebimentoRow,
   GestaoEstoqueItemRow,
@@ -36,6 +38,8 @@ export function normalizeGestaoEstoqueError(error: unknown): string {
   if (normalized.includes("TIPO_MOVIMENTO_INVALIDO")) return "Tipo de movimentação inválido.";
   if (normalized.includes("QTD_INVALIDA")) return "Informe uma quantidade válida maior que zero.";
   if (normalized.includes("QTD_BAIXA_EXCEDE_ESTOQUE")) return "A quantidade de baixa excede o estoque atual.";
+  if (normalized.includes("MOTIVO_BAIXA_OBRIGATORIO")) return "Selecione um motivo para a baixa.";
+  if (normalized.includes("MOTIVO_BAIXA_INVALIDO")) return "Motivo de baixa inválido.";
   if (normalized.includes("DIA_SOMENTE_LEITURA")) return "Dias anteriores ficam somente para consulta.";
   if (normalized.includes("ITEM_NAO_ENCONTRADO")) return "Item não encontrado.";
   if (normalized.includes("CONFLITO_ATUALIZACAO")) return "A linha foi alterada por outro processo. Atualize a lista e tente novamente.";
@@ -98,6 +102,20 @@ function parseDayReviewStatus(value: unknown): GestaoEstoqueDayReviewStatus {
   return String(value).trim().toLowerCase() === "revisado" ? "revisado" : "pendente";
 }
 
+function parseBaixaMotivo(value: unknown): GestaoEstoqueBaixaMotivo | null {
+  const parsed = parseNullableString(value);
+  if (parsed == null) return null;
+  if (
+    parsed === "Ajuste por Entrada (EO, EA)"
+    || parsed === "Ajuste por Inventário (EA)"
+    || parsed === "Logística Reversa (ED)"
+    || parsed === "Produto Perdido"
+  ) {
+    return parsed;
+  }
+  return null;
+}
+
 function mapDayReviewEntry(raw: Record<string, unknown>): GestaoEstoqueDayReviewEntry {
   return {
     actor_id: parseNullableString(raw.actor_id),
@@ -121,6 +139,7 @@ function mapItemRow(raw: Record<string, unknown>): GestaoEstoqueItemRow {
     endereco_pul: parseNullableString(raw.endereco_pul),
     qtd_est_atual: parseInteger(raw.qtd_est_atual),
     qtd_est_disp: parseInteger(raw.qtd_est_disp),
+    motivo: parseBaixaMotivo(raw.motivo),
     estoque_updated_at: parseNullableString(raw.estoque_updated_at),
     dat_ult_compra: parseNullableString(raw.dat_ult_compra),
     custo_unitario: parseNullableNumber(raw.custo_unitario),
@@ -136,6 +155,41 @@ function mapItemRow(raw: Record<string, unknown>): GestaoEstoqueItemRow {
     qtd_mov_dia: parseInteger(raw.qtd_mov_dia),
     valor_mov_dia: parseNumber(raw.valor_mov_dia),
     is_em_recebimento_previsto: parseBoolean(raw.is_em_recebimento_previsto)
+  };
+}
+
+function mapDeletedItemRow(raw: Record<string, unknown>): GestaoEstoqueDeletedItemRow {
+  return {
+    id: parseString(raw.id),
+    movement_date: parseString(raw.movement_date),
+    movement_type: parseMovementType(raw.movement_type),
+    coddv: parseInteger(raw.coddv),
+    barras_informado: parseNullableString(raw.barras_informado),
+    quantidade: parseInteger(raw.quantidade),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    endereco_sep: parseNullableString(raw.endereco_sep),
+    endereco_pul: parseNullableString(raw.endereco_pul),
+    qtd_est_atual: parseInteger(raw.qtd_est_atual),
+    qtd_est_disp: parseInteger(raw.qtd_est_disp),
+    motivo: parseBaixaMotivo(raw.motivo),
+    estoque_updated_at: parseNullableString(raw.estoque_updated_at),
+    dat_ult_compra: parseNullableString(raw.dat_ult_compra),
+    custo_unitario: parseNullableNumber(raw.custo_unitario),
+    custo_total: parseNumber(raw.custo_total),
+    created_nome: parseString(raw.created_nome, "Usuário"),
+    created_mat: parseString(raw.created_mat, "-"),
+    created_at: parseNullableString(raw.created_at),
+    updated_nome: parseString(raw.updated_nome, "Usuário"),
+    updated_mat: parseString(raw.updated_mat, "-"),
+    updated_at: parseNullableString(raw.updated_at),
+    resolved_refreshed_at: parseNullableString(raw.resolved_refreshed_at),
+    is_frozen: parseBoolean(raw.is_frozen),
+    qtd_mov_dia: parseInteger(raw.qtd_mov_dia),
+    valor_mov_dia: parseNumber(raw.valor_mov_dia),
+    is_em_recebimento_previsto: parseBoolean(raw.is_em_recebimento_previsto),
+    deleted_at: parseNullableString(raw.deleted_at),
+    deleted_nome: parseString(raw.deleted_nome, "Usuário"),
+    deleted_mat: parseString(raw.deleted_mat, "-")
   };
 }
 
@@ -231,6 +285,24 @@ export async function fetchGestaoEstoqueList(params: {
   return data
     .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
     .map(mapItemRow);
+}
+
+export async function fetchGestaoEstoqueDeletedList(params: {
+  cd: number | null;
+  date: string;
+  movementType: GestaoEstoqueMovementType;
+}): Promise<GestaoEstoqueDeletedItemRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_gestao_estoque_deleted_list", {
+    p_cd: params.cd,
+    p_date: params.date,
+    p_type: params.movementType
+  });
+  if (error) throw new Error(normalizeGestaoEstoqueError(error));
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+    .map(mapDeletedItemRow);
 }
 
 export async function fetchGestaoEstoqueStockUpdatedAt(cd: number | null): Promise<string | null> {
@@ -345,6 +417,7 @@ export async function addGestaoEstoqueItem(params: {
   barras?: string | null;
   coddv?: number | null;
   quantidade: number;
+  motivo?: GestaoEstoqueBaixaMotivo | null;
 }): Promise<GestaoEstoqueAddResult> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_gestao_estoque_add_item", {
@@ -353,7 +426,8 @@ export async function addGestaoEstoqueItem(params: {
     p_type: params.movementType,
     p_barras: params.barras ?? null,
     p_coddv: params.coddv ?? null,
-    p_quantidade: params.quantidade
+    p_quantidade: params.quantidade,
+    p_motivo: params.motivo ?? null
   });
   if (error) throw new Error(normalizeGestaoEstoqueError(error));
 
