@@ -13097,9 +13097,9 @@ small {
 
 .gestao-op-record-switcher button.is-active .gestao-op-record-switcher-icon {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .gestao-op-record-switcher button .gestao-op-record-switcher-label {
