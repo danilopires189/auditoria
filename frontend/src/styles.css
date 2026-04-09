@@ -13227,6 +13227,14 @@ small {
   min-width: 180px;
 }
 
+.gestao-op-preview-note {
+  display: block;
+  margin-top: -4px;
+  color: #73879b;
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
 .gestao-op-preview {
   display: grid;
   gap: 14px;

@@ -97,6 +97,9 @@ export interface GestaoEstoqueItemRow {
   updated_at: string;
   resolved_refreshed_at: string | null;
   is_frozen: boolean;
+  last_quantity_before: number | null;
+  last_quantity_after: number | null;
+  last_quantity_change_at: string | null;
   qtd_mov_dia: number;
   valor_mov_dia: number;
   is_em_recebimento_previsto: boolean;
@@ -127,6 +130,9 @@ export interface GestaoEstoqueDeletedItemRow {
   updated_at: string | null;
   resolved_refreshed_at: string | null;
   is_frozen: boolean;
+  last_quantity_before: number | null;
+  last_quantity_after: number | null;
+  last_quantity_change_at: string | null;
   qtd_mov_dia: number;
   valor_mov_dia: number;
   is_em_recebimento_previsto: boolean;

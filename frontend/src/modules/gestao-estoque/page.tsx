@@ -276,6 +276,15 @@ function hasRealItemEdit(row: {
   );
 }
 
+function formatLastQuantityChangeSummary(row: {
+  last_quantity_before: number | null;
+  last_quantity_after: number | null;
+}): string | null {
+  if (row.last_quantity_before == null || row.last_quantity_after == null) return null;
+  if (row.last_quantity_before === row.last_quantity_after) return null;
+  return `Quantidade alterada de ${formatInteger(row.last_quantity_before)} para ${formatInteger(row.last_quantity_after)}`;
+}
+
 function buildNaoAtendidoSearchBlob(row: GestaoEstoqueNaoAtendidoRow): string {
   return normalizeSearchText([
     row.descricao,
@@ -689,6 +698,18 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     }
     return formatInteger(deletedRows.length);
   }, [deletedRows.length, filteredDeletedRows.length, listSearchQuery, operationalRecordsView]);
+  const previewListObservation = useMemo(() => {
+    if (preview == null) return null;
+    const activeRow = rows.find((row) => row.coddv === preview.coddv);
+    if (activeRow) {
+      return `Observação: item já está em Ativos. Qtd: ${formatInteger(activeRow.quantidade)}.`;
+    }
+    const deletedRow = deletedRows.find((row) => row.coddv === preview.coddv);
+    if (deletedRow) {
+      return `Observação: item já está em Excluídos. Qtd: ${formatInteger(deletedRow.quantidade)}.`;
+    }
+    return "Observação: item não está em nenhuma lista.";
+  }, [deletedRows, preview, rows]);
 
   const focusSearch = useCallback(() => {
     disableSearchSoftKeyboard();
@@ -2054,6 +2075,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                   <button className="btn btn-primary gestao-op-add-btn" type="submit" disabled={preview == null || isHistorical}>
                     Adicionar à lista
                   </button>
+                  {previewListObservation ? <small className="gestao-op-preview-note">{previewListObservation}</small> : null}
                 </form>
               </div>
             </article>
@@ -2376,6 +2398,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                   const isHistoricalMismatch = isHistorical && row.qtd_mov_dia !== row.quantidade;
                   const isExpectedEntry = !isHistorical && row.movement_type === "entrada" && row.is_em_recebimento_previsto;
                   const showEditedBy = hasRealItemEdit(row);
+                  const quantityChangeSummary = formatLastQuantityChangeSummary(row);
                   return (
                     <div
                       key={rowKey}
@@ -2458,6 +2481,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                             <span><b>End. Pulmão:</b> {row.endereco_pul ?? "-"}</span>
                             <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
                             {showEditedBy ? <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span> : null}
+                            {quantityChangeSummary ? <span>{quantityChangeSummary}</span> : null}
                             <span><b>Excluído por:</b> {row.deleted_nome} ({row.deleted_mat})</span>
                             <span><b>Excluído em:</b> {formatDateTime(row.deleted_at)}</span>
                           </div>
@@ -2489,6 +2513,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                 const isHistoricalMismatch = isHistorical && row.qtd_mov_dia !== row.quantidade;
                 const isExpectedEntry = !isHistorical && listViewMode === "operacional" && movementType === "entrada" && row.is_em_recebimento_previsto;
                 const showEditedBy = hasRealItemEdit(row);
+                const quantityChangeSummary = formatLastQuantityChangeSummary(row);
                 return (
                   <div
                     key={row.id}
@@ -2583,6 +2608,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                           <span><b>End. Pulmão:</b> {row.endereco_pul ?? "-"}</span>
                           <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
                           {showEditedBy ? <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span> : null}
+                          {quantityChangeSummary ? <span>{quantityChangeSummary}</span> : null}
                         </div>
                         {isHistorical ? null : isEditing ? (
                           <div className="gestao-op-row-inline-editor">
