@@ -7256,9 +7256,22 @@ small {
 }
 
 .gestao-op-zone-badge {
-  color: #0f6b6d;
-  background: #e7f7f7;
-  border-color: #bde4e3;
+  min-height: 17px;
+  padding: 2px 7px;
+  font-size: 0.52rem;
+  letter-spacing: 0.02em;
+}
+
+.gestao-op-zone-badge.is-baixa {
+  color: #a23e4d;
+  background: #fdecef;
+  border-color: #f3c8cf;
+}
+
+.gestao-op-zone-badge.is-entrada {
+  color: #25694b;
+  background: #ebf8f0;
+  border-color: #c8e7d4;
 }
 
 .pvps-review-box {

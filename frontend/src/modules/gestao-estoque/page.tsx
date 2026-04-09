@@ -450,7 +450,7 @@ function RowTitleMeta({
       <span className="gestao-op-row-title-code gestao-op-row-title-code-mobile">{coddv}</span>
       <span aria-hidden="true"> • </span>
       <span>{label}</span>
-      {zona ? <span className="gestao-op-zone-badge">{zona}</span> : null}
+      {zona ? <span className={`gestao-op-zone-badge is-${movementType}`}>{zona}</span> : null}
     </span>
   );
 }
