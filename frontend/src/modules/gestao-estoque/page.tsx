@@ -1976,7 +1976,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                           onFocus={enableSearchSoftKeyboard}
                           onPointerDown={enableSearchSoftKeyboard}
                           onBlur={disableSearchSoftKeyboard}
-                          placeholder="Bipe, digite ou use câmera"
+                          placeholder="Bipe, digite"
                           autoComplete="off"
                           autoCapitalize="none"
                           autoCorrect="off"
