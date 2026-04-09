@@ -7027,7 +7027,9 @@ small {
 }
 
 .pvps-toolbar-btn-center {
-  margin-inline: auto;
+  align-self: flex-start;
+  margin-left: 18px;
+  margin-right: auto;
 }
 
 .pvps-progress-card {
@@ -7231,6 +7233,13 @@ small {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   line-height: 1;
+}
+
+.pvps-module-badge.is-ambos-tab {
+  min-height: 18px;
+  padding: 2px 7px;
+  font-size: 0.63rem;
+  letter-spacing: 0.02em;
 }
 
 .pvps-module-badge.is-pvps {
@@ -8028,10 +8037,10 @@ small {
   border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
   color: var(--text);
-  padding: 14px 16px;
+  padding: 11px 14px;
   text-align: left;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
   transition: box-shadow 200ms ease, border-color 200ms ease, transform 150ms ease;
 }
@@ -8114,10 +8123,10 @@ small {
   border: 0;
   background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
   color: inherit;
-  padding: 14px 16px;
+  padding: 11px 14px;
   text-align: left;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
   border-radius: inherit;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
@@ -8206,13 +8215,13 @@ small {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .pvps-row-main {
   display: grid;
   flex: 1 1 auto;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -8760,7 +8769,7 @@ small {
   }
 
   .pvps-row {
-    padding: 14px 14px;
+    padding: 10px 12px;
   }
 
   .pvps-row.is-active .pvps-row-main strong {
@@ -8831,6 +8840,7 @@ small {
   .pvps-toolbar-btn-center {
     width: auto;
     max-width: none;
+    margin-left: 12px;
   }
 
   .pvps-icon-btn {

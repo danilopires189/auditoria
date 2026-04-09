@@ -271,7 +271,11 @@ function AnimatedFeedReveal({ cardKey, className, children }: AnimatedFeedReveal
     const node = ref.current;
     if (!node) return;
     if (visible) return;
-    if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+    if (typeof window === "undefined") {
+      setVisible(true);
+      return;
+    }
+    if (window.matchMedia("(max-width: 979px)").matches || typeof window.IntersectionObserver === "undefined") {
       setVisible(true);
       return;
     }
@@ -319,6 +323,10 @@ function persistModuleTab(nextTab: ModuleTab): void {
   } catch {
     // Persistência local é best effort.
   }
+}
+
+function activePvpsRowsForPulHydration(rows: PvpsManifestRow[]): PvpsManifestRow[] {
+  return rows.filter((row) => row.is_window_active);
 }
 
 function keyOfPvps(row: { coddv: number; end_sep: string }): string {
@@ -1302,7 +1310,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     const updates: Record<string, PvpsPulItemRow[]> = {};
     let cursor = 0;
-    const concurrency = Math.max(8, Math.min(24, Math.ceil(missingRows.length / 12)));
+    const maxConcurrency = isDesktop ? 8 : 3;
+    const concurrency = Math.max(1, Math.min(maxConcurrency, Math.ceil(missingRows.length / (isDesktop ? 12 : 24))));
 
     const worker = async () => {
       for (;;) {
@@ -1505,8 +1514,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         });
         let nextPulBySepKey = projected.pulBySepKey;
         setLastPendingReviewAt((current) => ({ ...current, pvps: new Date().toISOString() }));
-        if (feedView === "pendentes") {
-          const updates = await hydratePulCacheForRows(projected.pvpsRows);
+        if (feedView === "pendentes" && isDesktop) {
+          const updates = await hydratePulCacheForRows(activePvpsRowsForPulHydration(projected.pvpsRows));
           if (Object.keys(updates).length > 0) {
             nextPulBySepKey = { ...nextPulBySepKey, ...updates };
           }
@@ -1575,8 +1584,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           events: pendingEvents
         });
         let nextPulBySepKey = projectedPvps.pulBySepKey;
-        if (feedView === "pendentes") {
-          const updates = await hydratePulCacheForRows(projectedPvps.pvpsRows);
+        if (feedView === "pendentes" && isDesktop) {
+          const updates = await hydratePulCacheForRows(activePvpsRowsForPulHydration(projectedPvps.pvpsRows));
           if (Object.keys(updates).length > 0) {
             nextPulBySepKey = { ...nextPulBySepKey, ...updates };
           }
@@ -3368,12 +3377,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       completed
     };
   }, [progressBaselinePvps.total, progressBaselineAloc.total, sortedPvpsCompletedRows.length, sortedAlocCompletedRows.length]);
+  const pvpsRowsForPulHydration = useMemo(
+    () => activePvpsRowsForPulHydration(sortedPvpsAllRows),
+    [sortedPvpsAllRows]
+  );
 
   useEffect(() => {
     if ((tab !== "pvps" && tab !== "ambos") || feedView !== "pendentes" || activeCd == null || !isOnline) return;
     let cancelled = false;
     const loadMissing = async () => {
-      const updates = await hydratePulCacheForRows(sortedPvpsAllRows);
+      const updates = await hydratePulCacheForRows(pvpsRowsForPulHydration);
       if (cancelled || !Object.keys(updates).length) return;
       setFeedPulBySepKey((current) => ({ ...current, ...updates }));
     };
@@ -3381,7 +3394,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return () => {
       cancelled = true;
     };
-  }, [tab, feedView, sortedPvpsAllRows, activeCd, feedPulBySepKey, isOnline]);
+  }, [tab, feedView, pvpsRowsForPulHydration, activeCd, feedPulBySepKey, isOnline]);
 
   useEffect(() => {
     if (!pendingSwipeOpen) return;
@@ -5027,7 +5040,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                   ) : null}
                                 </strong>
                                 <span>{item.coddv} - {item.descricao}</span>
-                                <span className={`pvps-module-badge is-${item.module}`}>{moduleBadgeLabel(item.module)}</span>
+                                <span className={`pvps-module-badge is-${item.module}${tab === "ambos" ? " is-ambos-tab" : ""}`}>{moduleBadgeLabel(item.module)}</span>
                               </div>
                               <div className="pvps-row-actions">
                                 <button
@@ -5091,7 +5104,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   {nextQueueItems.length === 0 ? <p>Não há próximos itens para a fila atual.</p> : nextQueueItems.map((item) => (
                     <div key={item.key} className="pvps-recent-row">
                       <span>{item.coddv} - {item.descricao}</span>
-                      {"module" in item ? <small className={`pvps-module-badge is-${item.module as "pvps" | "alocacao"}`}>{moduleBadgeLabel(item.module as "pvps" | "alocacao")}</small> : null}
+                      {"module" in item ? <small className={`pvps-module-badge is-${item.module as "pvps" | "alocacao"}${tab === "ambos" ? " is-ambos-tab" : ""}`}>{moduleBadgeLabel(item.module as "pvps" | "alocacao")}</small> : null}
                       <small>Última compra: {formatDate(item.dat_ult_compra)}</small>
                     </div>
                   ))}
@@ -5429,7 +5442,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                               <span className={`pvps-history-status ${statusInfo.tone}`}>
                                 {statusInfo.emoticon} {statusInfo.label}
                               </span>
-                              <span className="pvps-module-badge is-pvps">{moduleBadgeLabel("pvps")}</span>
+                              <span className={`pvps-module-badge is-pvps${tab === "ambos" ? " is-ambos-tab" : ""}`}>{moduleBadgeLabel("pvps")}</span>
                             </div>
                             <div className="pvps-row-actions">
                               <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openPvpsCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
@@ -5519,7 +5532,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                             <span className={`pvps-history-status ${statusInfo.tone}`}>
                               {statusInfo.emoticon} {statusInfo.label}
                             </span>
-                            <span className="pvps-module-badge is-alocacao">{moduleBadgeLabel("alocacao")}</span>
+                            <span className={`pvps-module-badge is-alocacao${tab === "ambos" ? " is-ambos-tab" : ""}`}>{moduleBadgeLabel("alocacao")}</span>
                           </div>
                           <div className="pvps-row-actions">
                             <button className="btn btn-primary pvps-icon-btn" type="button" onClick={() => openAlocCompletedEdit(row)} disabled={!canEdit} title="Editar concluído">
