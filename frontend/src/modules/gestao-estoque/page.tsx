@@ -156,6 +156,12 @@ function formatDate(value: string | null): string {
   return formatDateOnlyPtBR(value, "-", "value");
 }
 
+function extractZonaFromEndereco(endereco: string | null): string | null {
+  const normalized = endereco?.trim().toUpperCase() ?? "";
+  if (normalized.length < 4) return null;
+  return normalized.slice(0, 4);
+}
+
 function normalizeUtcTimestamp(value: string | null): string | null {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
@@ -218,10 +224,12 @@ function normalizeSearchText(value: string): string {
 }
 
 function buildRowSearchBlob(row: GestaoEstoqueItemRow): string {
+  const zona = extractZonaFromEndereco(row.endereco_sep);
   return normalizeSearchText([
     row.descricao,
     String(row.coddv),
     movementLabel(row.movement_type),
+    zona ?? "",
     row.motivo ?? "",
     row.endereco_sep ?? "",
     row.created_nome,
@@ -233,10 +241,12 @@ function buildRowSearchBlob(row: GestaoEstoqueItemRow): string {
 }
 
 function buildDeletedRowSearchBlob(row: GestaoEstoqueDeletedItemRow): string {
+  const zona = extractZonaFromEndereco(row.endereco_sep);
   return normalizeSearchText([
     row.descricao,
     String(row.coddv),
     movementLabel(row.movement_type),
+    zona ?? "",
     row.motivo ?? "",
     row.endereco_sep ?? "",
     row.created_nome,
@@ -248,6 +258,22 @@ function buildDeletedRowSearchBlob(row: GestaoEstoqueDeletedItemRow): string {
     formatDate(row.dat_ult_compra),
     formatDateTime(row.deleted_at)
   ].join(" "));
+}
+
+function hasRealItemEdit(row: {
+  created_at: string | null;
+  created_nome: string;
+  created_mat: string;
+  updated_at: string | null;
+  updated_nome: string;
+  updated_mat: string;
+}): boolean {
+  if (!row.updated_at) return false;
+  return !(
+    row.updated_at === row.created_at
+    && row.updated_nome === row.created_nome
+    && row.updated_mat === row.created_mat
+  );
 }
 
 function buildNaoAtendidoSearchBlob(row: GestaoEstoqueNaoAtendidoRow): string {
@@ -409,19 +435,23 @@ function trashIcon() {
 
 function RowTitleMeta({
   coddv,
-  movementType
+  movementType,
+  enderecoSep
 }: {
   coddv: number;
   movementType: GestaoEstoqueMovementType;
+  enderecoSep: string | null;
 }) {
   const label = movementLabel(movementType);
+  const zona = extractZonaFromEndereco(enderecoSep);
   return (
-    <>
+    <span className="gestao-op-row-title-meta">
       <span className="gestao-op-row-title-code gestao-op-row-title-code-desktop">CODDV {coddv}</span>
       <span className="gestao-op-row-title-code gestao-op-row-title-code-mobile">{coddv}</span>
       <span aria-hidden="true"> • </span>
       <span>{label}</span>
-    </>
+      {zona ? <span className="gestao-op-zone-badge">{zona}</span> : null}
+    </span>
   );
 }
 
@@ -2142,7 +2172,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                 type="text"
                 value={listSearchInput}
                 onChange={(event) => setListSearchInput(event.target.value)}
-                placeholder="Filtrar por descrição, CODDV, usuário..."
+                placeholder="Filtrar por descrição, CODDV, zona, usuário..."
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -2345,6 +2375,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                   const isExpanded = expandedRowId === rowKey;
                   const isHistoricalMismatch = isHistorical && row.qtd_mov_dia !== row.quantidade;
                   const isExpectedEntry = !isHistorical && row.movement_type === "entrada" && row.is_em_recebimento_previsto;
+                  const showEditedBy = hasRealItemEdit(row);
                   return (
                     <div
                       key={rowKey}
@@ -2367,9 +2398,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                           </span>
                           <span className="gestao-op-row-title">
                             <strong>{row.descricao}</strong>
-                            <span>
-                              <RowTitleMeta coddv={row.coddv} movementType={row.movement_type} />
-                            </span>
+                            <RowTitleMeta coddv={row.coddv} movementType={row.movement_type} enderecoSep={row.endereco_sep} />
                           </span>
                         </button>
                         <span className="gestao-op-row-cell gestao-op-row-cell--qty">
@@ -2428,7 +2457,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                             <span><b>End. Separação:</b> {row.endereco_sep ?? "-"}</span>
                             <span><b>End. Pulmão:</b> {row.endereco_pul ?? "-"}</span>
                             <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
-                            <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span>
+                            {showEditedBy ? <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span> : null}
                             <span><b>Excluído por:</b> {row.deleted_nome} ({row.deleted_mat})</span>
                             <span><b>Excluído em:</b> {formatDateTime(row.deleted_at)}</span>
                           </div>
@@ -2459,6 +2488,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                 const isExpanded = expandedRowId === row.id;
                 const isHistoricalMismatch = isHistorical && row.qtd_mov_dia !== row.quantidade;
                 const isExpectedEntry = !isHistorical && listViewMode === "operacional" && movementType === "entrada" && row.is_em_recebimento_previsto;
+                const showEditedBy = hasRealItemEdit(row);
                 return (
                   <div
                     key={row.id}
@@ -2481,9 +2511,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         </span>
                         <span className="gestao-op-row-title">
                           <strong>{row.descricao}</strong>
-                          <span>
-                            <RowTitleMeta coddv={row.coddv} movementType={row.movement_type} />
-                          </span>
+                          <RowTitleMeta coddv={row.coddv} movementType={row.movement_type} enderecoSep={row.endereco_sep} />
                         </span>
                       </button>
                       <span className="gestao-op-row-cell gestao-op-row-cell--qty">
@@ -2554,7 +2582,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                           <span><b>End. Separação:</b> {row.endereco_sep ?? "-"}</span>
                           <span><b>End. Pulmão:</b> {row.endereco_pul ?? "-"}</span>
                           <span><b>Criado por:</b> {row.created_nome} ({row.created_mat}) em {formatDateTime(row.created_at)}</span>
-                          <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span>
+                          {showEditedBy ? <span><b>Editado por:</b> {row.updated_nome} ({row.updated_mat}) em {formatDateTime(row.updated_at)}</span> : null}
                         </div>
                         {isHistorical ? null : isEditing ? (
                           <div className="gestao-op-row-inline-editor">

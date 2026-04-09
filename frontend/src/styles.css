@@ -7219,7 +7219,8 @@ small {
   color: var(--muted);
 }
 
-.pvps-module-badge {
+.pvps-module-badge,
+.gestao-op-zone-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7249,6 +7250,12 @@ small {
 }
 
 .pvps-module-badge.is-alocacao {
+  color: #0f6b6d;
+  background: #e7f7f7;
+  border-color: #bde4e3;
+}
+
+.gestao-op-zone-badge {
   color: #0f6b6d;
   background: #e7f7f7;
   border-color: #bde4e3;
@@ -13577,6 +13584,13 @@ small {
   color: #67809b;
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.gestao-op-row-title-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .gestao-op-row-title-code-mobile {
