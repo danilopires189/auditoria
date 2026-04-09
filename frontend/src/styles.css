@@ -13230,10 +13230,10 @@ small {
 }
 
 .gestao-op-search-footer {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  margin-top: auto;
-  align-content: end;
+  flex: 1 1 auto;
 }
 
 .gestao-op-preview-note {
@@ -13241,6 +13241,7 @@ small {
   color: #73879b;
   font-size: 0.73rem;
   line-height: 1.35;
+  margin-top: auto;
 }
 
 .gestao-op-preview {
