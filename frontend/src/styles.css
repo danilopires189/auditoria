@@ -6937,9 +6937,13 @@ small {
 }
 
 .pvps-actions-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  align-items: center;
+}
+
+.pvps-actions-break {
+  flex-basis: 100%;
+  width: 0;
+  height: 0;
 }
 
 /* Toolbar */
@@ -7023,9 +7027,7 @@ small {
 }
 
 .pvps-toolbar-btn-center {
-  grid-column: 1 / -1;
-  justify-self: center;
-  width: min(100%, 260px);
+  margin-inline: auto;
 }
 
 .pvps-progress-card {
@@ -8823,13 +8825,12 @@ small {
   }
 
   .pvps-actions-grid {
-    grid-template-columns: 1fr;
+    justify-content: flex-start;
   }
 
   .pvps-toolbar-btn-center {
-    grid-column: auto;
-    justify-self: stretch;
-    width: 100%;
+    width: auto;
+    max-width: none;
   }
 
   .pvps-icon-btn {

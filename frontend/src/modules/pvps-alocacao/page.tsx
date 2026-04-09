@@ -4531,7 +4531,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         ? "Somente próximas inclusões serão afetadas; pendentes atuais foram preservados."
         : (created.rule_kind === "blacklist"
           ? "Pendentes afetados foram removidos da fila imediatamente."
-          : "Pendentes afetados foram reordenados imediatamente.");
+          : "Fila atual recomposta imediatamente: prioridades entraram primeiro e os demais itens ficaram só como complemento.");
       setStatusMessage(
         `${createdLabel} criada em ${targetLabel}. ` +
         `${effectLabel} Impacto: PVPS ${created.affected_pvps}, Alocação ${created.affected_alocacao}.`
@@ -4716,6 +4716,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                     <span className="pvps-btn-icon" aria-hidden="true">{playIcon()}</span>
                     <span>Iniciar Alocação</span>
                   </button>
+                  <span className="pvps-actions-break" aria-hidden="true" />
                   <button
                     type="button"
                     className={`btn btn-muted pvps-toolbar-btn pvps-toolbar-btn-center${tab === "ambos" ? " is-active" : ""}`}
@@ -6184,7 +6185,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 <label>
                   Aplicar regra em
                   <select value={adminApplyMode} onChange={(event) => setAdminApplyMode(event.target.value as PvpsRuleApplyMode)}>
-                    <option value="apply_now">Agir agora (fila atual)</option>
+                    <option value="apply_now">Agir agora (recompor fila atual)</option>
                     <option value="next_inclusions">Somente próximas inclusões</option>
                   </select>
                 </label>
