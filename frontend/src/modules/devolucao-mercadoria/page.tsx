@@ -8,7 +8,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
-import { formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
+import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { chooseByJoinedValues, formatCountLabel } from "../../shared/inflection";
 import { shouldTriggerQueuedBackgroundSync, shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
@@ -43,8 +43,10 @@ import {
 } from "./storage";
 import {
   cancelVolume,
+  countDevolucaoMercadoriaReportRows,
   fetchCdOptions,
   fetchActiveVolume,
+  fetchDevolucaoMercadoriaReportRows,
   fetchManifestBundle,
   fetchManifestMeta,
   fetchManifestVolumes,
@@ -69,6 +71,9 @@ import type {
   DevolucaoMercadoriaLocalVolume,
   DevolucaoMercadoriaManifestItemRow,
   DevolucaoMercadoriaManifestVolumeRow,
+  DevolucaoMercadoriaReportCount,
+  DevolucaoMercadoriaReportFilters,
+  DevolucaoMercadoriaReportRow,
   DevolucaoMercadoriaRouteOverviewRow,
   DevolucaoMercadoriaVolumeRow,
   DevolucaoMercadoriaModuleProfile
@@ -111,6 +116,7 @@ const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+const REPORT_PAGE_SIZE = 1000;
 
 type ScannerInputTarget = "etiqueta" | "barras";
 
@@ -466,6 +472,17 @@ function listIcon() {
   );
 }
 
+function reportIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
+    </svg>
+  );
+}
+
 function closeIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -681,6 +698,40 @@ function formatPercent(value: number): string {
   })}%`;
 }
 
+function formatReportDate(value: string | null | undefined): string {
+  return formatDateOnlyPtBR(value ?? null, "-");
+}
+
+function formatConferenceKindLabel(value: string | null | undefined): string {
+  return value === "sem_nfd" ? "Sem NFD" : "Com NFD";
+}
+
+function formatConferenceStatusLabel(value: string | null | undefined): string {
+  if (value === "finalizado_ok") return "Finalizado OK";
+  if (value === "finalizado_falta") return "Finalizado com falta";
+  return "Em conferência";
+}
+
+function formatDivergenciaLabel(value: string | null | undefined): string {
+  if (value === "falta") return "Falta";
+  if (value === "sobra") return "Sobra";
+  return "Correto";
+}
+
+function resolveReportReference(value: Pick<DevolucaoMercadoriaReportRow, "conference_kind" | "ref" | "chave" | "nfd" | "nfo">): string {
+  if (value.ref.trim()) return value.ref.trim();
+  if (value.chave?.trim()) return value.chave.trim();
+  if (typeof value.nfd === "number" && Number.isFinite(value.nfd)) return `${value.nfd}`;
+  if (value.conference_kind === "sem_nfd" && value.nfo?.trim()) return `NFO ${value.nfo.trim()}`;
+  return "-";
+}
+
+function buildConferenceReportKey(
+  value: Pick<DevolucaoMercadoriaReportRow, "conf_date" | "cd" | "conference_kind" | "ref">
+): string {
+  return `${value.conf_date}|${value.cd}|${value.conference_kind}|${value.ref}`;
+}
+
 function isBrowserDesktop(): boolean {
   if (typeof window === "undefined") return true;
   return window.matchMedia("(min-width: 980px)").matches;
@@ -804,6 +855,14 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
 
   const [showRoutesModal, setShowRoutesModal] = useState(false);
   const [routeSearchInput, setRouteSearchInput] = useState("");
+  const [showReportPanel, setShowReportPanel] = useState(false);
+  const [reportDtIni, setReportDtIni] = useState("");
+  const [reportDtFim, setReportDtFim] = useState("");
+  const [reportCount, setReportCount] = useState<DevolucaoMercadoriaReportCount | null>(null);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportBusySearch, setReportBusySearch] = useState(false);
+  const [reportBusyExport, setReportBusyExport] = useState(false);
   const [modalVolumeHistory, setModalVolumeHistory] = useState<DevolucaoMercadoriaLocalVolume[]>([]);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeMotivo, setFinalizeMotivo] = useState("");
@@ -823,6 +882,12 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
+  const canSeeReportTools = isDesktop && profile.role === "admin";
+  const currentCdLabel = useMemo(() => {
+    if (currentCd == null) return "CD não definido";
+    const option = cdOptions.find((item) => item.cd === currentCd);
+    return option?.cd_nome || `CD ${String(currentCd).padStart(2, "0")}`;
+  }, [cdOptions, currentCd]);
   const canEditActiveVolume = Boolean(
     activeVolume
     && !activeVolume.is_read_only
@@ -886,6 +951,322 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
       correto: groupedItems.correto.length
     };
   }, [activeVolume, groupedItems]);
+
+  const validateReportFilters = useCallback((): DevolucaoMercadoriaReportFilters | null => {
+    if (!reportDtIni || !reportDtFim) {
+      setReportError("Informe data inicial e final.");
+      return null;
+    }
+
+    const dtIni = new Date(`${reportDtIni}T00:00:00`);
+    const dtFim = new Date(`${reportDtFim}T00:00:00`);
+    if (Number.isNaN(dtIni.getTime()) || Number.isNaN(dtFim.getTime())) {
+      setReportError("Período inválido.");
+      return null;
+    }
+
+    if (dtFim < dtIni) {
+      setReportError("A data final não pode ser menor que a data inicial.");
+      return null;
+    }
+
+    if (currentCd == null) {
+      setReportError("Selecione o CD antes de gerar o relatório.");
+      return null;
+    }
+
+    return {
+      dtIni: reportDtIni,
+      dtFim: reportDtFim,
+      cd: currentCd
+    };
+  }, [currentCd, reportDtFim, reportDtIni]);
+
+  const runReportSearch = useCallback(async () => {
+    if (!canSeeReportTools) return;
+    setReportError(null);
+    setReportMessage(null);
+    setReportCount(null);
+
+    const filters = validateReportFilters();
+    if (!filters) return;
+
+    setReportBusySearch(true);
+    try {
+      const count = await countDevolucaoMercadoriaReportRows(filters);
+      setReportCount(count);
+      if (count.total_conferencias > 0) {
+        setReportMessage(
+          `Foram encontradas ${count.total_conferencias} conferência(s) e ${count.total_itens} item(ns) no período.`
+        );
+      } else {
+        setReportMessage("Nenhuma conferência encontrada no período informado.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao buscar dados do relatório.";
+      setReportError(normalizeRpcErrorMessage(message));
+    } finally {
+      setReportBusySearch(false);
+    }
+  }, [canSeeReportTools, validateReportFilters]);
+
+  const runReportExport = useCallback(async () => {
+    if (!canSeeReportTools) return;
+    setReportError(null);
+    setReportMessage(null);
+
+    const filters = validateReportFilters();
+    if (!filters) return;
+
+    if ((reportCount?.total_conferencias ?? 0) <= 0) {
+      setReportError("Busque um período com registros antes de exportar o Excel.");
+      return;
+    }
+
+    setReportBusyExport(true);
+    try {
+      const reportRows: DevolucaoMercadoriaReportRow[] = [];
+      let offset = 0;
+
+      while (true) {
+        const batch = await fetchDevolucaoMercadoriaReportRows(filters, offset, REPORT_PAGE_SIZE);
+        if (!batch.length) break;
+        reportRows.push(...batch);
+        offset += batch.length;
+        setReportMessage(`Baixando linhas do relatório: ${reportRows.length}.`);
+        if (batch.length < REPORT_PAGE_SIZE) break;
+      }
+
+      if (reportRows.length === 0) {
+        setReportMessage("Nenhuma linha disponível para exportação no período informado.");
+        return;
+      }
+
+      type ConferenceAggregate = {
+        conf_date: string;
+        cd: number;
+        conference_kind: DevolucaoMercadoriaReportRow["conference_kind"];
+        nfd: number | null;
+        chave: string | null;
+        ref: string;
+        source_motivo: string | null;
+        nfo: string | null;
+        motivo_sem_nfd: string | null;
+        status: string;
+        started_mat: string | null;
+        started_nome: string | null;
+        started_at: string | null;
+        finalized_at: string | null;
+        updated_at: string | null;
+        total_itens: number;
+        itens_conferidos: number;
+        itens_divergentes: number;
+        qtd_esperada: number;
+        qtd_conferida: number;
+        qtd_manual_total: number;
+        qtd_falta: number;
+        qtd_sobra: number;
+      };
+
+      const conferenceMap = new Map<string, ConferenceAggregate>();
+      for (const row of reportRows) {
+        const key = buildConferenceReportKey(row);
+        const existing = conferenceMap.get(key);
+        if (existing) {
+          existing.qtd_esperada += row.qtd_esperada;
+          existing.qtd_conferida += row.qtd_conferida;
+          existing.qtd_manual_total += row.qtd_manual_total;
+          existing.qtd_falta += row.qtd_falta;
+          existing.qtd_sobra += row.qtd_sobra;
+          continue;
+        }
+
+        conferenceMap.set(key, {
+          conf_date: row.conf_date,
+          cd: row.cd,
+          conference_kind: row.conference_kind,
+          nfd: row.nfd,
+          chave: row.chave,
+          ref: row.ref,
+          source_motivo: row.source_motivo,
+          nfo: row.nfo,
+          motivo_sem_nfd: row.motivo_sem_nfd,
+          status: row.status,
+          started_mat: row.started_mat,
+          started_nome: row.started_nome,
+          started_at: row.started_at,
+          finalized_at: row.finalized_at,
+          updated_at: row.updated_at,
+          total_itens: row.total_itens,
+          itens_conferidos: row.itens_conferidos,
+          itens_divergentes: row.itens_divergentes,
+          qtd_esperada: row.qtd_esperada,
+          qtd_conferida: row.qtd_conferida,
+          qtd_manual_total: row.qtd_manual_total,
+          qtd_falta: row.qtd_falta,
+          qtd_sobra: row.qtd_sobra
+        });
+      }
+
+      const conferenceRows = Array.from(conferenceMap.values()).map((row) => ({
+        Data: formatReportDate(row.conf_date),
+        CD: row.cd,
+        Tipo_Conferencia: formatConferenceKindLabel(row.conference_kind),
+        Referencia: resolveReportReference(row),
+        NFD: row.nfd ?? "",
+        Chave: row.chave ?? "",
+        Motivo_Base: row.source_motivo ?? "",
+        NFO: row.nfo ?? "",
+        Motivo_Sem_NFD: row.motivo_sem_nfd ?? "",
+        Status: formatConferenceStatusLabel(row.status),
+        Conferente_Principal: row.started_nome ?? "",
+        Matricula: row.started_mat ?? "",
+        Iniciado_Em: formatDateTime(row.started_at),
+        Finalizado_Em: formatDateTime(row.finalized_at),
+        Ultima_Atualizacao: formatDateTime(row.updated_at),
+        Total_Itens: row.total_itens,
+        Itens_Conferidos: row.itens_conferidos,
+        Itens_Divergentes: row.itens_divergentes,
+        Qtd_Esperada: row.qtd_esperada,
+        Qtd_Conferida: row.qtd_conferida,
+        Qtd_Manual: row.qtd_manual_total,
+        Qtd_Falta: row.qtd_falta,
+        Qtd_Sobra: row.qtd_sobra
+      }));
+
+      const itemSheetRows = reportRows.map((row) => ({
+        Data: formatReportDate(row.conf_date),
+        CD: row.cd,
+        Tipo_Conferencia: formatConferenceKindLabel(row.conference_kind),
+        Referencia: resolveReportReference(row),
+        NFD: row.nfd ?? "",
+        Chave: row.chave ?? "",
+        Status: formatConferenceStatusLabel(row.status),
+        Possui_Item: row.has_item ? "Sim" : "Não",
+        CODDV: row.coddv ?? "",
+        Descricao: row.has_item ? (row.descricao ?? "") : "Sem itens informados",
+        Tipo_Unidade: row.tipo ?? "",
+        Barras: row.barras ?? "",
+        Lotes: row.lotes ?? "",
+        Validades: row.validades ?? "",
+        Qtd_Esperada: row.qtd_esperada,
+        Qtd_Conferida: row.qtd_conferida,
+        Qtd_Manual: row.qtd_manual_total,
+        Qtd_Falta: row.qtd_falta,
+        Qtd_Sobra: row.qtd_sobra,
+        Divergencia: formatDivergenciaLabel(row.divergencia_tipo),
+        Falta_Motivo: row.falta_motivo ?? "",
+        Motivo_Base: row.source_motivo ?? "",
+        Atualizado_Em: formatDateTime(row.item_updated_at ?? row.updated_at)
+      }));
+
+      const collaboratorSheetRows = Array.from(conferenceMap.values()).map((row) => ({
+        Colaborador: row.started_nome ?? "",
+        Matricula: row.started_mat ?? "",
+        Tipo_Conferencia: formatConferenceKindLabel(row.conference_kind),
+        Referencia: resolveReportReference(row),
+        Data: formatReportDate(row.conf_date),
+        Inicio: formatDateTime(row.started_at),
+        Finalizacao: formatDateTime(row.finalized_at),
+        Status: formatConferenceStatusLabel(row.status),
+        Status_Divergencia: row.itens_divergentes > 0 ? "Com divergencia" : "Sem divergencia",
+        CD: row.cd
+      }));
+
+      const totalQtdEsperada = reportRows.reduce((sum, row) => sum + row.qtd_esperada, 0);
+      const totalQtdConferida = reportRows.reduce((sum, row) => sum + row.qtd_conferida, 0);
+      const totalQtdManual = reportRows.reduce((sum, row) => sum + row.qtd_manual_total, 0);
+      const totalQtdFalta = reportRows.reduce((sum, row) => sum + row.qtd_falta, 0);
+      const totalQtdSobra = reportRows.reduce((sum, row) => sum + row.qtd_sobra, 0);
+      const totalItensDivergentes = Array.from(conferenceMap.values()).reduce((sum, row) => sum + row.itens_divergentes, 0);
+      const statusCounts = Array.from(conferenceMap.values()).reduce<Record<string, number>>((acc, row) => {
+        acc[row.status] = (acc[row.status] ?? 0) + 1;
+        return acc;
+      }, {});
+      const tipoCounts = Array.from(conferenceMap.values()).reduce<Record<string, number>>((acc, row) => {
+        acc[row.conference_kind] = (acc[row.conference_kind] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      setReportMessage("Montando arquivo Excel...");
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+
+      const summarySheet = XLSX.utils.aoa_to_sheet([
+        ["Relatório de Conferência de Devolução de Mercadoria"],
+        ["Período inicial", formatReportDate(filters.dtIni)],
+        ["Período final", formatReportDate(filters.dtFim)],
+        ["CD", currentCdLabel],
+        [],
+        ["Indicador", "Valor"],
+        ["Total de conferências", conferenceRows.length],
+        ["Total de itens", reportCount?.total_itens ?? 0],
+        ["Itens divergentes", totalItensDivergentes],
+        ["Quantidade esperada", totalQtdEsperada],
+        ["Quantidade conferida", totalQtdConferida],
+        ["Quantidade manual", totalQtdManual],
+        ["Quantidade falta", totalQtdFalta],
+        ["Quantidade sobra", totalQtdSobra],
+        [],
+        ["Status", "Quantidade"],
+        ["Em conferência", statusCounts.em_conferencia ?? 0],
+        ["Finalizado OK", statusCounts.finalizado_ok ?? 0],
+        ["Finalizado com falta", statusCounts.finalizado_falta ?? 0],
+        [],
+        ["Tipo", "Quantidade"],
+        ["Com NFD", tipoCounts.com_nfd ?? 0],
+        ["Sem NFD", tipoCounts.sem_nfd ?? 0]
+      ]);
+
+      const conferencesSheet = XLSX.utils.json_to_sheet(
+        conferenceRows.length ? conferenceRows : [{ Mensagem: "Nenhuma conferência encontrada no período." }]
+      );
+      const itemsSheet = XLSX.utils.json_to_sheet(
+        itemSheetRows.length ? itemSheetRows : [{ Mensagem: "Nenhum item encontrado no período." }]
+      );
+      const collaboratorsSheet = XLSX.utils.json_to_sheet(
+        collaboratorSheetRows.length ? collaboratorSheetRows : [{ Mensagem: "Nenhum colaborador encontrado no período." }]
+      );
+
+      summarySheet["!cols"] = [{ wch: 28 }, { wch: 24 }];
+      conferencesSheet["!cols"] = [
+        { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 24 }, { wch: 14 }, { wch: 28 }, { wch: 24 },
+        { wch: 14 }, { wch: 24 }, { wch: 22 }, { wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 20 },
+        { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 12 },
+        { wch: 12 }, { wch: 12 }
+      ];
+      itemsSheet["!cols"] = [
+        { wch: 12 }, { wch: 8 }, { wch: 18 }, { wch: 24 }, { wch: 14 }, { wch: 28 }, { wch: 22 },
+        { wch: 12 }, { wch: 10 }, { wch: 42 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 24 },
+        { wch: 24 }, { wch: 22 }
+      ];
+      collaboratorsSheet["!cols"] = [
+        { wch: 26 }, { wch: 14 }, { wch: 18 }, { wch: 24 }, { wch: 12 }, { wch: 20 }, { wch: 20 },
+        { wch: 22 }, { wch: 22 }, { wch: 8 }
+      ];
+
+      XLSX.utils.book_append_sheet(workbook, summarySheet, "Resumo");
+      XLSX.utils.book_append_sheet(workbook, conferencesSheet, "Conferencias");
+      XLSX.utils.book_append_sheet(workbook, itemsSheet, "Itens");
+      XLSX.utils.book_append_sheet(workbook, collaboratorsSheet, "Colaboradores");
+
+      XLSX.writeFile(
+        workbook,
+        `relatorio-conferencia-devolucao-mercadoria-${filters.dtIni}-${filters.dtFim}-cd${String(filters.cd).padStart(2, "0")}.xlsx`,
+        { compression: true }
+      );
+
+      setReportMessage(
+        `Relatório gerado com sucesso (${conferenceRows.length} conferência(s) e ${reportCount?.total_itens ?? 0} item(ns)).`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao gerar o relatório Excel.";
+      setReportError(normalizeRpcErrorMessage(message));
+    } finally {
+      setReportBusyExport(false);
+    }
+  }, [canSeeReportTools, currentCdLabel, reportCount, validateReportFilters]);
 
   const hasAnyItemInformed = useMemo(() => (
     Boolean(activeVolume?.items.some((item) => item.qtd_conferida > 0))
@@ -3241,7 +3622,110 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
             <span aria-hidden="true">{listIcon()}</span>
             Notas
           </button>
+
+          {canSeeReportTools ? (
+            <button
+              type="button"
+              className={`btn btn-muted termo-report-toggle${showReportPanel ? " is-active" : ""}`}
+              aria-pressed={showReportPanel}
+              onClick={() => {
+                setShowReportPanel((value) => {
+                  const next = !value;
+                  if (next && (!reportDtIni || !reportDtFim)) {
+                    const today = todayIsoBrasilia();
+                    setReportDtIni((current) => current || today);
+                    setReportDtFim((current) => current || today);
+                  }
+                  return next;
+                });
+                setReportCount(null);
+                setReportMessage(null);
+                setReportError(null);
+              }}
+              title="Abrir relatório em Excel"
+            >
+              <span className="termo-report-toggle-icon" aria-hidden="true">{reportIcon()}</span>
+              Relatório
+            </button>
+          ) : null}
         </div>
+
+        {showReportPanel && canSeeReportTools ? (
+          <section className="termo-report-panel">
+            <div className="termo-report-head">
+              <h3>Relatório de Conferência de Devolução</h3>
+              <p>Busca por período para exportação em Excel com foco em auditoria futura.</p>
+            </div>
+
+            {reportError ? <div className="alert error">{reportError}</div> : null}
+            {reportMessage ? <div className="alert success">{reportMessage}</div> : null}
+
+            <div className="termo-report-grid">
+              <label>
+                Data inicial
+                <input
+                  type="date"
+                  autoComplete="off"
+                  value={reportDtIni}
+                  onChange={(event) => {
+                    setReportDtIni(event.target.value);
+                    setReportCount(null);
+                    setReportMessage(null);
+                    setReportError(null);
+                  }}
+                  required
+                />
+              </label>
+
+              <label>
+                Data final
+                <input
+                  type="date"
+                  autoComplete="off"
+                  value={reportDtFim}
+                  onChange={(event) => {
+                    setReportDtFim(event.target.value);
+                    setReportCount(null);
+                    setReportMessage(null);
+                    setReportError(null);
+                  }}
+                  required
+                />
+              </label>
+
+              <label>
+                CD
+                <input type="text" value={currentCdLabel} disabled />
+              </label>
+            </div>
+
+            <div className="termo-report-actions">
+              <button
+                type="button"
+                className="btn btn-muted"
+                onClick={() => void runReportSearch()}
+                disabled={reportBusySearch}
+              >
+                {reportBusySearch ? "Buscando..." : "Buscar"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary termo-export-btn"
+                onClick={() => void runReportExport()}
+                disabled={reportBusyExport || (reportCount?.total_conferencias ?? 0) <= 0}
+              >
+                <span aria-hidden="true">{reportIcon()}</span>
+                {reportBusyExport ? "Gerando Excel..." : "Exportar Excel"}
+              </button>
+            </div>
+
+            {reportCount ? (
+              <p className="termo-report-count">
+                Conferências encontradas: {reportCount.total_conferencias} | Itens encontrados: {reportCount.total_itens}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
 
         {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
         {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
@@ -4005,4 +4489,3 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     </>
   );
 }
-

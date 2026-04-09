@@ -98,6 +98,53 @@ export interface DevolucaoMercadoriaItemRow {
   updated_at: string;
 }
 
+export interface DevolucaoMercadoriaReportFilters {
+  dtIni: string;
+  dtFim: string;
+  cd: number;
+}
+
+export interface DevolucaoMercadoriaReportCount {
+  total_conferencias: number;
+  total_itens: number;
+}
+
+export interface DevolucaoMercadoriaReportRow {
+  conf_date: string;
+  cd: number;
+  conference_kind: DevolucaoMercadoriaConferenceKind;
+  nfd: number | null;
+  chave: string | null;
+  ref: string;
+  source_motivo: string | null;
+  nfo: string | null;
+  motivo_sem_nfd: string | null;
+  status: DevolucaoMercadoriaConfStatus;
+  started_mat: string | null;
+  started_nome: string | null;
+  started_at: string | null;
+  finalized_at: string | null;
+  updated_at: string | null;
+  total_itens: number;
+  itens_conferidos: number;
+  itens_divergentes: number;
+  falta_motivo: string | null;
+  has_item: boolean;
+  coddv: number | null;
+  descricao: string | null;
+  tipo: string | null;
+  barras: string | null;
+  qtd_esperada: number;
+  qtd_conferida: number;
+  qtd_manual_total: number;
+  qtd_falta: number;
+  qtd_sobra: number;
+  divergencia_tipo: DevolucaoMercadoriaDivergenciaTipo;
+  lotes: string | null;
+  validades: string | null;
+  item_updated_at: string | null;
+}
+
 export interface DevolucaoMercadoriaVolumeRow {
   conf_id: string;
   conf_date: string;

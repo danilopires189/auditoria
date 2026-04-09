@@ -9,6 +9,9 @@ import type {
   DevolucaoMercadoriaManifestMeta,
   DevolucaoMercadoriaManifestVolumeRow,
   DevolucaoMercadoriaPartialReopenInfo,
+  DevolucaoMercadoriaReportCount,
+  DevolucaoMercadoriaReportFilters,
+  DevolucaoMercadoriaReportRow,
   DevolucaoMercadoriaRouteOverviewRow,
   DevolucaoMercadoriaVolumeRow
 } from "./types";
@@ -232,6 +235,58 @@ function mapItem(raw: Record<string, unknown>): DevolucaoMercadoriaItemRow {
     lotes: parseNullableString(raw.lotes),
     validades: parseNullableString(raw.validades),
     updated_at: String(raw.updated_at ?? new Date().toISOString())
+  };
+}
+
+function mapReportCount(raw: Record<string, unknown>): DevolucaoMercadoriaReportCount {
+  return {
+    total_conferencias: Math.max(parseInteger(raw.total_conferencias), 0),
+    total_itens: Math.max(parseInteger(raw.total_itens), 0)
+  };
+}
+
+function mapReportRow(raw: Record<string, unknown>): DevolucaoMercadoriaReportRow {
+  const statusRaw = String(raw.status ?? "em_conferencia");
+  const status = statusRaw === "finalizado_ok" || statusRaw === "finalizado_falta"
+    ? statusRaw
+    : "em_conferencia";
+  const tipoRaw = String(raw.divergencia_tipo ?? "correto").toLowerCase();
+  const divergencia_tipo = tipoRaw === "falta" || tipoRaw === "sobra" ? tipoRaw : "correto";
+
+  return {
+    conf_date: String(raw.conf_date ?? ""),
+    cd: parseInteger(raw.cd),
+    conference_kind: raw.conference_kind === "sem_nfd" ? "sem_nfd" : "com_nfd",
+    nfd: parseIntegerOrNull(raw.nfd),
+    chave: parseNullableString(raw.chave),
+    ref: String(raw.ref ?? "").trim(),
+    source_motivo: parseNullableString(raw.source_motivo),
+    nfo: parseNullableString(raw.nfo),
+    motivo_sem_nfd: parseNullableString(raw.motivo_sem_nfd),
+    status,
+    started_mat: parseNullableString(raw.started_mat),
+    started_nome: parseNullableString(raw.started_nome),
+    started_at: parseNullableString(raw.started_at),
+    finalized_at: parseNullableString(raw.finalized_at),
+    updated_at: parseNullableString(raw.updated_at),
+    total_itens: Math.max(parseInteger(raw.total_itens), 0),
+    itens_conferidos: Math.max(parseInteger(raw.itens_conferidos), 0),
+    itens_divergentes: Math.max(parseInteger(raw.itens_divergentes), 0),
+    falta_motivo: parseNullableString(raw.falta_motivo),
+    has_item: parseBoolean(raw.has_item),
+    coddv: parseIntegerOrNull(raw.coddv),
+    descricao: parseNullableString(raw.descricao),
+    tipo: parseNullableString(raw.tipo),
+    barras: parseNullableString(raw.barras),
+    qtd_esperada: Math.max(parseInteger(raw.qtd_esperada), 0),
+    qtd_conferida: Math.max(parseInteger(raw.qtd_conferida), 0),
+    qtd_manual_total: Math.max(parseInteger(raw.qtd_manual_total), 0),
+    qtd_falta: Math.max(parseInteger(raw.qtd_falta), 0),
+    qtd_sobra: Math.max(parseInteger(raw.qtd_sobra), 0),
+    divergencia_tipo,
+    lotes: parseNullableString(raw.lotes),
+    validades: parseNullableString(raw.validades),
+    item_updated_at: parseNullableString(raw.item_updated_at)
   };
 }
 
@@ -690,4 +745,41 @@ export async function syncPendingDevolucaoMercadoriaVolumes(userId: string): Pro
     synced,
     failed
   };
+}
+
+export async function countDevolucaoMercadoriaReportRows(
+  filters: DevolucaoMercadoriaReportFilters
+): Promise<DevolucaoMercadoriaReportCount> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_conf_devolucao_report_count", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) return { total_conferencias: 0, total_itens: 0 };
+  return mapReportCount(first);
+}
+
+export async function fetchDevolucaoMercadoriaReportRows(
+  filters: DevolucaoMercadoriaReportFilters,
+  offset = 0,
+  limit = 1000
+): Promise<DevolucaoMercadoriaReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_conf_devolucao_report_rows", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd,
+    p_offset: Math.max(offset, 0),
+    p_limit: Math.max(1, limit)
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapReportRow(row as Record<string, unknown>));
 }
