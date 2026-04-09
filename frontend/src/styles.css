@@ -13607,9 +13607,9 @@ small {
 }
 
 .gestao-op-row-title .gestao-op-zone-badge {
-  min-height: 10px;
-  padding: 0 4px;
-  font-size: 0.41rem;
+  min-height: 15px;
+  padding: 1px 6px;
+  font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.01em;
   line-height: 1;
@@ -14527,6 +14527,29 @@ small {
 
   .gestao-op-row-title-code-mobile {
     display: inline;
+  }
+
+  .gestao-op-row.is-deleted .gestao-op-row-title {
+    gap: 1px;
+  }
+
+  .gestao-op-row.is-deleted .gestao-op-row-title strong {
+    font-size: 0.92rem;
+    line-height: 1.18;
+  }
+
+  .gestao-op-row.is-deleted .gestao-op-row-title span {
+    font-size: 0.74rem;
+  }
+
+  .gestao-op-row.is-deleted .gestao-op-row-title-meta {
+    gap: 4px;
+  }
+
+  .gestao-op-row.is-deleted .gestao-op-row-title .gestao-op-zone-badge {
+    min-height: 13px;
+    padding: 1px 5px;
+    font-size: 0.56rem;
   }
 
   .gestao-op-row-cell {
