@@ -158,7 +158,7 @@ function formatDate(value: string | null): string {
 
 const SAO_PAULO_SOURCE_TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})[ t](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:z|[+-]\d{2}:\d{2})?$/i;
-const SAO_PAULO_SOURCE_HOUR_CORRECTION = -3;
+const SAO_PAULO_SOURCE_HOUR_CORRECTION = 3;
 
 function extractSaoPauloSourceTimestampParts(
   value: string | null
