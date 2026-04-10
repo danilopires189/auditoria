@@ -1,2 +1,0 @@
-table_name,source_row_number,reason_code,reason_detail,payload,run_id
-db_devolucao,4467,required_null,Required columns null: chave,"{""cd"": 2, ""motivo"": ""MOTIVO: AVARIA"", ""nfd"": 56743, ""coddv"": 559407, ""descricao"": ""KELUS GEL 15G"", ""tipo"": ""UN"", ""qtd_dev"": 13, ""dt_gera"": ""2026-02-13"", ""chave"": null, ""geracao"": ""A"", ""source_file"": ""DB_DEVOLUCAO.xlsx"", ""source_row_number"": 4467}",14db4748-fba8-4678-8e1d-81b763a07bd9
