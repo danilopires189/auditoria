@@ -156,6 +156,28 @@ function formatDate(value: string | null): string {
   return formatDateOnlyPtBR(value, "-", "value");
 }
 
+const SAO_PAULO_SOURCE_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})[ t](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:z|[+-]\d{2}:\d{2})?$/i;
+
+function extractSaoPauloSourceTimestampParts(
+  value: string | null
+): { year: string; month: string; day: string; hour: string; minute: string; second: string } | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  const matched = SAO_PAULO_SOURCE_TIMESTAMP_PATTERN.exec(raw);
+  if (!matched) return null;
+
+  return {
+    year: matched[1],
+    month: matched[2],
+    day: matched[3],
+    hour: matched[4],
+    minute: matched[5],
+    second: matched[6] ?? "00"
+  };
+}
+
 function extractZonaFromEndereco(endereco: string | null): string | null {
   const normalized = endereco?.trim().toUpperCase() ?? "";
   if (normalized.length < 4) return null;
@@ -181,8 +203,26 @@ function formatDateTime(value: string | null): string {
   });
 }
 
-function formatTime(value: string | null): string {
-  return formatTimeBrasilia(normalizeUtcTimestamp(value), "-", "value");
+function formatSaoPauloSourceDateTime(value: string | null): string {
+  const parts = extractSaoPauloSourceTimestampParts(value);
+  if (parts) {
+    return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}:${parts.second}`;
+  }
+
+  return formatDateTimeBrasilia(value, {
+    includeSeconds: true,
+    emptyFallback: "-",
+    invalidFallback: "value"
+  });
+}
+
+function formatSaoPauloSourceTime(value: string | null): string {
+  const parts = extractSaoPauloSourceTimestampParts(value);
+  if (parts) {
+    return `${parts.hour}:${parts.minute}:${parts.second}`;
+  }
+
+  return formatTimeBrasilia(value, "-", "value");
 }
 
 function movementLabel(value: GestaoEstoqueMovementType): string {
@@ -294,7 +334,7 @@ function buildNaoAtendidoSearchBlob(row: GestaoEstoqueNaoAtendidoRow): string {
     row.endereco ?? "",
     row.mat ?? "",
     formatDate(row.dat_ult_compra),
-    formatTime(row.ocorrencia)
+    formatSaoPauloSourceTime(row.ocorrencia)
   ].join(" "));
 }
 
@@ -304,8 +344,8 @@ function buildEmRecebimentoSearchBlob(row: GestaoEstoqueEmRecebimentoRow): strin
     String(row.coddv),
     String(row.seq_entrada ?? ""),
     row.transportadora,
-    formatDateTime(row.dh_consistida),
-    formatDateTime(row.dh_liberacao)
+    formatSaoPauloSourceDateTime(row.dh_consistida),
+    formatSaoPauloSourceDateTime(row.dh_liberacao)
   ].join(" "));
 }
 
@@ -2251,7 +2291,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                         </button>
                         <span className="gestao-op-row-cell">
                           <span className="gestao-op-row-cell-label">Ocorrência</span>
-                          <span className="gestao-op-row-cell-value">{formatTime(row.ocorrencia)}</span>
+                          <span className="gestao-op-row-cell-value">{formatSaoPauloSourceTime(row.ocorrencia)}</span>
                         </span>
                         <span className="gestao-op-row-cell">
                           <span className="gestao-op-row-cell-label">Filial</span>
@@ -2367,8 +2407,8 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
                       {isExpanded ? (
                         <div className="gestao-op-row-details">
                           <div className="gestao-op-row-detail-grid">
-                            <span><b>Dh. consistida:</b> {formatDateTime(row.dh_consistida)}</span>
-                            <span><b>Dh. liberação:</b> {formatDateTime(row.dh_liberacao)}</span>
+                            <span><b>Dh. consistida:</b> {formatSaoPauloSourceDateTime(row.dh_consistida)}</span>
+                            <span><b>Dh. liberação:</b> {formatSaoPauloSourceDateTime(row.dh_liberacao)}</span>
                           </div>
                         </div>
                       ) : null}

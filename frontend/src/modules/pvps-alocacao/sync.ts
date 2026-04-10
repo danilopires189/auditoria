@@ -192,6 +192,7 @@ function mapPvpsPul(raw: Record<string, unknown>): PvpsPulItemRow {
     auditado: parseBoolean(raw.auditado),
     dt_hr: parseNullableString(raw.dt_hr),
     auditor_nome: parseNullableString(raw.auditor_nome),
+    auditor_mat: parseNullableString(raw.auditor_mat),
     is_lower: parseBoolean(raw.is_lower)
   };
 }
@@ -202,7 +203,10 @@ function mapPvpsReportPul(raw: Record<string, unknown>): PvpsReportPulItemRow {
     end_pul: parseString(raw.end_pul).toUpperCase(),
     val_pul: parseNullableString(raw.val_pul),
     end_sit: parseEndSit(raw.end_sit),
-    is_lower: parseBoolean(raw.is_lower)
+    is_lower: parseBoolean(raw.is_lower),
+    dt_hr: parseNullableString(raw.dt_hr),
+    auditor_nome: parseNullableString(raw.auditor_nome),
+    auditor_mat: parseNullableString(raw.auditor_mat)
   };
 }
 

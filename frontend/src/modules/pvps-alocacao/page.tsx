@@ -1740,6 +1740,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         val_pul: string | null;
         end_sit: PvpsEndSit | null;
         is_lower: boolean;
+        dt_hr: string | null;
+        auditor_nome: string | null;
+        auditor_mat: string | null;
       }>>();
 
       for (const item of pulItems) {
@@ -1748,7 +1751,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           end_pul: item.end_pul,
           val_pul: item.val_pul,
           end_sit: item.end_sit,
-          is_lower: item.is_lower
+          is_lower: item.is_lower,
+          dt_hr: item.dt_hr ?? null,
+          auditor_nome: item.auditor_nome ?? null,
+          auditor_mat: item.auditor_mat ?? null
         });
         pulByAuditId.set(item.audit_id, current);
       }
@@ -1790,8 +1796,11 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             : null;
           normalizedRows.push({
             ...baseRow,
+            dataHora: formatDate(pulItem.dt_hr ?? reportValue(row, "dt_hr")),
             enderecoPulmao: pulItem.end_pul || "-",
             validadePulmao: formatMmaaDigits(pulItem.val_pul) ?? "-",
+            auditor: pulItem.auditor_nome || baseRow.auditor,
+            matricula: pulItem.auditor_mat || baseRow.matricula,
             sitAud: pulSituacao || sepSituacao
               ? "ocorrencia"
               : (pulItem.is_lower ? "nao_conforme" : "conforme"),
@@ -2336,13 +2345,23 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           .map((row) => reportValue(row, "audit_id"))
           .filter((auditId) => auditId.length > 0);
         const pulItems = await fetchPvpsReportPulItems(auditIds);
-        const pulByAuditId = new Map<string, Array<{ end_pul: string; val_pul: string | null; end_sit: string | null }>>();
+        const pulByAuditId = new Map<string, Array<{
+          end_pul: string;
+          val_pul: string | null;
+          end_sit: string | null;
+          dt_hr: string | null;
+          auditor_nome: string | null;
+          auditor_mat: string | null;
+        }>>();
         for (const item of pulItems) {
           const current = pulByAuditId.get(item.audit_id) ?? [];
           current.push({
             end_pul: item.end_pul,
             val_pul: item.val_pul,
-            end_sit: item.end_sit
+            end_sit: item.end_sit,
+            dt_hr: item.dt_hr ?? null,
+            auditor_nome: item.auditor_nome ?? null,
+            auditor_mat: item.auditor_mat ?? null
           });
           pulByAuditId.set(item.audit_id, current);
         }
@@ -2405,6 +2424,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               pulSituacao === "vazio" || pulSituacao === "obstruido" || sepSituacao === "vazio" || sepSituacao === "obstruido"
                 ? "ocorrencia"
                 : (valSepRank != null && pulRank != null && pulRank < valSepRank ? "nao_conforme" : "conforme");
+            const pulDtHr = pulItem.dt_hr ?? dtHr;
             rowsAoA.push([
               reportValue(row, "cd"),
               reportValue(row, "modulo").toUpperCase(),
@@ -2417,10 +2437,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               valSep,
               pulItem.val_pul ?? "",
               sitAud,
-              reportValue(row, "auditor_nome", "auditor_nom"),
-              reportValue(row, "auditor_mat"),
-              data,
-              hora
+              pulItem.auditor_nome ?? reportValue(row, "auditor_nome", "auditor_nom"),
+              pulItem.auditor_mat ?? reportValue(row, "auditor_mat"),
+              pulDtHr ? formatDate(pulDtHr) : "",
+              pulDtHr ? formatTime(pulDtHr) : ""
             ]);
           }
         }
@@ -5483,7 +5503,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 <div className="pvps-completed-meta-grid">
                                   <small><span>Endereço</span><strong>{row.end_sep}</strong></small>
                                   <small><span>Validade informada</span><strong>{row.val_sep ?? "-"}</strong></small>
-                                  <small><span>Auditor</span><strong>{row.auditor_nome}</strong></small>
+                                  <small><span>Auditor SEP</span><strong>{row.auditor_nome}</strong></small>
                                   <small><span>Data</span><strong>{formatDateTime(row.dt_hr)}</strong></small>
                                   <small><span>Status</span><strong>{statusInfo.label}</strong></small>
                                   <small><span>Módulo</span><strong>{moduleBadgeLabel("pvps")}</strong></small>
@@ -5513,7 +5533,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                           <div className="pvps-pul-completed-item-meta">
                                             <small>Validade: <strong>{pulItem.val_pul ?? "-"}</strong></small>
                                             {pulItem.end_sit ? <small>Ocorrência: <strong>{formatOcorrenciaLabel(pulItem.end_sit)}</strong></small> : null}
-                                            <small>Auditor: <strong>{pulItem.auditor_nome ?? row.auditor_nome}</strong></small>
+                                            <small>Auditor PUL: <strong>{pulItem.auditor_nome ?? row.auditor_nome}</strong>{pulItem.auditor_mat ? ` (${pulItem.auditor_mat})` : ""}</small>
                                           </div>
                                         </div>
                                       ))}
@@ -5643,7 +5663,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                               <div className="pvps-completed-meta-grid">
                                 <small><span>Endereço</span><strong>{row.end_sep}</strong></small>
                                 <small><span>Validade informada</span><strong>{row.val_sep ?? "-"}</strong></small>
-                                <small><span>Auditor</span><strong>{row.auditor_nome}</strong></small>
+                                <small><span>Auditor SEP</span><strong>{row.auditor_nome}</strong></small>
                                 <small><span>Data</span><strong>{formatDateTime(row.dt_hr)}</strong></small>
                                 <small><span>Status</span><strong>{statusInfo.label}</strong></small>
                               </div>
@@ -5672,7 +5692,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                         <div className="pvps-pul-completed-item-meta">
                                           <small>Validade: <strong>{item.val_pul ?? "-"}</strong></small>
                                           {item.end_sit ? <small>Ocorrência: <strong>{formatOcorrenciaLabel(item.end_sit)}</strong></small> : null}
-                                          <small>Auditor: <strong>{item.auditor_nome ?? row.auditor_nome}</strong></small>
+                                          <small>Auditor PUL: <strong>{item.auditor_nome ?? row.auditor_nome}</strong>{item.auditor_mat ? ` (${item.auditor_mat})` : ""}</small>
                                         </div>
                                       </div>
                                     ))}
