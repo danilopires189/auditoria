@@ -1037,6 +1037,10 @@ function pvpsStatusLabel(status: PvpsManifestRow["status"]): string {
   return "Concluído";
 }
 
+function pvpsSepDateTime(row: Pick<PvpsCompletedRow, "dt_hr" | "dt_hr_sep">): string {
+  return row.dt_hr_sep ?? row.dt_hr;
+}
+
 function shouldRefreshAfterAlreadyAudited(message: string): boolean {
   const normalized = message.toUpperCase();
   return (
@@ -1767,7 +1771,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           ? (sepSituacaoRaw as PvpsEndSit)
           : null;
         const baseRow = {
-          dataHora: formatDate(reportValue(row, "dt_hr")),
+          dataHora: formatDate(reportValue(row, "dt_hr_sep", "dt_hr")),
           cd: reportValue(row, "cd"),
           zona: reportValue(row, "zona"),
           coddv: reportValue(row, "coddv"),
@@ -3086,6 +3090,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         pul_lower_end: null,
         pul_lower_val: null,
         dt_hr: sepDtHr,
+        dt_hr_sep: sepDtHr,
         auditor_nome: profile.nome || "USUARIO"
       });
       byRowKey.add(rowKey);
@@ -5504,7 +5509,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                   <small><span>Endereço</span><strong>{row.end_sep}</strong></small>
                                   <small><span>Validade informada</span><strong>{row.val_sep ?? "-"}</strong></small>
                                   <small><span>Auditor SEP</span><strong>{row.auditor_nome}</strong></small>
-                                  <small><span>Data</span><strong>{formatDateTime(row.dt_hr)}</strong></small>
+                                  <small><span>Data</span><strong>{formatDateTime(pvpsSepDateTime(row))}</strong></small>
                                   <small><span>Status</span><strong>{statusInfo.label}</strong></small>
                                   <small><span>Módulo</span><strong>{moduleBadgeLabel("pvps")}</strong></small>
                                 </div>
@@ -5664,7 +5669,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                                 <small><span>Endereço</span><strong>{row.end_sep}</strong></small>
                                 <small><span>Validade informada</span><strong>{row.val_sep ?? "-"}</strong></small>
                                 <small><span>Auditor SEP</span><strong>{row.auditor_nome}</strong></small>
-                                <small><span>Data</span><strong>{formatDateTime(row.dt_hr)}</strong></small>
+                                <small><span>Data</span><strong>{formatDateTime(pvpsSepDateTime(row))}</strong></small>
                                 <small><span>Status</span><strong>{statusInfo.label}</strong></small>
                               </div>
                             </div>
@@ -5835,7 +5840,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                         <div className="pvps-editor-info-grid">
                           <div className="pvps-editor-info-card">
                             <small>Ultima auditoria</small>
-                            <strong>{formatDateTime(editingPvpsCompleted.dt_hr)}</strong>
+                            <strong>{formatDateTime(pvpsSepDateTime(editingPvpsCompleted))}</strong>
                           </div>
                         </div>
                       ) : null}

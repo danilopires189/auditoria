@@ -105,6 +105,7 @@ export interface PvpsCompletedRow {
   pul_lower_end: string | null;
   pul_lower_val: string | null;
   dt_hr: string;
+  dt_hr_sep?: string | null;
   auditor_nome: string;
 }
 
