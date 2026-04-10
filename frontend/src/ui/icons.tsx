@@ -214,6 +214,18 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <circle cx="18" cy="17" r="2" />
         </svg>
       );
+    case "truck":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 7h11v8H3z" />
+          <path d="M14 10h4l3 3v2h-7z" />
+          <path d="M5 17h2" />
+          <path d="M13 17h3" />
+          <circle cx="8.5" cy="17" r="2" />
+          <circle cx="18.5" cy="17" r="2" />
+          <path d="M6 10h5" />
+        </svg>
+      );
     case "goal":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">

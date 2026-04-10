@@ -23,6 +23,7 @@ import ConferenciaEntradaNotasPage from "./modules/conferencia-entrada-notas/pag
 import ConferenciaPedidoDiretoPage from "./modules/conferencia-pedido-direto/page";
 import ConferenciaTermoPage from "./modules/conferencia-termo/page";
 import ConferenciaVolumeAvulsoPage from "./modules/conferencia-volume-avulso/page";
+import TransferenciaCdPage from "./modules/transferencia-cd/page";
 import DevolucaoMercadoriaPage from "./modules/devolucao-mercadoria/page";
 import MetaMesPage from "./modules/meta-mes/page";
 import ProdutividadePage from "./modules/produtividade/page";
@@ -52,6 +53,7 @@ import type { TermoModuleProfile } from "./modules/conferencia-termo/types";
 import { clearUserTermoSessionCache } from "./modules/conferencia-termo/storage";
 import type { VolumeAvulsoModuleProfile } from "./modules/conferencia-volume-avulso/types";
 import { clearUserVolumeAvulsoSessionCache } from "./modules/conferencia-volume-avulso/storage";
+import type { TransferenciaCdModuleProfile } from "./modules/transferencia-cd/types";
 import type { DevolucaoMercadoriaModuleProfile } from "./modules/devolucao-mercadoria/types";
 import { clearUserDevolucaoSessionCache } from "./modules/devolucao-mercadoria/storage";
 import type { InventarioModuleProfile } from "./modules/zerados/types";
@@ -2280,6 +2282,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const transferenciaCdProfile = useMemo<TransferenciaCdModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const entradaNotasProfile = useMemo<EntradaNotasModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2599,6 +2613,16 @@ export default function App() {
             element={
               volumeAvulsoProfile ? (
                 <ConferenciaVolumeAvulsoPage isOnline={isOnline} profile={volumeAvulsoProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/transferencia-cd"
+            element={
+              transferenciaCdProfile ? (
+                <TransferenciaCdPage isOnline={isOnline} profile={transferenciaCdProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )

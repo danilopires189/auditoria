@@ -21,6 +21,7 @@ export type ModuleIconName =
   | "qr"
   | "return"
   | "ship"
+  | "truck"
   | "goal"
   | "productivity"
   | "zero";
@@ -46,6 +47,7 @@ export type DashboardModuleKey =
   | "produtividade"
   | "registro-embarque"
   | "ronda"
+  | "transferencia-cd"
   | "validar-enderecamento"
   | "validar-etiqueta-pulmao"
   | "zerados";

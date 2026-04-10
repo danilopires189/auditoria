@@ -63,6 +63,11 @@ TABLE_PROFILE: tuple[TableProfileEntry, ...] = (
         workbook_sheet="DB_GESTAO_ESTQ",
     ),
     TableProfileEntry(
+        table_name="db_transf_cd",
+        workbook_file="DB_TRANSF_CD.xlsx",
+        workbook_sheet="DB_TRANSF_CD",
+    ),
+    TableProfileEntry(
         table_name="db_termo",
         workbook_file="DB_TERMO.xlsx",
         workbook_sheet="DB_TERMO",

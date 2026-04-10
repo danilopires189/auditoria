@@ -25,6 +25,8 @@ const ALLOWED_TABLES = new Set([
   "db_usuario",
   "db_rotas",
   "db_prod_vol",
+  "db_transf_cd",
+  "db_gestao_estq",
   "db_termo",
   "db_avulso",
 ]);

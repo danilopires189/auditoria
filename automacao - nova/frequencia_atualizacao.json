@@ -25,7 +25,8 @@
         "DB_LOG_END.xlsx",
         "DB_USUARIO.xlsx",
         "DB_PROD_VOL.xlsx",
-        "DB_GESTAO_ESTQ.xlsx"
+        "DB_GESTAO_ESTQ.xlsx",
+        "DB_TRANSF_CD.xlsx"
       ]
     },
     "a_cada_6_horas": {

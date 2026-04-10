@@ -282,6 +282,25 @@ tables:
       qtd_mov: "integer"
       valor_mov: "numeric"
 
+  db_transf_cd:
+    file: "DB_TRANSF_CD.xlsx"
+    sheet: "DB_TRANSF_CD"
+    mode: "full_replace"
+    unique_keys: []
+    required_columns: ["cd_ori", "cd_des", "dt_nf", "nf_trf", "sq_nf", "coddv"]
+    refresh_before_load: false
+    types:
+      cd_ori: "integer"
+      cd_des: "integer"
+      dt_nf: "date"
+      nf_trf: "bigint"
+      sq_nf: "bigint"
+      coddv: "integer"
+      descricao: "text"
+      qtd_atend: "integer"
+      embcomp_cx: "integer"
+      qtd_cxpad: "integer"
+
   db_conf_blitz:
     file: "DB_BLITZ.xlsx"
     sheet: "DB_CONF_BLITZ"
