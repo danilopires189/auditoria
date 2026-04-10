@@ -158,6 +158,7 @@ function formatDate(value: string | null): string {
 
 const SAO_PAULO_SOURCE_TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})[ t](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:z|[+-]\d{2}:\d{2})?$/i;
+const SAO_PAULO_SOURCE_HOUR_CORRECTION = -3;
 
 function extractSaoPauloSourceTimestampParts(
   value: string | null
@@ -175,6 +176,31 @@ function extractSaoPauloSourceTimestampParts(
     hour: matched[4],
     minute: matched[5],
     second: matched[6] ?? "00"
+  };
+}
+
+function applySaoPauloSourceHourCorrection(
+  parts: { year: string; month: string; day: string; hour: string; minute: string; second: string }
+): { year: string; month: string; day: string; hour: string; minute: string; second: string } {
+  // Corrige a defasagem fixa da origem sem depender da interpretação de timezone do navegador.
+  const corrected = new Date(Date.UTC(
+    Number.parseInt(parts.year, 10),
+    Number.parseInt(parts.month, 10) - 1,
+    Number.parseInt(parts.day, 10),
+    Number.parseInt(parts.hour, 10),
+    Number.parseInt(parts.minute, 10),
+    Number.parseInt(parts.second, 10)
+  ));
+
+  corrected.setUTCHours(corrected.getUTCHours() + SAO_PAULO_SOURCE_HOUR_CORRECTION);
+
+  return {
+    year: String(corrected.getUTCFullYear()).padStart(4, "0"),
+    month: String(corrected.getUTCMonth() + 1).padStart(2, "0"),
+    day: String(corrected.getUTCDate()).padStart(2, "0"),
+    hour: String(corrected.getUTCHours()).padStart(2, "0"),
+    minute: String(corrected.getUTCMinutes()).padStart(2, "0"),
+    second: String(corrected.getUTCSeconds()).padStart(2, "0")
   };
 }
 
@@ -206,7 +232,8 @@ function formatDateTime(value: string | null): string {
 function formatSaoPauloSourceDateTime(value: string | null): string {
   const parts = extractSaoPauloSourceTimestampParts(value);
   if (parts) {
-    return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}:${parts.second}`;
+    const corrected = applySaoPauloSourceHourCorrection(parts);
+    return `${corrected.day}/${corrected.month}/${corrected.year} ${corrected.hour}:${corrected.minute}:${corrected.second}`;
   }
 
   return formatDateTimeBrasilia(value, {
@@ -219,7 +246,8 @@ function formatSaoPauloSourceDateTime(value: string | null): string {
 function formatSaoPauloSourceTime(value: string | null): string {
   const parts = extractSaoPauloSourceTimestampParts(value);
   if (parts) {
-    return `${parts.hour}:${parts.minute}:${parts.second}`;
+    const corrected = applySaoPauloSourceHourCorrection(parts);
+    return `${corrected.hour}:${corrected.minute}:${corrected.second}`;
   }
 
   return formatTimeBrasilia(value, "-", "value");
