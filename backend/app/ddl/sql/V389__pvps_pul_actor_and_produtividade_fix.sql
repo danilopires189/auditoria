@@ -303,6 +303,8 @@ begin
 end;
 $$;
 
+drop function if exists public.rpc_pvps_completed_pul_items(integer, uuid);
+
 create or replace function public.rpc_pvps_completed_pul_items(
     p_cd integer default null,
     p_audit_id uuid default null
