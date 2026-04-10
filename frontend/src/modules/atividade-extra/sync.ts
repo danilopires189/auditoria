@@ -7,6 +7,7 @@ import type {
   AtividadeExtraCollaboratorRow,
   AtividadeExtraCreatePayload,
   AtividadeExtraEntryRow,
+  AtividadeExtraMonthOption,
   AtividadeExtraUpdatePayload,
   AtividadeExtraVisibilityMode,
   AtividadeExtraVisibilityRow
@@ -100,6 +101,13 @@ function mapVisibilityRow(raw: Record<string, unknown>): AtividadeExtraVisibilit
   };
 }
 
+function mapMonthOption(raw: Record<string, unknown>): AtividadeExtraMonthOption {
+  return {
+    month_start: parseString(raw.month_start),
+    month_label: parseString(raw.month_label)
+  };
+}
+
 function mapCollaboratorRow(raw: Record<string, unknown>): AtividadeExtraCollaboratorRow {
   return {
     user_id: parseString(raw.user_id),
@@ -167,6 +175,18 @@ export async function fetchAtividadeExtraVisibility(cd: number | null): Promise<
   const row = firstRow(data);
   if (!row) throw new Error("Falha ao buscar visibilidade do CD.");
   return mapVisibilityRow(row);
+}
+
+export async function fetchAtividadeExtraMonthOptions(cd: number | null): Promise<AtividadeExtraMonthOption[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_atividade_extra_month_options", {
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapMonthOption(row as Record<string, unknown>));
 }
 
 export async function setAtividadeExtraVisibility(
@@ -251,11 +271,15 @@ export async function deleteAtividadeExtra(entryId: string): Promise<void> {
   if (data !== true) throw new Error("Atividade não encontrada para exclusão.");
 }
 
-export async function fetchAtividadeExtraCollaborators(cd: number | null): Promise<AtividadeExtraCollaboratorRow[]> {
+export async function fetchAtividadeExtraCollaborators(
+  cd: number | null,
+  monthStart: string
+): Promise<AtividadeExtraCollaboratorRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const { data, error } = await supabase.rpc("rpc_atividade_extra_collaborators", {
-    p_cd: cd
+    p_cd: cd,
+    p_month_start: monthStart
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -278,12 +302,14 @@ export async function fetchAtividadeExtraAssignableUsers(cd: number | null): Pro
 export async function fetchAtividadeExtraEntries(params: {
   cd: number | null;
   targetUserId: string | null;
+  monthStart: string;
 }): Promise<AtividadeExtraEntryRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const { data, error } = await supabase.rpc("rpc_atividade_extra_entries_v2", {
     p_cd: params.cd,
-    p_target_user_id: params.targetUserId
+    p_target_user_id: params.targetUserId,
+    p_month_start: params.monthStart
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -291,11 +317,15 @@ export async function fetchAtividadeExtraEntries(params: {
   return data.map((row) => mapEntryRow(row as Record<string, unknown>));
 }
 
-export async function fetchAtividadeExtraPendingEntries(cd: number | null): Promise<AtividadeExtraEntryRow[]> {
+export async function fetchAtividadeExtraPendingEntries(
+  cd: number | null,
+  monthStart: string
+): Promise<AtividadeExtraEntryRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const { data, error } = await supabase.rpc("rpc_atividade_extra_pending_entries", {
-    p_cd: cd
+    p_cd: cd,
+    p_month_start: monthStart
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];

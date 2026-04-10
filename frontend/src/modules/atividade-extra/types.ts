@@ -18,6 +18,11 @@ export interface AtividadeExtraVisibilityRow {
   updated_at: string | null;
 }
 
+export interface AtividadeExtraMonthOption {
+  month_start: string;
+  month_label: string;
+}
+
 export interface AtividadeExtraCollaboratorRow {
   user_id: string;
   mat: string;

@@ -1,10 +1,11 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, CalendarIcon, ClockIcon, ModuleIcon } from "../../ui/icons";
 import {
   formatDateOnlyPtBR,
   formatDateTimeBrasilia,
+  monthStartIsoBrasilia,
   nowHourMinuteBrasilia,
   todayIsoBrasilia
 } from "../../shared/brasilia-datetime";
@@ -16,6 +17,7 @@ import {
   fetchAtividadeExtraAssignableUsers,
   fetchAtividadeExtraCollaborators,
   fetchAtividadeExtraEntries,
+  fetchAtividadeExtraMonthOptions,
   fetchAtividadeExtraPendingEntries,
   fetchAtividadeExtraVisibility,
   insertAtividadeExtra,
@@ -27,6 +29,7 @@ import type {
   AtividadeExtraAssignableUserRow,
   AtividadeExtraCollaboratorRow,
   AtividadeExtraEntryRow,
+  AtividadeExtraMonthOption,
   AtividadeExtraModuleProfile,
   AtividadeExtraVisibilityMode,
   AtividadeExtraVisibilityRow
@@ -150,6 +153,41 @@ function formatPoints(value: number): string {
   }).format(value);
 }
 
+function formatMonthLabel(monthStart: string): string {
+  const matched = /^(\d{4})-(\d{2})-\d{2}$/.exec(monthStart.trim());
+  if (!matched) return monthStart;
+  return `${matched[2]}/${matched[1]}`;
+}
+
+function ensureCurrentMonthOption(
+  options: AtividadeExtraMonthOption[],
+  currentMonthStart: string
+): AtividadeExtraMonthOption[] {
+  if (options.some((option) => option.month_start === currentMonthStart)) return options;
+  return [
+    {
+      month_start: currentMonthStart,
+      month_label: formatMonthLabel(currentMonthStart)
+    },
+    ...options
+  ];
+}
+
+function resolveSelectedUserId(
+  collaborators: AtividadeExtraCollaboratorRow[],
+  preferredUserId: string | null,
+  profileUserId: string
+): string | null {
+  if (collaborators.length === 0) return null;
+  if (preferredUserId && collaborators.some((row) => row.user_id === preferredUserId)) {
+    return preferredUserId;
+  }
+  if (collaborators.some((row) => row.user_id === profileUserId)) {
+    return profileUserId;
+  }
+  return collaborators[0].user_id;
+}
+
 function normalizeMat(value: string): string {
   return value.replace(/\D/g, "");
 }
@@ -234,8 +272,11 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const displayUserName = toDisplayName(profile.nome);
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const isAdmin = profile.role === "admin";
+  const currentMonthStart = monthStartIsoBrasilia();
+  const hasLoadedOnceRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
+  const [loadingMonths, setLoadingMonths] = useState(true);
   const [busySubmit, setBusySubmit] = useState(false);
   const [busyVisibility, setBusyVisibility] = useState(false);
   const [busyRefresh, setBusyRefresh] = useState(false);
@@ -243,8 +284,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const [visibility, setVisibility] = useState<AtividadeExtraVisibilityRow | null>(null);
+  const [monthOptions, setMonthOptions] = useState<AtividadeExtraMonthOption[]>([]);
   const [collaborators, setCollaborators] = useState<AtividadeExtraCollaboratorRow[]>([]);
   const [assignableUsers, setAssignableUsers] = useState<AtividadeExtraAssignableUserRow[]>([]);
+  const [selectedMonthStart, setSelectedMonthStart] = useState<string>(currentMonthStart);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(profile.user_id);
   const [entries, setEntries] = useState<AtividadeExtraEntryRow[]>([]);
   const [pendingEntries, setPendingEntries] = useState<AtividadeExtraEntryRow[]>([]);
@@ -265,6 +308,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     [collaborators, selectedUserId]
   );
   const pendingApprovalsCount = pendingEntries.length;
+  const selectedMonthLabel = useMemo(
+    () => monthOptions.find((option) => option.month_start === selectedMonthStart)?.month_label ?? formatMonthLabel(selectedMonthStart),
+    [monthOptions, selectedMonthStart]
+  );
   const selectedAssignableUser = useMemo(
     () => assignableUsers.find((row) => row.user_id === adminTargetUserId) ?? null,
     [adminTargetUserId, assignableUsers]
@@ -296,31 +343,51 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     setDescricao("");
   }, []);
 
-  const loadEntries = useCallback(async (targetUserId: string | null) => {
-    if (activeCd == null) {
+  const loadEntries = useCallback(async (targetUserId: string | null, monthStart: string) => {
+    if (activeCd == null || !targetUserId || !monthStart) {
       setEntries([]);
       return;
     }
     const rows = await fetchAtividadeExtraEntries({
       cd: activeCd,
-      targetUserId
+      targetUserId,
+      monthStart
     });
     setEntries(rows);
   }, [activeCd]);
 
-  const loadModuleData = useCallback(async (preferredUserId?: string | null) => {
+  const loadModuleData = useCallback(async (params?: {
+    preferredUserId?: string | null;
+    monthStart?: string;
+  }) => {
     if (activeCd == null) {
       setVisibility(null);
+      setMonthOptions([]);
       setCollaborators([]);
+      setAssignableUsers([]);
+      setSelectedMonthStart(currentMonthStart);
+      setSelectedUserId(profile.user_id);
       setEntries([]);
       setPendingEntries([]);
       setErrorMessage("CD não definido para este usuário.");
+      setLoadingMonths(false);
+      setBusyRefresh(false);
       setLoading(false);
       return;
     }
 
-    const targetPreferred = preferredUserId ?? selectedUserId ?? profile.user_id;
-    const isFirstLoad = loading;
+    const activeMonth = params?.monthStart ?? selectedMonthStart;
+    if (!activeMonth) {
+      setCollaborators([]);
+      setSelectedUserId(null);
+      setEntries([]);
+      setPendingEntries([]);
+      setLoading(false);
+      return;
+    }
+
+    const targetPreferred = params?.preferredUserId ?? selectedUserId ?? profile.user_id;
+    const isFirstLoad = !hasLoadedOnceRef.current;
     if (isFirstLoad) {
       setLoading(true);
     } else {
@@ -331,24 +398,19 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     try {
       const [visibilityRow, collaboratorRows, pendingRows, assignableRows] = await Promise.all([
         fetchAtividadeExtraVisibility(activeCd),
-        fetchAtividadeExtraCollaborators(activeCd),
-        isAdmin ? fetchAtividadeExtraPendingEntries(activeCd) : Promise.resolve<AtividadeExtraEntryRow[]>([]),
+        fetchAtividadeExtraCollaborators(activeCd, activeMonth),
+        isAdmin ? fetchAtividadeExtraPendingEntries(activeCd, activeMonth) : Promise.resolve<AtividadeExtraEntryRow[]>([]),
         isAdmin ? fetchAtividadeExtraAssignableUsers(activeCd) : Promise.resolve<AtividadeExtraAssignableUserRow[]>([])
       ]);
 
-      let nextSelectedUserId = targetPreferred;
-      if (collaboratorRows.length > 0) {
-        if (!nextSelectedUserId || !collaboratorRows.some((row) => row.user_id === nextSelectedUserId)) {
-          nextSelectedUserId = collaboratorRows[0].user_id;
-        }
-      } else {
-        nextSelectedUserId = profile.user_id;
-      }
-
-      const detailRows = await fetchAtividadeExtraEntries({
-        cd: activeCd,
-        targetUserId: nextSelectedUserId
-      });
+      const nextSelectedUserId = resolveSelectedUserId(collaboratorRows, targetPreferred, profile.user_id);
+      const detailRows = nextSelectedUserId
+        ? await fetchAtividadeExtraEntries({
+            cd: activeCd,
+            targetUserId: nextSelectedUserId,
+            monthStart: activeMonth
+          })
+        : [];
 
       setVisibility(visibilityRow);
       setCollaborators(collaboratorRows);
@@ -364,23 +426,74 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     } catch (error) {
       setErrorMessage(asUnknownErrorMessage(error));
     } finally {
+      hasLoadedOnceRef.current = true;
       setBusyRefresh(false);
       setLoading(false);
     }
-  }, [activeCd, isAdmin, loading, profile.user_id, selectedUserId]);
+  }, [activeCd, currentMonthStart, isAdmin, profile.user_id, selectedMonthStart, selectedUserId]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadMonths(): Promise<void> {
+      hasLoadedOnceRef.current = false;
+      setLoading(true);
+      setLoadingMonths(true);
+      setErrorMessage(null);
+      setStatusMessage(null);
+
+      if (activeCd == null) {
+        setVisibility(null);
+        setMonthOptions([]);
+        setCollaborators([]);
+        setAssignableUsers([]);
+        setSelectedMonthStart(currentMonthStart);
+        setSelectedUserId(profile.user_id);
+        setEntries([]);
+        setPendingEntries([]);
+        setErrorMessage("CD não definido para este usuário.");
+        setLoadingMonths(false);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const nextMonths = ensureCurrentMonthOption(
+          await fetchAtividadeExtraMonthOptions(activeCd),
+          currentMonthStart
+        );
+        if (cancelled) return;
+        setMonthOptions(nextMonths);
+      } catch (error) {
+        if (cancelled) return;
+        setMonthOptions(ensureCurrentMonthOption([], currentMonthStart));
+        setErrorMessage(asUnknownErrorMessage(error));
+      } finally {
+        if (cancelled) return;
+        setSelectedMonthStart(currentMonthStart);
+        setSelectedUserId(profile.user_id);
+        setLoadingMonths(false);
+      }
+    }
+
+    void loadMonths();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCd, currentMonthStart, profile.user_id]);
+
+  useEffect(() => {
+    if (loadingMonths) return;
     void loadModuleData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCd, profile.user_id]);
+  }, [loadModuleData, loadingMonths]);
 
   const onSelectCollaborator = useCallback((targetUserId: string) => {
     setSelectedUserId(targetUserId);
     setErrorMessage(null);
-    void loadEntries(targetUserId).catch((error) => {
+    void loadEntries(targetUserId, selectedMonthStart).catch((error) => {
       setErrorMessage(asUnknownErrorMessage(error));
     });
-  }, [loadEntries]);
+  }, [loadEntries, selectedMonthStart]);
 
   const onEditEntry = useCallback((entry: AtividadeExtraEntryRow) => {
     if (!entry.can_edit) return;
@@ -460,7 +573,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
           setEditorOpen(false);
         }
         setStatusMessage("Atividade excluída com sucesso.");
-        await loadModuleData(selectedUserId ?? profile.user_id);
+        await loadModuleData({
+          preferredUserId: selectedUserId ?? profile.user_id,
+          monthStart: selectedMonthStart
+        });
       } catch (error) {
         setErrorMessage(asUnknownErrorMessage(error));
       } finally {
@@ -483,7 +599,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       try {
         await approveAtividadeExtra(entry.id);
         setStatusMessage("Atividade aprovada com sucesso.");
-        await loadModuleData(selectedUserId ?? profile.user_id);
+        await loadModuleData({
+          preferredUserId: selectedUserId ?? profile.user_id,
+          monthStart: selectedMonthStart
+        });
       } catch (error) {
         setErrorMessage(asUnknownErrorMessage(error));
       } finally {
@@ -505,7 +624,10 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       const row = await setAtividadeExtraVisibility(activeCd, confirmDialog.nextMode);
       setVisibility(row);
       setStatusMessage(`Visibilidade atualizada: ${visibilityModeLabel(row.visibility_mode)}.`);
-      await loadModuleData(selectedUserId ?? profile.user_id);
+      await loadModuleData({
+        preferredUserId: selectedUserId ?? profile.user_id,
+        monthStart: selectedMonthStart
+      });
     } catch (error) {
       setErrorMessage(asUnknownErrorMessage(error));
     } finally {
@@ -521,6 +643,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
     loadModuleData,
     profile.user_id,
     resetForm,
+    selectedMonthStart,
     selectedUserId,
     visibility
   ]);
@@ -585,9 +708,18 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
       }
 
       const nextDetailUserId = !editingEntryId && isAdmin ? adminTargetUserId : selectedUserId ?? profile.user_id;
+      const refreshMonthStart = editingEntryId ? selectedMonthStart : currentMonthStart;
       resetForm();
       setEditorOpen(false);
-      await loadModuleData(nextDetailUserId);
+      if (!editingEntryId && selectedMonthStart !== currentMonthStart) {
+        setSelectedUserId(nextDetailUserId);
+        setSelectedMonthStart(currentMonthStart);
+      } else {
+        await loadModuleData({
+          preferredUserId: nextDetailUserId,
+          monthStart: refreshMonthStart
+        });
+      }
     } catch (error) {
       setErrorMessage(asUnknownErrorMessage(error));
     } finally {
@@ -626,6 +758,9 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             <div className="module-screen-title-row">
               <div className="module-screen-title">
                 <h2>Detalhamento de atividades</h2>
+                <span className="module-status">
+                  {`CD ${activeCd ?? "-"} · mês ${selectedMonthLabel}`}
+                </span>
               </div>
               <div className="atividade-extra-actions-head">
                 <button
@@ -642,13 +777,13 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                 <button
                   type="button"
                   className="btn btn-muted atividade-extra-refresh-btn"
-                  onClick={() => void loadModuleData()}
-                  disabled={busyRefresh || loading}
+                  onClick={() => void loadModuleData({ monthStart: selectedMonthStart })}
+                  disabled={busyRefresh || loading || loadingMonths}
                 >
                   {busyRefresh ? "Atualizando..." : "Atualizar"}
                 </button>
                 {isAdmin ? (
-                  <span className="atividade-extra-pending-badge" title="Atividades aguardando aprovação">
+                  <span className="atividade-extra-pending-badge" title="Atividades aguardando aprovação no mês selecionado">
                     <span className="atividade-extra-pending-badge-icon" aria-hidden="true">
                       {pendingApprovalIcon()}
                     </span>
@@ -669,10 +804,26 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                 ) : null}
               </div>
             </div>
+            <div className="indicadores-filters atividade-extra-filters">
+              <label>
+                <span>Mês/Ano</span>
+                <select
+                  value={selectedMonthStart}
+                  onChange={(event) => setSelectedMonthStart(event.target.value)}
+                  disabled={loadingMonths || activeCd == null}
+                >
+                  {monthOptions.map((option) => (
+                    <option key={option.month_start} value={option.month_start}>
+                      {option.month_label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
           <div className="module-screen-body atividade-extra-body">
-            {loading ? <div className="coleta-empty">Carregando atividades...</div> : null}
+            {loading ? <div className="coleta-empty">Carregando atividades de {selectedMonthLabel}...</div> : null}
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
@@ -683,7 +834,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                   <span className="atividade-extra-pending-panel-count">{pendingApprovalsCount}</span>
                 </h3>
                 {pendingEntries.length === 0 ? (
-                  <div className="coleta-empty">Nenhuma atividade pendente neste CD.</div>
+                  <div className="coleta-empty">Nenhuma atividade pendente em {selectedMonthLabel}.</div>
                 ) : (
                   <div className="atividade-extra-pending-list">
                     {pendingEntries.map((entry) => (
@@ -736,7 +887,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
               <section className="atividade-extra-collaborators">
                 <h3>Resumo por colaborador</h3>
                 {collaborators.length === 0 ? (
-                  <div className="coleta-empty">Nenhuma atividade registrada no período atual.</div>
+                  <div className="coleta-empty">Nenhuma atividade registrada em {selectedMonthLabel}.</div>
                 ) : (
                   <div className="atividade-extra-collaborators-content">
                     <div className="atividade-extra-table-wrap">
@@ -798,7 +949,7 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
                 ) : null}
 
                 {entries.length === 0 ? (
-                  <div className="coleta-empty">Sem atividades para o colaborador selecionado.</div>
+                  <div className="coleta-empty">Sem atividades para o colaborador selecionado em {selectedMonthLabel}.</div>
                 ) : (
                   <div className="atividade-extra-entry-list">
                     {entries.map((entry) => (

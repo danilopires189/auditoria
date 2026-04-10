@@ -2192,6 +2192,10 @@ small {
   padding-bottom: 8px;
 }
 
+.atividade-extra-filters {
+  margin-top: 10px;
+}
+
 .atividade-extra-actions-head {
   display: inline-flex;
   align-items: center;
@@ -2750,6 +2754,10 @@ small {
 }
 
 @media (max-width: 640px) {
+  .atividade-extra-filters label {
+    width: 100%;
+  }
+
   .atividade-extra-actions-head {
     width: 100%;
     justify-content: flex-start;
