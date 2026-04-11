@@ -264,18 +264,6 @@ function TrashIcon() {
   );
 }
 
-function OfflineModeIcon({ enabled }: { enabled: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 10a12 12 0 0 1 16 0" />
-      <path d="M7 13a8 8 0 0 1 10 0" />
-      <path d="M10 16a4 4 0 0 1 4 0" />
-      <circle cx="12" cy="19" r="1.5" />
-      {!enabled ? <path d="M4 4l16 16" /> : null}
-    </svg>
-  );
-}
-
 function FileIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -626,6 +614,20 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       setBusySync(false);
     }
   }, [busySync, isOnline, profile.user_id, refreshLocalState, refreshSharedState]);
+
+  const runManualSync = useCallback(async () => {
+    if (!isOnline || currentCd == null || busyRefresh || busySync) return;
+
+    await runDbRotasRefresh(true);
+
+    if (pendingCount > 0) {
+      await runSync(false);
+      return;
+    }
+
+    await refreshSharedState();
+    setStatusMessage("Feed e base de rotas atualizados com sucesso.");
+  }, [busyRefresh, busySync, currentCd, isOnline, pendingCount, refreshSharedState, runDbRotasRefresh, runSync]);
 
   const toggleOfflineMode = useCallback(async () => {
     setErrorMessage(null);
@@ -1186,6 +1188,11 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const occurrenceModalValue = occurrenceModalTarget?.kind === "form"
     ? normalizeOccurrenceInput(ocorrenciaInput)
     : normalizeOccurrenceInput(editDraft?.ocorrencia ?? "");
+  const showOnlineBadge = (
+    <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
+      {isOnline ? "🟢 Online" : "🔴 Offline"}
+    </span>
+  );
 
   return (
     <>
@@ -1200,9 +1207,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
           <div className="module-topbar-user-side">
             <PendingSyncBadge pendingCount={pendingCount} title="Etiquetas pendentes de envio" />
-            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
-              {isOnline ? "🟢 Online" : "🔴 Offline"}
-            </span>
+            {showOnlineBadge}
           </div>
         </div>
 
@@ -1267,53 +1272,33 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
           </div>
         ) : null}
 
-        <div className="coleta-actions-row">
+        <div className="termo-actions-row">
           {!isDesktop ? (
             <button
               type="button"
-              className={`btn btn-muted coleta-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
+              className={`btn btn-muted termo-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
               onClick={() => void toggleOfflineMode()}
-              disabled={busyRefresh}
+              disabled={busyRefresh || busySync}
               title={preferOfflineMode ? "Desativar modo offline local" : "Ativar modo offline local"}
             >
-              <span aria-hidden="true"><OfflineModeIcon enabled={!preferOfflineMode} /></span>
-              {busyRefresh ? "Carregando base..." : preferOfflineMode ? "Offline local" : "Trabalhar offline"}
+              {preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
             </button>
           ) : null}
 
           <button
             type="button"
-            className="btn btn-muted"
-            onClick={() => void refreshSharedState()}
-            disabled={!isOnline || currentCd == null}
-          >
-            Atualizar feed do dia
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-muted coleta-sync-btn"
-            onClick={() => void runDbRotasRefresh(true)}
-            disabled={!isOnline || currentCd == null || busyRefresh}
+            className="btn btn-muted termo-sync-btn"
+            onClick={() => void runManualSync()}
+            disabled={!isOnline || currentCd == null || busyRefresh || busySync}
           >
             <span aria-hidden="true"><SyncIcon /></span>
-            {busyRefresh ? "Atualizando rotas..." : "Atualizar rotas"}
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-primary coleta-sync-btn"
-            onClick={() => void runSync(false)}
-            disabled={!isOnline || busySync || pendingCount <= 0}
-          >
-            <span aria-hidden="true"><SyncIcon /></span>
-            {busySync ? "Sincronizando..." : "Sincronizar agora"}
+            {busyRefresh || busySync ? "Sincronizando..." : "Sincronizar agora"}
           </button>
 
           {canSeeReportTools ? (
             <button
               type="button"
-              className={`btn btn-muted coleta-report-toggle${showReport ? " is-active" : ""}`}
+              className={`btn btn-muted termo-report-toggle${showReport ? " is-active" : ""}`}
               aria-pressed={showReport}
               onClick={() => {
                 setShowReport((value) => {
@@ -1331,7 +1316,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
               }}
               title="Buscar auditorias para relatório"
             >
-              <span className="coleta-report-toggle-icon" aria-hidden="true"><SearchIcon /></span>
+              <span className="termo-report-toggle-icon" aria-hidden="true"><SearchIcon /></span>
               Buscar auditorias
             </button>
           ) : null}

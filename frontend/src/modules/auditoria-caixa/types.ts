@@ -1,16 +1,16 @@
 export const AUDITORIA_CAIXA_OCCURRENCIAS = [
-  "Basqueta quebrada",
-  "Sem lacre",
-  "Lacramento não conforme",
-  "Duplicidade",
-  "Sem etiqueta",
-  "Volume misturado",
+  "Altura não conforme",
   "Avaria",
-  "Termo embagalem (N/OK)",
+  "Basqueta quebrada",
   "Caixa papelão não conforme",
+  "Duplicidade",
   "Falta",
+  "Lacramento não conforme",
+  "Sem etiqueta",
+  "Sem lacre",
   "Sobra",
-  "Altura não conforme"
+  "Termo embagalem (N/OK)",
+  "Volume misturado"
 ] as const;
 
 export type AuditoriaCaixaOccurrence = typeof AUDITORIA_CAIXA_OCCURRENCIAS[number] | null;
