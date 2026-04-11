@@ -550,7 +550,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setPreferOfflineMode(true);
     await persistPreferences({ prefer_offline_mode: true });
     setStatusMessage("Modo offline ativado com base de Transferência CD e barras prontas.");
-  }, [currentCd, isOnline, manifestReady, persistPreferences, preferOfflineMode, profile.user_id, runManifestSync]);
+  }, [currentCd, isOnline, manifestReady, persistPreferences, preferOfflineMode, profile.user_id, refreshManifestInfo, runManifestSync]);
 
   const openNote = useCallback(async (note: TransferenciaCdNoteRow) => {
     if (currentCd == null) return;
