@@ -507,6 +507,11 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     await refreshPendingState();
   }, [refreshPendingState]);
 
+  const clearActiveConferenceView = useCallback(() => {
+    setActiveConference(null);
+    setNfInput("");
+  }, []);
+
   const activateConference = useCallback(async (
     next: TransferenciaCdLocalConference,
     options?: { silent?: boolean; message?: string | null }
@@ -944,7 +949,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               await cancelTransferencia(activeConference.remote_conf_id);
               setStatusMessage("Conferência cancelada.");
             }
-            setActiveConference(null);
+            clearActiveConferenceView();
           } catch (error) {
             setErrorMessage(toTransferenciaErrorMessage(error));
           } finally {
@@ -953,7 +958,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         })();
       }
     });
-  }, [activeConference, canEditActiveConference, queueModeFor, setAndSaveActiveConference]);
+  }, [activeConference, canEditActiveConference, clearActiveConferenceView, queueModeFor, setAndSaveActiveConference]);
 
   const handleFinalizeConference = useCallback(async () => {
     if (!activeConference || !canEditActiveConference) return;
@@ -1364,7 +1369,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               <div className="termo-volume-head-right">
                 <span className={`coleta-row-status ${activeConference.sync_error ? "error" : activeConference.pending_snapshot || activeConference.pending_finalize || activeConference.pending_cancel ? "pending" : "synced"}`}>{activeConference.sync_error ? "Erro de sync" : activeConference.pending_snapshot || activeConference.pending_finalize || activeConference.pending_cancel ? "Pendente sync" : "Sincronizado"}</span>
                 <div className="termo-volume-actions">
-                  {activeConference.is_read_only ? <button className="btn btn-muted termo-close-btn" type="button" onClick={() => setActiveConference(null)}><span aria-hidden="true">{closeIcon()}</span>Fechar</button> : <>
+                  {activeConference.is_read_only ? <button className="btn btn-muted termo-close-btn" type="button" onClick={clearActiveConferenceView}><span aria-hidden="true">{closeIcon()}</span>Fechar</button> : <>
                     <button className="btn btn-danger termo-cancel-btn" type="button" onClick={requestCancelConference} disabled={busyCancel || busyFinalize}><span aria-hidden="true">{closeIcon()}</span>{busyCancel ? "Cancelando..." : "Cancelar"}</button>
                     {hasAnyItemInformed ? <button className="btn btn-primary termo-finalize-btn" type="button" onClick={requestFinalize} disabled={busyCancel || busyFinalize}><span aria-hidden="true">{checkIcon()}</span>Finalizar</button> : null}
                   </>}
