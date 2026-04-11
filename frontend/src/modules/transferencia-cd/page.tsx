@@ -115,7 +115,7 @@ function formatStatus(value: TransferenciaCdConfStatus | null | undefined): stri
 }
 
 function formatEtapa(value: TransferenciaCdEtapa): string {
-  return value === "saida" ? "Saída CD origem" : "Entrada CD destino";
+  return value === "saida" ? "📤 Mercadoria a enviar" : "📥 Mercadoria a receber";
 }
 
 function formatConciliacao(value: string): string {
@@ -164,6 +164,10 @@ function itemPackageLabel(item: TransferenciaCdLocalItem): string {
   const caixas = item.qtd_cxpad == null ? "-" : item.qtd_cxpad;
   const unidades = item.embcomp_cx == null ? "-" : item.embcomp_cx;
   return `${caixas} caixa(s) com ${unidades} un em cada caixa`;
+}
+
+function formatItemCount(value: number): string {
+  return formatCountLabel(value, "Item", "Itens");
 }
 
 function noteStatus(note: TransferenciaCdNoteRow): TransferenciaCdConfStatus | null {
@@ -216,13 +220,13 @@ function originObservation(conf: TransferenciaCdLocalConference): string {
   if (conf.etapa !== "entrada") return "";
   if (conf.origem_status === "finalizado_ok" || conf.origem_status === "finalizado_falta") {
     const mat = conf.origem_started_mat ? ` (${conf.origem_started_mat})` : "";
-    return `Origem conferida por ${conf.origem_started_nome ?? "usuário"}${mat} em ${formatDateTime(conf.origem_finalized_at ?? conf.origem_started_at)}.`;
+    return `O CD origem conferiu esta transferência: ${conf.origem_started_nome ?? "usuário"}${mat} em ${formatDateTime(conf.origem_finalized_at ?? conf.origem_started_at)}.`;
   }
   if (conf.origem_status === "em_conferencia") {
     const mat = conf.origem_started_mat ? ` (${conf.origem_started_mat})` : "";
-    return `Origem em conferência por ${conf.origem_started_nome ?? "usuário"}${mat} desde ${formatDateTime(conf.origem_started_at)}.`;
+    return `O CD origem está conferindo esta transferência: ${conf.origem_started_nome ?? "usuário"}${mat} desde ${formatDateTime(conf.origem_started_at)}.`;
   }
-  return "Origem ainda não conferiu esta transferência.";
+  return "O CD origem ainda não conferiu esta transferência.";
 }
 
 function localFromRemote(profile: TransferenciaCdModuleProfile, cd: number, conf: Omit<TransferenciaCdLocalConference, "local_key" | "user_id" | "cd" | "remote_conf_id" | "items" | "pending_snapshot" | "pending_finalize" | "pending_finalize_reason" | "pending_cancel" | "sync_error" | "last_synced_at">, items: TransferenciaCdItemRow[]): TransferenciaCdLocalConference {
@@ -326,6 +330,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const [cdAtivo, setCdAtivo] = useState<number | null>(null);
   const [nfInput, setNfInput] = useState("");
   const [notes, setNotes] = useState<TransferenciaCdNoteRow[]>([]);
+  const [onlineOverviewNotes, setOnlineOverviewNotes] = useState<TransferenciaCdNoteRow[]>([]);
   const [manifestNotes, setManifestNotes] = useState<TransferenciaCdNoteRow[]>([]);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [notesSearchInput, setNotesSearchInput] = useState("");
@@ -388,7 +393,10 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     sobra: groupedItems.sobra.length,
     correto: groupedItems.correto.length
   };
-  const modalNotes = notes.length ? notes : manifestNotes;
+  const overviewNotes = preferOfflineMode || !isOnline
+    ? manifestNotes
+    : onlineOverviewNotes.length ? onlineOverviewNotes : manifestNotes;
+  const modalNotes = notes.length ? notes : overviewNotes;
   const filteredModalNotes = useMemo(() => {
     const needle = normalizeSearchText(notesSearchInput);
     if (!needle) return modalNotes;
@@ -403,13 +411,13 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     ].join(" ")).includes(needle));
   }, [modalNotes, notesSearchInput]);
   const completionStats = useMemo(() => {
-    const rows = manifestNotes.length ? manifestNotes : notes;
+    const rows = overviewNotes.length ? overviewNotes : notes;
     const completed = rows.filter((row) => {
       const status = noteStatus(row);
       return status === "finalizado_ok" || status === "finalizado_falta";
     }).length;
     return { total: rows.length, completed, percent: rows.length ? (completed / rows.length) * 100 : 0 };
-  }, [manifestNotes, notes]);
+  }, [notes, overviewNotes]);
 
   const refreshPendingState = useCallback(async () => {
     const pending = await getPendingSummary(profile.user_id);
@@ -436,7 +444,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setManifestReady(Boolean(meta) && barrasMeta.row_count > 0);
     setManifestNotes(localNotes);
     setManifestInfo(meta
-      ? `Base local: Transferência CD ${meta.row_count} item(ns) | ${meta.notas_count} nota(s) | Barras ${barrasMeta.row_count} item(ns) | Atualizada em ${formatDateTime(meta.cached_at ?? meta.generated_at)}`
+      ? `Base local: Transferência CD ${formatItemCount(meta.row_count)} | ${meta.notas_count} nota(s) | Barras ${formatItemCount(barrasMeta.row_count)} | Atualizada em ${formatDateTime(meta.cached_at ?? meta.generated_at)}`
       : "Sem base local de Transferência CD. Sincronize antes de trabalhar offline."
     );
   }, [profile.user_id]);
@@ -494,8 +502,9 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         else setProgressMessage(`Atualizando base de barras: ${progress.percent}%.`);
       }, { allowFullReconcile: true });
       await refreshManifestInfo(currentCd);
+      setOnlineOverviewNotes(bundle.notes);
       setNotes([]);
-      setStatusMessage(`Base de Transferência CD sincronizada (${bundle.notes.length} NF(s), ${bundle.items.length} item(ns) e ${barrasSync.total} barras).`);
+      setStatusMessage(`Base de Transferência CD sincronizada (${bundle.notes.length} NF(s), ${formatItemCount(bundle.items.length)} e ${barrasSync.total} barras).`);
     } catch (error) {
       setErrorMessage(toTransferenciaErrorMessage(error));
     } finally {
@@ -567,6 +576,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setBusyOpen(true);
     try {
       const rows = await fetchManifestNotes(currentCd);
+      setOnlineOverviewNotes(rows);
       setNotes(rows);
       setShowNotesModal(true);
       if (!rows.length) setStatusMessage("Sem notas disponíveis para este CD.");
@@ -848,7 +858,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     try {
       const count = await countTransferenciaConciliacaoRows(filters);
       setReportCount(count);
-      setReportMessage(count.total_itens > 0 ? `Foram encontrados ${count.total_notas} NF(s) e ${count.total_itens} item(ns).` : "Nenhuma transferência encontrada no período.");
+      setReportMessage(count.total_itens > 0 ? `Foram encontrados ${count.total_notas} NF(s) e ${formatItemCount(count.total_itens)}.` : "Nenhuma transferência encontrada no período.");
     } catch (error) {
       setReportError(toTransferenciaErrorMessage(error));
     } finally {
@@ -909,7 +919,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         Data_NF: formatReportDate(row.dt_nf), NF: row.nf_trf, SQ_NF: row.sq_nf, CD_Origem: row.cd_ori, CD_Destino: row.cd_des, CODDV: row.coddv, Descricao: row.descricao, Qtd_Atend: row.qtd_atend, Qtd_Conferida_Saida: row.qtd_conferida_saida, Qtd_Conferida_Entrada: row.qtd_conferida_entrada, Diferenca_Saida_Destino: row.diferenca_saida_destino, Qtd_Avariado_Entrada: row.ocorrencia_avariado_qtd, Qtd_Vencido_Entrada: row.ocorrencia_vencido_qtd, Embcomp_CX: row.embcomp_cx ?? "", Qtd_CXPad: row.qtd_cxpad ?? "", Situacao: formatConciliacao(row.conciliacao_status)
       }))), "Itens");
       XLSX.writeFile(workbook, `relatorio-conferencia-transferencia-cd-${filters.dtIni}-${filters.dtFim}-cd${String(filters.cd).padStart(2, "0")}.xlsx`, { compression: true });
-      setReportMessage(`Relatório gerado com sucesso (${noteRows.length} NF(s) e ${itemRows.length} item(ns)).`);
+      setReportMessage(`Relatório gerado com sucesso (${noteRows.length} NF(s) e ${formatItemCount(itemRows.length)}).`);
     } catch (error) {
       setReportError(toTransferenciaErrorMessage(error));
     } finally {
@@ -949,6 +959,21 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   useEffect(() => {
     void refreshManifestInfo(currentCd);
   }, [currentCd, refreshManifestInfo]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOnlineOverviewNotes([]);
+    if (currentCd == null || !isOnline || preferOfflineMode) return () => { cancelled = true; };
+    void (async () => {
+      try {
+        const rows = await fetchManifestNotes(currentCd);
+        if (!cancelled) setOnlineOverviewNotes(rows);
+      } catch (error) {
+        if (!cancelled) setErrorMessage(toTransferenciaErrorMessage(error));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentCd, isOnline, preferOfflineMode]);
 
   useEffect(() => {
     if (isOnline) void runPendingSync(true);
@@ -1121,7 +1146,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               <button type="button" className="btn btn-muted" onClick={() => void runReportSearch()} disabled={reportBusySearch}>{reportBusySearch ? "Buscando..." : "Buscar"}</button>
               <button type="button" className="btn btn-primary termo-export-btn" onClick={() => void runReportExport()} disabled={reportBusyExport || (reportCount?.total_itens ?? 0) <= 0}><span aria-hidden="true">{reportIcon()}</span>{reportBusyExport ? "Gerando Excel..." : "Exportar Excel"}</button>
             </div>
-            {reportCount ? <p className="termo-report-count">NFs encontradas: {reportCount.total_notas} | Itens encontrados: {reportCount.total_itens}</p> : null}
+            {reportCount ? <p className="termo-report-count">NFs encontradas: {reportCount.total_notas} | Itens encontrados: {formatItemCount(reportCount.total_itens)}</p> : null}
           </section>
         ) : null}
 
@@ -1132,7 +1157,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
 
         {isGlobalAdmin ? (
           <div className="termo-cd-selector">
-            <label>CD<select value={cdAtivo ?? ""} onChange={(event) => { const nextCd = Number.parseInt(event.target.value, 10); setCdAtivo(nextCd); setActiveConference(null); setNotes([]); void persistPreferences({ cd_ativo: nextCd }); }}>
+            <label>CD<select value={cdAtivo ?? ""} onChange={(event) => { const nextCd = Number.parseInt(event.target.value, 10); setCdAtivo(nextCd); setActiveConference(null); setNotes([]); setOnlineOverviewNotes([]); void persistPreferences({ cd_ativo: nextCd }); }}>
               <option value="" disabled>Selecione o CD</option>
               {cdOptions.map((option) => <option key={option.cd} value={option.cd}>{option.cd_nome || `CD ${String(option.cd).padStart(2, "0")}`}</option>)}
             </select></label>
@@ -1193,7 +1218,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         ) : <div className="coleta-empty">Nenhuma NF ativa. Informe uma NF para iniciar a conferência.</div>}
       </section>
 
-      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><button type="button" className="termo-route-row-button termo-route-row-button-volume" disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span></span><span className="termo-route-actions-row"><span className="termo-route-items-count">{note.total_itens} item(ns)</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button></div></div></div>, document.body) : null}
+      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><button type="button" className="termo-route-row-button termo-route-row-button-volume" disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span></span><span className="termo-route-actions-row"><span className="termo-route-items-count">{formatItemCount(note.total_itens)}</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button></div></div></div>, document.body) : null}
 
       {showFinalizeModal && activeConference && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-finalizar-title" onClick={() => setShowFinalizeModal(false)}><div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-finalizar-title">Finalizar conferência</h3><p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>{divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? <div className="termo-item-detail"><p>Itens com divergência:</p><div className="termo-routes-list termo-finalize-list">{groupedItems.falta.map(({ item, qtd_falta }) => <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>)}{groupedItems.sobra.map(({ item, qtd_sobra }) => <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>)}</div></div> : null}{divergenciaTotals.falta > 0 ? <label>Motivo da falta<textarea value={finalizeMotivo} onChange={(event) => setFinalizeMotivo(event.target.value)} placeholder="Descreva o motivo da falta" rows={3} /></label> : null}{finalizeError ? <div className="alert error">{finalizeError}</div> : null}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowFinalizeModal(false)} disabled={busyFinalize}>Cancelar</button><button className="btn btn-primary" type="button" onClick={() => void handleFinalizeConference()} disabled={busyFinalize}>{busyFinalize ? "Finalizando..." : "Confirmar finalização"}</button></div></div></div>, document.body) : null}
 
