@@ -14,6 +14,7 @@ import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboar
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
+  buildTransferenciaCdNoteKey,
   buildTransferenciaCdConferenceKey,
   cleanupExpiredTransferenciaCdConferences,
   getLocalConference,
@@ -201,6 +202,27 @@ function conferenceResumeLabel(conf: Pick<TransferenciaCdLocalConference, "nf_tr
 
 function deriveConferenceCd(conf: Pick<TransferenciaCdLocalConference, "etapa" | "cd_ori" | "cd_des">): number {
   return conf.etapa === "saida" ? conf.cd_ori : conf.cd_des;
+}
+
+function applyConferenceToNote(note: TransferenciaCdNoteRow, conf: TransferenciaCdLocalConference): TransferenciaCdNoteRow {
+  if (conf.etapa === "saida") {
+    return {
+      ...note,
+      saida_status: conf.status,
+      saida_started_mat: conf.started_mat || null,
+      saida_started_nome: conf.started_nome || null,
+      saida_started_at: conf.started_at,
+      saida_finalized_at: conf.finalized_at
+    };
+  }
+  return {
+    ...note,
+    entrada_status: conf.status,
+    entrada_started_mat: conf.started_mat || null,
+    entrada_started_nome: conf.started_nome || null,
+    entrada_started_at: conf.started_at,
+    entrada_finalized_at: conf.finalized_at
+  };
 }
 
 function routeStatusLabel(status: TransferenciaCdConfStatus | null): string {
@@ -524,6 +546,30 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     return activateConference(local, { silent });
   }, [activateConference, isOnline, preferOfflineMode, profile]);
 
+  const mergeNotesWithLocalState = useCallback(async (rows: TransferenciaCdNoteRow[], targetCd: number): Promise<TransferenciaCdNoteRow[]> => {
+    const localConferences = await listUserLocalConferences(profile.user_id);
+    const localByKey = new Map(
+      localConferences
+        .filter((row) => !row.pending_cancel && deriveConferenceCd(row) === targetCd)
+        .map((row) => [buildTransferenciaCdNoteKey(row), row] as const)
+    );
+
+    return rows.map((row) => {
+      const local = localByKey.get(buildTransferenciaCdNoteKey(row));
+      return local ? applyConferenceToNote(row, local) : row;
+    });
+  }, [profile.user_id]);
+
+  const loadCurrentNotesSnapshot = useCallback(async (targetCd: number): Promise<TransferenciaCdNoteRow[]> => {
+    if (preferOfflineMode || !isOnline) {
+      const localRows = await listManifestNotesLocal(profile.user_id, targetCd);
+      return mergeNotesWithLocalState(localRows, targetCd);
+    }
+
+    const remoteRows = await fetchManifestNotes(targetCd);
+    return mergeNotesWithLocalState(remoteRows, targetCd);
+  }, [isOnline, mergeNotesWithLocalState, preferOfflineMode, profile.user_id]);
+
   const queueModeFor = useCallback((conference: TransferenciaCdLocalConference) => (
     shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(conference.remote_conf_id) }) || !conference.remote_conf_id
   ), [isOnline, preferOfflineMode]);
@@ -638,14 +684,12 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     }
     setNotesSearchInput("");
     setErrorMessage(null);
-    if (preferOfflineMode || !isOnline || modalNotes.length > 0) {
-      setShowNotesModal(true);
-      return;
-    }
     setBusyOpen(true);
     try {
-      const rows = await fetchManifestNotes(currentCd);
-      setOnlineOverviewNotes(rows);
+      const rows = await loadCurrentNotesSnapshot(currentCd);
+      if (!preferOfflineMode && isOnline) {
+        setOnlineOverviewNotes(rows);
+      }
       setNotes(rows);
       setShowNotesModal(true);
       if (!rows.length) setStatusMessage("Sem notas disponíveis para este CD.");
@@ -654,7 +698,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusyOpen(false);
     }
-  }, [currentCd, isOnline, modalNotes.length, preferOfflineMode]);
+  }, [currentCd, isOnline, loadCurrentNotesSnapshot, preferOfflineMode]);
 
   const openNote = useCallback(async (note: TransferenciaCdNoteRow) => {
     if (currentCd == null) return;
@@ -737,9 +781,12 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      const rows = (preferOfflineMode || !isOnline)
-        ? (await listManifestNotesLocal(profile.user_id, currentCd)).filter((row) => row.nf_trf === nfTrf)
-        : await searchTransferenciaNotes(currentCd, nfTrf);
+      const rows = await mergeNotesWithLocalState(
+        (preferOfflineMode || !isOnline)
+          ? (await listManifestNotesLocal(profile.user_id, currentCd)).filter((row) => row.nf_trf === nfTrf)
+          : await searchTransferenciaNotes(currentCd, nfTrf),
+        currentCd
+      );
       setNotes(rows);
       setNotesSearchInput(String(nfTrf));
       if (rows.length === 0) setStatusMessage("Nenhuma transferência encontrada para esta NF.");
@@ -753,7 +800,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusyOpen(false);
     }
-  }, [currentCd, isOnline, openNote, preferOfflineMode, profile.user_id]);
+  }, [currentCd, isOnline, mergeNotesWithLocalState, openNote, preferOfflineMode, profile.user_id]);
 
   const runNoteSearch = useCallback((event?: FormEvent) => {
     event?.preventDefault();
@@ -1070,14 +1117,14 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     if (currentCd == null || !isOnline || preferOfflineMode) return () => { cancelled = true; };
     void (async () => {
       try {
-        const rows = await fetchManifestNotes(currentCd);
+        const rows = await loadCurrentNotesSnapshot(currentCd);
         if (!cancelled) setOnlineOverviewNotes(rows);
       } catch (error) {
         if (!cancelled) setErrorMessage(toTransferenciaErrorMessage(error));
       }
     })();
     return () => { cancelled = true; };
-  }, [currentCd, isOnline, preferOfflineMode]);
+  }, [currentCd, isOnline, loadCurrentNotesSnapshot, preferOfflineMode]);
 
   useEffect(() => {
     let cancelled = false;
