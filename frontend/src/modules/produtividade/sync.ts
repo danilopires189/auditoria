@@ -142,6 +142,8 @@ function mapRankingRow(raw: Record<string, unknown>): ProdutividadeRankingRow {
     conf_transferencia_cd_qtd: parseNumber(raw.conf_transferencia_cd_qtd),
     conf_lojas_pontos: parseNumber(raw.conf_lojas_pontos),
     conf_lojas_qtd: parseNumber(raw.conf_lojas_qtd),
+    aud_caixa_pontos: parseNumber(raw.aud_caixa_pontos),
+    aud_caixa_qtd: parseNumber(raw.aud_caixa_qtd),
     total_pontos: parseNumber(raw.total_pontos)
   };
 }

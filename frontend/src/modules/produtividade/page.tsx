@@ -688,7 +688,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       "Avul. Conf",
       "Ent. Notas",
       "Transf. CD",
-      "Reg Lojas"
+      "Reg Lojas",
+      "Aud. Caixa"
     ]];
     const detailsBody = preview.rankingRows.map((row, index) => [
       String(row.posicao > 0 ? row.posicao : index + 1),
@@ -706,7 +707,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       formatRankingPdfPointsAndCount(row.conf_avulso_pontos, row.conf_avulso_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_entrada_pontos, row.conf_entrada_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_transferencia_cd_pontos, row.conf_transferencia_cd_qtd, "sku", "skus"),
-      formatRankingPdfPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas")
+      formatRankingPdfPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas"),
+      formatRankingPdfPointsAndCount(row.aud_caixa_pontos, row.aud_caixa_qtd, "volume", "volumes")
     ]);
     autoTable(doc, {
       startY: 60,
@@ -1145,6 +1147,15 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                             row.conf_lojas_qtd,
                                             "loja",
                                             "lojas"
+                                          )
+                                        },
+                                        {
+                                          label: "Aud. Caixa",
+                                          value: formatRankingPointsAndCount(
+                                            row.aud_caixa_pontos,
+                                            row.aud_caixa_qtd,
+                                            "volume",
+                                            "volumes"
                                           )
                                         }
                                       ].map((item) => (

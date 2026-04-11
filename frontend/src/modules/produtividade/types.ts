@@ -86,5 +86,7 @@ export interface ProdutividadeRankingRow {
   conf_transferencia_cd_qtd: number;
   conf_lojas_pontos: number;
   conf_lojas_qtd: number;
+  aud_caixa_pontos: number;
+  aud_caixa_qtd: number;
   total_pontos: number;
 }

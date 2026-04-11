@@ -1934,6 +1934,8 @@ small {
   border-radius: 12px;
   background: #ffffff;
   overflow: hidden;
+  isolation: isolate;
+  contain: paint;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -1963,6 +1965,12 @@ small {
 .coleta-row-swipe {
   position: relative;
   overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #f8fbff 0%, #f4f8ff 100%);
+}
+
+.coleta-row-swipe.is-swipe-visible .coleta-row-actions {
+  opacity: 1;
 }
 
 .coleta-row-actions {
@@ -1972,6 +1980,8 @@ small {
   align-items: stretch;
   justify-content: space-between;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
 }
 
 .coleta-row-action {
@@ -2032,6 +2042,8 @@ small {
   touch-action: pan-y;
   will-change: transform;
   transition: transform 180ms ease;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .coleta-row-line.is-dragging {

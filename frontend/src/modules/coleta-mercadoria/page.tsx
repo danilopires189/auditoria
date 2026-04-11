@@ -2100,9 +2100,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
               const canManageRow = canManageColetaRow(profile, row);
               const rowOffset = canManageRow ? getRowSwipeOffset(row.local_id) : 0;
               const isDraggingRow = swipeDrag?.rowId === row.local_id;
+              const isSwipeVisible = isDraggingRow || swipeOpen?.rowId === row.local_id;
               return (
                 <article key={row.local_id} className={`coleta-row-card${expandedRowId === row.local_id ? " is-expanded" : ""}`}>
-                  <div className="coleta-row-swipe">
+                  <div className={`coleta-row-swipe${isSwipeVisible ? " is-swipe-visible" : ""}`}>
                     {canManageRow ? (
                       <div className="coleta-row-actions" aria-hidden="true">
                         <button
@@ -2131,7 +2132,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
                     <button
                       type="button"
                       className={`coleta-row-line${canManageRow ? " is-swipeable" : ""}${isDraggingRow ? " is-dragging" : ""}`}
-                      style={canManageRow ? { transform: `translateX(${rowOffset}px)` } : undefined}
+                      style={canManageRow ? { transform: `translate3d(${rowOffset}px, 0, 0)` } : undefined}
                       onTouchStart={(event) => onRowTouchStart(event, row.local_id, canManageRow)}
                       onTouchMove={(event) => onRowTouchMove(event, row.local_id, canManageRow)}
                       onTouchEnd={() => onRowTouchEnd(row.local_id)}
