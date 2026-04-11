@@ -9,7 +9,8 @@ import {
 import {
   normalizeOccurrenceInput,
   normalizeEtiquetaInput,
-  normalizeKnappIdInput
+  normalizeKnappIdInput,
+  stripLeadingZeros
 } from "./logic";
 import type {
   AuditoriaCaixaOccurrence,
@@ -133,7 +134,7 @@ function mapRpcRowToAuditoriaCaixaRow(raw: Record<string, unknown>, userIdFallba
     id_knapp: normalizeKnappIdInput(parseNullableString(raw.id_knapp)),
     pedido: parseInteger(raw.pedido),
     data_pedido: parseNullableString(raw.data_pedido),
-    dv: parseNullableString(raw.dv),
+    dv: stripLeadingZeros(parseNullableString(raw.dv)),
     filial: parseInteger(raw.filial),
     filial_nome: parseNullableString(raw.filial_nome),
     uf: parseNullableString(raw.uf),
@@ -158,7 +159,7 @@ function mapRpcRowToReport(raw: Record<string, unknown>): AuditoriaCaixaReportRo
     cd: parseInteger(raw.cd),
     pedido: parseInteger(raw.pedido),
     data_pedido: parseNullableString(raw.data_pedido),
-    dv: parseNullableString(raw.dv),
+    dv: stripLeadingZeros(parseNullableString(raw.dv)),
     filial: parseInteger(raw.filial),
     filial_nome: parseNullableString(raw.filial_nome),
     uf: parseNullableString(raw.uf),

@@ -147,7 +147,7 @@ export function parseAuditoriaCaixaEtiqueta(
     pedido,
     pedido_raw: pedidoRaw,
     data_pedido: toIsoDateFromPedido(pedidoRaw),
-    dv: dvRaw.trim() || null,
+    dv: stripLeadingZeros(dvRaw),
     filial,
     volume: stripLeadingZeros(volumeRaw)
   };

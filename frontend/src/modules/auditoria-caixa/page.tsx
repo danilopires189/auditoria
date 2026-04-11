@@ -104,6 +104,8 @@ const PENDING_SYNC_STATUSES = new Set<AuditoriaCaixaRow["sync_status"]>([
   "pending_delete",
   "error"
 ]);
+const SUCCESS_CHIME_DURATION_MS = 420;
+let sharedAudioContext: AudioContext | null = null;
 
 function createScannerInputState(): ScannerInputState {
   return {
@@ -191,11 +193,95 @@ function safeUuid(): string {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const audioCtor = window.AudioContext
+    ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!audioCtor) return null;
+  if (!sharedAudioContext) {
+    sharedAudioContext = new audioCtor();
+  }
+  return sharedAudioContext;
+}
+
+function unlockAudioContextFromGesture(): void {
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    void ctx.resume().catch(() => undefined);
+  }
+}
+
+function runWithAudioContext(play: (ctx: AudioContext) => void): void {
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+  const run = () => {
+    try {
+      play(ctx);
+    } catch {
+      // Browser pode bloquear audio programatico.
+    }
+  };
+  if (ctx.state === "suspended") {
+    void ctx.resume().then(run).catch(() => undefined);
+    return;
+  }
+  run();
+}
+
+function playSuccessChime(): void {
+  runWithAudioContext((ctx) => {
+    const start = ctx.currentTime + 0.005;
+    const end = start + (SUCCESS_CHIME_DURATION_MS / 1000);
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, start);
+    master.gain.exponentialRampToValueAtTime(0.35, start + 0.03);
+    master.gain.exponentialRampToValueAtTime(0.0001, end);
+    master.connect(ctx.destination);
+
+    const toneA = ctx.createOscillator();
+    toneA.type = "sine";
+    toneA.frequency.setValueAtTime(760, start);
+    toneA.connect(master);
+    toneA.start(start);
+    toneA.stop(start + 0.14);
+
+    const toneB = ctx.createOscillator();
+    toneB.type = "triangle";
+    toneB.frequency.setValueAtTime(980, start + 0.11);
+    toneB.connect(master);
+    toneB.start(start + 0.11);
+    toneB.stop(end);
+  });
+}
+
 function toPendingLocalId(row: AuditoriaCaixaRow): string {
   if (row.remote_id) {
     return row.local_id.startsWith("pending:") ? row.local_id : `pending:${row.remote_id}`;
   }
   return row.local_id;
+}
+
+function compareRowFirstInformed(a: AuditoriaCaixaRow, b: AuditoriaCaixaRow): number {
+  const aTime = Date.parse(a.data_hr || a.created_at || a.updated_at || "");
+  const bTime = Date.parse(b.data_hr || b.created_at || b.updated_at || "");
+  const safeATime = Number.isFinite(aTime) ? aTime : Number.MAX_SAFE_INTEGER;
+  const safeBTime = Number.isFinite(bTime) ? bTime : Number.MAX_SAFE_INTEGER;
+  if (safeATime !== safeBTime) return safeATime - safeBTime;
+
+  if (a.sync_status === "synced" && b.sync_status !== "synced") return -1;
+  if (b.sync_status === "synced" && a.sync_status !== "synced") return 1;
+  if (a.remote_id && !b.remote_id) return -1;
+  if (b.remote_id && !a.remote_id) return 1;
+  return a.local_id.localeCompare(b.local_id);
+}
+
+function buildEtiquetaUniquenessKey(row: AuditoriaCaixaRow): string {
+  const length = row.etiqueta.trim().length;
+  if ((length === 17 || length === 18) && row.id_knapp) {
+    return `${row.etiqueta}::${row.id_knapp}`;
+  }
+  return row.etiqueta;
 }
 
 function buildRouteKey(rota: string | null | undefined): string {
@@ -385,7 +471,18 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       (row) => row.remote_id && !remoteIds.has(row.remote_id) && row.sync_status !== "pending_delete"
     );
 
-    return sortRows([...pendingNewRows, ...pendingOrphans, ...mergedRemote]);
+    const mergedRows = [...pendingNewRows, ...pendingOrphans, ...mergedRemote];
+    const uniqueRows = new Map<string, AuditoriaCaixaRow>();
+
+    for (const row of mergedRows) {
+      const key = buildEtiquetaUniquenessKey(row);
+      const current = uniqueRows.get(key);
+      if (!current || compareRowFirstInformed(row, current) < 0) {
+        uniqueRows.set(key, row);
+      }
+    }
+
+    return sortRows(Array.from(uniqueRows.values()));
   }, [currentCd, localRows, sharedTodayRows]);
 
   const groupedFeed = useMemo<FeedRouteGroup[]>(() => {
@@ -715,7 +812,10 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       });
       if (duplicateError) {
         setErrorMessage(duplicateError);
+        showScanFeedback("error", "Etiqueta descartada", duplicateError);
         triggerScanErrorAlert(duplicateError);
+        clearForm();
+        focusEtiqueta();
         return;
       }
 
@@ -763,6 +863,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       }
 
       showScanFeedback("success", `Etiqueta ${parsed.etiqueta}`, `Filial ${parsed.filial}`);
+      playSuccessChime();
       focusEtiqueta();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar etiqueta.";
@@ -994,7 +1095,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         "Id knapp": row.id_knapp ?? "",
         Pedido: row.pedido,
         "Data do pedido": formatDateOnlyPtBR(row.data_pedido),
-        DV: row.dv ?? "",
+        Seq: row.dv ?? "",
         Filial: row.filial,
         "Filial nome": row.filial_nome ?? "",
         UF: row.uf ?? "",
@@ -1411,8 +1512,14 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                   inputMode={etiquetaInputMode}
                   value={etiquetaInput}
                   onChange={onEtiquetaInputChange}
-                  onFocus={enableEtiquetaSoftKeyboard}
-                  onPointerDown={enableEtiquetaSoftKeyboard}
+                  onFocus={() => {
+                    unlockAudioContextFromGesture();
+                    enableEtiquetaSoftKeyboard();
+                  }}
+                  onPointerDown={() => {
+                    unlockAudioContextFromGesture();
+                    enableEtiquetaSoftKeyboard();
+                  }}
                   onBlur={disableEtiquetaSoftKeyboard}
                   autoComplete="off"
                   autoCapitalize="none"
@@ -1557,7 +1664,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                               >
                                 <div className="coleta-row-line-main">
                                   <strong>{row.etiqueta}</strong>
-                                  <p>Pedido {row.pedido} | DV {row.dv ?? "-"}</p>
+                                  <p>Pedido {row.pedido} | Seq {row.dv ?? "-"}</p>
                                   <p>Volume {row.volume ?? "-"} | Coletado em {formatDateTime(row.data_hr)}</p>
                                   {row.ocorrencia ? <p>Ocorrência: {row.ocorrencia}</p> : null}
                                 </div>
@@ -1656,7 +1763,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                                         <strong>{formatDateOnlyPtBR(row.data_pedido)}</strong>
                                       </div>
                                       <div className="coleta-row-detail">
-                                        <span>DV</span>
+                                        <span>Seq</span>
                                         <strong>{row.dv ?? "-"}</strong>
                                       </div>
                                       <div className="coleta-row-detail">
@@ -1675,10 +1782,12 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                                         <span>Ocorrência</span>
                                         <strong>{row.ocorrencia ?? "-"}</strong>
                                       </div>
-                                      <div className="coleta-row-detail">
-                                        <span>ID knapp</span>
-                                        <strong>{row.id_knapp ?? "-"}</strong>
-                                      </div>
+                                      {row.id_knapp ? (
+                                        <div className="coleta-row-detail">
+                                          <span>ID knapp</span>
+                                          <strong>{row.id_knapp}</strong>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   )}
 
