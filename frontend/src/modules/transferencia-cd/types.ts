@@ -39,6 +39,38 @@ export interface TransferenciaCdNoteRow {
   entrada_finalized_at: string | null;
 }
 
+export interface TransferenciaCdManifestMeta {
+  cd: number;
+  row_count: number;
+  notas_count: number;
+  source_run_id: string | null;
+  manifest_hash: string;
+  generated_at: string;
+}
+
+export interface TransferenciaCdManifestItemRow {
+  dt_nf: string;
+  nf_trf: number;
+  sq_nf: number;
+  cd_ori: number;
+  cd_des: number;
+  cd_ori_nome: string;
+  cd_des_nome: string;
+  etapa: TransferenciaCdEtapa;
+  coddv: number;
+  descricao: string;
+  qtd_esperada: number;
+  embcomp_cx: number | null;
+  qtd_cxpad: number | null;
+}
+
+export interface TransferenciaCdManifestBarrasRow {
+  barras: string;
+  coddv: number;
+  descricao: string;
+  updated_at: string | null;
+}
+
 export interface TransferenciaCdConferenceRow {
   conf_id: string;
   conf_date: string;
@@ -66,6 +98,31 @@ export interface TransferenciaCdConferenceRow {
   origem_finalized_at: string | null;
 }
 
+export interface TransferenciaCdLocalItem {
+  coddv: number;
+  barras: string | null;
+  descricao: string;
+  qtd_esperada: number;
+  qtd_conferida: number;
+  embcomp_cx: number | null;
+  qtd_cxpad: number | null;
+  updated_at: string;
+}
+
+export interface TransferenciaCdLocalConference extends TransferenciaCdConferenceRow {
+  local_key: string;
+  user_id: string;
+  cd: number;
+  remote_conf_id: string | null;
+  items: TransferenciaCdLocalItem[];
+  pending_snapshot: boolean;
+  pending_finalize: boolean;
+  pending_finalize_reason: string | null;
+  pending_cancel: boolean;
+  sync_error: string | null;
+  last_synced_at: string | null;
+}
+
 export interface TransferenciaCdItemRow {
   item_id: string;
   conf_id: string;
@@ -80,6 +137,17 @@ export interface TransferenciaCdItemRow {
   embcomp_cx: number | null;
   qtd_cxpad: number | null;
   updated_at: string;
+}
+
+export interface TransferenciaCdPreferences {
+  prefer_offline_mode: boolean;
+  multiplo_padrao: number;
+  cd_ativo: number | null;
+}
+
+export interface TransferenciaCdPendingSummary {
+  pending_count: number;
+  errors_count: number;
 }
 
 export interface TransferenciaCdReportFilters {

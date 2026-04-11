@@ -4205,40 +4205,6 @@ small {
   stroke-width: 1.8;
 }
 
-.termo-kicker {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  border-radius: 8px;
-  padding: 4px 10px;
-  background: rgba(18, 56, 115, 0.08);
-  color: #123873;
-  font-weight: 700;
-  font-size: 0.82rem;
-}
-
-.termo-summary-grid,
-.termo-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-  margin: 14px 0;
-}
-
-.termo-summary-grid span,
-.termo-detail-grid span {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: #ffffff;
-  color: var(--muted);
-}
-
-.termo-summary-grid strong,
-.termo-detail-grid strong {
-  color: var(--text);
-}
-
 .produtividade-period-card {
   border: 1px solid #d6e0f0;
   border-radius: 14px;

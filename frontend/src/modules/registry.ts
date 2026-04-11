@@ -20,7 +20,7 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "produtividade", path: "/modulos/produtividade", title: "Produtividade", icon: "worker", tone: "amber" },
   { key: "registro-embarque", path: "/modulos/registro-embarque", title: "Registro de Embarque", icon: "ship", tone: "teal" },
   { key: "ronda", path: "/modulos/ronda", title: "Ronda", icon: "path", tone: "blue" },
-  { key: "transferencia-cd", path: "/modulos/transferencia-cd", title: "TRANSFERÊNCIA CD <> CD", icon: "truck", tone: "teal" },
+  { key: "transferencia-cd", path: "/modulos/transferencia-cd", title: "Conferência de Transferência CD", icon: "truck", tone: "teal" },
   { key: "validar-enderecamento", path: "/modulos/validar-enderecamento", title: "Validar Endereçamento", icon: "location", tone: "blue" },
   { key: "validar-etiqueta-pulmao", path: "/modulos/validar-etiqueta-pulmao", title: "Validar Etiqueta Pulmão", icon: "qr", tone: "blue" }
 ];
