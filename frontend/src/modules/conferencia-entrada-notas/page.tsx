@@ -5512,6 +5512,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               clearConferenceScreen();
               setStatusMessage("Conferência conjunta cancelada. Os Seq/NF foram liberados.");
               await syncRouteOverview();
+              setEtiquetaInput("");
               return;
             }
 
@@ -5523,6 +5524,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 clearConferenceScreen();
                 setStatusMessage("Retomada encerrada. Os dados já conferidos foram preservados.");
                 await syncRouteOverview();
+                setEtiquetaInput("");
                 return;
               }
 
@@ -5567,6 +5569,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               clearConferenceScreen();
               setStatusMessage("Conferência cancelada. Os dados foram descartados.");
               await syncRouteOverview();
+              setEtiquetaInput("");
               return;
             }
 
