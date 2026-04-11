@@ -38,6 +38,8 @@ import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { HomeModulesViewMode } from "./types/ui";
 import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
+import type { AuditoriaCaixaModuleProfile } from "./modules/auditoria-caixa/types";
+import { clearUserAuditoriaCaixaSessionCache } from "./modules/auditoria-caixa/storage";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
 import type { GestaoEstoqueModuleProfile } from "./modules/gestao-estoque/types";
@@ -1804,6 +1806,11 @@ export default function App() {
           // Ignore local cleanup failures and proceed with logout.
         }
         try {
+          await clearUserAuditoriaCaixaSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
+        try {
           await clearUserControleValidadeCache(currentUserId);
         } catch {
           // Ignore local cleanup failures and proceed with logout.
@@ -2163,6 +2170,18 @@ export default function App() {
   }, [homeModulesViewMode, profile, session]);
 
   const coletaProfile = useMemo<ColetaModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
+  const auditoriaCaixaProfile = useMemo<AuditoriaCaixaModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
       user_id: effectiveProfileWithCd.user_id || session.user.id,
@@ -2586,7 +2605,16 @@ export default function App() {
               )
             }
           />
-          <Route path="/modulos/auditoria-caixa" element={<AuditoriaCaixaPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/auditoria-caixa"
+            element={
+              auditoriaCaixaProfile ? (
+                <AuditoriaCaixaPage isOnline={isOnline} profile={auditoriaCaixaProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="/modulos/check-list" element={<CheckListPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/coleta-mercadoria"

@@ -2165,6 +2165,275 @@ small {
   flex-wrap: wrap;
 }
 
+.aud-caixa-shell {
+  gap: 10px;
+}
+
+.aud-caixa-form {
+  gap: 10px;
+}
+
+.aud-caixa-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.aud-caixa-occurrence-field {
+  min-width: 0;
+}
+
+.aud-caixa-occurrence-field > span {
+  display: block;
+}
+
+.aud-caixa-occurrence-btn {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: #29415f;
+  font: inherit;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.aud-caixa-occurrence-btn:hover,
+.aud-caixa-occurrence-btn:focus-visible {
+  border-color: rgba(70, 111, 170, 0.55);
+  box-shadow: 0 0 0 4px rgba(49, 105, 191, 0.1);
+  outline: none;
+}
+
+.aud-caixa-occurrence-btn.is-filled {
+  border-color: rgba(103, 139, 193, 0.6);
+  background: #f3f7ff;
+}
+
+.aud-caixa-occurrence-btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #365a97;
+  background: rgba(54, 90, 151, 0.12);
+  flex: 0 0 auto;
+}
+
+.aud-caixa-occurrence-btn-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.aud-caixa-hint {
+  margin: 0;
+  color: #55698b;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.aud-caixa-feed {
+  display: grid;
+  gap: 12px;
+}
+
+.aud-caixa-route-group {
+  border: 1px solid #d4deef;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(255, 255, 255, 0.98));
+  overflow: hidden;
+}
+
+.aud-caixa-route-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(212, 222, 239, 0.9);
+  background: linear-gradient(135deg, rgba(223, 233, 249, 0.92), rgba(242, 247, 255, 0.98));
+}
+
+.aud-caixa-route-head div {
+  display: grid;
+  gap: 3px;
+}
+
+.aud-caixa-route-head strong {
+  color: #14345e;
+  font-family: "Sora", sans-serif;
+  font-size: 0.94rem;
+}
+
+.aud-caixa-route-head span {
+  color: #59708f;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.aud-caixa-route-body {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.aud-caixa-store-group {
+  border: 1px solid rgba(214, 224, 239, 0.92);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.aud-caixa-store-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.aud-caixa-store-head strong {
+  color: #18375f;
+  font-size: 0.9rem;
+}
+
+.aud-caixa-store-head span {
+  color: #60778f;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.aud-caixa-row-edit-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.aud-caixa-occurrence-field--edit {
+  align-self: end;
+}
+
+.aud-caixa-occurrence-dialog {
+  width: min(100%, 680px);
+  display: grid;
+  gap: 14px;
+}
+
+.aud-caixa-occurrence-dialog-head {
+  display: grid;
+  gap: 4px;
+}
+
+.aud-caixa-occurrence-dialog-head p {
+  margin: 0;
+  color: #637991;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.aud-caixa-occurrence-search {
+  width: 100%;
+}
+
+.aud-caixa-occurrence-list {
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.aud-caixa-occurrence-option {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 1px solid rgba(203, 215, 233, 0.92);
+  border-radius: 14px;
+  background: #fff;
+  color: #26435f;
+  font: inherit;
+  font-weight: 700;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  cursor: pointer;
+}
+
+.aud-caixa-occurrence-option:hover,
+.aud-caixa-occurrence-option:focus-visible {
+  border-color: rgba(100, 136, 186, 0.58);
+  box-shadow: 0 0 0 4px rgba(49, 105, 191, 0.08);
+  outline: none;
+}
+
+.aud-caixa-occurrence-option.is-active {
+  border-color: rgba(183, 61, 74, 0.34);
+  background: rgba(255, 244, 246, 0.98);
+  color: #9f3140;
+}
+
+.aud-caixa-occurrence-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(172, 191, 217, 0.92);
+  background: rgba(247, 250, 255, 0.98);
+}
+
+.aud-caixa-occurrence-option.is-active .aud-caixa-occurrence-check {
+  border-color: rgba(183, 61, 74, 0.5);
+  background: radial-gradient(circle at center, #c13c50 0 42%, rgba(193, 60, 80, 0) 46%);
+}
+
+.aud-caixa-occurrence-actions {
+  justify-content: space-between;
+}
+
+@media (max-width: 720px) {
+  .aud-caixa-form-grid,
+  .aud-caixa-row-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aud-caixa-occurrence-dialog {
+    width: min(100vw - 20px, 100%);
+  }
+}
+
+@media (max-width: 560px) {
+  .aud-caixa-route-head,
+  .aud-caixa-route-body,
+  .aud-caixa-store-group {
+    padding: 9px;
+  }
+
+  .aud-caixa-store-head {
+    align-items: flex-start;
+  }
+
+  .aud-caixa-occurrence-option {
+    min-height: 48px;
+    padding: 10px 12px;
+  }
+
+  .aud-caixa-occurrence-actions {
+    width: 100%;
+  }
+
+  .aud-caixa-occurrence-actions .btn {
+    flex: 1 1 0;
+  }
+}
+
 .coleta-delete-btn {
   display: inline-flex;
   align-items: center;
