@@ -2067,7 +2067,8 @@ small {
   flex: 0 0 auto;
   color: #173865;
   font-size: 0.92rem;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 1.2;
   text-align: right;
 }
 
