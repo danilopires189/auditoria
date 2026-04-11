@@ -535,7 +535,12 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
 
   const resumeLocalActiveConference = useCallback(async (silent = false): Promise<TransferenciaCdLocalConference | null> => {
     const rows = await listUserLocalConferences(profile.user_id);
-    const openRows = rows.filter((row) => row.status === "em_conferencia" && !row.pending_cancel);
+    const openRows = rows.filter((row) => (
+      row.status === "em_conferencia"
+      && !row.pending_cancel
+      && !row.is_read_only
+      && row.started_by === profile.user_id
+    ));
     const local = openRows[0] ?? null;
     if (!local) return null;
     return activateConference(local, { silent });
@@ -555,7 +560,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     const localConferences = await listUserLocalConferences(profile.user_id);
     const localByKey = new Map(
       localConferences
-        .filter((row) => !row.pending_cancel && deriveConferenceCd(row) === targetCd)
+        .filter((row) => !row.pending_cancel && deriveConferenceCd(row) === targetCd && row.started_by === profile.user_id)
         .map((row) => [buildTransferenciaCdNoteKey(row), row] as const)
     );
 
@@ -714,7 +719,12 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       const localKey = buildTransferenciaCdConferenceKey(profile.user_id, currentCd, note.etapa, note);
       const existing = await getLocalConference(localKey);
       const openLocals = (await listUserLocalConferences(profile.user_id))
-        .filter((row) => row.status === "em_conferencia" && !row.pending_cancel);
+        .filter((row) => (
+          row.status === "em_conferencia"
+          && !row.pending_cancel
+          && !row.is_read_only
+          && row.started_by === profile.user_id
+        ));
       const conflictingLocal = openLocals.find((row) => row.local_key !== localKey) ?? null;
 
       if (conflictingLocal) {
@@ -740,7 +750,16 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         try {
           const remote = await openTransferenciaNote(currentCd, note);
           const items = await fetchTransferenciaItems(remote.conf_id);
-          await activateConference(localFromRemote(profile, currentCd, remote, items), { silent: true });
+          await activateConference(localFromRemote(profile, currentCd, remote, items), {
+            silent: true
+          });
+          if (remote.is_read_only) {
+            const readOnlyMessage = remote.status === "em_conferencia"
+              ? "Conferência em andamento por outro usuário. Aberta somente para leitura."
+              : "Conferência já finalizada. Aberta somente para leitura.";
+            setStatusMessage(readOnlyMessage);
+            return;
+          }
         } catch (error) {
           if (isTransferenciaActiveConferenceConflict(error)) {
             const resumed = await resumeRemoteActiveConference(true) ?? await resumeLocalActiveConference(true);
@@ -1365,6 +1384,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
                 {activeConference.etapa === "entrada" ? <p className="termo-inline-note">{originObservation(activeConference)}</p> : null}
                 <p>Status: {formatStatus(activeConference.status)}</p>
                 <p>{activeConferenceStatusDetail(activeConference)}</p>
+                {activeConference.is_read_only ? <p className="termo-inline-note">Conferência aberta somente para leitura.</p> : null}
               </div>
               <div className="termo-volume-head-right">
                 <span className={`coleta-row-status ${activeConference.sync_error ? "error" : activeConference.pending_snapshot || activeConference.pending_finalize || activeConference.pending_cancel ? "pending" : "synced"}`}>{activeConference.sync_error ? "Erro de sync" : activeConference.pending_snapshot || activeConference.pending_finalize || activeConference.pending_cancel ? "Pendente sync" : "Sincronizado"}</span>
