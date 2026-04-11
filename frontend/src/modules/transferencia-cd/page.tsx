@@ -31,6 +31,7 @@ import {
   countTransferenciaConciliacaoRows,
   fetchCdOptions,
   fetchManifestBundle,
+  fetchManifestNotes,
   fetchTransferenciaConciliacaoRows,
   fetchTransferenciaItems,
   finalizeTransferencia,
@@ -552,6 +553,30 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setStatusMessage("Modo offline ativado com base de Transferência CD e barras prontas.");
   }, [currentCd, isOnline, manifestReady, persistPreferences, preferOfflineMode, profile.user_id, refreshManifestInfo, runManifestSync]);
 
+  const openNotesModal = useCallback(async () => {
+    if (currentCd == null) {
+      setErrorMessage("Selecione um CD antes de abrir as notas.");
+      return;
+    }
+    setNotesSearchInput("");
+    setErrorMessage(null);
+    if (preferOfflineMode || !isOnline || modalNotes.length > 0) {
+      setShowNotesModal(true);
+      return;
+    }
+    setBusyOpen(true);
+    try {
+      const rows = await fetchManifestNotes(currentCd);
+      setNotes(rows);
+      setShowNotesModal(true);
+      if (!rows.length) setStatusMessage("Sem notas disponíveis para este CD.");
+    } catch (error) {
+      setErrorMessage(toTransferenciaErrorMessage(error));
+    } finally {
+      setBusyOpen(false);
+    }
+  }, [currentCd, isOnline, modalNotes.length, preferOfflineMode]);
+
   const openNote = useCallback(async (note: TransferenciaCdNoteRow) => {
     if (currentCd == null) return;
     setBusyOpen(true);
@@ -1067,9 +1092,9 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               {preferOfflineMode ? "Offline ativo" : "Trabalhar offline"}
             </button>
           ) : null}
-          <button type="button" className="btn btn-muted termo-route-btn" onClick={() => { setNotesSearchInput(""); setShowNotesModal(true); }} disabled={!modalNotes.length}>
+          <button type="button" className="btn btn-muted termo-route-btn" onClick={() => void openNotesModal()} disabled={currentCd == null || busyOpen}>
             <span aria-hidden="true">{listIcon()}</span>
-            Notas
+            {busyOpen ? "Abrindo..." : "Notas"}
           </button>
           {canSeeReportTools ? (
             <button type="button" className={`btn btn-muted termo-report-toggle${showReportPanel ? " is-active" : ""}`} aria-pressed={showReportPanel} onClick={() => { setShowReportPanel((value) => { const next = !value; if (next && (!reportDtIni || !reportDtFim)) { const today = todayIsoBrasilia(); setReportDtIni((current) => current || today); setReportDtFim((current) => current || today); } return next; }); setReportCount(null); setReportMessage(null); setReportError(null); }}>
