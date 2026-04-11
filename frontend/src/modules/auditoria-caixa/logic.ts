@@ -7,6 +7,7 @@ import {
 export const AUDITORIA_CAIXA_ALLOWED_LENGTHS = [17, 18, 23, 25, 26, 27] as const;
 export const AUDITORIA_CAIXA_MAX_LENGTH = 27;
 export const AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE = "Etiqueta inválida, revise e tente novamente!";
+export const AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE = "Etiqueta Knapp inválida, revise e tente novamente!";
 
 export interface ParsedAuditoriaCaixaEtiqueta {
   etiqueta: string;
@@ -112,7 +113,7 @@ export function parseAuditoriaCaixaEtiqueta(
 
   const idKnapp = normalizeKnappIdInput(rawKnappId);
   if (requiresKnappId(length) && idKnapp != null && idKnapp.length !== 8) {
-    throw new Error("O ID knapp deve ter exatamente 8 dígitos.");
+    throw new Error(AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE);
   }
 
   let pedidoRaw = "";

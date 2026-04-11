@@ -8,6 +8,7 @@ import {
 } from "./storage";
 import {
   AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE,
+  AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE,
   normalizeOccurrenceInput,
   normalizeEtiquetaInput,
   normalizeKnappIdInput,
@@ -67,7 +68,7 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("ETIQUETA_INVALIDA_ANO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
   if (normalized.includes("PEDIDO_INVALIDO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
   if (normalized.includes("FILIAL_INVALIDA")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
-  if (normalized.includes("ID_KNAPP_INVALIDO")) return "O ID knapp deve ter exatamente 8 dígitos.";
+  if (normalized.includes("ID_KNAPP_INVALIDO")) return AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE;
   if (normalized.includes("ETIQUETA_DUPLICADA_EXIGE_ID_KNAPP")) {
     return "Esta etiqueta já existe. Informe o ID knapp para diferenciar a leitura.";
   }

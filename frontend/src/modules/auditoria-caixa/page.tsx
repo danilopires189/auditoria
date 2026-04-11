@@ -20,6 +20,7 @@ import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE,
+  AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE,
   AUDITORIA_CAIXA_MAX_LENGTH,
   clampEtiquetaInput,
   isAllowedEtiquetaLength,
@@ -531,6 +532,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const lastQuickSyncAtRef = useRef(0);
   const lastRouteRefreshAtRef = useRef(0);
   const scannerInputStateRef = useRef<ScannerInputState>(createScannerInputState());
+  const knappInputStateRef = useRef<ScannerInputState>(createScannerInputState());
   const {
     inputMode: etiquetaInputMode,
     enableSoftKeyboard: enableEtiquetaSoftKeyboard,
@@ -1004,10 +1006,19 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar etiqueta.";
       setErrorMessage(message);
-      setKnappModalState(null);
-      clearForm();
       triggerScanErrorAlert(message);
-      focusEtiqueta();
+
+      if (message === AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE) {
+        setIdKnappInput("");
+        window.requestAnimationFrame(() => {
+          knappInputRef.current?.focus();
+          knappInputRef.current?.select();
+        });
+      } else {
+        setKnappModalState(null);
+        clearForm();
+        focusEtiqueta();
+      }
     } finally {
       collectInFlightRef.current = false;
     }
@@ -1033,11 +1044,11 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     triggerScanErrorAlert
   ]);
 
-  const submitKnappModal = useCallback(async () => {
+  const submitKnappModal = useCallback(async (rawKnappValue?: string) => {
     if (!knappModalState) return;
     await handleCollect({
       etiqueta: knappModalState.etiqueta,
-      idKnapp: idKnappInput
+      idKnapp: rawKnappValue ?? idKnappInput
     });
   }, [handleCollect, idKnappInput, knappModalState]);
 
@@ -1107,6 +1118,46 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       void commitScannerInput(value);
     }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
   }, [clearScannerInputTimer, commitScannerInput]);
+
+  const clearKnappInputTimer = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const state = knappInputStateRef.current;
+    if (state.timerId != null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+  }, []);
+
+  const commitKnappInput = useCallback(async (rawValue: string) => {
+    const normalized = rawValue.replace(/\D/g, "");
+    if (!normalized) return;
+
+    const state = knappInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (state.lastSubmittedValue === normalized && now - state.lastSubmittedAt < SCANNER_INPUT_SUBMIT_COOLDOWN_MS) {
+      return;
+    }
+
+    clearKnappInputTimer();
+    state.lastSubmittedValue = normalized;
+    state.lastSubmittedAt = now;
+    state.lastInputAt = 0;
+    state.lastLength = 0;
+    state.burstChars = 0;
+
+    setIdKnappInput(normalized);
+    await submitKnappModal(normalized);
+  }, [clearKnappInputTimer, submitKnappModal]);
+
+  const scheduleKnappInputAutoSubmit = useCallback((value: string) => {
+    if (typeof window === "undefined") return;
+    const state = knappInputStateRef.current;
+    clearKnappInputTimer();
+    state.timerId = window.setTimeout(() => {
+      state.timerId = null;
+      void commitKnappInput(value);
+    }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+  }, [clearKnappInputTimer, commitKnappInput]);
 
   const saveRowEdit = useCallback(async (row: AuditoriaCaixaRow) => {
     if (!editDraft) return;
@@ -1519,6 +1570,11 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       if (state.timerId != null) {
         window.clearTimeout(state.timerId);
         state.timerId = null;
+      }
+      const knappState = knappInputStateRef.current;
+      if (knappState.timerId != null) {
+        window.clearTimeout(knappState.timerId);
+        knappState.timerId = null;
       }
     };
   }, []);
@@ -2276,7 +2332,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
               >
                 <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                   <h3 id="aud-caixa-knapp-title">Informe o ID knapp</h3>
-                  <p>Etiqueta {knappModalState.etiqueta}. Digite os 8 dígitos para concluir e voltar ao próximo bip.</p>
+                  <p>Etiqueta {knappModalState.etiqueta}. Informe ID Knapp para concluir e voltar ao próximo bip.</p>
                   <label>
                     ID knapp
                     <div className="input-icon-wrap">
@@ -2290,7 +2346,37 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                         pattern="[0-9]*"
                         autoComplete="off"
                         value={idKnappInput}
-                        onChange={(event) => setIdKnappInput(event.target.value.replace(/\D/g, ""))}
+                        onChange={(event) => {
+                          const nextValue = event.target.value.replace(/\D/g, "");
+                          setIdKnappInput(nextValue);
+
+                          const state = knappInputStateRef.current;
+                          const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+                          const elapsed = state.lastInputAt > 0 ? now - state.lastInputAt : Number.POSITIVE_INFINITY;
+                          const lengthDelta = Math.max(nextValue.length - state.lastLength, 0);
+
+                          if (lengthDelta > 0 && elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+                            state.burstChars += lengthDelta;
+                          } else {
+                            state.burstChars = lengthDelta;
+                          }
+
+                          state.lastInputAt = now;
+                          state.lastLength = nextValue.length;
+
+                          if (!nextValue) {
+                            state.burstChars = 0;
+                            clearKnappInputTimer();
+                            return;
+                          }
+
+                          if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+                            scheduleKnappInputAutoSubmit(nextValue);
+                            return;
+                          }
+
+                          clearKnappInputTimer();
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "Escape") {
                             event.preventDefault();
@@ -2301,7 +2387,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                           }
                           if (event.key !== "Enter" && event.key !== "Tab") return;
                           event.preventDefault();
-                          void submitKnappModal();
+                          void commitKnappInput(idKnappInput);
                         }}
                         placeholder="8 dígitos"
                       />
