@@ -4,6 +4,7 @@ import type {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent
 } from "react";
+import type { IScannerControls } from "@zxing/browser";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -18,6 +19,10 @@ import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
+  AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE,
+  AUDITORIA_CAIXA_MAX_LENGTH,
+  clampEtiquetaInput,
+  isAllowedEtiquetaLength,
   normalizeOccurrenceInput,
   normalizeEtiquetaInput,
   parseAuditoriaCaixaEtiqueta,
@@ -67,6 +72,10 @@ type OccurrenceModalTarget =
   | { kind: "form" }
   | { kind: "edit"; rowId: string };
 
+interface KnappModalState {
+  etiqueta: string;
+}
+
 interface ScannerInputState {
   lastInputAt: number;
   lastLength: number;
@@ -80,6 +89,7 @@ interface FeedFilialGroup {
   key: string;
   filial: number;
   filial_nome: string | null;
+  pedido: number;
   rows: AuditoriaCaixaRow[];
 }
 
@@ -98,6 +108,7 @@ const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+const TRANSIENT_MESSAGE_DURATION_MS = 5_000;
 const PENDING_SYNC_STATUSES = new Set<AuditoriaCaixaRow["sync_status"]>([
   "pending_insert",
   "pending_update",
@@ -166,7 +177,7 @@ function asStatusLabel(status: AuditoriaCaixaRow["sync_status"]): string {
   if (status === "pending_update") return "Pendente atualização";
   if (status === "pending_delete") return "Pendente exclusão";
   if (status === "error") return "Erro de sync";
-  return "Sincronizado";
+  return "Sync";
 }
 
 function asStatusClass(status: AuditoriaCaixaRow["sync_status"]): string {
@@ -288,8 +299,93 @@ function buildRouteKey(rota: string | null | undefined): string {
   return (String(rota ?? "Sem rota").trim() || "Sem rota");
 }
 
-function buildStoreKey(rota: string | null | undefined, filial: number, filialNome: string | null | undefined): string {
-  return `${buildRouteKey(rota)}::${filial}::${filialNome ?? ""}`;
+function buildStoreKey(
+  rota: string | null | undefined,
+  filial: number,
+  filialNome: string | null | undefined,
+  pedido: number
+): string {
+  return `${buildRouteKey(rota)}::${filial}::${filialNome ?? ""}::${pedido}`;
+}
+
+function formatVolumeCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "Volume" : "Volumes"}`;
+}
+
+function getEtiquetaTipoLabel(etiqueta: string): string {
+  const length = normalizeEtiquetaInput(etiqueta).length;
+  if (length === 17 || length === 18) return "Knapp";
+  if (length === 23) return "Termolábeis/Alimentos";
+  if (length === 25) return "Pedido direto";
+  if (length === 26) return "Pulmão";
+  if (length === 27) return "Separação";
+  return "-";
+}
+
+function getRowHeadlineVolume(row: AuditoriaCaixaRow): string {
+  return `cx: ${row.id_knapp ?? row.volume ?? "-"}`;
+}
+
+function isSubsequenceMatch(query: string, target: string): boolean {
+  if (!query) return true;
+  let queryIndex = 0;
+  for (const char of target) {
+    if (char === query[queryIndex]) {
+      queryIndex += 1;
+      if (queryIndex >= query.length) return true;
+    }
+  }
+  return queryIndex >= query.length;
+}
+
+function approximateContains(query: string, target: string): boolean {
+  if (!query) return true;
+  if (!target) return false;
+  if (target.includes(query)) return true;
+
+  const compactQuery = query.replace(/\s+/g, "");
+  const compactTarget = target.replace(/\s+/g, "");
+  if (!compactQuery) return true;
+
+  return compactTarget.includes(compactQuery) || isSubsequenceMatch(compactQuery, compactTarget);
+}
+
+function buildFeedSearchText(row: AuditoriaCaixaRow): string {
+  return [
+    row.etiqueta,
+    row.id_knapp ?? "",
+    row.pedido,
+    row.data_pedido ? formatDateOnlyPtBR(row.data_pedido) : "",
+    row.dv ?? "",
+    row.dv ? `seq ${row.dv}` : "",
+    row.filial,
+    row.filial_nome ?? "",
+    row.uf ?? "",
+    row.rota ?? "",
+    row.volume ?? "",
+    row.ocorrencia ?? "",
+    row.mat_aud,
+    row.nome_aud,
+    toDisplayName(row.nome_aud),
+    formatDateTime(row.data_hr),
+    asStatusLabel(row.sync_status)
+  ].join(" ");
+}
+
+function matchesFeedSearch(row: AuditoriaCaixaRow, rawQuery: string): boolean {
+  const query = normalizeSearchText(rawQuery);
+  if (!query) return true;
+
+  const target = normalizeSearchText(buildFeedSearchText(row));
+  if (approximateContains(query, target)) return true;
+
+  const queryTokens = query.split(/\s+/).filter(Boolean);
+  if (queryTokens.length === 0) return true;
+
+  const targetTokens = target.split(/[^a-z0-9]+/).filter(Boolean);
+  return queryTokens.every((token) => (
+    targetTokens.some((candidate) => approximateContains(token, candidate))
+  ));
 }
 
 function SearchIcon() {
@@ -297,6 +393,24 @@ function SearchIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="11" cy="11" r="6" />
       <path d="M16 16l4 4" />
+    </svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h4l1.5-2h5L16 7h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
     </svg>
   );
 }
@@ -397,15 +511,22 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const [reportBusyExport, setReportBusyExport] = useState(false);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [feedSearchInput, setFeedSearchInput] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AuditoriaCaixaRow | null>(null);
   const [occurrenceModalTarget, setOccurrenceModalTarget] = useState<OccurrenceModalTarget | null>(null);
+  const [knappModalState, setKnappModalState] = useState<KnappModalState | null>(null);
   const [occurrenceSearch, setOccurrenceSearch] = useState("");
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   const etiquetaRef = useRef<HTMLInputElement | null>(null);
+  const knappInputRef = useRef<HTMLInputElement | null>(null);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
   const collectInFlightRef = useRef(false);
   const lastQuickSyncAtRef = useRef(0);
   const lastRouteRefreshAtRef = useRef(0);
@@ -427,9 +548,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const canSeeReportTools = isDesktop && profile.role === "admin";
   const offlineReady = !isDesktop && preferOfflineMode && dbRotasCount > 0;
   const canOperate = isOnline || offlineReady;
-  const etiquetaRequiresKnapp = useMemo(
-    () => requiresKnappId(etiquetaInput) || Boolean(idKnappInput.trim()),
-    [etiquetaInput, idKnappInput]
+  const cameraSupported = useMemo(
+    () => typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function",
+    []
   );
 
   const visibleRows = useMemo(() => {
@@ -485,17 +606,23 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     return sortRows(Array.from(uniqueRows.values()));
   }, [currentCd, localRows, sharedTodayRows]);
 
+  const filteredVisibleRows = useMemo(
+    () => visibleRows.filter((row) => matchesFeedSearch(row, feedSearchInput)),
+    [feedSearchInput, visibleRows]
+  );
+
   const groupedFeed = useMemo<FeedRouteGroup[]>(() => {
     const routeMap = new Map<string, { rota: string; filiais: Map<string, FeedFilialGroup> }>();
 
-    for (const row of visibleRows) {
+    for (const row of filteredVisibleRows) {
       const rota = buildRouteKey(row.rota);
       const routeEntry = routeMap.get(rota) ?? { rota, filiais: new Map<string, FeedFilialGroup>() };
-      const filialKey = buildStoreKey(rota, row.filial, row.filial_nome);
+      const filialKey = buildStoreKey(rota, row.filial, row.filial_nome, row.pedido);
       const filialEntry = routeEntry.filiais.get(filialKey) ?? {
         key: filialKey,
         filial: row.filial,
         filial_nome: row.filial_nome,
+        pedido: row.pedido,
         rows: []
       };
       filialEntry.rows.push(row);
@@ -512,6 +639,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
           }))
           .sort((a, b) => {
             if (a.filial !== b.filial) return a.filial - b.filial;
+            if (a.pedido !== b.pedido) return a.pedido - b.pedido;
             return (a.filial_nome ?? "").localeCompare(b.filial_nome ?? "", "pt-BR");
           });
 
@@ -523,7 +651,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         };
       })
       .sort((a, b) => a.rota.localeCompare(b.rota, "pt-BR", { sensitivity: "base" }));
-  }, [visibleRows]);
+  }, [filteredVisibleRows]);
 
   useEffect(() => {
     if (!expandedRowId) return;
@@ -582,6 +710,12 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     });
   }, [disableEtiquetaSoftKeyboard]);
 
+  const closeScanner = useCallback(() => {
+    setScannerOpen(false);
+    setScannerError(null);
+    focusEtiqueta();
+  }, [focusEtiqueta]);
+
   const buildKnownRows = useCallback((): AuditoriaCaixaRow[] => {
     if (currentCd == null) return [];
     return [
@@ -601,8 +735,8 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       .filter((row) => row.etiqueta === params.etiqueta);
 
     if (params.length === 17 || params.length === 18) {
-      if (knownRows.length > 0 && !params.idKnapp) {
-        return "Esta etiqueta já existe no feed conhecido. Informe o ID knapp para continuar.";
+      if (!params.idKnapp) {
+        return "Informe o ID knapp para concluir esta etiqueta.";
       }
 
       if (params.idKnapp && knownRows.some((row) => (row.id_knapp ?? "") === params.idKnapp)) {
@@ -777,7 +911,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     }
   }, []);
 
-  const handleCollect = useCallback(async (overrideEtiqueta?: string) => {
+  const handleCollect = useCallback(async (payload?: { etiqueta?: string; idKnapp?: string | null }) => {
     if (collectInFlightRef.current) return;
     collectInFlightRef.current = true;
     setErrorMessage(null);
@@ -804,7 +938,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         return;
       }
 
-      const parsed = parseAuditoriaCaixaEtiqueta(overrideEtiqueta ?? etiquetaInput, idKnappInput);
+      const parsed = parseAuditoriaCaixaEtiqueta(payload?.etiqueta ?? etiquetaInput, payload?.idKnapp ?? idKnappInput, {
+        currentCd
+      });
       const duplicateError = getDuplicateError({
         etiqueta: parsed.etiqueta,
         idKnapp: parsed.id_knapp,
@@ -814,6 +950,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         setErrorMessage(duplicateError);
         showScanFeedback("error", "Etiqueta descartada", duplicateError);
         triggerScanErrorAlert(duplicateError);
+        setKnappModalState(null);
         clearForm();
         focusEtiqueta();
         return;
@@ -849,6 +986,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       await upsertAuditoriaCaixaRow(nextRow);
       await refreshLocalState();
       setExpandedRowId(nextRow.local_id);
+      setKnappModalState(null);
       clearForm();
 
       if (shouldTriggerQueuedBackgroundSync(isOnline)) {
@@ -868,6 +1006,8 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar etiqueta.";
       setErrorMessage(message);
+      setKnappModalState(null);
+      clearForm();
       triggerScanErrorAlert(message);
       focusEtiqueta();
     } finally {
@@ -895,9 +1035,27 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     triggerScanErrorAlert
   ]);
 
+  const submitKnappModal = useCallback(async () => {
+    if (!knappModalState) return;
+    await handleCollect({
+      etiqueta: knappModalState.etiqueta,
+      idKnapp: idKnappInput
+    });
+  }, [handleCollect, idKnappInput, knappModalState]);
+
   const commitScannerInput = useCallback(async (rawValue: string) => {
-    const normalized = normalizeEtiquetaInput(rawValue);
+    const normalized = clampEtiquetaInput(rawValue);
     if (!normalized) return;
+
+    if (!isAllowedEtiquetaLength(normalized.length)) {
+      const message = AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
+      clearForm();
+      setErrorMessage(message);
+      showScanFeedback("error", "Etiqueta inválida", message);
+      triggerScanErrorAlert(message);
+      focusEtiqueta();
+      return;
+    }
 
     const state = scannerInputStateRef.current;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -913,8 +1071,34 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     state.burstChars = 0;
 
     setEtiquetaInput(normalized);
-    await handleCollect(normalized);
-  }, [clearScannerInputTimer, handleCollect]);
+
+    if (requiresKnappId(normalized)) {
+      try {
+        parseAuditoriaCaixaEtiqueta(normalized, null, { currentCd });
+        setIdKnappInput("");
+        setKnappModalState({ etiqueta: normalized });
+        setStatusMessage("Informe o ID knapp para concluir a leitura.");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Falha ao validar a etiqueta.";
+        clearForm();
+        setErrorMessage(message);
+        showScanFeedback("error", "Etiqueta inválida", message);
+        triggerScanErrorAlert(message);
+        focusEtiqueta();
+      }
+      return;
+    }
+
+    await handleCollect({ etiqueta: normalized });
+  }, [
+    clearForm,
+    clearScannerInputTimer,
+    currentCd,
+    focusEtiqueta,
+    handleCollect,
+    showScanFeedback,
+    triggerScanErrorAlert
+  ]);
 
   const scheduleScannerInputAutoSubmit = useCallback((value: string) => {
     if (typeof window === "undefined") return;
@@ -937,7 +1121,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         return;
       }
 
-      const parsed = parseAuditoriaCaixaEtiqueta(editDraft.etiqueta, editDraft.id_knapp);
+      const parsed = parseAuditoriaCaixaEtiqueta(editDraft.etiqueta, editDraft.id_knapp, {
+        currentCd: row.cd
+      });
       const duplicateError = getDuplicateError({
         etiqueta: parsed.etiqueta,
         idKnapp: parsed.id_knapp,
@@ -1224,6 +1410,111 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   }, [focusEtiqueta]);
 
   useEffect(() => {
+    if (!knappModalState) return;
+    window.requestAnimationFrame(() => {
+      knappInputRef.current?.focus();
+      knappInputRef.current?.select();
+    });
+  }, [knappModalState]);
+
+  useEffect(() => {
+    if (!errorMessage) return undefined;
+    const timerId = window.setTimeout(() => setErrorMessage(null), TRANSIENT_MESSAGE_DURATION_MS);
+    return () => window.clearTimeout(timerId);
+  }, [errorMessage]);
+
+  useEffect(() => {
+    if (!statusMessage) return undefined;
+    const timerId = window.setTimeout(() => setStatusMessage(null), TRANSIENT_MESSAGE_DURATION_MS);
+    return () => window.clearTimeout(timerId);
+  }, [statusMessage]);
+
+  useEffect(() => {
+    if (!progressMessage) return undefined;
+    const timerId = window.setTimeout(() => setProgressMessage(null), TRANSIENT_MESSAGE_DURATION_MS);
+    return () => window.clearTimeout(timerId);
+  }, [progressMessage]);
+
+  useEffect(() => {
+    if (!reportError) return undefined;
+    const timerId = window.setTimeout(() => setReportError(null), TRANSIENT_MESSAGE_DURATION_MS);
+    return () => window.clearTimeout(timerId);
+  }, [reportError]);
+
+  useEffect(() => {
+    if (!reportMessage) return undefined;
+    const timerId = window.setTimeout(() => setReportMessage(null), TRANSIENT_MESSAGE_DURATION_MS);
+    return () => window.clearTimeout(timerId);
+  }, [reportMessage]);
+
+  useEffect(() => {
+    if (!scannerError) return undefined;
+    const timerId = window.setTimeout(() => setScannerError(null), TRANSIENT_MESSAGE_DURATION_MS);
+    return () => window.clearTimeout(timerId);
+  }, [scannerError]);
+
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+    let cancelled = false;
+    setScannerError(null);
+
+    const start = async () => {
+      const videoEl = scannerVideoRef.current;
+      if (!videoEl) return;
+
+      try {
+        const zxing = await import("@zxing/browser");
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints(
+          { audio: false, video: { facingMode: { ideal: "environment" } } },
+          videoEl,
+          (result, error) => {
+            if (cancelled) return;
+
+            if (result) {
+              const scanned = normalizeEtiquetaInput(result.getText() ?? "");
+              if (!scanned) return;
+              controls.stop();
+              scannerControlsRef.current = null;
+              setScannerOpen(false);
+              setScannerError(null);
+              setEtiquetaInput(scanned);
+              void commitScannerInput(scanned);
+              return;
+            }
+
+            const errorName = (error as { name?: string } | null)?.name;
+            if (
+              error
+              && errorName !== "NotFoundException"
+              && errorName !== "ChecksumException"
+              && errorName !== "FormatException"
+            ) {
+              setScannerError("Não foi possível ler a etiqueta. Ajuste foco/distância e tente novamente.");
+            }
+          }
+        );
+
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+
+        scannerControlsRef.current = controls;
+      } catch (error) {
+        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera.");
+      }
+    };
+
+    void start();
+    return () => {
+      cancelled = true;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+    };
+  }, [commitScannerInput, scannerOpen]);
+
+  useEffect(() => {
     return () => {
       if (typeof window === "undefined") return;
       const state = scannerInputStateRef.current;
@@ -1235,7 +1526,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   }, []);
 
   const onEtiquetaInputChange = (event: ReactChangeEvent<HTMLInputElement>) => {
-    const nextValue = event.target.value;
+    const nextValue = clampEtiquetaInput(event.target.value);
     setEtiquetaInput(nextValue);
 
     const state = scannerInputStateRef.current;
@@ -1502,7 +1793,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
           <div className="coleta-form-grid aud-caixa-form-grid">
             <label>
               Etiqueta de volume
-              <div className="input-icon-wrap">
+              <div className="input-icon-wrap with-action">
                 <span className="field-icon" aria-hidden="true">
                   <TagIcon />
                 </span>
@@ -1527,32 +1818,26 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                   spellCheck={false}
                   enterKeyHint="done"
                   onKeyDown={onEtiquetaKeyDown}
-                  placeholder="Bipe a etiqueta e pressione Enter"
+                  placeholder="Bipe, digite ou use câmera"
+                  maxLength={AUDITORIA_CAIXA_MAX_LENGTH}
                   required
                 />
+                <button
+                  type="button"
+                  className="input-action-btn"
+                  onClick={() => {
+                    unlockAudioContextFromGesture();
+                    setScannerError(null);
+                    setScannerOpen(true);
+                  }}
+                  title="Ler etiqueta pela câmera"
+                  aria-label="Ler etiqueta pela câmera"
+                  disabled={!cameraSupported}
+                >
+                  <CameraIcon />
+                </button>
               </div>
             </label>
-
-            {etiquetaRequiresKnapp ? (
-              <label>
-                ID knapp
-                <div className="input-icon-wrap">
-                  <span className="field-icon" aria-hidden="true">
-                    <TagIcon />
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    autoComplete="off"
-                    value={idKnappInput}
-                    onChange={(event) => setIdKnappInput(event.target.value.replace(/\D/g, "").slice(0, 8))}
-                    placeholder="8 dígitos"
-                    maxLength={8}
-                  />
-                </div>
-              </label>
-            ) : null}
 
             {isGlobalAdmin ? (
               <label>
@@ -1590,12 +1875,6 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
             </label>
           </div>
 
-          <p className="aud-caixa-hint">
-            {etiquetaRequiresKnapp
-              ? "Para etiquetas com 17 ou 18 caracteres repetidas, informe o ID knapp com 8 dígitos."
-              : "Ocorrência é opcional. Filial e volume são gravados sem zeros à esquerda."}
-          </p>
-
           <button className="btn btn-primary coleta-submit" type="submit" disabled={currentCd == null || !canOperate}>
             Salvar auditoria
           </button>
@@ -1603,19 +1882,40 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
         <div className="coleta-list-head">
           <h3>Feed de hoje</h3>
-          <span>{visibleRows.length} etiquetas</span>
+          <span>
+            {feedSearchInput.trim()
+              ? `${formatVolumeCountLabel(filteredVisibleRows.length)} de ${formatVolumeCountLabel(visibleRows.length)}`
+              : formatVolumeCountLabel(visibleRows.length)}
+          </span>
+        </div>
+
+        <div className="input-icon-wrap aud-caixa-feed-search">
+          <span className="field-icon" aria-hidden="true">
+            <SearchIcon />
+          </span>
+          <input
+            type="text"
+            value={feedSearchInput}
+            onChange={(event) => setFeedSearchInput(event.target.value)}
+            placeholder="Buscar no feed por etiqueta, pedido, seq, rota, filial, auditor..."
+            autoComplete="off"
+          />
         </div>
 
         <div className="aud-caixa-feed">
           {groupedFeed.length === 0 ? (
-            <div className="coleta-empty">Nenhuma etiqueta registrada hoje para este CD.</div>
+            <div className="coleta-empty">
+              {feedSearchInput.trim()
+                ? "Nenhum volume encontrado para a busca informada."
+                : "Nenhum volume registrado hoje para este CD."}
+            </div>
           ) : (
             groupedFeed.map((routeGroup) => (
               <section key={routeGroup.key} className="aud-caixa-route-group">
                 <header className="aud-caixa-route-head">
                   <div>
                     <strong>{routeGroup.rota}</strong>
-                    <span>{routeGroup.rowsCount} etiqueta(s) no feed</span>
+                    <span>{formatVolumeCountLabel(routeGroup.rowsCount)} no feed</span>
                   </div>
                 </header>
 
@@ -1626,8 +1926,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                         <strong>
                           Filial {filialGroup.filial}
                           {filialGroup.filial_nome ? ` - ${filialGroup.filial_nome}` : ""}
+                          {` | Pedido ${filialGroup.pedido}`}
                         </strong>
-                        <span>{filialGroup.rows.length} etiqueta(s)</span>
+                        <span>{formatVolumeCountLabel(filialGroup.rows.length)}</span>
                       </div>
 
                       <div className="coleta-list">
@@ -1640,14 +1941,19 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
                           if (isEditing && editDraft) {
                             try {
-                              parsedPreview = parseAuditoriaCaixaEtiqueta(editDraft.etiqueta, editDraft.id_knapp);
+                              parsedPreview = parseAuditoriaCaixaEtiqueta(editDraft.etiqueta, editDraft.id_knapp, {
+                                currentCd: row.cd
+                              });
                             } catch (error) {
                               previewError = error instanceof Error ? error.message : "Falha ao interpretar a etiqueta.";
                             }
                           }
 
                           return (
-                            <article key={row.local_id} className={`coleta-row-card${isExpanded ? " is-expanded" : ""}`}>
+                            <article
+                              key={row.local_id}
+                              className={`coleta-row-card${isExpanded ? " is-expanded" : ""}${row.ocorrencia ? " has-occurrence" : ""}`}
+                            >
                               <button
                                 type="button"
                                 className="coleta-row-line"
@@ -1663,10 +1969,18 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                                 }}
                               >
                                 <div className="coleta-row-line-main">
-                                  <strong>{row.etiqueta}</strong>
+                                  <div className="aud-caixa-row-headline">
+                                    <strong>{row.etiqueta}</strong>
+                                    <span className="aud-caixa-row-headline-volume">{getRowHeadlineVolume(row)}</span>
+                                  </div>
                                   <p>Pedido {row.pedido} | Seq {row.dv ?? "-"}</p>
-                                  <p>Volume {row.volume ?? "-"} | Coletado em {formatDateTime(row.data_hr)}</p>
-                                  {row.ocorrencia ? <p>Ocorrência: {row.ocorrencia}</p> : null}
+                                  <p>Coletado em {formatDateTime(row.data_hr)}</p>
+                                  {row.ocorrencia ? (
+                                    <p className="aud-caixa-row-occurrence">
+                                      <span>Ocorrência:</span>{" "}
+                                      <span className="aud-caixa-row-occurrence-value">{row.ocorrencia}</span>
+                                    </p>
+                                  ) : null}
                                 </div>
 
                                 <div className="coleta-row-line-right">
@@ -1690,9 +2004,10 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                                             type="text"
                                             value={editDraft.etiqueta}
                                             onChange={(event) => {
-                                              const value = event.target.value;
+                                              const value = clampEtiquetaInput(event.target.value);
                                               setEditDraft((current) => (current ? { ...current, etiqueta: value } : current));
                                             }}
+                                            maxLength={AUDITORIA_CAIXA_MAX_LENGTH}
                                           />
                                         </label>
 
@@ -1735,6 +2050,10 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
                                       <div className="coleta-row-detail-grid">
                                         <div className="coleta-row-detail">
+                                          <span>Tipo</span>
+                                          <strong>{getEtiquetaTipoLabel(editDraft.etiqueta)}</strong>
+                                        </div>
+                                        <div className="coleta-row-detail">
                                           <span>Pedido</span>
                                           <strong>{parsedPreview?.pedido ?? row.pedido}</strong>
                                         </div>
@@ -1754,6 +2073,10 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                                     </>
                                   ) : (
                                     <div className="coleta-row-detail-grid">
+                                      <div className="coleta-row-detail">
+                                        <span>Tipo</span>
+                                        <strong>{getEtiquetaTipoLabel(row.etiqueta)}</strong>
+                                      </div>
                                       <div className="coleta-row-detail">
                                         <span>Pedido</span>
                                         <strong>{row.pedido}</strong>
@@ -1935,6 +2258,111 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                       Feito
                     </button>
                   </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
+
+        {knappModalState && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="confirm-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="aud-caixa-knapp-title"
+                onClick={() => {
+                  setKnappModalState(null);
+                  clearForm();
+                  focusEtiqueta();
+                }}
+              >
+                <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <h3 id="aud-caixa-knapp-title">Informe o ID knapp</h3>
+                  <p>Etiqueta {knappModalState.etiqueta}. Digite os 8 dígitos para concluir e voltar ao próximo bip.</p>
+                  <label>
+                    ID knapp
+                    <div className="input-icon-wrap">
+                      <span className="field-icon" aria-hidden="true">
+                        <TagIcon />
+                      </span>
+                      <input
+                        ref={knappInputRef}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="off"
+                        value={idKnappInput}
+                        onChange={(event) => setIdKnappInput(event.target.value.replace(/\D/g, "").slice(0, 8))}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            setKnappModalState(null);
+                            clearForm();
+                            focusEtiqueta();
+                            return;
+                          }
+                          if (event.key !== "Enter" && event.key !== "Tab") return;
+                          event.preventDefault();
+                          void submitKnappModal();
+                        }}
+                        placeholder="8 dígitos"
+                        maxLength={8}
+                      />
+                    </div>
+                  </label>
+                  <div className="confirm-actions">
+                    <button
+                      className="btn btn-muted"
+                      type="button"
+                      onClick={() => {
+                        setKnappModalState(null);
+                        clearForm();
+                        focusEtiqueta();
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button className="btn btn-primary" type="button" onClick={() => void submitKnappModal()}>
+                      Validar ID knapp
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
+
+        {scannerOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="scanner-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="aud-caixa-scanner-title"
+                onClick={closeScanner}
+              >
+                <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <div className="scanner-head">
+                    <h3 id="aud-caixa-scanner-title">Scanner de etiqueta</h3>
+                    <div className="scanner-head-actions">
+                      <button className="scanner-close-btn" type="button" onClick={closeScanner} aria-label="Fechar scanner">
+                        <CloseIcon />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="scanner-video-wrap">
+                    <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+                    <div className="scanner-frame" aria-hidden="true">
+                      <div className="scanner-frame-corner top-left" />
+                      <div className="scanner-frame-corner top-right" />
+                      <div className="scanner-frame-corner bottom-left" />
+                      <div className="scanner-frame-corner bottom-right" />
+                      <div className="scanner-frame-line" />
+                    </div>
+                  </div>
+                  <p className="scanner-hint">Aponte a câmera para leitura automática.</p>
+                  {scannerError ? <div className="alert error">{scannerError}</div> : null}
                 </div>
               </div>,
               document.body

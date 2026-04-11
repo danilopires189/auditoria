@@ -7,6 +7,7 @@ import {
   upsertAuditoriaCaixaRow
 } from "./storage";
 import {
+  AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE,
   normalizeOccurrenceInput,
   normalizeEtiquetaInput,
   normalizeKnappIdInput,
@@ -58,11 +59,13 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("CD_SEM_ACESSO")) return "Você não possui acesso ao CD informado.";
   if (normalized.includes("CD_OBRIGATORIO")) return "Selecione um CD antes de continuar.";
   if (normalized.includes("ETIQUETA_OBRIGATORIA")) return "Informe a etiqueta para continuar.";
-  if (normalized.includes("ETIQUETA_TAMANHO_INVALIDO")) return "Etiqueta inválida. Use 17, 18, 23, 25, 26 ou 27 caracteres.";
-  if (normalized.includes("ETIQUETA_INVALIDA_PREFIXO")) return "Etiqueta inválida. O primeiro caractere deve estar entre 1 e 9.";
-  if (normalized.includes("ETIQUETA_INVALIDA_ANO")) return "Etiqueta inválida. O ano deve estar entre 2024 e o ano atual.";
-  if (normalized.includes("PEDIDO_INVALIDO")) return "Etiqueta inválida. Não foi possível extrair o pedido.";
-  if (normalized.includes("FILIAL_INVALIDA")) return "Etiqueta inválida. Não foi possível extrair a filial.";
+  if (normalized.includes("ETIQUETA_TAMANHO_INVALIDO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
+  if (normalized.includes("ETIQUETA_CD_PREFIXO_INVALIDO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
+  if (normalized.includes("ETIQUETA_17_18_ESTRUTURA_INVALIDA")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
+  if (normalized.includes("ETIQUETA_INVALIDA_PREFIXO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
+  if (normalized.includes("ETIQUETA_INVALIDA_ANO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
+  if (normalized.includes("PEDIDO_INVALIDO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
+  if (normalized.includes("FILIAL_INVALIDA")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
   if (normalized.includes("ID_KNAPP_INVALIDO")) return "O ID knapp deve ter exatamente 8 dígitos.";
   if (normalized.includes("ETIQUETA_DUPLICADA_EXIGE_ID_KNAPP")) {
     return "Esta etiqueta já existe. Informe o ID knapp para diferenciar a leitura.";

@@ -1937,6 +1937,11 @@ small {
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
+.coleta-row-card.has-occurrence {
+  border-color: rgba(227, 188, 78, 0.3);
+  background: #ffffff;
+}
+
 .coleta-row-card.is-expanded {
   border-color: #89a7d3;
   box-shadow: 0 0 0 1px rgba(77, 116, 176, 0.38), 0 8px 20px rgba(18, 45, 87, 0.14);
@@ -1944,6 +1949,15 @@ small {
 
 .coleta-row-card.is-expanded .coleta-row-edit-card {
   border-top-color: #b8cbe8;
+}
+
+.coleta-row-card.has-occurrence .coleta-row-line,
+.coleta-row-card.has-occurrence .coleta-row-edit-card {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.coleta-row-card.has-occurrence .coleta-row-line {
+  background: linear-gradient(180deg, rgba(255, 251, 241, 0.99) 0%, rgba(255, 247, 225, 0.99) 100%);
 }
 
 .coleta-row-swipe {
@@ -2035,10 +2049,41 @@ small {
   color: #142d58;
 }
 
+.aud-caixa-row-headline {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.aud-caixa-row-headline strong {
+  min-width: 0;
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+
+.aud-caixa-row-headline-volume {
+  flex: 0 0 auto;
+  color: #173865;
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-align: right;
+}
+
 .coleta-row-line-main p {
   margin: 0;
   font-size: 0.79rem;
   color: #4b5e81;
+}
+
+.aud-caixa-row-occurrence {
+  color: #9a6a11 !important;
+  font-weight: 700;
+}
+
+.aud-caixa-row-occurrence-value {
+  color: #d98b95;
 }
 
 .coleta-row-line-right {
@@ -2243,6 +2288,10 @@ small {
   line-height: 1.45;
 }
 
+.aud-caixa-feed-search {
+  width: min(100%, 520px);
+}
+
 .aud-caixa-feed {
   display: grid;
   gap: 12px;
@@ -2404,12 +2453,24 @@ small {
     grid-template-columns: 1fr;
   }
 
+  .aud-caixa-feed-search {
+    width: 100%;
+  }
+
   .aud-caixa-occurrence-dialog {
     width: min(100vw - 20px, 100%);
   }
 }
 
 @media (max-width: 560px) {
+  .aud-caixa-row-headline {
+    gap: 8px;
+  }
+
+  .aud-caixa-row-headline-volume {
+    font-size: 0.88rem;
+  }
+
   .aud-caixa-route-head,
   .aud-caixa-route-body,
   .aud-caixa-store-group {
