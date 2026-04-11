@@ -290,7 +290,7 @@ function compareRowFirstInformed(a: AuditoriaCaixaRow, b: AuditoriaCaixaRow): nu
 function buildEtiquetaUniquenessKey(row: AuditoriaCaixaRow): string {
   const length = row.etiqueta.trim().length;
   if ((length === 17 || length === 18) && row.id_knapp) {
-    return `${row.etiqueta}::${row.id_knapp}`;
+    return `KNAPP::${row.id_knapp}`;
   }
   return row.etiqueta;
 }
@@ -730,23 +730,21 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     length: number;
     ignoreLocalId?: string | null;
   }): string | null => {
-    const knownRows = buildKnownRows()
-      .filter((row) => row.local_id !== params.ignoreLocalId)
-      .filter((row) => row.etiqueta === params.etiqueta);
+    const knownRows = buildKnownRows().filter((row) => row.local_id !== params.ignoreLocalId);
 
     if (params.length === 17 || params.length === 18) {
       if (!params.idKnapp) {
         return "Informe o ID knapp para concluir esta etiqueta.";
       }
 
-      if (params.idKnapp && knownRows.some((row) => (row.id_knapp ?? "") === params.idKnapp)) {
-        return "Esta etiqueta com o mesmo ID knapp já foi informada.";
+      if (knownRows.some((row) => (row.id_knapp ?? "") === params.idKnapp)) {
+        return "Este ID knapp já foi informado.";
       }
 
       return null;
     }
 
-    if (knownRows.length > 0) {
+    if (knownRows.some((row) => row.etiqueta === params.etiqueta)) {
       return "Esta etiqueta já foi informada.";
     }
 
@@ -2020,10 +2018,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                                               pattern="[0-9]*"
                                               value={editDraft.id_knapp}
                                               onChange={(event) => {
-                                                const value = event.target.value.replace(/\D/g, "").slice(0, 8);
+                                                const value = event.target.value.replace(/\D/g, "");
                                                 setEditDraft((current) => (current ? { ...current, id_knapp: value } : current));
                                               }}
-                                              maxLength={8}
                                             />
                                           </label>
                                         ) : null}
@@ -2293,7 +2290,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                         pattern="[0-9]*"
                         autoComplete="off"
                         value={idKnappInput}
-                        onChange={(event) => setIdKnappInput(event.target.value.replace(/\D/g, "").slice(0, 8))}
+                        onChange={(event) => setIdKnappInput(event.target.value.replace(/\D/g, ""))}
                         onKeyDown={(event) => {
                           if (event.key === "Escape") {
                             event.preventDefault();
@@ -2307,7 +2304,6 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                           void submitKnappModal();
                         }}
                         placeholder="8 dígitos"
-                        maxLength={8}
                       />
                     </div>
                   </label>

@@ -38,7 +38,7 @@ export function clampEtiquetaInput(value: string): string {
 }
 
 export function normalizeKnappIdInput(value: string | null | undefined): string | null {
-  const normalized = String(value ?? "").replace(/\D+/g, "").slice(0, 8);
+  const normalized = String(value ?? "").replace(/\D+/g, "");
   return normalized || null;
 }
 
@@ -125,34 +125,24 @@ export function parseAuditoriaCaixaEtiqueta(
     if (!Number.isFinite(currentCd)) {
       throw new Error("CD não definido para validar esta etiqueta.");
     }
-    const cdPrefix = String(Math.trunc(currentCd as number));
-    if (!etiqueta.startsWith(cdPrefix)) {
+    if (Math.trunc(currentCd as number) !== 2) {
       throw new Error(AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE);
     }
-    const filialLength = length - cdPrefix.length - 13;
-    if (filialLength !== 3 && filialLength !== 4) {
-      throw new Error(AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE);
-    }
-    pedidoRaw = etiqueta.slice(cdPrefix.length, cdPrefix.length + 7);
-    dvRaw = etiqueta.slice(cdPrefix.length + 7, cdPrefix.length + 13);
-    filialRaw = etiqueta.slice(-filialLength);
+    pedidoRaw = etiqueta.slice(0, 7);
+    dvRaw = etiqueta.slice(7, 8);
+    filialRaw = etiqueta.slice(-3);
     volumeRaw = idKnapp;
   } else if (length === 18) {
     const currentCd = options.currentCd;
     if (!Number.isFinite(currentCd)) {
       throw new Error("CD não definido para validar esta etiqueta.");
     }
-    const cdPrefix = String(Math.trunc(currentCd as number));
-    if (!etiqueta.startsWith(cdPrefix)) {
+    if (Math.trunc(currentCd as number) !== 2) {
       throw new Error(AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE);
     }
-    const filialLength = length - cdPrefix.length - 13;
-    if (filialLength !== 3 && filialLength !== 4) {
-      throw new Error(AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE);
-    }
-    pedidoRaw = etiqueta.slice(cdPrefix.length, cdPrefix.length + 7);
-    dvRaw = etiqueta.slice(cdPrefix.length + 7, cdPrefix.length + 13);
-    filialRaw = etiqueta.slice(-filialLength);
+    pedidoRaw = etiqueta.slice(0, 7);
+    dvRaw = etiqueta.slice(7, 8);
+    filialRaw = etiqueta.slice(-4);
     volumeRaw = idKnapp;
   } else {
     pedidoRaw = etiqueta.slice(1, 8);

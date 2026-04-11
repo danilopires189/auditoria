@@ -60,6 +60,7 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("CD_OBRIGATORIO")) return "Selecione um CD antes de continuar.";
   if (normalized.includes("ETIQUETA_OBRIGATORIA")) return "Informe a etiqueta para continuar.";
   if (normalized.includes("ETIQUETA_TAMANHO_INVALIDO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
+  if (normalized.includes("ETIQUETA_17_18_CD_INVALIDO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
   if (normalized.includes("ETIQUETA_CD_PREFIXO_INVALIDO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
   if (normalized.includes("ETIQUETA_17_18_ESTRUTURA_INVALIDA")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
   if (normalized.includes("ETIQUETA_INVALIDA_PREFIXO")) return AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE;
@@ -71,7 +72,7 @@ function toErrorMessage(error: unknown): string {
     return "Esta etiqueta já existe. Informe o ID knapp para diferenciar a leitura.";
   }
   if (normalized.includes("ETIQUETA_ID_KNAPP_DUPLICADO")) {
-    return "Esta etiqueta com o mesmo ID knapp já foi informada anteriormente.";
+    return "Este ID knapp já foi informado anteriormente.";
   }
   if (normalized.includes("ETIQUETA_DUPLICADA")) {
     return "Esta etiqueta já foi informada anteriormente.";
@@ -104,7 +105,7 @@ function isDiscardableDuplicateConflict(error: unknown): boolean {
     || normalized.includes("ETIQUETA_ID_KNAPP_DUPLICADO")
     || normalized.includes("DUPLICATE KEY VALUE")
     || normalized.includes("ESTA ETIQUETA JA FOI INFORMADA ANTERIORMENTE")
-    || normalized.includes("ESTA ETIQUETA COM O MESMO ID KNAPP JA FOI INFORMADA ANTERIORMENTE");
+    || normalized.includes("ESTE ID KNAPP JA FOI INFORMADO ANTERIORMENTE");
 }
 
 function parseInteger(value: unknown, fallback = 0): number {
