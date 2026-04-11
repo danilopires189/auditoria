@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -n \"database connection is closing\\\\|IDBDatabase.*close\" \"c:/PROJETOS/AUDITORIA/frontend/src\"/**/*.ts \"c:/PROJETOS/AUDITORIA/frontend/src\"/**/*.tsx)"
+      "Bash(grep -n \"database connection is closing\\\\|IDBDatabase.*close\" \"c:/PROJETOS/AUDITORIA/frontend/src\"/**/*.ts \"c:/PROJETOS/AUDITORIA/frontend/src\"/**/*.tsx)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -2717,7 +2717,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     }
 
     return localVolume;
-  }, [cdAtivo, fetchSeqNfContributors, isGlobalAdmin, isOnline, profile]);
+  }, [cdAtivo, fetchSeqNfContributors, isGlobalAdmin, isOnline, preferOfflineMode, profile]);
 
   const openVolumeFromEtiqueta = useCallback(async (rawEtiqueta: string) => {
     const etiqueta = rawEtiqueta.trim();
@@ -4923,6 +4923,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         return (
           row.status === "em_conferencia"
           && !row.is_read_only
+          && !row.pending_cancel
           && (row.conference_kind !== "avulsa" || isCombinedLocalConference)
         );
       }) ?? null;
@@ -5949,48 +5950,46 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                 >
                   {activeVolume.sync_error ? "Erro de sync" : activeVolume.pending_snapshot || activeVolume.pending_finalize || activeVolume.pending_cancel ? "Pendente sync" : "Sincronizado"}
                 </span>
-                {canEditActiveVolume || activeVolume.is_read_only ? (
-                  <div className="termo-volume-actions">
-                    {activeVolume.is_read_only ? (
-                      <button
-                        className="btn btn-muted termo-close-btn"
-                        type="button"
-                        onClick={clearConferenceScreen}
-                        disabled={busyCancel || busyFinalize}
-                        title="Fechar visualização"
-                      >
-                        <span aria-hidden="true">{closeIcon()}</span>
-                        Fechar
-                      </button>
-                    ) : (
-                      <>
-                        {!hasAnyItemInformed ? (
-                          <button
-                            className="btn btn-danger termo-cancel-btn"
-                            type="button"
-                            onClick={requestCancelConference}
-                            disabled={busyCancel || busyFinalize}
-                            title="Cancelar conferência"
-                          >
-                            <span aria-hidden="true">{closeIcon()}</span>
-                            {busyCancel ? "Cancelando..." : "Cancelar"}
-                          </button>
-                        ) : null}
-                        {hasAnyItemInformed ? (
-                          <button
-                            className="btn btn-primary termo-finalize-btn"
-                            type="button"
-                            onClick={requestFinalize}
-                            disabled={busyCancel || busyFinalize}
-                          >
-                            <span aria-hidden="true">{checkIcon()}</span>
-                            Finalizar
-                          </button>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                ) : null}
+                <div className="termo-volume-actions">
+                  {!canEditActiveVolume ? (
+                    <button
+                      className="btn btn-muted termo-close-btn"
+                      type="button"
+                      onClick={clearConferenceScreen}
+                      disabled={busyCancel || busyFinalize}
+                      title="Fechar visualização"
+                    >
+                      <span aria-hidden="true">{closeIcon()}</span>
+                      Fechar
+                    </button>
+                  ) : (
+                    <>
+                      {!hasAnyItemInformed ? (
+                        <button
+                          className="btn btn-danger termo-cancel-btn"
+                          type="button"
+                          onClick={requestCancelConference}
+                          disabled={busyCancel || busyFinalize}
+                          title="Cancelar conferência"
+                        >
+                          <span aria-hidden="true">{closeIcon()}</span>
+                          {busyCancel ? "Cancelando..." : "Cancelar"}
+                        </button>
+                      ) : null}
+                      {hasAnyItemInformed ? (
+                        <button
+                          className="btn btn-primary termo-finalize-btn"
+                          type="button"
+                          onClick={requestFinalize}
+                          disabled={busyCancel || busyFinalize}
+                        >
+                          <span aria-hidden="true">{checkIcon()}</span>
+                          Finalizar
+                        </button>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
