@@ -174,6 +174,24 @@ function noteStatus(note: TransferenciaCdNoteRow): TransferenciaCdConfStatus | n
   return note.etapa === "saida" ? note.saida_status : note.entrada_status;
 }
 
+function noteStatusDetail(note: TransferenciaCdNoteRow): string {
+  const status = noteStatus(note);
+  if (!status) return "";
+  const nome = note.etapa === "saida" ? note.saida_started_nome : note.entrada_started_nome;
+  const mat = note.etapa === "saida" ? note.saida_started_mat : note.entrada_started_mat;
+  const startedAt = note.etapa === "saida" ? note.saida_started_at : note.entrada_started_at;
+  const finalizedAt = note.etapa === "saida" ? note.saida_finalized_at : note.entrada_finalized_at;
+  const userLabel = `${nome ?? "usuário"}${mat ? ` (${mat})` : ""}`;
+  if (status === "em_conferencia") return `Em conferência por ${userLabel} desde ${formatDateTime(startedAt)}.`;
+  return `Concluído por ${userLabel} em ${formatDateTime(finalizedAt ?? startedAt)}.`;
+}
+
+function activeConferenceStatusDetail(conf: TransferenciaCdLocalConference): string {
+  const userLabel = `${conf.started_nome || "usuário"}${conf.started_mat ? ` (${conf.started_mat})` : ""}`;
+  if (conf.status === "em_conferencia") return `Em conferência por ${userLabel} desde ${formatDateTime(conf.started_at)}.`;
+  return `Concluído por ${userLabel} em ${formatDateTime(conf.finalized_at ?? conf.updated_at ?? conf.started_at)}.`;
+}
+
 function routeStatusLabel(status: TransferenciaCdConfStatus | null): string {
   if (status === "finalizado_ok" || status === "finalizado_falta") return "Concluído";
   if (status === "em_conferencia") return "Em andamento";
@@ -407,7 +425,8 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       row.cd_ori_nome,
       row.cd_des_nome,
       formatEtapa(row.etapa),
-      routeStatusLabel(noteStatus(row))
+      routeStatusLabel(noteStatus(row)),
+      noteStatusDetail(row)
     ].join(" ")).includes(needle));
   }, [modalNotes, notesSearchInput]);
   const completionStats = useMemo(() => {
@@ -1191,6 +1210,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
                 <p>Data NF: {formatReportDate(activeConference.dt_nf)}</p>
                 {activeConference.etapa === "entrada" ? <p className="termo-inline-note">{originObservation(activeConference)}</p> : null}
                 <p>Status: {formatStatus(activeConference.status)}</p>
+                <p>{activeConferenceStatusDetail(activeConference)}</p>
               </div>
               <div className="termo-volume-head-right">
                 <span className={`coleta-row-status ${activeConference.sync_error ? "error" : activeConference.pending_snapshot || activeConference.pending_finalize || activeConference.pending_cancel ? "pending" : "synced"}`}>{activeConference.sync_error ? "Erro de sync" : activeConference.pending_snapshot || activeConference.pending_finalize || activeConference.pending_cancel ? "Pendente sync" : "Sincronizado"}</span>
@@ -1218,7 +1238,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         ) : <div className="coleta-empty">Nenhuma NF ativa. Informe uma NF para iniciar a conferência.</div>}
       </section>
 
-      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><button type="button" className="termo-route-row-button termo-route-row-button-volume" disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span></span><span className="termo-route-actions-row"><span className="termo-route-items-count">{formatItemCount(note.total_itens)}</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button></div></div></div>, document.body) : null}
+      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); const statusDetail = noteStatusDetail(note); return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><button type="button" className="termo-route-row-button termo-route-row-button-volume" disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span>{statusDetail ? <span className="termo-route-sub">{statusDetail}</span> : null}</span><span className="termo-route-actions-row"><span className="termo-route-items-count">{formatItemCount(note.total_itens)}</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button></div></div></div>, document.body) : null}
 
       {showFinalizeModal && activeConference && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-finalizar-title" onClick={() => setShowFinalizeModal(false)}><div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-finalizar-title">Finalizar conferência</h3><p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>{divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? <div className="termo-item-detail"><p>Itens com divergência:</p><div className="termo-routes-list termo-finalize-list">{groupedItems.falta.map(({ item, qtd_falta }) => <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>)}{groupedItems.sobra.map(({ item, qtd_sobra }) => <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>)}</div></div> : null}{divergenciaTotals.falta > 0 ? <label>Motivo da falta<textarea value={finalizeMotivo} onChange={(event) => setFinalizeMotivo(event.target.value)} placeholder="Descreva o motivo da falta" rows={3} /></label> : null}{finalizeError ? <div className="alert error">{finalizeError}</div> : null}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowFinalizeModal(false)} disabled={busyFinalize}>Cancelar</button><button className="btn btn-primary" type="button" onClick={() => void handleFinalizeConference()} disabled={busyFinalize}>{busyFinalize ? "Finalizando..." : "Confirmar finalização"}</button></div></div></div>, document.body) : null}
 
