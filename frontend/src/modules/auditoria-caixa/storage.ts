@@ -84,7 +84,16 @@ function safeTimestamp(value: string | null | undefined): number {
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 async function getDb(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise;
+  if (dbPromise) {
+    try {
+      const db = await dbPromise;
+      // Verifica se a conexão ainda está aberta tentando uma transação vazia
+      db.transaction([], "readonly").abort();
+      return db;
+    } catch {
+      dbPromise = null;
+    }
+  }
 
   dbPromise = new Promise((resolve, reject) => {
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
@@ -113,8 +122,16 @@ async function getDb(): Promise<IDBDatabase> {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("Cannot open IndexedDB"));
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onclose = () => { dbPromise = null; };
+      db.onerror = () => { dbPromise = null; };
+      resolve(db);
+    };
+    request.onerror = () => {
+      dbPromise = null;
+      reject(request.error ?? new Error("Cannot open IndexedDB"));
+    };
   });
 
   return dbPromise;
@@ -388,4 +405,5 @@ export async function clearUserAuditoriaCaixaSessionCache(userId: string): Promi
 
   prefStore.delete(prefsKey(userId));
   await transactionDone(transaction);
+  dbPromise = null;
 }
