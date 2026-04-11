@@ -421,6 +421,24 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
   const currentCdLabel = useMemo(() => cdLabel(currentCd, cdOptions, profile.cd_nome), [cdOptions, currentCd, profile.cd_nome]);
   const canSeeReportTools = isDesktop && profile.role === "admin";
+  const dismissedReadOnlyStorageKey = useMemo(() => `conf-transferencia-cd-dismissed-read-only:${profile.user_id}`, [profile.user_id]);
+  const buildReadOnlyConferenceSignature = useCallback((conference: TransferenciaCdLocalConference) => JSON.stringify({
+    cd: conference.cd,
+    conf_date: conference.conf_date,
+    key: conference.local_key ?? conference.remote_conf_id ?? conference.conf_id
+  }), []);
+  const clearDismissedReadOnlyConference = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.removeItem(dismissedReadOnlyStorageKey);
+  }, [dismissedReadOnlyStorageKey]);
+  const dismissReadOnlyConference = useCallback((conference: TransferenciaCdLocalConference) => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(dismissedReadOnlyStorageKey, buildReadOnlyConferenceSignature(conference));
+  }, [buildReadOnlyConferenceSignature, dismissedReadOnlyStorageKey]);
+  const isDismissedReadOnlyConference = useCallback((conference: TransferenciaCdLocalConference) => {
+    if (!conference.is_read_only || typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(dismissedReadOnlyStorageKey) === buildReadOnlyConferenceSignature(conference);
+  }, [buildReadOnlyConferenceSignature, dismissedReadOnlyStorageKey]);
   const canEditActiveConference = Boolean(activeConference && !activeConference.is_read_only && activeConference.started_by === profile.user_id);
   const hasOpenConference = Boolean(activeConference && activeConference.status === "em_conferencia" && !activeConference.is_read_only);
   const hasAnyItemInformed = Boolean(activeConference?.items.some((item) => item.qtd_conferida > 0));
@@ -508,14 +526,20 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [refreshPendingState]);
 
   const clearActiveConferenceView = useCallback(() => {
+    if (activeConference?.is_read_only) {
+      dismissReadOnlyConference(activeConference);
+    } else {
+      clearDismissedReadOnlyConference();
+    }
     setActiveConference(null);
     setNfInput("");
-  }, []);
+  }, [activeConference, clearDismissedReadOnlyConference, dismissReadOnlyConference]);
 
   const activateConference = useCallback(async (
     next: TransferenciaCdLocalConference,
     options?: { silent?: boolean; message?: string | null }
   ) => {
+    clearDismissedReadOnlyConference();
     const nextCd = deriveConferenceCd(next);
     if (isGlobalAdmin && cdAtivo !== nextCd) {
       setCdAtivo(nextCd);
@@ -531,7 +555,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       setStatusMessage(options?.message ?? `Conferência retomada automaticamente: ${conferenceResumeLabel(next)}.`);
     }
     return next;
-  }, [cdAtivo, isGlobalAdmin, persistPreferences, setAndSaveActiveConference]);
+  }, [cdAtivo, clearDismissedReadOnlyConference, isGlobalAdmin, persistPreferences, setAndSaveActiveConference]);
 
   const resumeLocalActiveConference = useCallback(async (silent = false): Promise<TransferenciaCdLocalConference | null> => {
     const rows = await listUserLocalConferences(profile.user_id);
@@ -553,8 +577,9 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     const remoteCd = deriveConferenceCd(remoteActive);
     const remoteItems = await fetchTransferenciaItems(remoteActive.conf_id);
     const local = localFromRemote(profile, remoteCd, remoteActive, remoteItems);
+    if (isDismissedReadOnlyConference(local)) return null;
     return activateConference(local, { silent });
-  }, [activateConference, isOnline, preferOfflineMode, profile]);
+  }, [activateConference, isDismissedReadOnlyConference, isOnline, preferOfflineMode, profile]);
 
   const mergeNotesWithLocalState = useCallback(async (rows: TransferenciaCdNoteRow[], targetCd: number): Promise<TransferenciaCdNoteRow[]> => {
     const localConferences = await listUserLocalConferences(profile.user_id);
@@ -750,16 +775,25 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         try {
           const remote = await openTransferenciaNote(currentCd, note);
           const items = await fetchTransferenciaItems(remote.conf_id);
+          if (remote.is_read_only) {
+            const readOnlyConference = localFromRemote(profile, currentCd, remote, items);
+            setDialogState({
+              title: "NF com conferência existente",
+              message: remote.status === "em_conferencia"
+                ? "Esta NF está em conferência por outro usuário. Deseja abrir em modo leitura?"
+                : "Esta NF já possui conferência registrada. Deseja abrir em modo leitura?",
+              confirmLabel: "Abrir leitura",
+              onConfirm: () => {
+                setDialogState(null);
+                void activateConference(readOnlyConference, { silent: true });
+                setStatusMessage("NF aberta em modo leitura.");
+              }
+            });
+            return;
+          }
           await activateConference(localFromRemote(profile, currentCd, remote, items), {
             silent: true
           });
-          if (remote.is_read_only) {
-            const readOnlyMessage = remote.status === "em_conferencia"
-              ? "Conferência em andamento por outro usuário. Aberta somente para leitura."
-              : "Conferência já finalizada. Aberta somente para leitura.";
-            setStatusMessage(readOnlyMessage);
-            return;
-          }
         } catch (error) {
           if (isTransferenciaActiveConferenceConflict(error)) {
             const resumed = await resumeRemoteActiveConference(true) ?? await resumeLocalActiveConference(true);
