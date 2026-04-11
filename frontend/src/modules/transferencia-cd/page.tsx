@@ -7,6 +7,8 @@ import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { formatCountLabel } from "../../shared/inflection";
+import { getDbBarrasByBarcode, getDbBarrasMeta } from "../../shared/db-barras/storage";
+import { refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
 import { shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
@@ -14,7 +16,6 @@ import { getModuleByKeyOrThrow } from "../registry";
 import {
   buildTransferenciaCdConferenceKey,
   cleanupExpiredTransferenciaCdConferences,
-  findManifestBarras,
   getLocalConference,
   getManifestItemsByNote,
   getManifestMetaLocal,
@@ -66,6 +67,7 @@ interface TransferenciaCdPageProps {
 type GroupKey = "falta" | "sobra" | "correto";
 type ScannerTarget = "nf" | "barras";
 type DialogState = { title: string; message: string; confirmLabel?: string; onConfirm?: () => void };
+type OcorrenciaTipo = "" | "Avariado" | "Vencido";
 
 const MODULE_DEF = getModuleByKeyOrThrow("transferencia-cd");
 const REPORT_PAGE_SIZE = 1000;
@@ -144,6 +146,25 @@ function withDivergencia(item: TransferenciaCdLocalItem): {
   return { item, divergencia, qtd_falta, qtd_sobra };
 }
 
+function normalizeOccurrenceForQtd(avariado: number, vencido: number, qtdConferida: number): { avariado: number; vencido: number } {
+  const qtd = Math.max(0, Math.trunc(qtdConferida));
+  let nextAvariado = Math.max(0, Math.trunc(avariado));
+  let nextVencido = Math.max(0, Math.trunc(vencido));
+  let overflow = nextAvariado + nextVencido - qtd;
+  if (overflow <= 0) return { avariado: nextAvariado, vencido: nextVencido };
+  const reduceVencido = Math.min(nextVencido, overflow);
+  nextVencido -= reduceVencido;
+  overflow -= reduceVencido;
+  if (overflow > 0) nextAvariado = Math.max(0, nextAvariado - overflow);
+  return { avariado: nextAvariado, vencido: nextVencido };
+}
+
+function itemPackageLabel(item: TransferenciaCdLocalItem): string {
+  const caixas = item.qtd_cxpad == null ? "-" : item.qtd_cxpad;
+  const unidades = item.embcomp_cx == null ? "-" : item.embcomp_cx;
+  return `${caixas} caixa(s) com ${unidades} un em cada caixa`;
+}
+
 function noteStatus(note: TransferenciaCdNoteRow): TransferenciaCdConfStatus | null {
   return note.etapa === "saida" ? note.saida_status : note.entrada_status;
 }
@@ -218,6 +239,8 @@ function localFromRemote(profile: TransferenciaCdModuleProfile, cd: number, conf
       qtd_conferida: item.qtd_conferida,
       embcomp_cx: item.embcomp_cx,
       qtd_cxpad: item.qtd_cxpad,
+      ocorrencia_avariado_qtd: item.ocorrencia_avariado_qtd,
+      ocorrencia_vencido_qtd: item.ocorrencia_vencido_qtd,
       updated_at: item.updated_at
     })).sort(itemSort),
     pending_snapshot: false,
@@ -268,6 +291,8 @@ function localFromManifest(profile: TransferenciaCdModuleProfile, cd: number, no
       qtd_conferida: 0,
       embcomp_cx: row.embcomp_cx,
       qtd_cxpad: row.qtd_cxpad,
+      ocorrencia_avariado_qtd: 0,
+      ocorrencia_vencido_qtd: 0,
       updated_at: nowIso
     })).sort(itemSort),
     pending_snapshot: true,
@@ -311,6 +336,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const [barcodeInput, setBarcodeInput] = useState("");
   const [barcodeValidationState, setBarcodeValidationState] = useState<"idle" | "validating" | "valid" | "invalid">("idle");
   const [multiploInput, setMultiploInput] = useState("1");
+  const [ocorrenciaInput, setOcorrenciaInput] = useState<OcorrenciaTipo>("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<ScannerTarget>("barras");
   const [scannerError, setScannerError] = useState<string | null>(null);
@@ -341,6 +367,8 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const canEditActiveConference = Boolean(activeConference && !activeConference.is_read_only && activeConference.started_by === profile.user_id);
   const hasOpenConference = Boolean(activeConference && activeConference.status === "em_conferencia" && !activeConference.is_read_only);
   const hasAnyItemInformed = Boolean(activeConference?.items.some((item) => item.qtd_conferida > 0));
+  const isReceivingActiveConference = activeConference?.etapa === "entrada";
+  const qtdAtendidaLabel = isReceivingActiveConference ? "Qtd a receber" : "Qtd a enviar";
   const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
 
   const groupedItems = useMemo(() => {
@@ -399,14 +427,15 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
 
   const refreshManifestInfo = useCallback(async (cd: number | null) => {
     if (cd == null) return;
-    const [meta, localNotes] = await Promise.all([
+    const [meta, localNotes, barrasMeta] = await Promise.all([
       getManifestMetaLocal(profile.user_id, cd),
-      listManifestNotesLocal(profile.user_id, cd)
+      listManifestNotesLocal(profile.user_id, cd),
+      getDbBarrasMeta()
     ]);
-    setManifestReady(Boolean(meta));
+    setManifestReady(Boolean(meta) && barrasMeta.row_count > 0);
     setManifestNotes(localNotes);
     setManifestInfo(meta
-      ? `Base local: Transferência CD ${meta.row_count} item(ns) | ${meta.notas_count} nota(s) | Atualizada em ${formatDateTime(meta.cached_at ?? meta.generated_at)}`
+      ? `Base local: Transferência CD ${meta.row_count} item(ns) | ${meta.notas_count} nota(s) | Barras ${barrasMeta.row_count} item(ns) | Atualizada em ${formatDateTime(meta.cached_at ?? meta.generated_at)}`
       : "Sem base local de Transferência CD. Sincronize antes de trabalhar offline."
     );
   }, [profile.user_id]);
@@ -457,11 +486,15 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       const bundle = await fetchManifestBundle(currentCd, (progress) => {
         const label = progress.step === "items" ? "itens" : progress.step === "barras" ? "barras" : "notas";
         setProgressMessage(`Sincronizando ${label}: ${progress.rows}/${progress.total || progress.rows} (${progress.percent}%).`);
-      });
+      }, { includeBarras: false });
       await saveManifestSnapshot({ user_id: profile.user_id, cd: currentCd, ...bundle });
+      const barrasSync = await refreshDbBarrasCacheSmart((progress) => {
+        if (progress.totalRows > 0) setProgressMessage(`Atualizando base de barras: ${progress.rowsFetched}/${progress.totalRows} (${progress.percent}%).`);
+        else setProgressMessage(`Atualizando base de barras: ${progress.percent}%.`);
+      }, { allowFullReconcile: true });
       await refreshManifestInfo(currentCd);
       setNotes([]);
-      setStatusMessage(`Base de Transferência CD sincronizada (${bundle.notes.length} NF(s) e ${bundle.items.length} item(ns)).`);
+      setStatusMessage(`Base de Transferência CD sincronizada (${bundle.notes.length} NF(s), ${bundle.items.length} item(ns) e ${barrasSync.total} barras).`);
     } catch (error) {
       setErrorMessage(toTransferenciaErrorMessage(error));
     } finally {
@@ -469,6 +502,55 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       setBusyManifest(false);
     }
   }, [currentCd, isOnline, profile.user_id, refreshManifestInfo, runPendingSync]);
+
+  const handleToggleOffline = useCallback(async () => {
+    const next = !preferOfflineMode;
+    if (!next) {
+      setPreferOfflineMode(false);
+      await persistPreferences({ prefer_offline_mode: false });
+      return;
+    }
+    if (!isOnline) {
+      if (!manifestReady) {
+        setErrorMessage("Conecte para preparar a base de Transferência CD e a base de barras antes de ativar o offline.");
+        return;
+      }
+      setPreferOfflineMode(true);
+      await persistPreferences({ prefer_offline_mode: true });
+      return;
+    }
+    if (!manifestReady) {
+      await runManifestSync();
+      const [meta, barrasMeta] = await Promise.all([
+        currentCd == null ? Promise.resolve(null) : getManifestMetaLocal(profile.user_id, currentCd),
+        getDbBarrasMeta()
+      ]);
+      if (!meta || barrasMeta.row_count <= 0) {
+        setErrorMessage("Não foi possível preparar a base offline completa. Tente sincronizar novamente.");
+        return;
+      }
+    } else {
+      setBusyManifest(true);
+      setStatusMessage(null);
+      setErrorMessage(null);
+      try {
+        await refreshDbBarrasCacheSmart((progress) => {
+          if (progress.totalRows > 0) setProgressMessage(`Atualizando base de barras: ${progress.rowsFetched}/${progress.totalRows} (${progress.percent}%).`);
+          else setProgressMessage(`Atualizando base de barras: ${progress.percent}%.`);
+        }, { allowFullReconcile: true });
+        await refreshManifestInfo(currentCd);
+      } catch (error) {
+        setErrorMessage(toTransferenciaErrorMessage(error));
+        return;
+      } finally {
+        setProgressMessage(null);
+        setBusyManifest(false);
+      }
+    }
+    setPreferOfflineMode(true);
+    await persistPreferences({ prefer_offline_mode: true });
+    setStatusMessage("Modo offline ativado com base de Transferência CD e barras prontas.");
+  }, [currentCd, isOnline, manifestReady, persistPreferences, preferOfflineMode, profile.user_id, runManifestSync]);
 
   const openNote = useCallback(async (note: TransferenciaCdNoteRow) => {
     if (currentCd == null) return;
@@ -560,15 +642,30 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     try {
       let nextItem: TransferenciaCdLocalItem | null = null;
       if (queueModeFor(activeConference)) {
-        const found = await findManifestBarras(profile.user_id, activeConference.cd, barras);
+        const found = await getDbBarrasByBarcode(barras);
         if (!found) throw new Error("BARRAS_NAO_ENCONTRADA");
         const current = activeConference.items.find((item) => item.coddv === found.coddv);
         if (!current) throw new Error("PRODUTO_FORA_DA_TRANSFERENCIA");
-        nextItem = { ...current, barras, qtd_conferida: current.qtd_conferida + qtd, updated_at: new Date().toISOString() };
+        const nextQtd = current.qtd_conferida + qtd;
+        const normalizedOcc = activeConference.etapa === "entrada"
+          ? normalizeOccurrenceForQtd(
+            current.ocorrencia_avariado_qtd + (ocorrenciaInput === "Avariado" ? qtd : 0),
+            current.ocorrencia_vencido_qtd + (ocorrenciaInput === "Vencido" ? qtd : 0),
+            nextQtd
+          )
+          : { avariado: 0, vencido: 0 };
+        nextItem = {
+          ...current,
+          barras,
+          qtd_conferida: nextQtd,
+          ocorrencia_avariado_qtd: normalizedOcc.avariado,
+          ocorrencia_vencido_qtd: normalizedOcc.vencido,
+          updated_at: new Date().toISOString()
+        };
         await updateActiveItem(nextItem, true);
       } else if (activeConference.remote_conf_id) {
-        const remote = await scanTransferenciaBarcode(activeConference.remote_conf_id, barras, qtd);
-        nextItem = { coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, updated_at: remote.updated_at };
+        const remote = await scanTransferenciaBarcode(activeConference.remote_conf_id, barras, qtd, activeConference.etapa === "entrada" ? ocorrenciaInput : "");
+        nextItem = { coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at };
         await updateActiveItem(nextItem, false);
       }
       if (!nextItem) return;
@@ -576,7 +673,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       setLastAddedCoddv(nextItem.coddv);
       setExpandedCoddv(nextItem.coddv);
       setBarcodeInput("");
-      showScanFeedback("success", "Leitura registrada", `SKU ${nextItem.coddv} | Conferido ${nextItem.qtd_conferida}`);
+      showScanFeedback("success", "Leitura registrada", `CDDV ${nextItem.coddv} | Conferido ${nextItem.qtd_conferida}`);
     } catch (error) {
       const message = toTransferenciaErrorMessage(error);
       setBarcodeValidationState("invalid");
@@ -587,7 +684,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       setBusyScan(false);
       window.setTimeout(() => setBarcodeValidationState("idle"), 700);
     }
-  }, [activeConference, barcodeInput, busyScan, canEditActiveConference, multiploInput, profile.user_id, queueModeFor, showScanFeedback, triggerScanErrorAlert, updateActiveItem]);
+  }, [activeConference, barcodeInput, busyScan, canEditActiveConference, multiploInput, ocorrenciaInput, queueModeFor, showScanFeedback, triggerScanErrorAlert, updateActiveItem]);
 
   const onSubmitBarras = useCallback((event: FormEvent) => {
     event.preventDefault();
@@ -601,10 +698,19 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     if (!current) return;
     try {
       if (queueModeFor(activeConference)) {
-        await updateActiveItem({ ...current, qtd_conferida: qtd, updated_at: new Date().toISOString() }, true);
+        const normalizedOcc = activeConference.etapa === "entrada"
+          ? normalizeOccurrenceForQtd(current.ocorrencia_avariado_qtd, current.ocorrencia_vencido_qtd, qtd)
+          : { avariado: 0, vencido: 0 };
+        await updateActiveItem({
+          ...current,
+          qtd_conferida: qtd,
+          ocorrencia_avariado_qtd: normalizedOcc.avariado,
+          ocorrencia_vencido_qtd: normalizedOcc.vencido,
+          updated_at: new Date().toISOString()
+        }, true);
       } else if (activeConference.remote_conf_id) {
         const remote = await setTransferenciaItemQtd(activeConference.remote_conf_id, coddv, qtd);
-        await updateActiveItem({ coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, updated_at: remote.updated_at }, false);
+        await updateActiveItem({ coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at }, false);
       }
       setEditingCoddv(null);
       setEditQtdInput("0");
@@ -619,10 +725,10 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     if (!current) return;
     try {
       if (queueModeFor(activeConference)) {
-        await updateActiveItem({ ...current, qtd_conferida: 0, barras: null, updated_at: new Date().toISOString() }, true);
+        await updateActiveItem({ ...current, qtd_conferida: 0, barras: null, ocorrencia_avariado_qtd: 0, ocorrencia_vencido_qtd: 0, updated_at: new Date().toISOString() }, true);
       } else if (activeConference.remote_conf_id) {
         const remote = await resetTransferenciaItem(activeConference.remote_conf_id, coddv);
-        await updateActiveItem({ coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, updated_at: remote.updated_at }, false);
+        await updateActiveItem({ coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at }, false);
       }
     } catch (error) {
       setErrorMessage(toTransferenciaErrorMessage(error));
@@ -775,7 +881,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         Data_NF: formatReportDate(row.dt_nf), NF: row.nf_trf, SQ_NF: row.sq_nf, CD_Origem: row.cd_ori, Nome_CD_Origem: row.cd_ori_nome, CD_Destino: row.cd_des, Nome_CD_Destino: row.cd_des_nome, Status_Saida: formatStatus(row.saida_status), Usuario_Saida: row.saida_started_nome ?? "", Matricula_Saida: row.saida_started_mat ?? "", Finalizado_Saida: formatDateTime(row.saida_finalized_at), Status_Entrada: formatStatus(row.entrada_status), Usuario_Entrada: row.entrada_started_nome ?? "", Matricula_Entrada: row.entrada_started_mat ?? "", Finalizado_Entrada: formatDateTime(row.entrada_finalized_at), Situacao: formatConciliacao(row.conciliacao_status)
       }))), "Conciliacao");
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(itemRows.map((row) => ({
-        Data_NF: formatReportDate(row.dt_nf), NF: row.nf_trf, SQ_NF: row.sq_nf, CD_Origem: row.cd_ori, CD_Destino: row.cd_des, CODDV: row.coddv, Descricao: row.descricao, Qtd_Atend: row.qtd_atend, Qtd_Conferida_Saida: row.qtd_conferida_saida, Qtd_Conferida_Entrada: row.qtd_conferida_entrada, Diferenca_Saida_Destino: row.diferenca_saida_destino, Embcomp_CX: row.embcomp_cx ?? "", Qtd_CXPad: row.qtd_cxpad ?? "", Situacao: formatConciliacao(row.conciliacao_status)
+        Data_NF: formatReportDate(row.dt_nf), NF: row.nf_trf, SQ_NF: row.sq_nf, CD_Origem: row.cd_ori, CD_Destino: row.cd_des, CODDV: row.coddv, Descricao: row.descricao, Qtd_Atend: row.qtd_atend, Qtd_Conferida_Saida: row.qtd_conferida_saida, Qtd_Conferida_Entrada: row.qtd_conferida_entrada, Diferenca_Saida_Destino: row.diferenca_saida_destino, Qtd_Avariado_Entrada: row.ocorrencia_avariado_qtd, Qtd_Vencido_Entrada: row.ocorrencia_vencido_qtd, Embcomp_CX: row.embcomp_cx ?? "", Qtd_CXPad: row.qtd_cxpad ?? "", Situacao: formatConciliacao(row.conciliacao_status)
       }))), "Itens");
       XLSX.writeFile(workbook, `relatorio-conferencia-transferencia-cd-${filters.dtIni}-${filters.dtFim}-cd${String(filters.cd).padStart(2, "0")}.xlsx`, { compression: true });
       setReportMessage(`Relatório gerado com sucesso (${noteRows.length} NF(s) e ${itemRows.length} item(ns)).`);
@@ -884,9 +990,10 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
             <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
               <div className="termo-item-main">
                 <strong>{item.descricao}</strong>
-                <p>SKU: {item.coddv}</p>
+                <p>CDDV: {item.coddv}</p>
                 {item.qtd_conferida > 0 ? <p>Barras: {item.barras ?? "-"}</p> : null}
                 <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
+                {item.ocorrencia_avariado_qtd > 0 || item.ocorrencia_vencido_qtd > 0 ? <p>Ocorrência: Avariado {item.ocorrencia_avariado_qtd} | Vencido {item.ocorrencia_vencido_qtd}</p> : null}
               </div>
               <div className="termo-item-side">
                 {isLastAddedItem ? <span className="termo-last-added-tag"><span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>Último adicionado</span> : null}
@@ -897,9 +1004,8 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
             {expanded ? (
               <div className="termo-item-detail">
                 <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                <p>Qtd atendida: {item.qtd_esperada}</p>
-                <p>Embcomp CX: {item.embcomp_cx ?? "-"}</p>
-                <p>Qtd CXPad: {item.qtd_cxpad ?? "-"}</p>
+                <p>{qtdAtendidaLabel}: {item.qtd_esperada}</p>
+                <p>{itemPackageLabel(item)}</p>
                 {canEditActiveConference ? (
                   <div className="termo-item-actions">
                     {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
@@ -957,7 +1063,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
             {busyManifest ? "Sincronizando..." : "Sincronizar agora"}
           </button>
           {!isDesktop ? (
-            <button type="button" className={`btn btn-muted termo-offline-toggle${preferOfflineMode ? " is-active" : ""}`} onClick={() => { const next = !preferOfflineMode; if (next && !manifestReady) { setErrorMessage("Sincronize a base antes de ativar o modo offline."); return; } setPreferOfflineMode(next); void persistPreferences({ prefer_offline_mode: next }); }} disabled={busyManifest}>
+            <button type="button" className={`btn btn-muted termo-offline-toggle${preferOfflineMode ? " is-active" : ""}`} onClick={() => void handleToggleOffline()} disabled={busyManifest}>
               {preferOfflineMode ? "Offline ativo" : "Trabalhar offline"}
             </button>
           ) : null}
@@ -1029,9 +1135,10 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
             <div className="termo-volume-head">
               <div>
                 <h3>NF {activeConference.nf_trf} | SQ {activeConference.sq_nf}</h3>
+                <p>Origem: {activeConference.cd_ori_nome}</p>
+                <p>Destino: {activeConference.cd_des_nome}</p>
                 <p>{formatEtapa(activeConference.etapa)} para esta transferência.</p>
                 <p>Data NF: {formatReportDate(activeConference.dt_nf)}</p>
-                <p>{activeConference.cd_ori_nome} -&gt; {activeConference.cd_des_nome}</p>
                 {activeConference.etapa === "entrada" ? <p className="termo-inline-note">{originObservation(activeConference)}</p> : null}
                 <p>Status: {formatStatus(activeConference.status)}</p>
               </div>
@@ -1050,6 +1157,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               <div className="termo-scan-grid termo-scan-grid-stack">
                 <label>Código de barras<div className="input-icon-wrap with-action"><span className={barcodeIconClassName} aria-hidden="true">{barcodeIcon()}</span><input ref={barrasRef} type="text" inputMode={barcodeInputMode} value={barcodeInput} onChange={(event) => setBarcodeInput(event.target.value)} onFocus={enableSoftKeyboard} onPointerDown={enableSoftKeyboard} onBlur={disableSoftKeyboard} autoComplete="off" placeholder="Bipe, digite ou use câmera" disabled={!canEditActiveConference || busyScan} /><button type="button" className="input-action-btn" onClick={() => { setScannerTarget("barras"); setScannerOpen(true); }} title="Ler barras pela câmera" aria-label="Ler barras pela câmera">{cameraIcon()}</button></div></label>
                 <label>Múltiplo<div className="input-icon-wrap with-stepper"><span className="field-icon" aria-hidden="true">{quantityIcon()}</span><input type="text" inputMode="numeric" pattern="[0-9]*" value={multiploInput} onChange={(event) => { const next = event.target.value.replace(/\D/g, "") || "1"; setMultiploInput(next); void persistPreferences({ multiplo_padrao: parsePositiveInteger(next, 1) }); }} disabled={!canEditActiveConference} /><div className="input-stepper-group"><button type="button" className="input-stepper-btn" onClick={() => setMultiploInput((current) => String(Math.max(1, parsePositiveInteger(current, 1) - 1)))} disabled={!canEditActiveConference}>-</button><button type="button" className="input-stepper-btn" onClick={() => setMultiploInput((current) => String(parsePositiveInteger(current, 1) + 1))} disabled={!canEditActiveConference}>+</button></div></div></label>
+                {isReceivingActiveConference ? <label>Ocorrência<select value={ocorrenciaInput} onChange={(event) => setOcorrenciaInput(event.target.value as OcorrenciaTipo)} disabled={!canEditActiveConference || busyScan}><option value="">Sem ocorrência</option><option value="Avariado">Avariado</option><option value="Vencido">Vencido</option></select></label> : null}
               </div>
               <button className="btn btn-primary" type="submit" disabled={!canEditActiveConference || busyScan}>{busyScan ? "Registrando..." : "Registrar leitura"}</button>
             </form>
@@ -1060,7 +1168,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         ) : <div className="coleta-empty">Nenhuma NF ativa. Informe uma NF para iniciar a conferência.</div>}
       </section>
 
-      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><button type="button" className="termo-route-row-button termo-route-row-button-volume" disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)} | {note.cd_ori_nome} -&gt; {note.cd_des_nome}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span></span><span className="termo-route-actions-row"><span className="termo-route-items-count">{note.total_itens} item(ns)</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button></div></div></div>, document.body) : null}
+      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><button type="button" className="termo-route-row-button termo-route-row-button-volume" disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span></span><span className="termo-route-actions-row"><span className="termo-route-items-count">{note.total_itens} item(ns)</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button></div></div></div>, document.body) : null}
 
       {showFinalizeModal && activeConference && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-finalizar-title" onClick={() => setShowFinalizeModal(false)}><div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-finalizar-title">Finalizar conferência</h3><p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>{divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? <div className="termo-item-detail"><p>Itens com divergência:</p><div className="termo-routes-list termo-finalize-list">{groupedItems.falta.map(({ item, qtd_falta }) => <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>)}{groupedItems.sobra.map(({ item, qtd_sobra }) => <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>)}</div></div> : null}{divergenciaTotals.falta > 0 ? <label>Motivo da falta<textarea value={finalizeMotivo} onChange={(event) => setFinalizeMotivo(event.target.value)} placeholder="Descreva o motivo da falta" rows={3} /></label> : null}{finalizeError ? <div className="alert error">{finalizeError}</div> : null}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowFinalizeModal(false)} disabled={busyFinalize}>Cancelar</button><button className="btn btn-primary" type="button" onClick={() => void handleFinalizeConference()} disabled={busyFinalize}>{busyFinalize ? "Finalizando..." : "Confirmar finalização"}</button></div></div></div>, document.body) : null}
 

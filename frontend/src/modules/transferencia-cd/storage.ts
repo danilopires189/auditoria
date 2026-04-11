@@ -224,6 +224,8 @@ function normalizeLocalConference(row: TransferenciaCdLocalConference | null | u
       coddv: Number(item.coddv),
       qtd_esperada: Math.max(0, Number(item.qtd_esperada) || 0),
       qtd_conferida: Math.max(0, Number(item.qtd_conferida) || 0),
+      ocorrencia_avariado_qtd: Math.max(0, Number(item.ocorrencia_avariado_qtd) || 0),
+      ocorrencia_vencido_qtd: Math.max(0, Number(item.ocorrencia_vencido_qtd) || 0),
       updated_at: item.updated_at || new Date().toISOString()
     }))
     : [];

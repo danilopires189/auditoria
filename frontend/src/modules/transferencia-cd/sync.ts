@@ -55,6 +55,7 @@ export function toTransferenciaErrorMessage(error: unknown): string {
   if (raw.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras não encontrado.";
   if (raw.includes("PRODUTO_FORA_DA_TRANSFERENCIA")) return "Produto fora desta transferência.";
   if (raw.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) return "Conferência não encontrada, finalizada ou aberta por outro usuário.";
+  if (raw.includes("OCORRENCIA_INVALIDA")) return "Ocorrência inválida para esta leitura.";
   if (raw.includes("SOBRA_PENDENTE")) return "Ajuste os itens com sobra antes de finalizar.";
   if (raw.includes("FALTA_MOTIVO_OBRIGATORIO")) return "Informe o motivo da falta para finalizar.";
   if (raw.includes("APENAS_ADMIN")) return "Recurso disponível apenas para administradores.";
@@ -206,6 +207,8 @@ function mapItem(row: Record<string, unknown>): TransferenciaCdItemRow {
     divergencia_tipo: parseDivergencia(row.divergencia_tipo),
     embcomp_cx: row.embcomp_cx == null ? null : parseInteger(row.embcomp_cx),
     qtd_cxpad: row.qtd_cxpad == null ? null : parseInteger(row.qtd_cxpad),
+    ocorrencia_avariado_qtd: Math.max(parseInteger(row.ocorrencia_avariado_qtd), 0),
+    ocorrencia_vencido_qtd: Math.max(parseInteger(row.ocorrencia_vencido_qtd), 0),
     updated_at: String(row.updated_at ?? new Date().toISOString())
   };
 }
@@ -244,7 +247,9 @@ function mapReportRow(row: Record<string, unknown>): TransferenciaCdReportRow {
     qtd_conferida_entrada: parseInteger(row.qtd_conferida_entrada),
     diferenca_saida_destino: parseInteger(row.diferenca_saida_destino),
     embcomp_cx: row.embcomp_cx == null ? null : parseInteger(row.embcomp_cx),
-    qtd_cxpad: row.qtd_cxpad == null ? null : parseInteger(row.qtd_cxpad)
+    qtd_cxpad: row.qtd_cxpad == null ? null : parseInteger(row.qtd_cxpad),
+    ocorrencia_avariado_qtd: Math.max(parseInteger(row.ocorrencia_avariado_qtd), 0),
+    ocorrencia_vencido_qtd: Math.max(parseInteger(row.ocorrencia_vencido_qtd), 0)
   };
 }
 
@@ -421,12 +426,13 @@ export async function fetchTransferenciaItems(confId: string): Promise<Transfere
   return data.map((row) => mapItem(row as Record<string, unknown>));
 }
 
-export async function scanTransferenciaBarcode(confId: string, barras: string, qtd: number): Promise<TransferenciaCdItemRow> {
+export async function scanTransferenciaBarcode(confId: string, barras: string, qtd: number, ocorrenciaTipo?: "" | "Avariado" | "Vencido"): Promise<TransferenciaCdItemRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_scan_barcode", {
     p_conf_id: confId,
     p_barras: normalizeBarcode(barras),
-    p_qtd: Math.max(1, Math.trunc(qtd))
+    p_qtd: Math.max(1, Math.trunc(qtd)),
+    p_ocorrencia_tipo: ocorrenciaTipo || null
   });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
@@ -477,13 +483,15 @@ export async function finalizeTransferencia(confId: string, faltaMotivo: string 
 
 export async function syncTransferenciaSnapshot(
   confId: string,
-  items: Array<{ coddv: number; qtd_conferida: number; barras?: string | null }>
+  items: Array<{ coddv: number; qtd_conferida: number; barras?: string | null; ocorrencia_avariado_qtd?: number; ocorrencia_vencido_qtd?: number }>
 ): Promise<void> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const payload = items.map((item) => ({
     coddv: item.coddv,
     qtd_conferida: Math.max(0, Math.trunc(item.qtd_conferida)),
-    barras: item.barras ? normalizeBarcode(item.barras) : null
+    barras: item.barras ? normalizeBarcode(item.barras) : null,
+    ocorrencia_avariado_qtd: Math.max(0, Math.trunc(item.ocorrencia_avariado_qtd ?? 0)),
+    ocorrencia_vencido_qtd: Math.max(0, Math.trunc(item.ocorrencia_vencido_qtd ?? 0))
   }));
   const { error } = await supabase.rpc("rpc_conf_transferencia_cd_sync_snapshot", {
     p_conf_id: confId,
@@ -566,7 +574,9 @@ export async function syncPendingTransferenciaCdConferences(userId: string): Pro
           row.items.map((item) => ({
             coddv: item.coddv,
             qtd_conferida: item.qtd_conferida,
-            barras: item.barras
+            barras: item.barras,
+            ocorrencia_avariado_qtd: item.ocorrencia_avariado_qtd,
+            ocorrencia_vencido_qtd: item.ocorrencia_vencido_qtd
           }))
         );
         row.pending_snapshot = false;

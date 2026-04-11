@@ -106,6 +106,8 @@ export interface TransferenciaCdLocalItem {
   qtd_conferida: number;
   embcomp_cx: number | null;
   qtd_cxpad: number | null;
+  ocorrencia_avariado_qtd: number;
+  ocorrencia_vencido_qtd: number;
   updated_at: string;
 }
 
@@ -136,6 +138,8 @@ export interface TransferenciaCdItemRow {
   divergencia_tipo: TransferenciaCdDivergenciaTipo;
   embcomp_cx: number | null;
   qtd_cxpad: number | null;
+  ocorrencia_avariado_qtd: number;
+  ocorrencia_vencido_qtd: number;
   updated_at: string;
 }
 
@@ -188,4 +192,6 @@ export interface TransferenciaCdReportRow {
   diferenca_saida_destino: number;
   embcomp_cx: number | null;
   qtd_cxpad: number | null;
+  ocorrencia_avariado_qtd: number;
+  ocorrencia_vencido_qtd: number;
 }
