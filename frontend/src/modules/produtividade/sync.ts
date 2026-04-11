@@ -138,6 +138,8 @@ function mapRankingRow(raw: Record<string, unknown>): ProdutividadeRankingRow {
     conf_avulso_qtd: parseNumber(raw.conf_avulso_qtd),
     conf_entrada_pontos: parseNumber(raw.conf_entrada_pontos),
     conf_entrada_qtd: parseNumber(raw.conf_entrada_qtd),
+    conf_transferencia_cd_pontos: parseNumber(raw.conf_transferencia_cd_pontos),
+    conf_transferencia_cd_qtd: parseNumber(raw.conf_transferencia_cd_qtd),
     conf_lojas_pontos: parseNumber(raw.conf_lojas_pontos),
     conf_lojas_qtd: parseNumber(raw.conf_lojas_qtd),
     total_pontos: parseNumber(raw.total_pontos)

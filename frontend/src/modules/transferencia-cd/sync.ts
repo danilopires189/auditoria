@@ -51,6 +51,9 @@ export function toTransferenciaErrorMessage(error: unknown): string {
   if (raw.includes("CD_SEM_ACESSO")) return "Você não possui acesso a este CD.";
   if (raw.includes("CD_FORA_DA_TRANSFERENCIA")) return "Este CD não participa da transferência.";
   if (raw.includes("TRANSFERENCIA_NAO_ENCONTRADA")) return "Transferência não encontrada para esta NF.";
+  if (raw.includes("CONFERENCIA_EM_ABERTO_OUTRA_TRANSFERENCIA")) {
+    return "Existe uma conferência em andamento para seu usuário neste módulo. Retome ou finalize a NF atual antes de iniciar outra.";
+  }
   if (raw.includes("NF_OBRIGATORIA")) return "Informe o número da NF.";
   if (raw.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras não encontrado.";
   if (raw.includes("PRODUTO_FORA_DA_TRANSFERENCIA")) return "Produto fora desta transferência.";
@@ -60,6 +63,13 @@ export function toTransferenciaErrorMessage(error: unknown): string {
   if (raw.includes("FALTA_MOTIVO_OBRIGATORIO")) return "Informe o motivo da falta para finalizar.";
   if (raw.includes("APENAS_ADMIN")) return "Recurso disponível apenas para administradores.";
   return raw;
+}
+
+export function isTransferenciaActiveConferenceConflict(error: unknown): boolean {
+  const raw = extractRawErrorMessage(error);
+  const normalized = raw.toUpperCase();
+  return normalized.includes("CONFERENCIA_EM_ABERTO_OUTRA_TRANSFERENCIA")
+    || raw.includes("Existe uma conferência em andamento para seu usuário neste módulo.");
 }
 
 function parseNullableString(value: unknown): string | null {
@@ -415,6 +425,15 @@ export async function openTransferenciaNote(cd: number, note: TransferenciaCdNot
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) throw new Error("Falha ao abrir NF.");
+  return mapConference(first);
+}
+
+export async function fetchActiveTransferenciaConference(): Promise<TransferenciaCdConferenceRow | null> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_get_active_conference");
+  if (error) throw new Error(toTransferenciaErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) return null;
   return mapConference(first);
 }
 

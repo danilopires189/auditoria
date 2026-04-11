@@ -458,7 +458,13 @@ export async function cleanupExpiredTransferenciaCdConferences(userId: string): 
         return;
       }
       const row = cursor.value as TransferenciaCdLocalConference;
-      if ((row.conf_date || "") < today && !row.pending_snapshot && !row.pending_finalize && !row.pending_cancel) {
+      if (
+        (row.conf_date || "") < today
+        && row.status !== "em_conferencia"
+        && !row.pending_snapshot
+        && !row.pending_finalize
+        && !row.pending_cancel
+      ) {
         cursor.delete();
         removed += 1;
       }

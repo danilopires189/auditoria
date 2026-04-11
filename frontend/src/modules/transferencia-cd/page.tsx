@@ -21,6 +21,7 @@ import {
   getManifestMetaLocal,
   getPendingSummary,
   getTransferenciaCdPreferences,
+  listUserLocalConferences,
   listManifestNotesLocal,
   saveLocalConference,
   saveManifestSnapshot,
@@ -29,12 +30,14 @@ import {
 import {
   cancelTransferencia,
   countTransferenciaConciliacaoRows,
+  fetchActiveTransferenciaConference,
   fetchCdOptions,
   fetchManifestBundle,
   fetchManifestNotes,
   fetchTransferenciaConciliacaoRows,
   fetchTransferenciaItems,
   finalizeTransferencia,
+  isTransferenciaActiveConferenceConflict,
   normalizeBarcode,
   openTransferenciaNote,
   resetTransferenciaItem,
@@ -190,6 +193,14 @@ function activeConferenceStatusDetail(conf: TransferenciaCdLocalConference): str
   const userLabel = `${conf.started_nome || "usuário"}${conf.started_mat ? ` (${conf.started_mat})` : ""}`;
   if (conf.status === "em_conferencia") return `Em conferência por ${userLabel} desde ${formatDateTime(conf.started_at)}.`;
   return `Concluído por ${userLabel} em ${formatDateTime(conf.finalized_at ?? conf.updated_at ?? conf.started_at)}.`;
+}
+
+function conferenceResumeLabel(conf: Pick<TransferenciaCdLocalConference, "nf_trf" | "sq_nf" | "etapa">): string {
+  return `NF ${conf.nf_trf}/${conf.sq_nf} (${formatEtapa(conf.etapa)})`;
+}
+
+function deriveConferenceCd(conf: Pick<TransferenciaCdLocalConference, "etapa" | "cd_ori" | "cd_des">): number {
+  return conf.etapa === "saida" ? conf.cd_ori : conf.cd_des;
 }
 
 function routeStatusLabel(status: TransferenciaCdConfStatus | null): string {
@@ -474,6 +485,45 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     await refreshPendingState();
   }, [refreshPendingState]);
 
+  const activateConference = useCallback(async (
+    next: TransferenciaCdLocalConference,
+    options?: { silent?: boolean; message?: string | null }
+  ) => {
+    const nextCd = deriveConferenceCd(next);
+    if (isGlobalAdmin && cdAtivo !== nextCd) {
+      setCdAtivo(nextCd);
+      void persistPreferences({ cd_ativo: nextCd });
+    }
+    await setAndSaveActiveConference(next);
+    setNfInput(String(next.nf_trf));
+    setShowNotesModal(false);
+    setNotes([]);
+    setEditingCoddv(null);
+    setExpandedCoddv(null);
+    if (!options?.silent) {
+      setStatusMessage(options?.message ?? `Conferência retomada automaticamente: ${conferenceResumeLabel(next)}.`);
+    }
+    return next;
+  }, [cdAtivo, isGlobalAdmin, persistPreferences, setAndSaveActiveConference]);
+
+  const resumeLocalActiveConference = useCallback(async (silent = false): Promise<TransferenciaCdLocalConference | null> => {
+    const rows = await listUserLocalConferences(profile.user_id);
+    const openRows = rows.filter((row) => row.status === "em_conferencia" && !row.pending_cancel);
+    const local = openRows[0] ?? null;
+    if (!local) return null;
+    return activateConference(local, { silent });
+  }, [activateConference, profile.user_id]);
+
+  const resumeRemoteActiveConference = useCallback(async (silent = false): Promise<TransferenciaCdLocalConference | null> => {
+    if (preferOfflineMode || !isOnline) return null;
+    const remoteActive = await fetchActiveTransferenciaConference();
+    if (!remoteActive || remoteActive.status !== "em_conferencia") return null;
+    const remoteCd = deriveConferenceCd(remoteActive);
+    const remoteItems = await fetchTransferenciaItems(remoteActive.conf_id);
+    const local = localFromRemote(profile, remoteCd, remoteActive, remoteItems);
+    return activateConference(local, { silent });
+  }, [activateConference, isOnline, preferOfflineMode, profile]);
+
   const queueModeFor = useCallback((conference: TransferenciaCdLocalConference) => (
     shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(conference.remote_conf_id) }) || !conference.remote_conf_id
   ), [isOnline, preferOfflineMode]);
@@ -614,18 +664,44 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     try {
       const localKey = buildTransferenciaCdConferenceKey(profile.user_id, currentCd, note.etapa, note);
       const existing = await getLocalConference(localKey);
+      const openLocals = (await listUserLocalConferences(profile.user_id))
+        .filter((row) => row.status === "em_conferencia" && !row.pending_cancel);
+      const conflictingLocal = openLocals.find((row) => row.local_key !== localKey) ?? null;
+
+      if (conflictingLocal) {
+        await activateConference(conflictingLocal, {
+          message: `Conferência retomada automaticamente: ${conferenceResumeLabel(conflictingLocal)}.`
+        });
+        return;
+      }
+
       if (preferOfflineMode || !isOnline) {
         if (!manifestReady) throw new Error("Sincronize a base antes de trabalhar offline.");
-        if (existing) setActiveConference(existing);
-        else {
+        if (existing) {
+          await activateConference(existing, {
+            message: `Conferência retomada automaticamente: ${conferenceResumeLabel(existing)}.`
+          });
+          return;
+        } else {
           const manifestItems = await getManifestItemsByNote(profile.user_id, currentCd, note);
           if (!manifestItems.length) throw new Error("NF não encontrada na base local sincronizada.");
-          await setAndSaveActiveConference(localFromManifest(profile, currentCd, note, manifestItems));
+          await activateConference(localFromManifest(profile, currentCd, note, manifestItems), { silent: true });
         }
       } else {
-        const remote = await openTransferenciaNote(currentCd, note);
-        const items = await fetchTransferenciaItems(remote.conf_id);
-        await setAndSaveActiveConference(localFromRemote(profile, currentCd, remote, items));
+        try {
+          const remote = await openTransferenciaNote(currentCd, note);
+          const items = await fetchTransferenciaItems(remote.conf_id);
+          await activateConference(localFromRemote(profile, currentCd, remote, items), { silent: true });
+        } catch (error) {
+          if (isTransferenciaActiveConferenceConflict(error)) {
+            const resumed = await resumeRemoteActiveConference(true) ?? await resumeLocalActiveConference(true);
+            if (resumed) {
+              setStatusMessage(`Conferência retomada automaticamente: ${conferenceResumeLabel(resumed)}.`);
+              return;
+            }
+          }
+          throw error;
+        }
       }
       setShowNotesModal(false);
       setEditingCoddv(null);
@@ -636,7 +712,16 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusyOpen(false);
     }
-  }, [currentCd, isOnline, manifestReady, preferOfflineMode, profile, setAndSaveActiveConference]);
+  }, [
+    activateConference,
+    currentCd,
+    isOnline,
+    manifestReady,
+    preferOfflineMode,
+    profile,
+    resumeLocalActiveConference,
+    resumeRemoteActiveConference
+  ]);
 
   const runNoteSearchByValue = useCallback(async (value: string) => {
     if (currentCd == null) {
@@ -727,7 +812,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       setLastAddedCoddv(nextItem.coddv);
       setExpandedCoddv(nextItem.coddv);
       setBarcodeInput("");
-      showScanFeedback("success", "Leitura registrada", `CDDV ${nextItem.coddv} | Conferido ${nextItem.qtd_conferida}`);
+      showScanFeedback("success", "Leitura registrada", `CODDV ${nextItem.coddv} | Conferido ${nextItem.qtd_conferida}`);
     } catch (error) {
       const message = toTransferenciaErrorMessage(error);
       setBarcodeValidationState("invalid");
@@ -995,6 +1080,23 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [currentCd, isOnline, preferOfflineMode]);
 
   useEffect(() => {
+    let cancelled = false;
+    if (currentCd == null) return () => { cancelled = true; };
+
+    void (async () => {
+      try {
+        const resumedRemote = await resumeRemoteActiveConference(false);
+        if (cancelled || resumedRemote) return;
+        await resumeLocalActiveConference(false);
+      } catch (error) {
+        if (!cancelled) setErrorMessage(toTransferenciaErrorMessage(error));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentCd, resumeLocalActiveConference, resumeRemoteActiveConference]);
+
+  useEffect(() => {
     if (isOnline) void runPendingSync(true);
   }, [isOnline, runPendingSync]);
 
@@ -1059,7 +1161,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
             <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
               <div className="termo-item-main">
                 <strong>{item.descricao}</strong>
-                <p>CDDV: {item.coddv}</p>
+                <p>CODDV: {item.coddv}</p>
                 {item.qtd_conferida > 0 ? <p>Barras: {item.barras ?? "-"}</p> : null}
                 <p>Esperada: {item.qtd_esperada} | Conferida: {item.qtd_conferida}</p>
                 {item.ocorrencia_avariado_qtd > 0 || item.ocorrencia_vencido_qtd > 0 ? <p>Ocorrência: Avariado {item.ocorrencia_avariado_qtd} | Vencido {item.ocorrencia_vencido_qtd}</p> : null}
@@ -1110,7 +1212,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
           </Link>
           <div className="module-topbar-user-side">
             <PendingSyncBadge pendingCount={pendingCount} errorCount={pendingErrors} title="Conferências pendentes de envio" />
-            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "Online" : "Offline"}</span>
+            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "🟢 Online" : "🔴 Offline"}</span>
           </div>
         </div>
         <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
@@ -1133,7 +1235,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
           </button>
           {!isDesktop ? (
             <button type="button" className={`btn btn-muted termo-offline-toggle${preferOfflineMode ? " is-active" : ""}`} onClick={() => void handleToggleOffline()} disabled={busyManifest}>
-              {preferOfflineMode ? "Offline ativo" : "Trabalhar offline"}
+              {preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
             </button>
           ) : null}
           <button type="button" className="btn btn-muted termo-route-btn" onClick={() => void openNotesModal()} disabled={currentCd == null || busyOpen}>

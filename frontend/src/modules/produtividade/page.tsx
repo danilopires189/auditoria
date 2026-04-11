@@ -687,6 +687,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       "Ter. Conf",
       "Avul. Conf",
       "Ent. Notas",
+      "Transf. CD",
       "Reg Lojas"
     ]];
     const detailsBody = preview.rankingRows.map((row, index) => [
@@ -704,6 +705,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       formatRankingPdfPointsAndCount(row.conf_termo_pontos, row.conf_termo_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_avulso_pontos, row.conf_avulso_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_entrada_pontos, row.conf_entrada_qtd, "sku", "skus"),
+      formatRankingPdfPointsAndCount(row.conf_transferencia_cd_pontos, row.conf_transferencia_cd_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas")
     ]);
     autoTable(doc, {
@@ -736,37 +738,39 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         detailsHead[0],
         detailsBody,
         contentWidth,
-        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
         {
           0: 24,
-          1: 98,
+          1: 92,
           2: 42,
-          3: 46,
-          4: 44,
-          5: 48,
-          6: 42,
-          7: 44,
-          8: 46,
-          9: 44,
-          10: 44,
-          11: 44,
-          12: 44,
-          13: 46,
-          14: 44
+          3: 44,
+          4: 42,
+          5: 46,
+          6: 40,
+          7: 42,
+          8: 44,
+          9: 42,
+          10: 42,
+          11: 42,
+          12: 42,
+          13: 44,
+          14: 44,
+          15: 42
         },
         {
-          1: 132,
-          4: 54,
-          5: 58,
-          6: 50,
-          7: 54,
-          8: 58,
-          9: 54,
-          10: 54,
-          11: 54,
-          12: 54,
-          13: 58,
-          14: 54
+          1: 122,
+          4: 50,
+          5: 54,
+          6: 46,
+          7: 50,
+          8: 54,
+          9: 50,
+          10: 50,
+          11: 50,
+          12: 50,
+          13: 54,
+          14: 54,
+          15: 50
         }
       )
     });
@@ -1121,6 +1125,15 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                           value: formatRankingPointsAndCount(
                                             row.conf_entrada_pontos,
                                             row.conf_entrada_qtd,
+                                            "sku",
+                                            "skus"
+                                          )
+                                        },
+                                        {
+                                          label: "Transf. CD",
+                                          value: formatRankingPointsAndCount(
+                                            row.conf_transferencia_cd_pontos,
+                                            row.conf_transferencia_cd_qtd,
                                             "sku",
                                             "skus"
                                           )
