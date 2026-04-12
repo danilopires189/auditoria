@@ -79,6 +79,11 @@ function formatPercent(value: number): string {
   return `${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}%`;
 }
 
+function formatMonthYearPtBR(value: string): string {
+  const matched = /^(\d{4})-(\d{2})$/.exec(value);
+  return matched ? `${matched[2]}/${matched[1]}` : value;
+}
+
 function riskLabel(value: number): string {
   if (value < 60) return "Alto";
   if (value >= 60 && value <= 75) return "Médio";
@@ -246,7 +251,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
     if (total <= 0) return 100;
     return (1 - (nonConformities / total)) * 100;
   }, [nonConformities, selectedChecklist]);
-  const monthLabel = useMemo(() => monthKeyBrasilia(), []);
+  const monthLabel = useMemo(() => formatMonthYearPtBR(monthKeyBrasilia()), []);
 
   useEffect(() => {
     if (typeof window !== "undefined") window.scrollTo(0, 0);
@@ -513,14 +518,6 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                   <div className="checklist-metric">
                     <span>Mês</span>
                     <strong>{monthLabel}</strong>
-                  </div>
-                  <div className="checklist-metric">
-                    <span>Modelos</span>
-                    <strong>{CHECKLIST_DEFINITIONS.length}</strong>
-                  </div>
-                  <div className="checklist-metric">
-                    <span>Modo</span>
-                    <strong>{isOnline ? "Online" : "Offline"}</strong>
                   </div>
                 </div>
               </section>
