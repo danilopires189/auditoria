@@ -365,6 +365,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const nfRef = useRef<HTMLInputElement | null>(null);
   const barrasRef = useRef<HTMLInputElement | null>(null);
+  const activeConferenceRef = useRef<TransferenciaCdLocalConference | null>(null);
   const { scanFeedback, scanFeedbackTop, showScanFeedback, triggerScanErrorAlert } = useScanFeedback(useCallback(() => barrasRef.current, []));
   const { inputMode: barcodeInputMode, enableSoftKeyboard, disableSoftKeyboard } = useOnDemandSoftKeyboard("numeric");
 
@@ -495,6 +496,10 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setPendingErrors(pending.errors_count);
   }, [profile.user_id]);
 
+  useEffect(() => {
+    activeConferenceRef.current = activeConference;
+  }, [activeConference]);
+
   const persistPreferences = useCallback(async (next: { prefer_offline_mode?: boolean; multiplo_padrao?: number; cd_ativo?: number | null }) => {
     const current = await getTransferenciaCdPreferences(profile.user_id);
     await saveTransferenciaCdPreferences(profile.user_id, {
@@ -521,6 +526,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
 
   const setAndSaveActiveConference = useCallback(async (next: TransferenciaCdLocalConference) => {
     await saveLocalConference(next);
+    activeConferenceRef.current = next;
     setActiveConference(next);
     await refreshPendingState();
   }, [refreshPendingState]);
@@ -531,8 +537,21 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } else {
       clearDismissedReadOnlyConference();
     }
+    setShowFinalizeModal(false);
+    setFinalizeMotivo("");
+    setFinalizeError(null);
+    setExpandedCoddv(null);
+    setEditingCoddv(null);
+    setLastAddedCoddv(null);
+    setEditQtdInput("0");
+    setBarcodeInput("");
+    setOcorrenciaInput("");
+    activeConferenceRef.current = null;
     setActiveConference(null);
     setNfInput("");
+    window.requestAnimationFrame(() => {
+      nfRef.current?.focus();
+    });
   }, [activeConference, clearDismissedReadOnlyConference, dismissReadOnlyConference]);
 
   const activateConference = useCallback(async (
@@ -619,7 +638,20 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     try {
       const result = await syncPendingTransferenciaCdConferences(profile.user_id);
       await refreshPendingState();
-      if (activeConference) setActiveConference(await getLocalConference(activeConference.local_key));
+      const currentActive = activeConferenceRef.current;
+      if (currentActive) {
+        const refreshed = await getLocalConference(currentActive.local_key);
+        if (activeConferenceRef.current?.local_key === currentActive.local_key) {
+          if (refreshed) {
+            activeConferenceRef.current = refreshed;
+            setActiveConference(refreshed);
+          } else {
+            activeConferenceRef.current = null;
+            setActiveConference(null);
+            setNfInput("");
+          }
+        }
+      }
       if (!silent) {
         if (result.failed > 0) setErrorMessage(`${formatCountLabel(result.failed, "pendência", "pendências")} com falha na sincronização da Transferência CD.`);
         else if (result.processed > 0) setStatusMessage(`Sincronização concluída (${formatCountLabel(result.synced, "pendência processada", "pendências processadas")}).`);
@@ -630,7 +662,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusySync(false);
     }
-  }, [activeConference, busySync, isOnline, profile.user_id, refreshPendingState]);
+  }, [busySync, isOnline, profile.user_id, refreshPendingState]);
 
   const runManifestSync = useCallback(async () => {
     if (!isOnline || currentCd == null) {
