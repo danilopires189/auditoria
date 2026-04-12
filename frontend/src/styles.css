@@ -15001,6 +15001,17 @@ small {
   gap: 20px;
 }
 
+.ronda-confirm-dialog {
+  width: min(100%, 420px);
+  max-width: min(calc(100vw - 24px), 420px);
+}
+
+.ronda-confirm-dialog small {
+  color: #64738e;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 @media (min-width: 721px) {
   .ronda-page {
     place-items: start;
@@ -15081,12 +15092,19 @@ small {
   color: #7a5518;
 }
 
-.ronda-history-button .ronda-inline-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
+.ronda-history-button.btn {
+  border-color: #f0dca8;
   background: #fff6d8;
-  color: #9b6b12;
+  color: #6f4f1b;
+}
+
+.ronda-history-button.btn:hover:not(:disabled) {
+  border-color: #e5c36f;
+  background: #ffefbf;
+}
+
+.ronda-history-button .ronda-inline-icon {
+  color: #6f4f1b;
 }
 
 .ronda-inline-icon,
@@ -15700,6 +15718,12 @@ small {
 
   .ronda-history-filters {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ronda-zone-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .ronda-type-grid {

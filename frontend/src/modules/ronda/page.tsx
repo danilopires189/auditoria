@@ -38,6 +38,12 @@ interface RondaOfflineMeta {
   month_count: number;
 }
 
+interface RondaNoOccurrenceConfirmState {
+  title: string;
+  message: string;
+  helper: string;
+}
+
 const MODULE_DEF = getModuleByKeyOrThrow("ronda");
 const HISTORY_ALL_TYPES = "TODOS";
 const HISTORY_LIMIT = 200;
@@ -288,13 +294,20 @@ function renderZoneCardDetails(row: RondaQualidadeZoneSummary, expanded: boolean
     );
   }
 
+  if (!row.audited_in_month) return null;
+
   return (
     <div className="ronda-zone-card-details">
-      <span>{`${formatInteger(row.total_enderecos)} endereços`}</span>
-      {row.audited_in_month ? <span>{formatPercent(row.percentual_conformidade)}</span> : null}
-      {row.audited_in_month && row.last_audit_at ? <small>{`Última auditoria: ${formatDateTime(row.last_audit_at)}`}</small> : null}
+      <span>{formatPercent(row.percentual_conformidade)}</span>
+      {row.last_audit_at ? <small>{`Última auditoria: ${formatDateTime(row.last_audit_at)}`}</small> : null}
     </div>
   );
+}
+
+function zoneCardMetricLabel(row: RondaQualidadeZoneSummary): string {
+  return row.zone_type === "PUL"
+    ? formatCount(row.total_colunas, "coluna", "colunas")
+    : formatCount(row.total_enderecos, "endereço", "endereços");
 }
 
 function zoneCardBadgeLabel(row: RondaQualidadeZoneSummary): string {
@@ -305,6 +318,18 @@ function zoneCardBadgeLabel(row: RondaQualidadeZoneSummary): string {
 function zoneCardBadgeClass(row: RondaQualidadeZoneSummary): string {
   if (row.zone_type === "PUL" && row.total_auditorias > 0 && !row.audited_in_month) return "is-partial";
   return row.audited_in_month ? "is-audited" : "is-pending";
+}
+
+function hasNoOccurrenceAudit(
+  detail: RondaQualidadeZoneDetail | null,
+  zoneType: RondaQualidadeZoneType | null,
+  selectedPulColumn: number | null
+): boolean {
+  if (!detail || !zoneType) return false;
+  return detail.history_rows.some((session) => (
+    session.audit_result === "sem_ocorrencia"
+    && (zoneType !== "PUL" || session.coluna === selectedPulColumn)
+  ));
 }
 
 export default function RondaQualidadePage({ isOnline, profile }: RondaQualidadePageProps) {
@@ -342,6 +367,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   const [offlineMeta, setOfflineMeta] = useState<RondaOfflineMeta>({ updated_at: null, zone_count: 0, month_count: 0 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [noOccurrenceConfirm, setNoOccurrenceConfirm] = useState<RondaNoOccurrenceConfirmState | null>(null);
 
   const selectedMonthRef = selectedMonthStart;
   const selectedMonthLabel = useMemo(() => formatMonthLabel(selectedMonthStart), [selectedMonthStart]);
@@ -369,6 +395,20 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     () => (selectedPulColumn == null ? null : detail?.column_stats.find((row) => row.coluna === selectedPulColumn) ?? null),
     [detail?.column_stats, selectedPulColumn]
   );
+  const noOccurrenceAlreadyRegistered = useMemo(
+    () => hasNoOccurrenceAudit(detail, zoneType, selectedPulColumn),
+    [detail, selectedPulColumn, zoneType]
+  );
+  const noOccurrenceDisabledReason = useMemo(() => {
+    if (readOnlyCorrectionMode) return "Meses anteriores ficam apenas para consulta e correção.";
+    if (zoneType === "PUL" && selectedPulColumn == null) return "Selecione uma coluna para registrar sem ocorrência.";
+    if (noOccurrenceAlreadyRegistered) {
+      return zoneType === "PUL"
+        ? "Esta coluna já foi registrada sem ocorrência neste mês."
+        : "Esta zona já foi registrada sem ocorrência neste mês.";
+    }
+    return undefined;
+  }, [noOccurrenceAlreadyRegistered, readOnlyCorrectionMode, selectedPulColumn, zoneType]);
   const addressLevelOptions = useMemo(
     () => Array.from(new Set(addressOptions.map((option) => option.nivel).filter((nivel): nivel is string => Boolean(nivel)))).sort(compareAddressLevel),
     [addressOptions]
@@ -740,15 +780,44 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
       setErrorMessage("Selecione uma coluna do Pulmão antes de registrar a auditoria.");
       return;
     }
-    const targetLabel = zoneType === "PUL"
-      ? `a coluna ${selectedPulColumn} da zona ${selectedZone} de pulmão`
-      : `a zona ${selectedZone} de ${zoneTypeLabelLower(zoneType)}`;
-    if (!window.confirm(`Confirmar ${targetLabel} sem ocorrência?`)) return;
+    if (noOccurrenceAlreadyRegistered) {
+      setErrorMessage(zoneType === "PUL"
+        ? `A coluna ${selectedPulColumn} da zona ${selectedZone} já foi registrada sem ocorrência neste mês.`
+        : `A zona ${selectedZone} já foi registrada sem ocorrência neste mês.`);
+      return;
+    }
 
+    const targetLabel = zoneType === "PUL"
+      ? `coluna ${selectedPulColumn} da zona ${selectedZone}`
+      : `zona ${selectedZone}`;
+    setNoOccurrenceConfirm({
+      title: "Registrar auditoria sem ocorrência",
+      message: zoneType === "PUL"
+        ? `Confirma que a ${targetLabel} de pulmão foi auditada sem ocorrência?`
+        : `Confirma que a ${targetLabel} de separação foi auditada sem ocorrência?`,
+      helper: "Essa confirmação pode ser feita apenas uma vez no mês para esta referência. Se encontrar erro depois, use Adicionar ocorrência."
+    });
+  }, [activeCd, isOnline, noOccurrenceAlreadyRegistered, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
+
+  const confirmNoOccurrence = useCallback(async () => {
+    if (!isOnline || readOnlyCorrectionMode || !zoneType || !selectedZone || activeCd == null) return;
+    if (zoneType === "PUL" && selectedPulColumn == null) {
+      setNoOccurrenceConfirm(null);
+      setErrorMessage("Selecione uma coluna do Pulmão antes de registrar a auditoria.");
+      return;
+    }
+    if (noOccurrenceAlreadyRegistered) {
+      setNoOccurrenceConfirm(null);
+      setErrorMessage(zoneType === "PUL"
+        ? `A coluna ${selectedPulColumn} da zona ${selectedZone} já foi registrada sem ocorrência neste mês.`
+        : `A zona ${selectedZone} já foi registrada sem ocorrência neste mês.`);
+      return;
+    }
     setAuditBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
     try {
+      setNoOccurrenceConfirm(null);
       await submitRondaQualidadeAudit({
         cd: activeCd,
         zoneType,
@@ -768,7 +837,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     } finally {
       setAuditBusy(false);
     }
-  }, [activeCd, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
+  }, [activeCd, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, noOccurrenceAlreadyRegistered, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
 
   const handleSaveOccurrences = useCallback(async () => {
     if (!isOnline || readOnlyCorrectionMode || !zoneType || !selectedZone || activeCd == null) return;
@@ -999,7 +1068,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                             <div className="ronda-zone-card-top">
                               <div className="ronda-zone-card-title">
                                 <strong>{row.zona}</strong>
-                                {row.zone_type === "PUL" ? <small>{formatCount(row.total_colunas, "coluna", "colunas")}</small> : null}
+                                <small>{zoneCardMetricLabel(row)}</small>
                               </div>
                               <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                             </div>
@@ -1029,7 +1098,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                             <div className="ronda-zone-card-top">
                               <div className="ronda-zone-card-title">
                                 <strong>{row.zona}</strong>
-                                {row.zone_type === "PUL" ? <small>{formatCount(row.total_colunas, "coluna", "colunas")}</small> : null}
+                                <small>{zoneCardMetricLabel(row)}</small>
                               </div>
                               <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                             </div>
@@ -1082,8 +1151,8 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                               type="button"
                               className="btn btn-primary"
                               onClick={() => void handleSubmitNoOccurrence()}
-                              disabled={auditBusy || !isOnline || readOnlyCorrectionMode}
-                              title={readOnlyCorrectionMode ? "Meses anteriores ficam apenas para consulta e correção." : undefined}
+                              disabled={auditBusy || !isOnline || noOccurrenceDisabledReason != null}
+                              title={noOccurrenceDisabledReason}
                             >
                               <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
                               Sem ocorrência
@@ -1095,9 +1164,10 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                       {zoneType === "SEP" ? (
                         <div className="ronda-summary-grid">
                           <article className="ronda-summary-card"><span>Endereços</span><strong>{formatInteger(currentZoneSummary.total_enderecos)}</strong></article>
-                          <article className="ronda-summary-card"><span>Produtos únicos</span><strong>{formatInteger(currentZoneSummary.produtos_unicos)}</strong></article>
                           <article className="ronda-summary-card"><span>Endereços com ocorrência</span><strong>{formatInteger(currentZoneSummary.enderecos_com_ocorrencia)}</strong></article>
-                          <article className="ronda-summary-card"><span>% conformidade</span><strong>{formatPercent(currentZoneSummary.percentual_conformidade)}</strong></article>
+                          {currentZoneSummary.audited_in_month ? (
+                            <article className="ronda-summary-card"><span>% conformidade</span><strong>{formatPercent(currentZoneSummary.percentual_conformidade)}</strong></article>
+                          ) : null}
                           <article className="ronda-summary-card"><span>Auditorias no mês</span><strong>{formatInteger(currentZoneSummary.total_auditorias)}</strong></article>
                           <article className="ronda-summary-card"><span>Última auditoria</span><strong>{formatDateTime(currentZoneSummary.last_audit_at)}</strong></article>
                         </div>
@@ -1163,8 +1233,8 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                 type="button"
                                 className="btn btn-primary"
                                 onClick={() => void handleSubmitNoOccurrence()}
-                                disabled={auditBusy || !isOnline || readOnlyCorrectionMode || selectedPulColumn == null}
-                                title={selectedPulColumn == null ? "Selecione uma coluna para registrar sem ocorrência." : readOnlyCorrectionMode ? "Meses anteriores ficam apenas para consulta e correção." : undefined}
+                                disabled={auditBusy || !isOnline || noOccurrenceDisabledReason != null}
+                                title={noOccurrenceDisabledReason}
                               >
                                 <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
                                 Sem ocorrência
@@ -1264,6 +1334,27 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
           </div>
         </article>
       </section>
+
+      {noOccurrenceConfirm && typeof document !== "undefined"
+        ? createPortal(
+            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="ronda-sem-ocorrencia-title" onClick={() => setNoOccurrenceConfirm(null)}>
+              <div className="confirm-dialog ronda-confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="ronda-sem-ocorrencia-title">{noOccurrenceConfirm.title}</h3>
+                <p>{noOccurrenceConfirm.message}</p>
+                <small>{noOccurrenceConfirm.helper}</small>
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setNoOccurrenceConfirm(null)} disabled={auditBusy}>
+                    Cancelar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={() => void confirmNoOccurrence()} disabled={auditBusy}>
+                    {auditBusy ? "Registrando..." : "Confirmar sem ocorrência"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {composerOpen && selectedZone && zoneType && typeof document !== "undefined"
         ? createPortal(

@@ -33,6 +33,8 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("AUDIT_RESULT_INVALIDO")) return "Resultado da auditoria inválido.";
   if (normalized.includes("OCCURRENCES_INVALIDAS")) return "Lista de ocorrências inválida.";
   if (normalized.includes("SEM_OCORRENCIA_NAO_ACEITA_ITENS")) return "Auditoria sem ocorrência não pode ter itens.";
+  if (normalized.includes("SEM_OCORRENCIA_DUPLICADA_COLUNA")) return "Esta coluna já foi registrada sem ocorrência neste mês.";
+  if (normalized.includes("SEM_OCORRENCIA_DUPLICADA_ZONA")) return "Esta zona já foi registrada sem ocorrência neste mês.";
   if (normalized.includes("OCORRENCIA_OBRIGATORIA")) return "Adicione pelo menos uma ocorrência antes de salvar.";
   if (normalized.includes("ENDERECO_OBRIGATORIO")) return "Informe o endereço da ocorrência.";
   if (normalized.includes("MOTIVO_OBRIGATORIO")) return "Selecione o motivo da ocorrência.";
