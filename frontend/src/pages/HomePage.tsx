@@ -23,6 +23,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "produtividade",
   "pvps-alocacao",
   "ronda",
+  "transferencia-cd",
   "validar-enderecamento",
   "validar-etiqueta-pulmao",
   "zerados"

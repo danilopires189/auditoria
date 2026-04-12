@@ -47,6 +47,7 @@ interface RondaNoOccurrenceConfirmState {
 const MODULE_DEF = getModuleByKeyOrThrow("ronda");
 const HISTORY_ALL_TYPES = "TODOS";
 const HISTORY_LIMIT = 200;
+const PT_BR_COLLATOR = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
 
 function searchIcon() {
   return (
@@ -320,6 +321,14 @@ function zoneCardBadgeClass(row: RondaQualidadeZoneSummary): string {
   return row.audited_in_month ? "is-audited" : "is-pending";
 }
 
+function compareOccurrenceReason(
+  left: { motivo: string; endereco?: string },
+  right: { motivo: string; endereco?: string }
+): number {
+  return PT_BR_COLLATOR.compare(left.motivo, right.motivo)
+    || PT_BR_COLLATOR.compare(left.endereco ?? "", right.endereco ?? "");
+}
+
 function hasNoOccurrenceAudit(
   detail: RondaQualidadeZoneDetail | null,
   zoneType: RondaQualidadeZoneType | null,
@@ -377,7 +386,10 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   const isCurrentMonthSelected = selectedMonthStart === currentMonthStart;
   const readOnlyCorrectionMode = !isCurrentMonthSelected;
   const shouldUseOfflineData = preferOfflineMode || !isOnline;
-  const reasonOptions = zoneType === "PUL" ? RONDA_QUALIDADE_MOTIVOS_PUL : RONDA_QUALIDADE_MOTIVOS_SEP;
+  const reasonOptions = useMemo(
+    () => [...(zoneType === "PUL" ? RONDA_QUALIDADE_MOTIVOS_PUL : RONDA_QUALIDADE_MOTIVOS_SEP)].sort((left, right) => PT_BR_COLLATOR.compare(left, right)),
+    [zoneType]
+  );
   const unauditedZones = useMemo(() => zoneRows.filter((row) => !row.audited_in_month), [zoneRows]);
   const auditedZones = useMemo(() => zoneRows.filter((row) => row.audited_in_month), [zoneRows]);
   const totalPulColumns = useMemo(() => zoneRows.reduce((total, row) => total + row.total_colunas, 0), [zoneRows]);
@@ -1272,7 +1284,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                   </div>
                                 ) : (
                                   <div className="ronda-occurrence-list">
-                                    {session.occurrences.map((occurrence) => (
+                                    {[...session.occurrences].sort(compareOccurrenceReason).map((occurrence) => (
                                       <article key={occurrence.occurrence_id} className="ronda-occurrence-card">
                                         <div className="ronda-occurrence-head">
                                           <strong>{occurrence.motivo}</strong>
@@ -1281,6 +1293,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                           </span>
                                         </div>
                                         <div className="ronda-occurrence-meta">
+                                          {zoneType === "PUL" && occurrence.nivel ? <span>{`Nível: ${occurrence.nivel}`}</span> : null}
                                           <span>{`Endereço: ${occurrence.endereco}`}</span>
                                           {zoneType === "PUL" && occurrence.coluna != null ? <span>{`Coluna: ${occurrence.coluna}`}</span> : null}
                                           <span>{`Registro: ${formatDateTime(occurrence.created_at)}`}</span>
@@ -1586,12 +1599,12 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
 
                 {!historyBusy && historyRows.length > 0 ? (
                   <div className="ronda-history-list">
-                    {historyRows.map((row) => (
+                    {[...historyRows].sort(compareOccurrenceReason).map((row) => (
                       <article key={row.occurrence_id} className="ronda-history-row">
                         <div className="ronda-history-row-head">
                           <div>
                             <strong>{row.motivo}</strong>
-                            <span>{`${zoneTypeLabel(row.zone_type)} | Zona ${row.zona} | Endereço ${row.endereco}`}</span>
+                            <span>{`${zoneTypeLabel(row.zone_type)} | Zona ${row.zona}${row.nivel ? ` | Nível ${row.nivel}` : ""} | Endereço ${row.endereco}`}</span>
                           </div>
                           <span className={`ronda-correction-pill is-${row.correction_status}`}>
                             {correctionStatusLabel(row.correction_status)}
