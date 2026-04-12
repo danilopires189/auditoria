@@ -40,6 +40,7 @@ import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
 import type { AuditoriaCaixaModuleProfile } from "./modules/auditoria-caixa/types";
 import { clearUserAuditoriaCaixaSessionCache } from "./modules/auditoria-caixa/storage";
+import type { CheckListModuleProfile } from "./modules/check-list/types";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
 import type { GestaoEstoqueModuleProfile } from "./modules/gestao-estoque/types";
@@ -2194,6 +2195,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const checkListProfile = useMemo<CheckListModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const controleValidadeProfile = useMemo<ControleValidadeModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2628,7 +2641,16 @@ export default function App() {
               )
             }
           />
-          <Route path="/modulos/check-list" element={<CheckListPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/check-list"
+            element={
+              checkListProfile ? (
+                <CheckListPage isOnline={isOnline} profile={checkListProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route
             path="/modulos/coleta-mercadoria"
             element={

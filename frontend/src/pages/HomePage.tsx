@@ -10,6 +10,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "auditoria-caixa",
   "atividade-extra",
   "busca-produto",
+  "check-list",
   "coleta-mercadoria",
   "conferencia-entrada-notas",
   "conferencia-pedido-direto",
