@@ -22,6 +22,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "meta-mes",
   "produtividade",
   "pvps-alocacao",
+  "ronda",
   "validar-enderecamento",
   "validar-etiqueta-pulmao",
   "zerados"

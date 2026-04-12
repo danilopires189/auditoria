@@ -62,6 +62,7 @@ import type { InventarioModuleProfile } from "./modules/zerados/types";
 import { clearUserInventarioSessionCache } from "./modules/zerados/storage";
 import type { PvpsAlocacaoModuleProfile } from "./modules/pvps-alocacao/types";
 import type { ProdutividadeModuleProfile } from "./modules/produtividade/types";
+import type { RondaQualidadeModuleProfile } from "./modules/ronda/types";
 import type { ControleValidadeModuleProfile } from "./modules/controle-validade/types";
 import { clearUserControleValidadeCache } from "./modules/controle-validade/storage";
 
@@ -2205,6 +2206,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const rondaQualidadeProfile = useMemo<RondaQualidadeModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const atividadeExtraProfile = useMemo<AtividadeExtraModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2687,7 +2700,16 @@ export default function App() {
             }
           />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
-          <Route path="/modulos/ronda" element={<RondaPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/ronda"
+            element={
+              rondaQualidadeProfile ? (
+                <RondaPage isOnline={isOnline} profile={rondaQualidadeProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route
             path="/modulos/meta-mes"
             element={

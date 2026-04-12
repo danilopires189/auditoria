@@ -14995,3 +14995,861 @@ small {
     padding: 10px 14px;
   }
 }
+
+.ronda-page {
+  display: grid;
+  gap: 20px;
+}
+
+@media (min-width: 721px) {
+  .ronda-page {
+    place-items: start;
+    align-content: start;
+  }
+}
+
+.ronda-head {
+  display: grid;
+  gap: 3px;
+}
+
+.ronda-head h2 {
+  margin: 0;
+  font-size: 1.02rem;
+  color: #12305e;
+}
+
+.ronda-head p {
+  margin: 0;
+  color: #445474;
+  font-size: 0.87rem;
+  font-weight: 400;
+  text-align: left;
+}
+
+.ronda-head .ronda-meta-line {
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.ronda-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ronda-actions-row .btn {
+  padding: 9px 11px;
+  font-size: 0.88rem;
+}
+
+.ronda-month-rule {
+  border-radius: 18px;
+  border: 1px solid rgba(18, 56, 115, 0.12);
+  background: linear-gradient(160deg, rgba(255, 244, 226, 0.92), rgba(255, 250, 240, 0.96));
+  color: #6f4f1b;
+  padding: 14px 16px;
+  line-height: 1.45;
+  box-shadow: 0 12px 24px rgba(9, 21, 39, 0.04);
+}
+
+.ronda-month-rule.is-current {
+  background: linear-gradient(160deg, rgba(230, 242, 255, 0.96), rgba(244, 248, 253, 0.98));
+  color: #20477b;
+}
+
+.ronda-history-button,
+.ronda-detail-actions .btn,
+.ronda-sheet-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ronda-sync-btn,
+.ronda-history-button,
+.ronda-offline-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ronda-offline-toggle.is-active {
+  border-color: #c6a25f;
+  background: #f6ecd6;
+  color: #7a5518;
+}
+
+.ronda-history-button .ronda-inline-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #fff6d8;
+  color: #9b6b12;
+}
+
+.ronda-inline-icon,
+.ronda-search-icon,
+.ronda-search-clear,
+.ronda-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ronda-inline-icon svg,
+.ronda-search-icon svg,
+.ronda-search-clear svg,
+.ronda-close-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ronda-actions-row .ronda-inline-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+
+.ronda-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ronda-type-card {
+  border: 1px solid rgba(18, 56, 115, 0.12);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(246, 249, 253, 0.96));
+  padding: 14px 16px;
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  box-shadow: 0 8px 18px rgba(8, 22, 43, 0.05);
+}
+
+.ronda-type-card:hover,
+.ronda-type-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(18, 56, 115, 0.26);
+  box-shadow: 0 14px 26px rgba(8, 22, 43, 0.09);
+}
+
+.ronda-type-card.is-active {
+  border-color: rgba(22, 132, 86, 0.28);
+  background: linear-gradient(145deg, #ffffff, #effbf4);
+  box-shadow: 0 16px 28px rgba(22, 132, 86, 0.1);
+}
+
+.ronda-type-card.is-active .ronda-type-card-head span {
+  background: rgba(22, 132, 86, 0.12);
+  color: #11724b;
+}
+
+.ronda-type-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ronda-type-card-head strong {
+  font-family: "Sora", sans-serif;
+  font-size: 0.98rem;
+  color: #123873;
+}
+
+.ronda-type-card-head span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(18, 56, 115, 0.08);
+  color: #20477b;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.ronda-type-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.ronda-layout {
+  display: grid;
+  grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.ronda-zones-panel,
+.ronda-detail-panel {
+  border-radius: 24px;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 253, 0.98));
+  border: 1px solid rgba(18, 56, 115, 0.1);
+  box-shadow: 0 18px 34px rgba(8, 22, 43, 0.08);
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+
+.ronda-panel-head,
+.ronda-zone-section-head,
+.ronda-stat-block-head,
+.ronda-session-head,
+.ronda-occurrence-head,
+.ronda-history-row-head,
+.ronda-sheet-head,
+.ronda-draft-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ronda-panel-head h3,
+.ronda-stat-block-head h4,
+.ronda-sheet-head h3 {
+  margin: 0;
+  font-family: "Sora", sans-serif;
+  color: #123873;
+}
+
+.ronda-panel-head span,
+.ronda-zone-section-head span,
+.ronda-stat-block-head span,
+.ronda-sheet-head span,
+.ronda-session-head span,
+.ronda-history-row-head span,
+.ronda-draft-head span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ronda-search-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 10px 0 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(18, 56, 115, 0.14);
+  background: rgba(243, 247, 252, 0.96);
+}
+
+.ronda-search-icon {
+  color: #56729d;
+}
+
+.ronda-search-field input {
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+}
+
+.ronda-search-clear,
+.ronda-close-btn {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(18, 56, 115, 0.08);
+  color: #20477b;
+  cursor: pointer;
+}
+
+.ronda-zone-section,
+.ronda-history-section,
+.ronda-stat-block {
+  display: grid;
+  gap: 12px;
+}
+
+.ronda-zone-list,
+.ronda-session-list,
+.ronda-draft-list,
+.ronda-history-list,
+.ronda-occurrence-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ronda-zone-card,
+.ronda-mini-card,
+.ronda-session-card,
+.ronda-occurrence-card,
+.ronda-history-row,
+.ronda-draft-card,
+.ronda-empty-card,
+.ronda-summary-card {
+  border-radius: 18px;
+  border: 1px solid rgba(18, 56, 115, 0.12);
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(9, 21, 39, 0.05);
+}
+
+.ronda-zone-card {
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.ronda-zone-card:hover,
+.ronda-zone-card:focus-visible,
+.ronda-zone-card.is-active {
+  transform: translateY(-1px);
+  border-color: rgba(18, 56, 115, 0.3);
+  box-shadow: 0 16px 28px rgba(9, 21, 39, 0.09);
+}
+
+.ronda-zone-card.is-audited {
+  background: linear-gradient(160deg, #ffffff, #f3f8f6);
+}
+
+.ronda-zone-card-top,
+.ronda-zone-card-stats,
+.ronda-zone-card-details,
+.ronda-occurrence-meta,
+.ronda-occurrence-footer,
+.ronda-detail-actions,
+.ronda-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ronda-zone-card-top {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ronda-zone-card-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ronda-zone-card-top strong,
+.ronda-session-head strong,
+.ronda-occurrence-head strong,
+.ronda-history-row-head strong,
+.ronda-draft-head strong {
+  font-family: "Sora", sans-serif;
+  color: #123873;
+}
+
+.ronda-zone-card-top strong {
+  font-size: 0.98rem;
+  line-height: 1.15;
+}
+
+.ronda-zone-card-stats span,
+.ronda-zone-card-details span,
+.ronda-occurrence-meta span,
+.ronda-occurrence-footer small,
+.ronda-zone-card small {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ronda-zone-card-details {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 2px;
+}
+
+.ronda-zone-card-details small {
+  width: 100%;
+}
+
+.ronda-zone-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+.ronda-correction-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.ronda-zone-badge.is-pending,
+.ronda-correction-pill.is-nao_corrigido {
+  background: rgba(242, 63, 95, 0.1);
+  color: #b13047;
+}
+
+.ronda-zone-badge.is-partial {
+  background: rgba(221, 150, 33, 0.13);
+  color: #946118;
+}
+
+.ronda-zone-badge.is-audited,
+.ronda-correction-pill.is-corrigido {
+  background: rgba(14, 159, 110, 0.12);
+  color: #0e7f58;
+}
+
+.ronda-empty-card,
+.ronda-intro-card,
+.ronda-detail-empty,
+.ronda-session-empty {
+  padding: 18px;
+  color: var(--muted);
+}
+
+.ronda-detail-empty,
+.ronda-intro-card {
+  place-content: center;
+}
+
+.ronda-detail-empty {
+  min-height: 220px;
+}
+
+.ronda-intro-card {
+  display: grid;
+  gap: 5px;
+  min-height: auto;
+  padding: 14px 16px;
+  place-content: start;
+  text-align: left;
+  border-style: dashed;
+  background: linear-gradient(145deg, #ffffff, #f7faff);
+}
+
+.ronda-intro-card strong {
+  font-family: "Sora", sans-serif;
+  font-size: 0.96rem;
+  color: #123873;
+}
+
+.ronda-intro-card p {
+  margin: 0;
+  color: #445474;
+  font-size: 0.88rem;
+  font-weight: 400;
+  line-height: 1.38;
+  text-align: left;
+}
+
+.ronda-intro-card p strong {
+  color: #123873;
+  font-weight: 700;
+}
+
+.ronda-summary-grid,
+.ronda-pul-grid,
+.ronda-mini-card-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.ronda-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ronda-summary-card {
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.ronda-summary-card span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.ronda-summary-card strong,
+.ronda-mini-card strong {
+  font-family: "Sora", sans-serif;
+  color: #123873;
+}
+
+.ronda-pul-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ronda-stat-block {
+  padding: 16px;
+  border-radius: 20px;
+  background: linear-gradient(165deg, rgba(242, 246, 252, 0.95), rgba(255, 255, 255, 0.98));
+  border: 1px solid rgba(18, 56, 115, 0.12);
+}
+
+.ronda-mini-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.ronda-mini-card {
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.ronda-column-card {
+  width: 100%;
+  border: 1px solid rgba(18, 56, 115, 0.12);
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.ronda-column-card:hover,
+.ronda-column-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(18, 56, 115, 0.26);
+  box-shadow: 0 14px 24px rgba(9, 21, 39, 0.08);
+}
+
+.ronda-column-card.is-active {
+  border-color: rgba(22, 132, 86, 0.36);
+  background: linear-gradient(145deg, #ffffff, #effbf4);
+  box-shadow: 0 16px 26px rgba(22, 132, 86, 0.1);
+}
+
+.ronda-column-card.is-active small {
+  color: #11724b;
+  font-weight: 700;
+}
+
+.ronda-column-audit-panel {
+  grid-column: 1 / -1;
+}
+
+.ronda-mini-card span,
+.ronda-mini-card small {
+  color: var(--muted);
+}
+
+.ronda-session-card,
+.ronda-occurrence-card,
+.ronda-history-row,
+.ronda-draft-card {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.ronda-occurrence-card p,
+.ronda-history-row p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.ronda-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+  display: grid;
+  place-items: center;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 18px)
+    calc(env(safe-area-inset-right, 0px) + 18px)
+    calc(env(safe-area-inset-bottom, 0px) + 18px)
+    calc(env(safe-area-inset-left, 0px) + 18px);
+  background: rgba(9, 19, 34, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.ronda-sheet {
+  width: min(100%, 760px);
+  max-height: min(88vh, 920px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  border-radius: 24px;
+  background: linear-gradient(160deg, #ffffff, #f5f8fd);
+  border: 1px solid rgba(18, 56, 115, 0.14);
+  box-shadow: 0 24px 54px rgba(7, 18, 33, 0.28);
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.ronda-sheet .field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ronda-sheet .field span {
+  color: #273956;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.ronda-sheet .field input,
+.ronda-sheet .field select,
+.ronda-sheet .field textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.ronda-sheet .field textarea {
+  resize: vertical;
+}
+
+.ronda-sheet .field small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.ronda-sheet-wide {
+  width: min(100%, 1120px);
+}
+
+.ronda-sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 8px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(245, 248, 253, 0.98));
+}
+
+.ronda-history-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 180px)) minmax(260px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.ronda-history-search {
+  min-width: 0;
+}
+
+.ronda-history-row-head > div,
+.ronda-session-head > div,
+.ronda-panel-head > div,
+.ronda-sheet-head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.ronda-back-btn {
+  display: none;
+}
+
+@media (max-width: 1080px) {
+  .ronda-layout,
+  .ronda-pul-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ronda-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ronda-history-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .ronda-panel-head,
+  .ronda-sheet-head,
+  .ronda-zone-section-head,
+  .ronda-stat-block-head,
+  .ronda-session-head,
+  .ronda-occurrence-head,
+  .ronda-history-row-head,
+  .ronda-draft-head {
+    grid-template-columns: minmax(0, 1fr);
+    display: grid;
+  }
+
+  .ronda-history-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ronda-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .ronda-type-card {
+    padding: 12px 10px;
+    border-radius: 16px;
+  }
+
+  .ronda-type-card-head {
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .ronda-type-card-head strong {
+    font-size: 0.9rem;
+  }
+
+  .ronda-type-card-head span {
+    min-height: 22px;
+    padding: 0 8px;
+    font-size: 0.66rem;
+  }
+
+  .ronda-type-card p {
+    font-size: 0.78rem;
+    line-height: 1.28;
+  }
+
+  .ronda-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ronda-zones-panel,
+  .ronda-detail-panel {
+    padding: 14px;
+  }
+
+  /* Navegação mobile: ao selecionar zona, exibe só o painel de detalhe */
+  .ronda-layout.has-zone .ronda-zones-panel {
+    display: none;
+  }
+
+  /* Botão voltar visível apenas no mobile */
+  .ronda-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 44px;
+    padding: 0 16px 0 10px;
+    border: 1px solid rgba(18, 56, 115, 0.16);
+    border-radius: 999px;
+    background: rgba(243, 247, 252, 0.98);
+    color: #20477b;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    align-self: start;
+    transition: background 160ms ease, border-color 160ms ease;
+  }
+
+  .ronda-back-btn:active {
+    background: rgba(220, 232, 248, 0.98);
+    border-color: rgba(18, 56, 115, 0.28);
+  }
+
+  /* Bottom sheet nos modais */
+  .ronda-overlay {
+    align-items: flex-end;
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 0 0;
+  }
+
+  .ronda-sheet,
+  .ronda-sheet-wide {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px);
+    border-radius: 24px 24px 0 0;
+    padding: 16px 16px max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  }
+
+  .ronda-sheet {
+    gap: 12px;
+  }
+
+  .ronda-draft-card {
+    padding: 12px;
+  }
+
+  /* Drag handle visual no sheet */
+  .ronda-sheet-head::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(18, 56, 115, 0.16);
+    margin: 0 auto 10px;
+  }
+
+  .ronda-actions-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .ronda-actions-row .btn {
+    width: 100%;
+    min-width: 0;
+    padding: 9px 6px;
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+    font-size: 0.78rem;
+  }
+
+  /* Ações lado a lado no mobile */
+  .ronda-detail-actions,
+  .ronda-sheet-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ronda-detail-actions .btn,
+  .ronda-sheet-actions .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .ronda-zone-card-stats,
+  .ronda-occurrence-meta,
+  .ronda-occurrence-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Touch targets maiores */
+  .ronda-search-clear,
+  .ronda-close-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ronda-zone-card {
+    padding: 16px;
+  }
+}
