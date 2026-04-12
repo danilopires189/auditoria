@@ -689,7 +689,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       "Ent. Notas",
       "Transf. CD",
       "Reg Lojas",
-      "Aud. Caixa"
+      "Aud. Caixa",
+      "Ronda Qual."
     ]];
     const detailsBody = preview.rankingRows.map((row, index) => [
       String(row.posicao > 0 ? row.posicao : index + 1),
@@ -708,7 +709,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       formatRankingPdfPointsAndCount(row.conf_entrada_pontos, row.conf_entrada_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_transferencia_cd_pontos, row.conf_transferencia_cd_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas"),
-      formatRankingPdfPointsAndCount(row.aud_caixa_pontos, row.aud_caixa_qtd, "volume", "volumes")
+      formatRankingPdfPointsAndCount(row.aud_caixa_pontos, row.aud_caixa_qtd, "volume", "volumes"),
+      formatRankingPdfPointsAndCount(row.ronda_quality_pontos, row.ronda_quality_qtd, "aud.", "aud.")
     ]);
     autoTable(doc, {
       startY: 60,
@@ -740,7 +742,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         detailsHead[0],
         detailsBody,
         contentWidth,
-        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
         {
           0: 24,
           1: 92,
@@ -757,7 +759,9 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           12: 42,
           13: 44,
           14: 44,
-          15: 42
+          15: 42,
+          16: 42,
+          17: 46
         },
         {
           1: 122,
@@ -772,7 +776,9 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           12: 50,
           13: 54,
           14: 54,
-          15: 50
+          15: 50,
+          16: 50,
+          17: 56
         }
       )
     });
@@ -1156,6 +1162,15 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                             row.aud_caixa_qtd,
                                             "volume",
                                             "volumes"
+                                          )
+                                        },
+                                        {
+                                          label: "Ronda Qualidade",
+                                          value: formatRankingPointsAndCount(
+                                            row.ronda_quality_pontos,
+                                            row.ronda_quality_qtd,
+                                            "aud.",
+                                            "aud."
                                           )
                                         }
                                       ].map((item) => (
