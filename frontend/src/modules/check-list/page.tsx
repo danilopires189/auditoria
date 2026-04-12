@@ -483,7 +483,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
           <div className="module-topbar-user-side">
             <span className="module-user-greeting">Olá, {displayUserName}</span>
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
-              {isOnline ? "Online" : "Offline"}
+              {isOnline ? "🟢 Online" : "🔴 Offline"}
             </span>
           </div>
         </div>
