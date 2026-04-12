@@ -45,6 +45,7 @@ export interface ChecklistFinalizePayload {
 export interface ChecklistAuditSummary {
   audit_id: string;
   cd: number;
+  cd_nome: string | null;
   checklist_key: ChecklistKey;
   checklist_title: string;
   checklist_version: string;

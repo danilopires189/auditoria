@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia, monthKeyBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -27,6 +28,12 @@ interface CheckListPageProps {
 }
 
 type AnswerDraft = Record<number, ChecklistAnswer | "">;
+type CompletionPopup = {
+  checklistTitle: string;
+  conformityPercent: number;
+  nonConformities: number;
+  auditId: string;
+} | null;
 
 const MODULE_DEF = getModuleByKeyOrThrow("check-list");
 const ANSWER_OPTIONS: ChecklistAnswer[] = ["Sim", "Não", "N.A."];
@@ -110,20 +117,46 @@ function nextPdfY(doc: jsPDF, fallback: number): number {
   return typeof last === "number" && Number.isFinite(last) ? last + 14 : fallback;
 }
 
-function buildPdf(detail: ChecklistAuditDetail): void {
+async function imageUrlToDataUrl(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function resolvePdfCdLabel(detail: ChecklistAuditDetail): string {
+  const fullName = detail.cd_nome?.trim().replace(/\s+/g, " ");
+  if (fullName) return fullName;
+  return `CD ${String(detail.cd).padStart(2, "0")}`;
+}
+
+async function buildPdf(detail: ChecklistAuditDetail): Promise<void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const percent = detail.conformity_percent;
   const generatedAt = formatDateTimeBrasilia(new Date().toISOString(), { includeSeconds: true });
-  const cdLabel = `CD ${String(detail.cd).padStart(2, "0")}`;
+  const cdLabel = resolvePdfCdLabel(detail);
   const nonConforming = detail.answers.filter((answer) => answer.is_nonconformity);
+  const logoDataUrl = await imageUrlToDataUrl(pmImage);
+
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, "PNG", 40, 28, 42, 42);
+  }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text(detail.checklist_title, 40, 42);
+  doc.text(detail.checklist_title, 96, 42);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text(`Versão ${detail.checklist_version} | ${cdLabel}`, 40, 58);
-  doc.text(`Gerado em: ${generatedAt}`, 40, 72);
+  doc.text(`Versão ${detail.checklist_version} | ${cdLabel}`, 96, 58);
+  doc.text(`Gerado em: ${generatedAt}`, 96, 72);
 
   autoTable(doc, {
     startY: 88,
@@ -131,6 +164,7 @@ function buildPdf(detail: ChecklistAuditDetail): void {
     head: [["Campo", "Valor"]],
     body: [
       ["Data da auditoria", formatDateTimeBrasilia(detail.created_at, { includeSeconds: true })],
+      ["CD/Depósito", cdLabel],
       ["Auditor", `${detail.auditor_nome} | MAT ${detail.auditor_mat}`],
       ["Colaborador avaliado", `${detail.evaluated_nome} | MAT ${detail.evaluated_mat}`],
       ["Checklist", `${detail.checklist_title} | ${detail.total_items} itens`],
@@ -213,6 +247,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const currentCdLabel = useMemo(() => resolveCdLabel(profile, activeCd), [activeCd, profile]);
   const canSeeAdmin = profile.role === "admin";
+  const isGlobalAdmin = profile.role === "admin" && profile.cd_default == null;
 
   const [selectedChecklistKey, setSelectedChecklistKey] = useState<ChecklistKey | null>(null);
   const selectedChecklist = useMemo(
@@ -229,6 +264,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
   const [busySubmit, setBusySubmit] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [completionPopup, setCompletionPopup] = useState<CompletionPopup>(null);
 
   const [reportDtIni, setReportDtIni] = useState(todayIsoBrasilia());
   const [reportDtFim, setReportDtFim] = useState(todayIsoBrasilia());
@@ -378,6 +414,8 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
       setErrorMessage("Confirme a assinatura eletrônica antes de finalizar.");
       return;
     }
+    const shouldFinalize = window.confirm(`Deseja finalizar ${selectedChecklist.title}? Após concluir, a auditoria será salva e você voltará para a tela inicial do Check List.`);
+    if (!shouldFinalize) return;
 
     setBusySubmit(true);
     try {
@@ -398,9 +436,16 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
           answer: answers[item.item_number] as ChecklistAnswer
         }))
       });
-      setStatusMessage(`${selectedChecklist.title} finalizado. Conformidade: ${formatPercent(result.conformity_percent)}.`);
+      setStatusMessage(null);
+      setCompletionPopup({
+        checklistTitle: selectedChecklist.title,
+        conformityPercent: result.conformity_percent,
+        nonConformities: result.non_conformities,
+        auditId: result.audit_id
+      });
       setErrorMessage(null);
-      clearFormForDefinition(selectedChecklist);
+      setSelectedChecklistKey(null);
+      clearFormForDefinition(null);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao finalizar checklist.");
     } finally {
@@ -427,9 +472,13 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
       setReportError("Consulta admin disponível apenas online.");
       return;
     }
-    const parsedCd = reportCd.trim() ? Number.parseInt(reportCd.trim(), 10) : null;
-    if (reportCd.trim() && !Number.isFinite(parsedCd)) {
+    const parsedCd = isGlobalAdmin && reportCd.trim() ? Number.parseInt(reportCd.trim(), 10) : null;
+    if (isGlobalAdmin && reportCd.trim() && !Number.isFinite(parsedCd)) {
       setReportError("Informe um CD válido.");
+      return;
+    }
+    if (!isGlobalAdmin && activeCd == null) {
+      setReportError("CD não definido para este usuário.");
       return;
     }
 
@@ -438,7 +487,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
       const rows = await fetchChecklistAdminList({
         dt_ini: reportDtIni,
         dt_fim: reportDtFim,
-        cd: parsedCd,
+        cd: isGlobalAdmin ? parsedCd : activeCd,
         auditor: reportAuditor.trim() || null,
         evaluated: reportEvaluated.trim() || null,
         checklist_key: reportChecklistKey || null,
@@ -452,7 +501,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
     } finally {
       setReportBusy(false);
     }
-  }, [canSeeAdmin, isOnline, reportAuditor, reportCd, reportDtFim, reportDtIni, reportEvaluated, reportChecklistKey]);
+  }, [activeCd, canSeeAdmin, isGlobalAdmin, isOnline, reportAuditor, reportCd, reportDtFim, reportDtIni, reportEvaluated, reportChecklistKey]);
 
   useEffect(() => {
     if (canSeeAdmin && isOnline && !initialReportLoadedRef.current) {
@@ -465,7 +514,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
     setReportExportingId(auditId);
     try {
       const detail = await fetchChecklistDetail(auditId);
-      buildPdf(detail);
+      await buildPdf(detail);
       setReportMessage("PDF gerado com sucesso.");
       setReportError(null);
     } catch (error) {
@@ -738,10 +787,17 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                     ))}
                   </select>
                 </label>
-                <label>
-                  CD
-                  <input type="text" inputMode="numeric" value={reportCd} onChange={(event) => setReportCd(event.target.value.replace(/\D/g, ""))} placeholder="Todos" />
-                </label>
+                {isGlobalAdmin ? (
+                  <label className="checklist-report-cd-filter">
+                    CD
+                    <input type="text" inputMode="numeric" value={reportCd} onChange={(event) => setReportCd(event.target.value.replace(/\D/g, ""))} placeholder="Todos" />
+                  </label>
+                ) : (
+                  <label className="checklist-report-cd-filter">
+                    CD
+                    <input type="text" value={currentCdLabel} readOnly className="checklist-readonly-input" />
+                  </label>
+                )}
                 <label>
                   Auditor
                   <input type="text" value={reportAuditor} onChange={(event) => setReportAuditor(event.target.value)} placeholder="Nome ou matrícula" />
@@ -765,7 +821,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                       <strong>{row.checklist_title}</strong>
                       <span>{`${row.evaluated_nome} | MAT ${row.evaluated_mat}`}</span>
                       <span>{`Auditor: ${row.auditor_nome} | MAT ${row.auditor_mat}`}</span>
-                      <span>{`${formatDateTimeBrasilia(row.created_at, { includeSeconds: true })} | CD ${String(row.cd).padStart(2, "0")}`}</span>
+                      <span>{`${formatDateTimeBrasilia(row.created_at, { includeSeconds: true })} | ${row.cd_nome || `CD ${String(row.cd).padStart(2, "0")}`}`}</span>
                     </div>
                     <div className="checklist-report-stats">
                       <span>{`${row.non_conformities} NC`}</span>
@@ -783,6 +839,32 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                 ))}
               </div>
             </section>
+          ) : null}
+
+          {completionPopup ? (
+            <div className="checklist-completion-overlay" role="dialog" aria-modal="true" aria-labelledby="checklist-completion-title">
+              <div className="checklist-completion-dialog surface-enter">
+                <span className="checklist-completion-icon" aria-hidden="true">✓</span>
+                <div>
+                  <h3 id="checklist-completion-title">Checklist concluído</h3>
+                  <p>{completionPopup.checklistTitle}</p>
+                </div>
+                <div className="checklist-completion-metrics">
+                  <span>
+                    Conformidade
+                    <strong>{formatPercent(completionPopup.conformityPercent)}</strong>
+                  </span>
+                  <span>
+                    Não conformidades
+                    <strong>{completionPopup.nonConformities}</strong>
+                  </span>
+                </div>
+                <small>{`ID da auditoria: ${completionPopup.auditId}`}</small>
+                <button type="button" className="btn btn-primary" onClick={() => setCompletionPopup(null)}>
+                  Voltar ao início
+                </button>
+              </div>
+            </div>
           ) : null}
 
           <div className="checklist-footnote">

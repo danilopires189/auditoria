@@ -91,6 +91,7 @@ function mapSummary(raw: Record<string, unknown>): ChecklistAuditSummary {
   return {
     audit_id: parseString(raw.audit_id),
     cd: parseInteger(raw.cd),
+    cd_nome: parseNullableString(raw.cd_nome),
     checklist_key: parseChecklistKey(raw.checklist_key),
     checklist_title: parseString(raw.checklist_title, "DTO - Auditoria"),
     checklist_version: parseString(raw.checklist_version, "1.0"),
