@@ -352,7 +352,6 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   const [drafts, setDrafts] = useState<RondaQualidadeOccurrenceDraft[]>([emptyDraft()]);
   const [addressOptions, setAddressOptions] = useState<RondaQualidadeAddressOption[]>([]);
   const [addressesBusy, setAddressesBusy] = useState(false);
-  const [addressSearchByDraft, setAddressSearchByDraft] = useState<Record<number, string>>({});
   const [addressLevelFilter, setAddressLevelFilter] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyBusy, setHistoryBusy] = useState(false);
@@ -633,7 +632,6 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   useEffect(() => {
     if (!composerOpen) {
       setDrafts([emptyDraft()]);
-      setAddressSearchByDraft({});
       setAddressLevelFilter("");
       setAddressOptions([]);
     }
@@ -682,7 +680,6 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
 
   const openComposer = useCallback(() => {
     setDrafts([emptyDraft()]);
-    setAddressSearchByDraft({});
     setAddressLevelFilter("");
     setAddressOptions([]);
     setComposerOpen(true);
@@ -907,12 +904,12 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [historyOpen, isOnline, loadDetail, loadHistory, selectedZone]);
 
   const currentZoneSummary = detail ?? (selectedZone ? zoneRows.find((row) => row.zona === selectedZone) ?? null : null);
-  const getAddressOptionsForDraft = useCallback((index: number, draft: RondaQualidadeOccurrenceDraft) => {
-    const filtered = filterAddressOptions(addressOptions, addressSearchByDraft[index] ?? "", zoneType === "PUL" ? addressLevelFilter : "");
+  const getAddressOptionsForDraft = useCallback((draft: RondaQualidadeOccurrenceDraft) => {
+    const filtered = filterAddressOptions(addressOptions, "", zoneType === "PUL" ? addressLevelFilter : "");
     if (!draft.endereco || filtered.some((option) => option.endereco === draft.endereco)) return filtered;
     const selected = addressOptions.find((option) => option.endereco === draft.endereco);
     return selected ? [selected, ...filtered] : filtered;
-  }, [addressLevelFilter, addressOptions, addressSearchByDraft, zoneType]);
+  }, [addressLevelFilter, addressOptions, zoneType]);
 
   return (
     <>
@@ -985,7 +982,11 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                 >
                   <div className="ronda-type-card-head">
                     <strong>{zoneTypeLabel(type)}</strong>
-                    <span>{zoneType === type ? "Selecionado" : "Abrir"}</span>
+                    {zoneType === type ? (
+                      <span className="ronda-type-selected-dot" aria-label="Selecionado" title="Selecionado" />
+                    ) : (
+                      <span>Abrir</span>
+                    )}
                   </div>
                   <p>
                     {type === "SEP"
@@ -1431,18 +1432,6 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                       </label>
 
                       <label className="field">
-                        <span>Buscar endereço</span>
-                        <input
-                          type="text"
-                          value={addressSearchByDraft[index] ?? ""}
-                          onChange={(event) => setAddressSearchByDraft((current) => ({ ...current, [index]: event.target.value }))}
-                          placeholder="Busque por endereço, produto ou nível"
-                          autoComplete="off"
-                          disabled={auditBusy || addressesBusy}
-                        />
-                      </label>
-
-                      <label className="field">
                         <span>Endereço</span>
                         <select
                           value={draft.endereco}
@@ -1456,7 +1445,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                           disabled={auditBusy || addressesBusy || addressOptions.length === 0}
                         >
                           <option value="">Selecione o endereço</option>
-                          {getAddressOptionsForDraft(index, draft).map((option) => (
+                          {getAddressOptionsForDraft(draft).map((option) => (
                             <option key={`${option.endereco}:${option.nivel ?? "sem-nivel"}`} value={option.endereco}>
                               {addressOptionLabel(option)}
                             </option>
@@ -1465,8 +1454,8 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                         {addressOptions.length === 0 && !addressesBusy ? (
                           <small>Nenhum endereço disponível para a zona selecionada.</small>
                         ) : null}
-                        {getAddressOptionsForDraft(index, draft).length === 0 && addressOptions.length > 0 ? (
-                          <small>Nenhum endereço encontrado com a busca atual.</small>
+                        {getAddressOptionsForDraft(draft).length === 0 && addressOptions.length > 0 ? (
+                          <small>Nenhum endereço disponível com o filtro atual.</small>
                         ) : null}
                         {draft.endereco && addressOptions.some((option) => option.endereco === draft.endereco) ? (
                           <small>{`Selecionado: ${draft.endereco}`}</small>
