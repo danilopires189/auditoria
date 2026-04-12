@@ -32,8 +32,22 @@ type CompletionPopup = {
   checklistTitle: string;
   conformityPercent: number;
   nonConformities: number;
+  scoringMode: ChecklistDefinition["scoring_mode"];
+  riskScorePercent: number | null;
+  riskLevel: string | null;
+  scorePoints: number | null;
+  scoreMaxPoints: number | null;
   auditId: string;
 } | null;
+type DraftResult = {
+  conformityPercent: number;
+  nonConformities: number;
+  riskScorePercent: number | null;
+  riskLevel: string | null;
+  scorePoints: number | null;
+  scoreMaxPoints: number | null;
+  criticalFail: boolean;
+};
 
 const MODULE_DEF = getModuleByKeyOrThrow("check-list");
 const ANSWER_OPTIONS: ChecklistAnswer[] = ["Sim", "Não", "N.A."];
@@ -86,6 +100,11 @@ function formatPercent(value: number): string {
   return `${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}%`;
 }
 
+function formatPoints(value: number | null): string {
+  if (value == null) return "-";
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value);
+}
+
 function formatMonthYearPtBR(value: string): string {
   const matched = /^(\d{4})-(\d{2})$/.exec(value);
   return matched ? `${matched[2]}/${matched[1]}` : value;
@@ -98,6 +117,79 @@ function riskLabel(value: number): string {
   return "Acompanhamento";
 }
 
+function weightedRiskLevel(riskScore: number): string {
+  if (riskScore <= 20) return "CONTROLADO";
+  if (riskScore <= 40) return "ATENÇÃO";
+  if (riskScore <= 60) return "ALTO";
+  return "CRÍTICO";
+}
+
+function scoreRiskLevel(score: number, criticalFail: boolean): string {
+  if (criticalFail) return "ALTO";
+  if (score >= 90) return "BAIXO";
+  if (score >= 70) return "MÉDIO";
+  return "ALTO";
+}
+
+function calculateDraftResult(definition: ChecklistDefinition | null, answers: AnswerDraft): DraftResult {
+  if (!definition) {
+    return {
+      conformityPercent: 100,
+      nonConformities: 0,
+      riskScorePercent: null,
+      riskLevel: null,
+      scorePoints: null,
+      scoreMaxPoints: null,
+      criticalFail: false
+    };
+  }
+
+  const nonConformities = definition.items.filter((item) => answers[item.item_number] === "Não").length;
+  if (definition.scoring_mode === "risk_weighted") {
+    const applicable = definition.items.filter((item) => answers[item.item_number] !== "N.A.");
+    const maxRisk = applicable.reduce((total, item) => total + (item.item_weight ?? 0), 0);
+    const riskPoints = applicable.reduce((total, item) => total + (answers[item.item_number] === "Não" ? item.item_weight ?? 0 : 0), 0);
+    const riskScorePercent = maxRisk > 0 ? (riskPoints / maxRisk) * 100 : 0;
+    return {
+      conformityPercent: Math.max(0, 100 - riskScorePercent),
+      nonConformities,
+      riskScorePercent,
+      riskLevel: weightedRiskLevel(riskScorePercent),
+      scorePoints: null,
+      scoreMaxPoints: null,
+      criticalFail: false
+    };
+  }
+
+  if (definition.scoring_mode === "score_points") {
+    const applicable = definition.items.filter((item) => answers[item.item_number] !== "N.A.");
+    const scoreMaxPoints = applicable.reduce((total, item) => total + (item.max_points ?? 0), 0);
+    const scorePoints = applicable.reduce((total, item) => total + (answers[item.item_number] === "Sim" ? item.max_points ?? 0 : 0), 0);
+    const conformityPercent = scoreMaxPoints > 0 ? (scorePoints / scoreMaxPoints) * 100 : 100;
+    const criticalFail = applicable.some((item) => item.is_critical && answers[item.item_number] === "Não");
+    return {
+      conformityPercent,
+      nonConformities,
+      riskScorePercent: Math.max(0, 100 - conformityPercent),
+      riskLevel: scoreRiskLevel(conformityPercent, criticalFail),
+      scorePoints,
+      scoreMaxPoints,
+      criticalFail
+    };
+  }
+
+  const conformityPercent = definition.total_items > 0 ? (1 - (nonConformities / definition.total_items)) * 100 : 100;
+  return {
+    conformityPercent,
+    nonConformities,
+    riskScorePercent: null,
+    riskLevel: riskLabel(conformityPercent).toUpperCase(),
+    scorePoints: null,
+    scoreMaxPoints: null,
+    criticalFail: false
+  };
+}
+
 function sectionItems(definition: ChecklistDefinition, sectionKey: ChecklistSectionKey): ChecklistItem[] {
   return definition.items.filter((item) => item.section_key === sectionKey);
 }
@@ -105,11 +197,6 @@ function sectionItems(definition: ChecklistDefinition, sectionKey: ChecklistSect
 function countAnswered(definition: ChecklistDefinition | null, answers: AnswerDraft): number {
   if (!definition) return 0;
   return definition.items.filter((item) => answers[item.item_number]).length;
-}
-
-function countNonConformities(definition: ChecklistDefinition | null, answers: AnswerDraft): number {
-  if (!definition) return 0;
-  return definition.items.filter((item) => answers[item.item_number] === "Não").length;
 }
 
 function nextPdfY(doc: jsPDF, fallback: number): number {
@@ -138,9 +225,49 @@ function resolvePdfCdLabel(detail: ChecklistAuditDetail): string {
   return `CD ${String(detail.cd).padStart(2, "0")}`;
 }
 
+function evaluatedPdfLabel(detail: ChecklistAuditDetail): string {
+  if (detail.scoring_mode !== "simple") return "Auditoria por CD";
+  return `${detail.evaluated_nome} | MAT ${detail.evaluated_mat}`;
+}
+
+function resultLabel(detail: Pick<ChecklistAuditDetail, "scoring_mode" | "conformity_percent" | "risk_score_percent" | "risk_level" | "score_points" | "score_max_points">): string {
+  if (detail.scoring_mode === "risk_weighted") {
+    return `Risco ${formatPercent(detail.risk_score_percent ?? (100 - detail.conformity_percent))} | Nível ${detail.risk_level ?? "N/A"}`;
+  }
+  if (detail.scoring_mode === "score_points") {
+    return `Score ${formatPoints(detail.score_points)} de ${formatPoints(detail.score_max_points)} | ${formatPercent(detail.conformity_percent)} | Risco ${detail.risk_level ?? "N/A"}`;
+  }
+  return `${formatPercent(detail.conformity_percent)} | Risco ${riskLabel(detail.conformity_percent)}`;
+}
+
+function buildSectionSummary(detail: ChecklistAuditDetail): string[][] {
+  const sections = new Map<string, { total: number; no: number; yes: number; na: number; risk: number; score: number; max: number }>();
+  detail.answers.forEach((answer) => {
+    const current = sections.get(answer.section_title) ?? { total: 0, no: 0, yes: 0, na: 0, risk: 0, score: 0, max: 0 };
+    current.total += 1;
+    current.yes += answer.answer === "Sim" ? 1 : 0;
+    current.no += answer.answer === "Não" ? 1 : 0;
+    current.na += answer.answer === "N.A." ? 1 : 0;
+    current.risk += answer.risk_points ?? 0;
+    current.score += answer.earned_points ?? 0;
+    current.max += answer.answer === "N.A." ? 0 : answer.max_points ?? 0;
+    sections.set(answer.section_title, current);
+  });
+  return Array.from(sections.entries()).map(([section, values]) => [
+    section,
+    String(values.total),
+    String(values.no),
+    String(values.na),
+    detail.scoring_mode === "score_points"
+      ? `${formatPoints(values.score)} / ${formatPoints(values.max)}`
+      : detail.scoring_mode === "risk_weighted"
+        ? formatPoints(values.risk)
+        : "-"
+  ]);
+}
+
 async function buildPdf(detail: ChecklistAuditDetail): Promise<void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-  const percent = detail.conformity_percent;
   const generatedAt = formatDateTimeBrasilia(new Date().toISOString(), { includeSeconds: true });
   const cdLabel = resolvePdfCdLabel(detail);
   const nonConforming = detail.answers.filter((answer) => answer.is_nonconformity);
@@ -166,10 +293,10 @@ async function buildPdf(detail: ChecklistAuditDetail): Promise<void> {
       ["Data da auditoria", formatDateTimeBrasilia(detail.created_at, { includeSeconds: true })],
       ["CD/Depósito", cdLabel],
       ["Auditor", `${detail.auditor_nome} | MAT ${detail.auditor_mat}`],
-      ["Colaborador avaliado", `${detail.evaluated_nome} | MAT ${detail.evaluated_mat}`],
+      [detail.scoring_mode === "simple" ? "Colaborador avaliado" : "Escopo", evaluatedPdfLabel(detail)],
       ["Checklist", `${detail.checklist_title} | ${detail.total_items} itens`],
       ["Não conformidades", String(detail.non_conformities)],
-      ["Conformidade", `${formatPercent(percent)} | Risco ${riskLabel(percent)}`]
+      [detail.scoring_mode === "simple" ? "Conformidade" : "Resultado", resultLabel(detail)]
     ],
     margin: { left: 40, right: 40 },
     styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
@@ -177,16 +304,35 @@ async function buildPdf(detail: ChecklistAuditDetail): Promise<void> {
     columnStyles: { 0: { cellWidth: 145, fontStyle: "bold" } }
   });
 
+  if (detail.scoring_mode !== "simple") {
+    autoTable(doc, {
+      startY: nextPdfY(doc, 210),
+      theme: "grid",
+      head: [["Bloco", "Itens", "NC", "N.A.", detail.scoring_mode === "score_points" ? "Score" : "Risco ponderado"]],
+      body: buildSectionSummary(detail),
+      margin: { left: 40, right: 40 },
+      styles: { fontSize: 8.5, cellPadding: 4, overflow: "linebreak" },
+      headStyles: { fillColor: [22, 63, 135] },
+      columnStyles: {
+        0: { cellWidth: 205 },
+        1: { cellWidth: 45, halign: "center" },
+        2: { cellWidth: 45, halign: "center" },
+        3: { cellWidth: 45, halign: "center" },
+        4: { cellWidth: 120, halign: "center" }
+      }
+    });
+  }
+
   autoTable(doc, {
     startY: nextPdfY(doc, 225),
     theme: "striped",
-    head: [["Item", "Seção", "Critério", "Resposta", "NC"]],
+    head: [["Item", "Seção", "Critério", "Resposta", detail.scoring_mode === "score_points" ? "Pts" : "NC"]],
     body: detail.answers.map((answer) => [
       String(answer.item_number),
       answer.section_title,
       answer.question,
       answer.answer,
-      answer.is_nonconformity ? "Sim" : "-"
+      detail.scoring_mode === "score_points" ? formatPoints(answer.earned_points ?? 0) : answer.is_nonconformity ? "Sim" : "-"
     ]),
     margin: { left: 30, right: 30 },
     styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak" },
@@ -229,7 +375,7 @@ async function buildPdf(detail: ChecklistAuditDetail): Promise<void> {
       [
         `Auditor: ${detail.auditor_nome} | MAT ${detail.auditor_mat}`,
         `Aceite registrado em: ${formatDateTimeBrasilia(detail.signed_at, { includeSeconds: true })}`,
-        `Colaborador avaliado: ${detail.evaluated_nome} | MAT ${detail.evaluated_mat}`,
+        `${detail.scoring_mode === "simple" ? "Colaborador avaliado" : "Escopo"}: ${evaluatedPdfLabel(detail)}`,
         `Checklist: ${detail.checklist_title}`,
         `ID da auditoria: ${detail.audit_id}`
       ].join("\n")
@@ -281,12 +427,10 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
   const lookupSeqRef = useRef(0);
 
   const answeredCount = useMemo(() => countAnswered(selectedChecklist, answers), [answers, selectedChecklist]);
-  const nonConformities = useMemo(() => countNonConformities(selectedChecklist, answers), [answers, selectedChecklist]);
-  const conformityPercent = useMemo(() => {
-    const total = selectedChecklist?.total_items ?? 0;
-    if (total <= 0) return 100;
-    return (1 - (nonConformities / total)) * 100;
-  }, [nonConformities, selectedChecklist]);
+  const draftResult = useMemo(() => calculateDraftResult(selectedChecklist, answers), [answers, selectedChecklist]);
+  const nonConformities = draftResult.nonConformities;
+  const conformityPercent = draftResult.conformityPercent;
+  const isRiskChecklist = selectedChecklist ? selectedChecklist.scoring_mode !== "simple" : false;
   const monthLabel = useMemo(() => formatMonthYearPtBR(monthKeyBrasilia()), []);
 
   useEffect(() => {
@@ -365,7 +509,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
 
   useEffect(() => {
     const mat = normalizeMat(evaluatedMat);
-    if (!selectedChecklist || !mat || mat.length < 3 || !isOnline || activeCd == null) return undefined;
+    if (!selectedChecklist?.requires_evaluated_user || !mat || mat.length < 3 || !isOnline || activeCd == null) return undefined;
     const timer = window.setTimeout(() => {
       void lookupEvaluated(mat);
     }, 500);
@@ -398,7 +542,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
       setErrorMessage("CD não definido para este usuário.");
       return;
     }
-    if (!evaluatedMat.trim()) {
+    if (selectedChecklist.requires_evaluated_user && !evaluatedMat.trim()) {
       setErrorMessage("Informe a matrícula do colaborador avaliado.");
       return;
     }
@@ -419,8 +563,8 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
 
     setBusySubmit(true);
     try {
-      const resolvedEvaluated = evaluatedUser ?? await lookupEvaluated(evaluatedMat);
-      if (!resolvedEvaluated) {
+      const resolvedEvaluated = selectedChecklist.requires_evaluated_user ? evaluatedUser ?? await lookupEvaluated(evaluatedMat) : null;
+      if (selectedChecklist.requires_evaluated_user && !resolvedEvaluated) {
         setErrorMessage("Localize uma matrícula válida no DB_USUARIO antes de finalizar.");
         return;
       }
@@ -428,12 +572,19 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
       const result = await finalizeChecklistAudit({
         checklist_key: selectedChecklist.checklist_key,
         cd: activeCd,
-        evaluated_mat: resolvedEvaluated.mat,
+        evaluated_mat: resolvedEvaluated?.mat ?? null,
         observations: observations.trim() || null,
         signature_accepted: signatureAccepted,
         answers: selectedChecklist.items.map((item) => ({
           item_number: item.item_number,
-          answer: answers[item.item_number] as ChecklistAnswer
+          answer: answers[item.item_number] as ChecklistAnswer,
+          section_key: item.section_key,
+          section_title: item.section_title,
+          question: item.question,
+          item_weight: item.item_weight ?? null,
+          max_points: item.max_points ?? null,
+          criticality: item.criticality ?? null,
+          is_critical: Boolean(item.is_critical)
         }))
       });
       setStatusMessage(null);
@@ -441,6 +592,11 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
         checklistTitle: selectedChecklist.title,
         conformityPercent: result.conformity_percent,
         nonConformities: result.non_conformities,
+        scoringMode: result.scoring_mode,
+        riskScorePercent: result.risk_score_percent,
+        riskLevel: result.risk_level,
+        scorePoints: result.score_points,
+        scoreMaxPoints: result.score_max_points,
         auditId: result.audit_id
       });
       setErrorMessage(null);
@@ -596,7 +752,11 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                 <div className="checklist-head">
                   <span>{selectedChecklist.title}</span>
                   <h2>Checklist de auditoria</h2>
-                  <p>{`Preencha os ${selectedChecklist.total_items} itens, valide o avaliado pelo DB_USUARIO e finalize com aceite eletrônico.`}</p>
+                  <p>
+                    {selectedChecklist.requires_evaluated_user
+                      ? `Preencha os ${selectedChecklist.total_items} itens, valide o avaliado pelo DB_USUARIO e finalize com aceite eletrônico.`
+                      : `Preencha os ${selectedChecklist.total_items} itens da auditoria por CD e finalize com aceite eletrônico.`}
+                  </p>
                 </div>
                 <div className="checklist-metrics-grid">
                   <div className="checklist-metric">
@@ -612,8 +772,24 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                     <strong>{answeredCount}/{selectedChecklist.total_items}</strong>
                   </div>
                   <div className="checklist-metric">
-                    <span>Conformidade</span>
-                    <strong>{formatPercent(conformityPercent)}</strong>
+                    <span>{isRiskChecklist ? "Resultado" : "Conformidade"}</span>
+                    <strong>
+                      {selectedChecklist.scoring_mode === "risk_weighted"
+                        ? `${formatPercent(draftResult.riskScorePercent ?? 0)} risco`
+                        : selectedChecklist.scoring_mode === "score_points"
+                          ? `${formatPoints(draftResult.scorePoints)} / ${formatPoints(draftResult.scoreMaxPoints)}`
+                          : formatPercent(conformityPercent)}
+                    </strong>
+                  </div>
+                  {isRiskChecklist ? (
+                    <div className="checklist-metric">
+                      <span>Nível</span>
+                      <strong>{draftResult.riskLevel ?? "-"}</strong>
+                    </div>
+                  ) : null}
+                  <div className="checklist-metric">
+                    <span>NC</span>
+                    <strong>{nonConformities}</strong>
                   </div>
                 </div>
               </section>
@@ -625,55 +801,61 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                 <div className="checklist-panel-head">
                   <div>
                     <h3>Dados da auditoria</h3>
-                    <span>{`Auditor: ${displayUserName} | MAT ${profile.mat || "-"}`}</span>
+                    <span>{`Auditor: ${displayUserName} | MAT ${profile.mat || "-"} | ${selectedChecklist.requires_evaluated_user ? "Auditoria por colaborador" : "Auditoria por CD"}`}</span>
                   </div>
                   <button type="button" className="btn btn-muted" onClick={switchChecklist} disabled={busySubmit}>
                     Trocar checklist
                   </button>
                 </div>
-                <div className="checklist-fields-grid">
-                  <label>
-                    Matrícula do avaliado
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={evaluatedMat}
-                      onChange={(event) => handleEvaluatedMatChange(event.target.value)}
-                      onBlur={() => {
-                        if (evaluatedMat.trim()) void lookupEvaluated(evaluatedMat);
-                      }}
-                      placeholder="Informe a matrícula"
-                      disabled={busySubmit}
-                    />
-                  </label>
-                  <label>
-                    Nome do avaliado
-                    <input
-                      type="text"
-                      value={evaluatedUser?.nome ?? ""}
-                      placeholder={evaluatedLookupBusy ? "Buscando no DB_USUARIO..." : "Preenchido automaticamente"}
-                      readOnly
-                      disabled={busySubmit}
-                      className="checklist-readonly-input"
-                    />
-                  </label>
-                </div>
-                <div className="checklist-lookup-row">
-                  <button
-                    type="button"
-                    className="btn btn-muted"
-                    onClick={() => void lookupEvaluated(evaluatedMat)}
-                    disabled={busySubmit || evaluatedLookupBusy || !isOnline || !evaluatedMat.trim()}
-                  >
-                    {evaluatedLookupBusy ? "Buscando..." : "Buscar avaliado"}
-                  </button>
-                  {evaluatedUser ? (
-                    <span>{`Avaliado localizado: ${evaluatedUser.nome}${evaluatedUser.cargo ? ` | ${evaluatedUser.cargo}` : ""}`}</span>
-                  ) : (
-                    <span>O nome será preenchido somente a partir do DB_USUARIO.</span>
-                  )}
-                </div>
-                {evaluatedLookupError ? <div className="alert error">{evaluatedLookupError}</div> : null}
+                {selectedChecklist.requires_evaluated_user ? (
+                  <>
+                    <div className="checklist-fields-grid">
+                      <label>
+                        Matrícula do avaliado
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={evaluatedMat}
+                          onChange={(event) => handleEvaluatedMatChange(event.target.value)}
+                          onBlur={() => {
+                            if (evaluatedMat.trim()) void lookupEvaluated(evaluatedMat);
+                          }}
+                          placeholder="Informe a matrícula"
+                          disabled={busySubmit}
+                        />
+                      </label>
+                      <label>
+                        Nome do avaliado
+                        <input
+                          type="text"
+                          value={evaluatedUser?.nome ?? ""}
+                          placeholder={evaluatedLookupBusy ? "Buscando no DB_USUARIO..." : "Preenchido automaticamente"}
+                          readOnly
+                          disabled={busySubmit}
+                          className="checklist-readonly-input"
+                        />
+                      </label>
+                    </div>
+                    <div className="checklist-lookup-row">
+                      <button
+                        type="button"
+                        className="btn btn-muted"
+                        onClick={() => void lookupEvaluated(evaluatedMat)}
+                        disabled={busySubmit || evaluatedLookupBusy || !isOnline || !evaluatedMat.trim()}
+                      >
+                        {evaluatedLookupBusy ? "Buscando..." : "Buscar avaliado"}
+                      </button>
+                      {evaluatedUser ? (
+                        <span>{`Avaliado localizado: ${evaluatedUser.nome}${evaluatedUser.cargo ? ` | ${evaluatedUser.cargo}` : ""}`}</span>
+                      ) : (
+                        <span>O nome será preenchido somente a partir do DB_USUARIO.</span>
+                      )}
+                    </div>
+                    {evaluatedLookupError ? <div className="alert error">{evaluatedLookupError}</div> : null}
+                  </>
+                ) : (
+                  <div className="alert success">Este modelo audita o CD/processo, sem colaborador avaliado.</div>
+                )}
               </section>
 
               {selectedChecklist.sections.map((sectionKey) => {
@@ -693,7 +875,16 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                         <article key={item.item_number} className={`checklist-item-card${answers[item.item_number] === "Não" ? " is-nok" : ""}`}>
                           <div className="checklist-item-question">
                             <span>{String(item.item_number).padStart(2, "0")}</span>
-                            <strong>{item.question}</strong>
+                            <div>
+                              <strong>{item.question}</strong>
+                              {isRiskChecklist ? (
+                                <small className="checklist-item-meta">
+                                  {selectedChecklist.scoring_mode === "risk_weighted"
+                                    ? `Peso ${formatPoints(item.item_weight ?? 0)}`
+                                    : `${item.criticality ?? "Controle"} | ${formatPoints(item.max_points ?? 0)} pts${item.is_critical ? " | crítico" : ""}`}
+                                </small>
+                              ) : null}
+                            </div>
                           </div>
                           <div className="checklist-answer-group" role="group" aria-label={`Resposta do item ${item.item_number}`}>
                             {ANSWER_OPTIONS.map((option) => (
@@ -819,13 +1010,13 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                   <article key={row.audit_id} className="checklist-report-row">
                     <div className="checklist-report-main">
                       <strong>{row.checklist_title}</strong>
-                      <span>{`${row.evaluated_nome} | MAT ${row.evaluated_mat}`}</span>
+                      <span>{row.scoring_mode === "simple" ? `${row.evaluated_nome} | MAT ${row.evaluated_mat}` : "Auditoria por CD"}</span>
                       <span>{`Auditor: ${row.auditor_nome} | MAT ${row.auditor_mat}`}</span>
                       <span>{`${formatDateTimeBrasilia(row.created_at, { includeSeconds: true })} | ${row.cd_nome || `CD ${String(row.cd).padStart(2, "0")}`}`}</span>
                     </div>
                     <div className="checklist-report-stats">
-                      <span>{`${row.non_conformities} NC`}</span>
-                      <strong>{formatPercent(row.conformity_percent)}</strong>
+                      <span>{row.scoring_mode === "simple" ? `${row.non_conformities} NC` : row.risk_level ?? "RISCO"}</span>
+                      <strong>{row.scoring_mode === "risk_weighted" ? `${formatPercent(row.risk_score_percent ?? 0)} risco` : formatPercent(row.conformity_percent)}</strong>
                     </div>
                     <button
                       type="button"
@@ -850,14 +1041,40 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                   <p>{completionPopup.checklistTitle}</p>
                 </div>
                 <div className="checklist-completion-metrics">
-                  <span>
-                    Conformidade
-                    <strong>{formatPercent(completionPopup.conformityPercent)}</strong>
-                  </span>
-                  <span>
-                    Não conformidades
-                    <strong>{completionPopup.nonConformities}</strong>
-                  </span>
+                  {completionPopup.scoringMode === "risk_weighted" ? (
+                    <>
+                      <span>
+                        Risco
+                        <strong>{formatPercent(completionPopup.riskScorePercent ?? 0)}</strong>
+                      </span>
+                      <span>
+                        Nível
+                        <strong>{completionPopup.riskLevel ?? "-"}</strong>
+                      </span>
+                    </>
+                  ) : completionPopup.scoringMode === "score_points" ? (
+                    <>
+                      <span>
+                        Score
+                        <strong>{`${formatPoints(completionPopup.scorePoints)} / ${formatPoints(completionPopup.scoreMaxPoints)}`}</strong>
+                      </span>
+                      <span>
+                        Nível
+                        <strong>{completionPopup.riskLevel ?? "-"}</strong>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        Conformidade
+                        <strong>{formatPercent(completionPopup.conformityPercent)}</strong>
+                      </span>
+                      <span>
+                        Não conformidades
+                        <strong>{completionPopup.nonConformities}</strong>
+                      </span>
+                    </>
+                  )}
                 </div>
                 <small>{`ID da auditoria: ${completionPopup.auditId}`}</small>
                 <button type="button" className="btn btn-primary" onClick={() => setCompletionPopup(null)}>

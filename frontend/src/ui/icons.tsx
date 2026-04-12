@@ -254,6 +254,13 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M15.5 8.5l-7 7" />
         </svg>
       );
+    case "damage":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3L4 7v6c0 5 3.5 9.7 8 11 4.5-1.3 8-6 8-11V7l-8-4z" />
+          <path d="M12 8l1.5 3h-3l1.5 3h-3l1.5 3" />
+        </svg>
+      );
     default:
       return null;
   }

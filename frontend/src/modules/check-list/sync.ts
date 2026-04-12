@@ -8,6 +8,7 @@ import type {
   ChecklistEvaluatedUser,
   ChecklistFinalizePayload,
   ChecklistKey,
+  ChecklistScoringMode,
   ChecklistSectionKey
 } from "./types";
 
@@ -66,7 +67,18 @@ function parseNullableString(value: unknown): string | null {
 }
 
 function parseChecklistKey(value: unknown): ChecklistKey {
-  return parseString(value) === "dto_alocacao" ? "dto_alocacao" : "dto_pvps";
+  const parsed = parseString(value);
+  if (
+    parsed === "dto_alocacao" ||
+    parsed === "dto_blitz_separacao" ||
+    parsed === "auditoria_prevencao_perdas" ||
+    parsed === "prevencao_riscos_geral" ||
+    parsed === "prevencao_riscos_expedicao" ||
+    parsed === "prevencao_riscos_avaria"
+  ) {
+    return parsed;
+  }
+  return "dto_pvps";
 }
 
 function parseAnswer(value: unknown): ChecklistAnswer {
@@ -76,9 +88,13 @@ function parseAnswer(value: unknown): ChecklistAnswer {
 }
 
 function parseSectionKey(value: unknown): ChecklistSectionKey {
+  return parseString(value, "zona_separacao");
+}
+
+function parseScoringMode(value: unknown): ChecklistScoringMode {
   const parsed = parseString(value);
-  if (parsed === "pulmao" || parsed === "alocacao") return parsed;
-  return "zona_separacao";
+  if (parsed === "risk_weighted" || parsed === "score_points") return parsed;
+  return "simple";
 }
 
 function firstRow(data: unknown): Record<string, unknown> | null {
@@ -101,6 +117,11 @@ function mapSummary(raw: Record<string, unknown>): ChecklistAuditSummary {
     auditor_nome: parseString(raw.auditor_nome),
     non_conformities: parseInteger(raw.non_conformities),
     conformity_percent: parseNumber(raw.conformity_percent),
+    scoring_mode: parseScoringMode(raw.scoring_mode),
+    risk_score_percent: raw.risk_score_percent == null ? null : parseNumber(raw.risk_score_percent),
+    risk_level: parseNullableString(raw.risk_level),
+    score_points: raw.score_points == null ? null : parseNumber(raw.score_points),
+    score_max_points: raw.score_max_points == null ? null : parseNumber(raw.score_max_points),
     created_at: parseString(raw.created_at),
     signed_at: parseNullableString(raw.signed_at)
   };
@@ -128,8 +149,14 @@ function mapDetail(raw: Record<string, unknown>): ChecklistAuditDetail {
           section_key: parseSectionKey(answer.section_key),
           section_title: parseString(answer.section_title),
           question: parseString(answer.question),
+          item_weight: answer.item_weight == null ? null : parseNumber(answer.item_weight),
+          max_points: answer.max_points == null ? null : parseNumber(answer.max_points),
+          criticality: parseNullableString(answer.criticality),
+          is_critical: Boolean(answer.is_critical),
           answer: parseAnswer(answer.answer),
-          is_nonconformity: Boolean(answer.is_nonconformity)
+          is_nonconformity: Boolean(answer.is_nonconformity),
+          earned_points: answer.earned_points == null ? null : parseNumber(answer.earned_points),
+          risk_points: answer.risk_points == null ? null : parseNumber(answer.risk_points)
         };
       })
       .filter((item): item is ChecklistAuditDetail["answers"][number] => item != null)

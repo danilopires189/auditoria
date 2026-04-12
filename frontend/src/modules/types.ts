@@ -24,7 +24,8 @@ export type ModuleIconName =
   | "truck"
   | "goal"
   | "productivity"
-  | "zero";
+  | "zero"
+  | "damage";
 
 export type ModuleTone = "blue" | "red" | "teal" | "amber";
 
@@ -36,6 +37,7 @@ export type DashboardModuleKey =
   | "coleta-mercadoria"
   | "conferencia-entrada-notas"
   | "conferencia-pedido-direto"
+  | "controle-avarias"
   | "conferencia-termo"
   | "conferencia-volume-avulso"
   | "controle-validade"

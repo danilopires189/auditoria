@@ -28,6 +28,7 @@ import DevolucaoMercadoriaPage from "./modules/devolucao-mercadoria/page";
 import MetaMesPage from "./modules/meta-mes/page";
 import ProdutividadePage from "./modules/produtividade/page";
 import PvpsAlocacaoPage from "./modules/pvps-alocacao/page";
+import ControleAvariasPage from "./modules/controle-avarias/page";
 import RegistroEmbarquePage from "./modules/registro-embarque/page";
 import RondaPage from "./modules/ronda/page";
 import ZeradosPage from "./modules/zerados/page";
@@ -2721,6 +2722,7 @@ export default function App() {
               )
             }
           />
+          <Route path="/modulos/controle-avarias" element={<ControleAvariasPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/ronda"

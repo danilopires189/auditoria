@@ -8,6 +8,7 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "check-list", path: "/modulos/check-list", title: "Check List", icon: "checklist", tone: "blue" },
   { key: "coleta-mercadoria", path: "/modulos/coleta-mercadoria", title: "Coleta de Mercadoria", icon: "barcode", tone: "teal" },
   { key: "conferencia-entrada-notas", path: "/modulos/conferencia-entrada-notas", title: "Conferência de Entrada de Notas", icon: "notes", tone: "blue" },
+  { key: "controle-avarias", path: "/modulos/controle-avarias", title: "Controle de Avarias", icon: "damage", tone: "red" },
   { key: "conferencia-pedido-direto", path: "/modulos/conferencia-pedido-direto", title: "Conferência de Pedido Direto", icon: "direct", tone: "blue" },
   { key: "conferencia-termo", path: "/modulos/conferencia-termo", title: "Conferência de Termo", icon: "cold", tone: "blue" },
   { key: "conferencia-volume-avulso", path: "/modulos/conferencia-volume-avulso", title: "Conferência de Volume Avulso", icon: "carton-meds", tone: "teal" },

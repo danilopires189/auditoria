@@ -15307,6 +15307,18 @@ small {
   font-size: 0.95rem;
 }
 
+.checklist-item-question > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.checklist-item-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .checklist-answer-group {
   display: grid;
   grid-template-columns: repeat(3, minmax(56px, 1fr));
