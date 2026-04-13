@@ -327,19 +327,7 @@ function getRowHeadlineVolume(row: AuditoriaCaixaRow): string {
   return `cx: ${row.id_knapp ?? row.volume ?? "-"}`;
 }
 
-function isSubsequenceMatch(query: string, target: string): boolean {
-  if (!query) return true;
-  let queryIndex = 0;
-  for (const char of target) {
-    if (char === query[queryIndex]) {
-      queryIndex += 1;
-      if (queryIndex >= query.length) return true;
-    }
-  }
-  return queryIndex >= query.length;
-}
-
-function approximateContains(query: string, target: string): boolean {
+function fieldContainsSearchQuery(query: string, target: string): boolean {
   if (!query) return true;
   if (!target) return false;
   if (target.includes(query)) return true;
@@ -348,18 +336,18 @@ function approximateContains(query: string, target: string): boolean {
   const compactTarget = target.replace(/\s+/g, "");
   if (!compactQuery) return true;
 
-  return compactTarget.includes(compactQuery) || isSubsequenceMatch(compactQuery, compactTarget);
+  return compactTarget.includes(compactQuery);
 }
 
-function buildFeedSearchText(row: AuditoriaCaixaRow): string {
+function buildFeedSearchFields(row: AuditoriaCaixaRow): string[] {
   return [
     row.etiqueta,
     row.id_knapp ?? "",
-    row.pedido,
+    String(row.pedido),
     row.data_pedido ? formatDateOnlyPtBR(row.data_pedido) : "",
     row.dv ?? "",
     row.dv ? `seq ${row.dv}` : "",
-    row.filial,
+    String(row.filial),
     row.filial_nome ?? "",
     row.uf ?? "",
     row.rota ?? "",
@@ -370,22 +358,21 @@ function buildFeedSearchText(row: AuditoriaCaixaRow): string {
     toDisplayName(row.nome_aud),
     formatDateTime(row.data_hr),
     asStatusLabel(row.sync_status)
-  ].join(" ");
+  ];
 }
 
 function matchesFeedSearch(row: AuditoriaCaixaRow, rawQuery: string): boolean {
   const query = normalizeSearchText(rawQuery);
   if (!query) return true;
 
-  const target = normalizeSearchText(buildFeedSearchText(row));
-  if (approximateContains(query, target)) return true;
+  const fields = buildFeedSearchFields(row).map(normalizeSearchText);
+  if (fields.some((field) => fieldContainsSearchQuery(query, field))) return true;
 
   const queryTokens = query.split(/\s+/).filter(Boolean);
   if (queryTokens.length === 0) return true;
 
-  const targetTokens = target.split(/[^a-z0-9]+/).filter(Boolean);
   return queryTokens.every((token) => (
-    targetTokens.some((candidate) => approximateContains(token, candidate))
+    fields.some((field) => fieldContainsSearchQuery(token, field))
   ));
 }
 
