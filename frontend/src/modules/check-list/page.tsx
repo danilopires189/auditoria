@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -219,6 +220,11 @@ function nextPdfY(doc: jsPDF, fallback: number): number {
 function scrollChecklistTop(behavior: ScrollBehavior = "smooth"): void {
   if (typeof window === "undefined") return;
   window.scrollTo({ top: 0, behavior });
+}
+
+function renderChecklistModal(content: ReactNode): ReactNode {
+  if (typeof document === "undefined") return content;
+  return createPortal(content, document.body);
 }
 
 async function imageUrlToDataUrl(url: string): Promise<string | null> {
@@ -1091,7 +1097,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
             </section>
           ) : null}
 
-          {completionPopup ? (
+          {completionPopup ? renderChecklistModal(
             <div className="checklist-completion-overlay" role="dialog" aria-modal="true" aria-labelledby="checklist-completion-title">
               <div className="checklist-completion-dialog surface-enter">
                 <span className="checklist-completion-icon" aria-hidden="true">✓</span>
@@ -1150,7 +1156,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
             </div>
           ) : null}
 
-          {confirmationPopup ? (
+          {confirmationPopup ? renderChecklistModal(
             <div className="checklist-completion-overlay" role="dialog" aria-modal="true" aria-labelledby="checklist-confirmation-title">
               <div className="checklist-completion-dialog checklist-confirmation-dialog surface-enter">
                 <span className="checklist-completion-icon" aria-hidden="true">!</span>
