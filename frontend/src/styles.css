@@ -15654,7 +15654,15 @@ small {
     border-radius: 8px;
   }
 
-  .checklist-metrics-grid,
+  .checklist-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: grid;
+  }
+
+  .checklist-metrics-grid .checklist-metric:first-child {
+    grid-column: 1 / -1;
+  }
+
   .checklist-fields-grid,
   .checklist-report-filters,
   .checklist-panel-head {
