@@ -935,13 +935,11 @@ export async function fetchVwAuditoriasReportRows(
   filters: PvpsAuditoriasReportFilters
 ): Promise<PvpsAuditoriasReportRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const total = await countVwAuditoriasReportRows(filters);
-  if (total < 1) return [];
   let pageSize = 1000;
   const rows: PvpsAuditoriasReportRow[] = [];
   let offset = 0;
 
-  while (rows.length < total) {
+  for (;;) {
     const { data, error } = await supabase.rpc("rpc_vw_auditorias_report_rows", {
       p_dt_ini: filters.dtIni,
       p_dt_fim: filters.dtFim,
@@ -952,6 +950,10 @@ export async function fetchVwAuditoriasReportRows(
     });
 
     if (error) {
+      if (isStatementTimeout(error) && pageSize > 100) {
+        pageSize = Math.max(100, Math.floor(pageSize / 4));
+        continue;
+      }
       throw new Error(toErrorMessage(error));
     }
 
@@ -964,8 +966,9 @@ export async function fetchVwAuditoriasReportRows(
 
     if (page.length === 0) break;
     rows.push(...page);
+    if (page.length < pageSize) break;
     offset += page.length;
   }
 
-  return rows.slice(0, total);
+  return rows;
 }
