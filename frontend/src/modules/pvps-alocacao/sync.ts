@@ -931,9 +931,69 @@ export async function countVwAuditoriasReportRows(filters: PvpsAuditoriasReportF
   return Math.max(parseInteger(data, 0), 0);
 }
 
+async function fetchVwAuditoriasReportRowsCursor(
+  filters: PvpsAuditoriasReportFilters,
+  modulo: Exclude<PvpsModulo, "ambos">
+): Promise<PvpsAuditoriasReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  let pageSize = 500;
+  const rows: PvpsAuditoriasReportRow[] = [];
+  let cursorDt: string | null = null;
+  let cursorId: string | null = null;
+
+  for (;;) {
+    const { data, error } = await supabase.rpc("rpc_pvps_alocacao_report_rows_cursor", {
+      p_dt_ini: filters.dtIni,
+      p_dt_fim: filters.dtFim,
+      p_cd: filters.cd,
+      p_modulo: modulo,
+      p_cursor_dt: cursorDt,
+      p_cursor_id: cursorId,
+      p_limit: pageSize
+    });
+
+    if (error) {
+      if (isStatementTimeout(error) && pageSize > 50) {
+        pageSize = Math.max(50, Math.floor(pageSize / 2));
+        continue;
+      }
+      throw new Error(toErrorMessage(error));
+    }
+
+    const page = Array.isArray(data)
+      ? data.map((item) => {
+        const raw = item as Record<string, unknown>;
+        return parseReportPayload(raw.payload);
+      })
+      : [];
+
+    if (page.length === 0) break;
+    rows.push(...page);
+    if (page.length < pageSize) break;
+
+    const lastRow = page[page.length - 1];
+    cursorDt = parseNullableString(lastRow.dt_hr);
+    cursorId = parseNullableString(lastRow.audit_id);
+    if (!cursorDt || !cursorId) {
+      throw new Error("Falha ao paginar relatório. Atualize a página e tente novamente.");
+    }
+  }
+
+  return rows;
+}
+
 export async function fetchVwAuditoriasReportRows(
   filters: PvpsAuditoriasReportFilters
 ): Promise<PvpsAuditoriasReportRow[]> {
+  if (filters.modulo === "pvps" || filters.modulo === "alocacao") {
+    return fetchVwAuditoriasReportRowsCursor(filters, filters.modulo);
+  }
+  if (filters.modulo === "ambos") {
+    const pvpsRows = await fetchVwAuditoriasReportRowsCursor({ ...filters, modulo: "pvps" }, "pvps");
+    const alocacaoRows = await fetchVwAuditoriasReportRowsCursor({ ...filters, modulo: "alocacao" }, "alocacao");
+    return [...pvpsRows, ...alocacaoRows];
+  }
+
   if (!supabase) throw new Error("Supabase não inicializado.");
   let pageSize = 1000;
   const rows: PvpsAuditoriasReportRow[] = [];

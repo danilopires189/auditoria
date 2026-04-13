@@ -19,7 +19,6 @@ import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-po
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
-  countVwAuditoriasReportRows,
   createAdminRule,
   fetchAlocacaoCompletedItemsDayAll,
   fetchAdminRulesActive,
@@ -2168,13 +2167,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
     setReportBusySearch(true);
     try {
-      const count = await countVwAuditoriasReportRows(filters);
-      setReportCount(count);
-      if (count > 0) {
-        setReportMessage(`Foram encontradas ${count} auditorias em ${moduloLabel(reportModulo)} no período.`);
-      } else {
-        setReportMessage("Nenhuma auditoria encontrada no período informado.");
-      }
+      setReportCount(null);
+      setReportMessage(
+        `Filtros prontos para ${moduloLabel(reportModulo)}. A quantidade de linhas será exibida depois da exportação.`
+      );
     } catch (error) {
       setReportError(error instanceof Error ? error.message : "Falha ao consultar relatório.");
     } finally {
