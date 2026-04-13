@@ -39,7 +39,6 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 
 function createDefaultPreferences(): ControleAvariasPreferences {
   return {
-    etiqueta_fixa: "",
     multiplo_padrao: 1,
     cd_ativo: null,
     prefer_offline_mode: false
@@ -305,7 +304,6 @@ export async function getControleAvariasPreferences(userId: string): Promise<Con
 
   const payload = (raw as { value?: Partial<ControleAvariasPreferences> }).value;
   return {
-    etiqueta_fixa: typeof payload?.etiqueta_fixa === "string" ? payload.etiqueta_fixa : "",
     multiplo_padrao: normalizePositiveInteger(payload?.multiplo_padrao, 1),
     cd_ativo: typeof payload?.cd_ativo === "number" && Number.isFinite(payload.cd_ativo)
       ? Math.trunc(payload.cd_ativo)
@@ -322,7 +320,6 @@ export async function saveControleAvariasPreferences(userId: string, preferences
   store.put({
     key: prefsKey(userId),
     value: {
-      etiqueta_fixa: preferences.etiqueta_fixa,
       multiplo_padrao: normalizePositiveInteger(preferences.multiplo_padrao, 1),
       cd_ativo: preferences.cd_ativo,
       prefer_offline_mode: Boolean(preferences.prefer_offline_mode)

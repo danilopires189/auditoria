@@ -1,7 +1,7 @@
 export type ControleAvariasSyncStatus = "pending_insert" | "pending_update" | "pending_delete" | "synced" | "error";
 
 export type ControleAvariasMotivo = string;
-export type ControleAvariasOrigem = "Expedição" | "Pulmão" | "Separação";
+export type ControleAvariasOrigem = "Entrada" | "Expedição" | "Pulmão" | "Separação";
 
 export interface ControleAvariasModuleProfile {
   user_id: string;
@@ -43,7 +43,6 @@ export interface ControleAvariasRow {
 }
 
 export interface ControleAvariasPreferences {
-  etiqueta_fixa: string;
   multiplo_padrao: number;
   cd_ativo: number | null;
   prefer_offline_mode: boolean;

@@ -67,7 +67,7 @@ const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const LOOKUP_CACHE_MAX_ENTRIES = 800;
-const ORIGEM_OPTIONS: ControleAvariasOrigem[] = ["Expedição", "Pulmão", "Separação"];
+const ORIGEM_OPTIONS: ControleAvariasOrigem[] = ["Entrada", "Expedição", "Pulmão", "Separação"];
 const PENDING_SYNC_STATUSES = new Set<ControleAvariasRow["sync_status"]>([
   "pending_insert",
   "pending_update",
@@ -268,15 +268,6 @@ function QuantityIcon() {
   );
 }
 
-function TagIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M20 12l-8 8-9-9V4h7z" />
-      <circle cx="7.5" cy="8.5" r="1" />
-    </svg>
-  );
-}
-
 function UploadIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -406,7 +397,6 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
   const [barcodeInput, setBarcodeInput] = useState("");
   const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [multiploInput, setMultiploInput] = useState("1");
-  const [etiquetaFixa, setEtiquetaFixa] = useState("");
   const [motivoInput, setMotivoInput] = useState("");
   const [origemInput, setOrigemInput] = useState<"" | ControleAvariasOrigem>("");
   const [loteInput, setLoteInput] = useState("");
@@ -1168,7 +1158,6 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
       const prefs = await getControleAvariasPreferences(profile.user_id);
       if (cancelled) return;
 
-      setEtiquetaFixa("");
       setMultiploInput("1");
       setPreferOfflineMode(false);
 
@@ -1194,7 +1183,6 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
     if (!preferencesReady) return;
     const payloadCd = isGlobalAdmin ? cdAtivo : fixedCd;
     void saveControleAvariasPreferences(profile.user_id, {
-      etiqueta_fixa: "",
       multiplo_padrao: 1,
       cd_ativo: payloadCd,
       prefer_offline_mode: preferOfflineMode
@@ -1363,7 +1351,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
         local_id: safeUuid(),
         remote_id: null,
         user_id: profile.user_id,
-        etiqueta: etiquetaFixa.trim() || null,
+        etiqueta: null,
         cd: currentCd,
         barras: product.barras,
         coddv: product.coddv,
@@ -1417,7 +1405,6 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
     barcodeInput,
     currentCd,
     dbBarrasCount,
-    etiquetaFixa,
     focusBarcode,
     isOnline,
     loteInput,
@@ -2044,21 +2031,6 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
                     +
                   </button>
                 </div>
-              </div>
-            </label>
-
-            <label>
-              Etiqueta fixa
-              <div className="input-icon-wrap">
-                <span className="field-icon" aria-hidden="true">
-                  <TagIcon />
-                </span>
-                <input
-                  type="text"
-                  value={etiquetaFixa}
-                  onChange={(event) => setEtiquetaFixa(event.target.value)}
-                  placeholder="Opcional (fica salvo até limpar)"
-                />
               </div>
             </label>
 

@@ -85,7 +85,7 @@ function parseRequiredString(value: unknown): string {
 }
 
 function parseOrigem(value: unknown): ControleAvariasOrigem {
-  return value === "Expedição" || value === "Pulmão" || value === "Separação"
+  return value === "Entrada" || value === "Expedição" || value === "Pulmão" || value === "Separação"
     ? value
     : "Expedição";
 }
