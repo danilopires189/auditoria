@@ -138,29 +138,29 @@ function mapAuditResult(raw: Record<string, unknown>): ChecklistAuditResult {
 
 function mapDetail(raw: Record<string, unknown>): ChecklistAuditDetail {
   const answersRaw = Array.isArray(raw.answers) ? raw.answers : [];
+  const answers = answersRaw.reduce<ChecklistAuditDetail["answers"]>((acc, item) => {
+    if (!item || typeof item !== "object") return acc;
+    const answer = item as Record<string, unknown>;
+    acc.push({
+      item_number: parseInteger(answer.item_number),
+      section_key: parseSectionKey(answer.section_key),
+      section_title: parseString(answer.section_title),
+      question: parseString(answer.question),
+      item_weight: answer.item_weight == null ? null : parseNumber(answer.item_weight),
+      max_points: answer.max_points == null ? null : parseNumber(answer.max_points),
+      criticality: parseNullableString(answer.criticality),
+      is_critical: Boolean(answer.is_critical),
+      answer: parseAnswer(answer.answer),
+      is_nonconformity: Boolean(answer.is_nonconformity),
+      earned_points: answer.earned_points == null ? null : parseNumber(answer.earned_points),
+      risk_points: answer.risk_points == null ? null : parseNumber(answer.risk_points)
+    });
+    return acc;
+  }, []).sort((left, right) => left.item_number - right.item_number);
+
   return {
     ...mapAuditResult(raw),
-    answers: answersRaw
-      .map((item) => {
-        if (!item || typeof item !== "object") return null;
-        const answer = item as Record<string, unknown>;
-        return {
-          item_number: parseInteger(answer.item_number),
-          section_key: parseSectionKey(answer.section_key),
-          section_title: parseString(answer.section_title),
-          question: parseString(answer.question),
-          item_weight: answer.item_weight == null ? null : parseNumber(answer.item_weight),
-          max_points: answer.max_points == null ? null : parseNumber(answer.max_points),
-          criticality: parseNullableString(answer.criticality),
-          is_critical: Boolean(answer.is_critical),
-          answer: parseAnswer(answer.answer),
-          is_nonconformity: Boolean(answer.is_nonconformity),
-          earned_points: answer.earned_points == null ? null : parseNumber(answer.earned_points),
-          risk_points: answer.risk_points == null ? null : parseNumber(answer.risk_points)
-        };
-      })
-      .filter((item): item is ChecklistAuditDetail["answers"][number] => item != null)
-      .sort((left, right) => left.item_number - right.item_number)
+    answers
   };
 }
 
