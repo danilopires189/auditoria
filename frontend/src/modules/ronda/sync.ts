@@ -41,6 +41,9 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("OBSERVACAO_OBRIGATORIA")) return "Informe a observação da ocorrência.";
   if (normalized.includes("COLUNA_OBRIGATORIA_PUL")) return "Selecione a coluna do Pulmão antes de salvar.";
   if (normalized.includes("COLUNA_FORA_DA_ZONA")) return "A coluna selecionada não pertence à zona.";
+  if (normalized.includes("ZONA_SEM_ESTOQUE_DISPONIVEL")) return "Esta zona não possui mais produtos com estoque disponível.";
+  if (normalized.includes("COLUNA_SEM_ESTOQUE_DISPONIVEL")) return "Esta coluna não possui mais produtos com estoque disponível.";
+  if (normalized.includes("ENDERECO_SEM_ESTOQUE_DISPONIVEL")) return "Este endereço não possui mais produtos com estoque disponível.";
   if (normalized.includes("MOTIVO_INVALIDO_SEP") || normalized.includes("MOTIVO_INVALIDO_PUL")) return "Motivo inválido para o tipo de zona selecionado.";
   if (normalized.includes("ENDERECO_FORA_DA_ZONA")) return "O endereço informado não pertence à zona selecionada.";
   if (normalized.includes("ENDERECO_FORA_DA_COLUNA")) return "O endereço informado não pertence à coluna selecionada.";

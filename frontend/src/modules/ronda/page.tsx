@@ -448,6 +448,12 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
       (offlineStoragePrefix ? `${offlineStoragePrefix}:history:${monthStart ?? "all"}:${type}:${status}:${search.trim().toUpperCase() || "all"}` : null),
     [offlineStoragePrefix]
   );
+  const resetComposerState = useCallback(() => {
+    setComposerOpen(false);
+    setDrafts([emptyDraft()]);
+    setAddressLevelFilter("");
+    setAddressOptions([]);
+  }, []);
 
   const loadMonthOptions = useCallback(async () => {
     if (activeCd == null) {
@@ -526,12 +532,20 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
       setDetail(nextDetail);
       writeStorageValue(detailCacheKey(selectedMonthStart, zoneType, zona), nextDetail);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao carregar a zona.");
+      const message = error instanceof Error ? error.message : "Falha ao carregar a zona.";
+      setErrorMessage(message === "Zona não encontrada."
+        ? "A zona selecionada não possui mais produtos com estoque disponível."
+        : message);
       setDetail(null);
+      if (message === "Zona não encontrada.") {
+        setSelectedZone(null);
+        setSelectedPulColumn(null);
+        resetComposerState();
+      }
     } finally {
       setDetailBusy(false);
     }
-  }, [activeCd, detailCacheKey, selectedMonthRef, selectedMonthStart, shouldUseOfflineData, zoneType]);
+  }, [activeCd, detailCacheKey, resetComposerState, selectedMonthRef, selectedMonthStart, shouldUseOfflineData, zoneType]);
 
   const loadHistory = useCallback(async () => {
     if (activeCd == null) {
@@ -638,6 +652,15 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [loadAddressOptions]);
 
   useEffect(() => {
+    if (!selectedZone || zoneSearch.trim() !== "") return;
+    if (zoneRows.some((row) => row.zona === selectedZone)) return;
+    setSelectedZone(null);
+    setSelectedPulColumn(null);
+    setDetail(null);
+    resetComposerState();
+  }, [resetComposerState, selectedZone, zoneRows, zoneSearch]);
+
+  useEffect(() => {
     setHistoryMonth(selectedMonthStart);
   }, [selectedMonthStart]);
 
@@ -666,11 +689,19 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [addressLevelFilter, addressOptions, addressesBusy, composerOpen, zoneType]);
 
   useEffect(() => {
+    if (zoneType !== "PUL" || selectedPulColumn == null || detail == null) return;
+    if (detail.column_stats.some((row) => row.coluna === selectedPulColumn)) return;
+    setSelectedPulColumn(null);
+    resetComposerState();
+  }, [detail, resetComposerState, selectedPulColumn, zoneType]);
+
+  useEffect(() => {
     setSelectedZone(null);
     setDetail(null);
     setZoneSearch("");
     setSelectedPulColumn(null);
-  }, [zoneType]);
+    resetComposerState();
+  }, [resetComposerState, zoneType]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -691,11 +722,9 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [isOnline, offlineMeta.zone_count, selectedMonthStart, zoneType]);
 
   const openComposer = useCallback(() => {
-    setDrafts([emptyDraft()]);
-    setAddressLevelFilter("");
-    setAddressOptions([]);
+    resetComposerState();
     setComposerOpen(true);
-  }, []);
+  }, [resetComposerState]);
 
   const closeComposer = useCallback(() => {
     if (auditBusy) return;
