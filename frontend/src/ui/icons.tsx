@@ -92,6 +92,21 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M7.5 13.6v3.6" />
         </svg>
       );
+    case "thermal-box":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 8l8-4 8 4-8 4-8-4z" />
+          <path d="M4 8v8l8 4 8-4V8" />
+          <path d="M12 12v8" />
+          <path d="M12 6.5v3" />
+          <path d="M10.5 7.3l3 1.4" />
+          <path d="M13.5 7.3l-3 1.4" />
+          <path d="M8.5 14.5h7" />
+          <path d="M12 11v7" />
+          <path d="M9.5 12.5l5 4" />
+          <path d="M14.5 12.5l-5 4" />
+        </svg>
+      );
     case "carton-meds":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">

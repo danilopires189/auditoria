@@ -30,6 +30,7 @@ import ProdutividadePage from "./modules/produtividade/page";
 import PvpsAlocacaoPage from "./modules/pvps-alocacao/page";
 import ControleAvariasPage from "./modules/controle-avarias/page";
 import RegistroEmbarquePage from "./modules/registro-embarque/page";
+import RegistroEmbarqueCaixaTermicaPage from "./modules/registro-embarque-caixa-termica/page";
 import RondaPage from "./modules/ronda/page";
 import ZeradosPage from "./modules/zerados/page";
 import HomePage from "./pages/HomePage";
@@ -2772,6 +2773,10 @@ export default function App() {
             }
           />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/registro-embarque-caixa-termica"
+            element={<RegistroEmbarqueCaixaTermicaPage isOnline={isOnline} userName={displayContext.nome} />}
+          />
           <Route
             path="/modulos/ronda"
             element={
