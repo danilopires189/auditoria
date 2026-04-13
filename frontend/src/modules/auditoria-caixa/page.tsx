@@ -73,7 +73,26 @@ type OccurrenceModalTarget =
   | { kind: "form" }
   | { kind: "edit"; rowId: string };
 
+type CollectMode = "normal" | "store-context";
+type StoreContextAction = "start" | "switch";
+
 interface KnappModalState {
+  etiqueta: string;
+  mode: CollectMode;
+  action?: StoreContextAction;
+}
+
+interface ActiveStoreContext {
+  filial: number;
+  pedido: number;
+  filial_nome: string | null;
+  rota: string | null;
+  etiqueta: string;
+}
+
+interface MixedVolumeAlertState {
+  expected: string;
+  actual: string;
   etiqueta: string;
 }
 
@@ -110,6 +129,8 @@ const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const TRANSIENT_MESSAGE_DURATION_MS = 5_000;
+const NOT_FOUND_CHIME_DURATION_MS = 420;
+const MIXED_VOLUME_OCCURRENCE: Exclude<AuditoriaCaixaOccurrence, null> = "Volume misturado";
 const PENDING_SYNC_STATUSES = new Set<AuditoriaCaixaRow["sync_status"]>([
   "pending_insert",
   "pending_update",
@@ -267,6 +288,36 @@ function playSuccessChime(): void {
   });
 }
 
+function playNotFoundChime(): void {
+  runWithAudioContext((ctx) => {
+    const start = ctx.currentTime + 0.005;
+    const end = start + (NOT_FOUND_CHIME_DURATION_MS / 1000);
+    const mid = start + ((NOT_FOUND_CHIME_DURATION_MS / 1000) * 0.52);
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, start);
+    master.gain.exponentialRampToValueAtTime(0.28, start + 0.025);
+    master.gain.exponentialRampToValueAtTime(0.2, mid);
+    master.gain.exponentialRampToValueAtTime(0.0001, end);
+    master.connect(ctx.destination);
+
+    const toneA = ctx.createOscillator();
+    toneA.type = "triangle";
+    toneA.frequency.setValueAtTime(700, start);
+    toneA.frequency.exponentialRampToValueAtTime(560, mid);
+    toneA.connect(master);
+    toneA.start(start);
+    toneA.stop(mid);
+
+    const toneB = ctx.createOscillator();
+    toneB.type = "triangle";
+    toneB.frequency.setValueAtTime(560, mid - 0.01);
+    toneB.frequency.exponentialRampToValueAtTime(460, end);
+    toneB.connect(master);
+    toneB.start(mid - 0.01);
+    toneB.stop(end);
+  });
+}
+
 function toPendingLocalId(row: AuditoriaCaixaRow): string {
   if (row.remote_id) {
     return row.local_id.startsWith("pending:") ? row.local_id : `pending:${row.remote_id}`;
@@ -325,6 +376,14 @@ function getEtiquetaTipoLabel(etiqueta: string): string {
 
 function getRowHeadlineVolume(row: AuditoriaCaixaRow): string {
   return `cx: ${row.id_knapp ?? row.volume ?? "-"}`;
+}
+
+function storeContextActionLabel(action: StoreContextAction): string {
+  return action === "start" ? "Iniciar loja" : "Trocar loja";
+}
+
+function formatStoreContext(context: Pick<ActiveStoreContext, "filial" | "pedido" | "filial_nome">): string {
+  return `Filial ${context.filial}${context.filial_nome ? ` - ${context.filial_nome}` : ""} | Pedido ${context.pedido}`;
 }
 
 function fieldContainsSearchQuery(query: string, target: string): boolean {
@@ -408,6 +467,19 @@ function TagIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 7a2 2 0 0 1 2-2h6l8 8-7 7-8-8z" />
       <circle cx="9" cy="9" r="1.4" />
+    </svg>
+  );
+}
+
+function StoreIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 10h16l-1.2-5H5.2z" />
+      <path d="M5 10v10h14V10" />
+      <path d="M9 20v-6h6v6" />
+      <path d="M4 10c0 1.4 1 2.5 2.4 2.5S8.8 11.4 8.8 10" />
+      <path d="M8.8 10c0 1.4 1 2.5 2.4 2.5s2.4-1.1 2.4-2.5" />
+      <path d="M13.6 10c0 1.4 1 2.5 2.4 2.5s2.4-1.1 2.4-2.5" />
     </svg>
   );
 }
@@ -508,6 +580,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const [deleteTarget, setDeleteTarget] = useState<AuditoriaCaixaRow | null>(null);
   const [occurrenceModalTarget, setOccurrenceModalTarget] = useState<OccurrenceModalTarget | null>(null);
   const [knappModalState, setKnappModalState] = useState<KnappModalState | null>(null);
+  const [pendingStoreContextAction, setPendingStoreContextAction] = useState<StoreContextAction | null>(null);
+  const [activeStoreContext, setActiveStoreContext] = useState<ActiveStoreContext | null>(null);
+  const [mixedVolumeAlert, setMixedVolumeAlert] = useState<MixedVolumeAlertState | null>(null);
   const [occurrenceSearch, setOccurrenceSearch] = useState("");
   const [refreshNonce, setRefreshNonce] = useState(0);
 
@@ -705,6 +780,23 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     focusEtiqueta();
   }, [focusEtiqueta]);
 
+  const closeMixedVolumeAlert = useCallback(() => {
+    setMixedVolumeAlert(null);
+    focusEtiqueta();
+  }, [focusEtiqueta]);
+
+  const armStoreContextCollect = useCallback(() => {
+    unlockAudioContextFromGesture();
+    setErrorMessage(null);
+    const action = activeStoreContext ? "switch" : "start";
+    setPendingStoreContextAction(action);
+    setEtiquetaInput("");
+    setIdKnappInput("");
+    setOcorrenciaInput("");
+    setStatusMessage(`${storeContextActionLabel(action)} armada. Bipe a etiqueta no campo de volume.`);
+    focusEtiqueta();
+  }, [activeStoreContext, focusEtiqueta]);
+
   const buildKnownRows = useCallback((): AuditoriaCaixaRow[] => {
     if (currentCd == null) return [];
     return [
@@ -898,11 +990,19 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     }
   }, []);
 
-  const handleCollect = useCallback(async (payload?: { etiqueta?: string; idKnapp?: string | null }) => {
+  const handleCollect = useCallback(async (payload?: {
+    etiqueta?: string;
+    idKnapp?: string | null;
+    mode?: CollectMode;
+    action?: StoreContextAction;
+  }) => {
     if (collectInFlightRef.current) return;
     collectInFlightRef.current = true;
     setErrorMessage(null);
     setStatusMessage(null);
+    const collectMode = payload?.mode ?? "normal";
+    const storeAction = payload?.action ?? pendingStoreContextAction ?? (activeStoreContext ? "switch" : "start");
+    const isStoreContextCollect = collectMode === "store-context";
 
     try {
       if (currentCd == null) {
@@ -938,12 +1038,23 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         showScanFeedback("error", "Etiqueta descartada", duplicateError);
         triggerScanErrorAlert(duplicateError);
         setKnappModalState(null);
+        if (isStoreContextCollect) {
+          setPendingStoreContextAction(storeAction);
+        }
         clearForm();
         focusEtiqueta();
         return;
       }
 
       const routeData = await resolveRouteData(parsed.filial, null);
+      const isMixedVolume = !isStoreContextCollect
+        && activeStoreContext != null
+        && (activeStoreContext.filial !== parsed.filial || activeStoreContext.pedido !== parsed.pedido);
+      const resolvedOccurrence = isStoreContextCollect
+        ? null
+        : isMixedVolume
+          ? MIXED_VOLUME_OCCURRENCE
+          : normalizeOccurrenceInput(ocorrenciaInput);
       const nowIso = new Date().toISOString();
       const nextRow: AuditoriaCaixaRow = {
         local_id: safeUuid(),
@@ -960,7 +1071,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         uf: routeData.uf,
         rota: routeData.rota,
         volume: parsed.volume,
-        ocorrencia: normalizeOccurrenceInput(ocorrenciaInput),
+        ocorrencia: resolvedOccurrence,
         mat_aud: profile.mat,
         nome_aud: profile.nome,
         data_hr: nowIso,
@@ -974,7 +1085,27 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       await refreshLocalState();
       setExpandedRowId(nextRow.local_id);
       setKnappModalState(null);
+      if (isStoreContextCollect) {
+        setActiveStoreContext({
+          filial: parsed.filial,
+          pedido: parsed.pedido,
+          filial_nome: routeData.filial_nome,
+          rota: routeData.rota,
+          etiqueta: parsed.etiqueta
+        });
+        setPendingStoreContextAction(null);
+      }
       clearForm();
+
+      const statusPrefix = isStoreContextCollect
+        ? `${storeContextActionLabel(storeAction)} confirmada: ${formatStoreContext({
+            filial: parsed.filial,
+            pedido: parsed.pedido,
+            filial_nome: routeData.filial_nome
+          })}`
+        : isMixedVolume
+          ? "Etiqueta registrada como Volume misturado"
+          : "Etiqueta registrada";
 
       if (shouldTriggerQueuedBackgroundSync(isOnline)) {
         const nowMs = Date.now();
@@ -982,18 +1113,42 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
           lastQuickSyncAtRef.current = nowMs;
           void runSync(true);
         }
-        setStatusMessage("Etiqueta registrada e enviada para sincronização.");
+        setStatusMessage(`${statusPrefix} e enviada para sincronização.`);
       } else {
-        setStatusMessage("Etiqueta registrada localmente. A pendência será enviada quando houver internet.");
+        setStatusMessage(`${statusPrefix} localmente. A pendência será enviada quando houver internet.`);
       }
 
-      showScanFeedback("success", `Etiqueta ${parsed.etiqueta}`, `Filial ${parsed.filial}`);
-      playSuccessChime();
+      if (isMixedVolume && activeStoreContext) {
+        const actualContext = formatStoreContext({
+          filial: parsed.filial,
+          pedido: parsed.pedido,
+          filial_nome: routeData.filial_nome
+        });
+        const detail = `Esperado ${formatStoreContext(activeStoreContext)} | Lido ${actualContext}`;
+        showScanFeedback("error", "Volume misturado", detail);
+        triggerScanErrorAlert("Volume misturado");
+        setMixedVolumeAlert({
+          expected: formatStoreContext(activeStoreContext),
+          actual: actualContext,
+          etiqueta: parsed.etiqueta
+        });
+      } else {
+        showScanFeedback(
+          "success",
+          isStoreContextCollect ? `${storeContextActionLabel(storeAction)} confirmada` : `Etiqueta ${parsed.etiqueta}`,
+          `Filial ${parsed.filial}`
+        );
+        playSuccessChime();
+      }
       focusEtiqueta();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao registrar etiqueta.";
       setErrorMessage(message);
-      triggerScanErrorAlert(message);
+      if (message === AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE) {
+        playNotFoundChime();
+      } else {
+        triggerScanErrorAlert(message);
+      }
 
       if (message === AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE) {
         setIdKnappInput("");
@@ -1003,6 +1158,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         });
       } else {
         setKnappModalState(null);
+        if (!isStoreContextCollect) {
+          setPendingStoreContextAction(null);
+        }
         clearForm();
         focusEtiqueta();
       }
@@ -1011,6 +1169,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     }
   }, [
     clearForm,
+    activeStoreContext,
     currentCd,
     dbRotasCount,
     etiquetaInput,
@@ -1024,6 +1183,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     profile.mat,
     profile.nome,
     profile.user_id,
+    pendingStoreContextAction,
     refreshLocalState,
     resolveRouteData,
     runSync,
@@ -1035,7 +1195,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     if (!knappModalState) return;
     await handleCollect({
       etiqueta: knappModalState.etiqueta,
-      idKnapp: rawKnappValue ?? idKnappInput
+      idKnapp: rawKnappValue ?? idKnappInput,
+      mode: knappModalState.mode,
+      action: knappModalState.action
     });
   }, [handleCollect, idKnappInput, knappModalState]);
 
@@ -1048,7 +1210,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       clearForm();
       setErrorMessage(message);
       showScanFeedback("error", "Etiqueta inválida", message);
-      triggerScanErrorAlert(message);
+      playNotFoundChime();
       focusEtiqueta();
       return;
     }
@@ -1072,26 +1234,40 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       try {
         parseAuditoriaCaixaEtiqueta(normalized, null, { currentCd });
         setIdKnappInput("");
-        setKnappModalState({ etiqueta: normalized });
-        setStatusMessage("Informe o ID knapp para concluir a leitura.");
+        const isStoreContextCollect = pendingStoreContextAction != null;
+        setKnappModalState({
+          etiqueta: normalized,
+          mode: isStoreContextCollect ? "store-context" : "normal",
+          action: pendingStoreContextAction ?? undefined
+        });
+        setStatusMessage(
+          isStoreContextCollect
+            ? "Informe o ID knapp para concluir a leitura da loja."
+            : "Informe o ID knapp para concluir a leitura."
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Falha ao validar a etiqueta.";
         clearForm();
         setErrorMessage(message);
         showScanFeedback("error", "Etiqueta inválida", message);
-        triggerScanErrorAlert(message);
+        playNotFoundChime();
         focusEtiqueta();
       }
       return;
     }
 
-    await handleCollect({ etiqueta: normalized });
+    await handleCollect({
+      etiqueta: normalized,
+      mode: pendingStoreContextAction ? "store-context" : "normal",
+      action: pendingStoreContextAction ?? undefined
+    });
   }, [
     clearForm,
     clearScannerInputTimer,
     currentCd,
     focusEtiqueta,
     handleCollect,
+    pendingStoreContextAction,
     showScanFeedback,
     triggerScanErrorAlert
   ]);
@@ -1442,6 +1618,11 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   }, [currentCd, fixedCd, isGlobalAdmin, showReport]);
 
   useEffect(() => {
+    setActiveStoreContext(null);
+    setPendingStoreContextAction(null);
+  }, [currentCd]);
+
+  useEffect(() => {
     focusEtiqueta();
   }, [focusEtiqueta]);
 
@@ -1621,6 +1802,8 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const occurrenceModalValue = occurrenceModalTarget?.kind === "form"
     ? normalizeOccurrenceInput(ocorrenciaInput)
     : normalizeOccurrenceInput(editDraft?.ocorrencia ?? "");
+  const showCollectionControls = activeStoreContext != null || pendingStoreContextAction != null;
+  const showFormIcons = showCollectionControls;
   const showOnlineBadge = (
     <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
       {isOnline ? "🟢 Online" : "🔴 Offline"}
@@ -1831,54 +2014,81 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
           </section>
         ) : null}
         <form className="coleta-form aud-caixa-form" onSubmit={onSubmit}>
+          <div className="aud-caixa-store-context-bar">
+            <button
+              type="button"
+              className={`aud-caixa-store-context-btn${activeStoreContext || pendingStoreContextAction ? " is-active" : ""}`}
+              onClick={armStoreContextCollect}
+              disabled={currentCd == null || !canOperate}
+            >
+              <span aria-hidden="true">
+                <StoreIcon />
+              </span>
+              {activeStoreContext ? "Trocar loja" : "Iniciar loja"}
+            </button>
+            <span className={`aud-caixa-store-context-pill${activeStoreContext || pendingStoreContextAction ? " is-active" : ""}`}>
+              {pendingStoreContextAction
+                ? `Aguardando bip para ${storeContextActionLabel(pendingStoreContextAction).toLocaleLowerCase("pt-BR")}`
+                : activeStoreContext
+                ? `Loja ativa: ${formatStoreContext(activeStoreContext)}`
+                : "Nenhuma loja iniciada"}
+            </span>
+          </div>
+
           <div className="coleta-form-grid aud-caixa-form-grid">
-            <label>
-              Etiqueta de volume
-              <div className="input-icon-wrap with-action">
-                <span className="field-icon" aria-hidden="true">
-                  <TagIcon />
-                </span>
-                <input
-                  ref={etiquetaRef}
-                  type="text"
-                  inputMode={etiquetaInputMode}
-                  value={etiquetaInput}
-                  onChange={onEtiquetaInputChange}
-                  onFocus={() => {
-                    unlockAudioContextFromGesture();
-                    enableEtiquetaSoftKeyboard();
-                  }}
-                  onPointerDown={() => {
-                    unlockAudioContextFromGesture();
-                    enableEtiquetaSoftKeyboard();
-                  }}
-                  onBlur={disableEtiquetaSoftKeyboard}
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  enterKeyHint="done"
-                  onKeyDown={onEtiquetaKeyDown}
-                  placeholder="Bipe, digite ou use câmera"
-                  maxLength={AUDITORIA_CAIXA_MAX_LENGTH}
-                  required
-                />
-                <button
-                  type="button"
-                  className="input-action-btn"
-                  onClick={() => {
-                    unlockAudioContextFromGesture();
-                    setScannerError(null);
-                    setScannerOpen(true);
-                  }}
-                  title="Ler etiqueta pela câmera"
-                  aria-label="Ler etiqueta pela câmera"
-                  disabled={!cameraSupported}
-                >
-                  <CameraIcon />
-                </button>
-              </div>
-            </label>
+            {showCollectionControls ? (
+              <label>
+                Etiqueta de volume
+                <div className={`input-icon-wrap${showFormIcons ? " with-action" : " aud-caixa-input-wrap--plain"}`}>
+                  {showFormIcons ? (
+                    <span className="field-icon" aria-hidden="true">
+                      <TagIcon />
+                    </span>
+                  ) : null}
+                  <input
+                    ref={etiquetaRef}
+                    type="text"
+                    inputMode={etiquetaInputMode}
+                    value={etiquetaInput}
+                    onChange={onEtiquetaInputChange}
+                    onFocus={() => {
+                      unlockAudioContextFromGesture();
+                      enableEtiquetaSoftKeyboard();
+                    }}
+                    onPointerDown={() => {
+                      unlockAudioContextFromGesture();
+                      enableEtiquetaSoftKeyboard();
+                    }}
+                    onBlur={disableEtiquetaSoftKeyboard}
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="done"
+                    onKeyDown={onEtiquetaKeyDown}
+                    placeholder="Bipe, digite ou use câmera"
+                    maxLength={AUDITORIA_CAIXA_MAX_LENGTH}
+                    required
+                  />
+                  {showFormIcons ? (
+                    <button
+                      type="button"
+                      className="input-action-btn"
+                      onClick={() => {
+                        unlockAudioContextFromGesture();
+                        setScannerError(null);
+                        setScannerOpen(true);
+                      }}
+                      title="Ler etiqueta pela câmera"
+                      aria-label="Ler etiqueta pela câmera"
+                      disabled={!cameraSupported}
+                    >
+                      <CameraIcon />
+                    </button>
+                  ) : null}
+                </div>
+              </label>
+            ) : null}
 
             {isGlobalAdmin ? (
               <label>
@@ -1898,27 +2108,33 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
               </label>
             ) : null}
 
-            <label className="aud-caixa-occurrence-field">
-              <span>Ocorrência</span>
-              <button
-                type="button"
-                className={`aud-caixa-occurrence-btn${ocorrenciaInput ? " is-filled" : ""}`}
-                onClick={() => {
-                  setOccurrenceSearch("");
-                  setOccurrenceModalTarget({ kind: "form" });
-                }}
-              >
-                <span className="aud-caixa-occurrence-btn-icon" aria-hidden="true">
-                  <TagIcon />
-                </span>
-                <span>{ocorrenciaInput || "Sem ocorrência"}</span>
-              </button>
-            </label>
+            {showCollectionControls ? (
+              <label className="aud-caixa-occurrence-field">
+                <span>Ocorrência</span>
+                <button
+                  type="button"
+                  className={`aud-caixa-occurrence-btn${ocorrenciaInput ? " is-filled" : ""}`}
+                  onClick={() => {
+                    setOccurrenceSearch("");
+                    setOccurrenceModalTarget({ kind: "form" });
+                  }}
+                >
+                  {showFormIcons ? (
+                    <span className="aud-caixa-occurrence-btn-icon" aria-hidden="true">
+                      <TagIcon />
+                    </span>
+                  ) : null}
+                  <span>{ocorrenciaInput || "Sem ocorrência"}</span>
+                </button>
+              </label>
+            ) : null}
           </div>
 
-          <button className="btn btn-primary coleta-submit" type="submit" disabled={currentCd == null || !canOperate}>
-            Salvar auditoria
-          </button>
+          {showCollectionControls ? (
+            <button className="btn btn-primary coleta-submit" type="submit" disabled={currentCd == null || !canOperate}>
+              Salvar auditoria
+            </button>
+          ) : null}
         </form>
 
         <div className="coleta-list-head">
@@ -2318,8 +2534,15 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                 }}
               >
                 <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                  <h3 id="aud-caixa-knapp-title">Informe o ID knapp</h3>
-                  <p>Etiqueta {knappModalState.etiqueta}. Informe ID Knapp para concluir e voltar ao próximo bip.</p>
+                  <h3 id="aud-caixa-knapp-title">
+                    {knappModalState.mode === "store-context"
+                      ? `${storeContextActionLabel(knappModalState.action ?? "start")} - ID knapp`
+                      : "Informe o ID knapp"}
+                  </h3>
+                  <p>
+                    Etiqueta {knappModalState.etiqueta}. Informe ID Knapp para concluir
+                    {knappModalState.mode === "store-context" ? " a loja ativa." : " e voltar ao próximo bip."}
+                  </p>
                   <label>
                     ID knapp
                     <div className="input-icon-wrap">
@@ -2394,6 +2617,40 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                     </button>
                     <button className="btn btn-primary" type="button" onClick={() => void submitKnappModal()}>
                       Validar ID knapp
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
+
+        {mixedVolumeAlert && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="confirm-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="aud-caixa-mixed-volume-title"
+              >
+                <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                  <h3 id="aud-caixa-mixed-volume-title">Volume misturado identificado</h3>
+                  <p>
+                    A etiqueta {mixedVolumeAlert.etiqueta} foi registrada como <strong>Volume misturado</strong>.
+                  </p>
+                  <div className="coleta-row-detail-grid">
+                    <div className="coleta-row-detail">
+                      <span>Loja/Pedido esperado</span>
+                      <strong>{mixedVolumeAlert.expected}</strong>
+                    </div>
+                    <div className="coleta-row-detail">
+                      <span>Loja/Pedido lido</span>
+                      <strong>{mixedVolumeAlert.actual}</strong>
+                    </div>
+                  </div>
+                  <div className="confirm-actions">
+                    <button className="btn btn-primary" type="button" onClick={closeMixedVolumeAlert}>
+                      Fechar
                     </button>
                   </div>
                 </div>

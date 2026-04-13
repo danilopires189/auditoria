@@ -2231,6 +2231,97 @@ small {
   gap: 10px;
 }
 
+.aud-caixa-store-context-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.aud-caixa-store-context-btn {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(70, 111, 170, 0.42);
+  border-radius: 8px;
+  background: #fff;
+  color: #18375f;
+  font: inherit;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.aud-caixa-store-context-btn:hover,
+.aud-caixa-store-context-btn:focus-visible {
+  border-color: rgba(70, 111, 170, 0.68);
+  box-shadow: 0 0 0 4px rgba(49, 105, 191, 0.1);
+  outline: none;
+}
+
+.aud-caixa-store-context-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.aud-caixa-store-context-btn.is-active {
+  border-color: rgba(183, 61, 74, 0.34);
+  background: #fff6f7;
+  color: #9f3140;
+}
+
+.aud-caixa-store-context-btn span {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: rgba(54, 90, 151, 0.12);
+}
+
+.aud-caixa-store-context-btn.is-active span {
+  background: rgba(183, 61, 74, 0.12);
+}
+
+.aud-caixa-store-context-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.aud-caixa-store-context-pill {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(202, 215, 232, 0.9);
+  border-radius: 8px;
+  background: #f7faff;
+  color: #526983;
+  font-size: 0.84rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.aud-caixa-store-context-pill.is-active {
+  border-color: rgba(43, 125, 82, 0.28);
+  background: #f0fbf5;
+  color: #216642;
+}
+
+.aud-caixa-input-wrap--plain input {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
 .aud-caixa-form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -2472,6 +2563,12 @@ small {
 
   .aud-caixa-occurrence-dialog {
     width: min(100vw - 20px, 100%);
+  }
+
+  .aud-caixa-store-context-bar,
+  .aud-caixa-store-context-btn,
+  .aud-caixa-store-context-pill {
+    width: 100%;
   }
 }
 
