@@ -24,6 +24,7 @@ import {
   getTransferenciaCdPreferences,
   listUserLocalConferences,
   listManifestNotesLocal,
+  removeLocalConference,
   saveLocalConference,
   saveManifestSnapshot,
   saveTransferenciaCdPreferences
@@ -749,6 +750,12 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     });
   }, [activeConference, clearDismissedReadOnlyConference, dismissReadOnlyConference]);
 
+  const discardLocalConference = useCallback(async (conference: TransferenciaCdLocalConference | null | undefined) => {
+    if (!conference?.local_key) return;
+    await removeLocalConference(conference.local_key);
+    await refreshPendingState();
+  }, [refreshPendingState]);
+
   const activateConference = useCallback(async (
     next: TransferenciaCdLocalConference,
     options?: { silent?: boolean; message?: string | null }
@@ -1396,16 +1403,25 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               for (const confId of confIds) {
                 await cancelTransferencia(confId);
               }
+              await discardLocalConference(activeConference);
               setStatusMessage("Lote cancelado.");
             } else if (queueModeFor(activeConference)) {
               await setAndSaveActiveConference({ ...activeConference, pending_cancel: true, pending_snapshot: false, pending_finalize: false, updated_at: new Date().toISOString() });
               setStatusMessage("Cancelamento salvo localmente. A remoção no banco ocorrerá ao reconectar.");
             } else if (activeConference.remote_conf_id) {
               await cancelTransferencia(activeConference.remote_conf_id);
+              await discardLocalConference(activeConference);
               setStatusMessage("Conferência cancelada.");
             }
             clearActiveConferenceView();
           } catch (error) {
+            const raw = String(error ?? "");
+            if (raw.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
+              await discardLocalConference(activeConference);
+              clearActiveConferenceView();
+              setStatusMessage("A conferência já não estava mais ativa no servidor. O estado local foi limpo.");
+              return;
+            }
             setErrorMessage(toTransferenciaErrorMessage(error));
           } finally {
             setBusyCancel(false);
@@ -1413,7 +1429,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         })();
       }
     });
-  }, [activeConference, canEditActiveConference, clearActiveConferenceView, queueModeFor, setAndSaveActiveConference]);
+  }, [activeConference, canEditActiveConference, clearActiveConferenceView, discardLocalConference, queueModeFor, setAndSaveActiveConference]);
 
   const handleFinalizeConference = useCallback(async () => {
     if (!activeConference || !canEditActiveConference) return;
@@ -1441,6 +1457,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
           if (finalized.status === "finalizado_ok") okCount += 1;
           else partialCount += 1;
         }
+        await discardLocalConference(activeConference);
         setShowFinalizeModal(false);
         clearActiveConferenceView();
         setStatusMessage(`Lote finalizado: ${okCount} NF(s) concluída(s), ${partialCount} parcial(is) e ${pendingCountLocal} pendente(s).`);
@@ -1465,7 +1482,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusyFinalize(false);
     }
-  }, [activeConference, canEditActiveConference, clearActiveConferenceView, groupedItems.nao_conferido.length, hasAnyItemInformed, queueModeFor, setAndSaveActiveConference]);
+  }, [activeConference, canEditActiveConference, clearActiveConferenceView, discardLocalConference, groupedItems.nao_conferido.length, hasAnyItemInformed, queueModeFor, setAndSaveActiveConference]);
 
   const requestFinalize = useCallback(() => {
     if (groupedItems.sobra.length > 0) {
