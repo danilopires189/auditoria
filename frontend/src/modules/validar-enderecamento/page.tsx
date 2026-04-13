@@ -390,7 +390,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   const focusProduto = useCallback(() => {
     disableProdutoSoftKeyboard();
     window.requestAnimationFrame(() => {
-      produtoRef.current?.focus();
+      produtoRef.current?.focus({ preventScroll: true });
     });
   }, [disableProdutoSoftKeyboard]);
 

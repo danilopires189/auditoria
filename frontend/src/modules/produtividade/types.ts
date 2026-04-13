@@ -90,5 +90,7 @@ export interface ProdutividadeRankingRow {
   aud_caixa_qtd: number;
   ronda_quality_pontos: number;
   ronda_quality_qtd: number;
+  checklist_pontos: number;
+  checklist_qtd: number;
   total_pontos: number;
 }

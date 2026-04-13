@@ -402,7 +402,7 @@ export default function ValidarEtiquetaPulmaoPage({ isOnline, profile }: Validar
     disableProdutoSoftKeyboard();
     disableCodigoInternoSoftKeyboard();
     window.requestAnimationFrame(() => {
-      produtoRef.current?.focus();
+      produtoRef.current?.focus({ preventScroll: true });
     });
   }, [disableCodigoInternoSoftKeyboard, disableProdutoSoftKeyboard]);
 

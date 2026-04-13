@@ -39,6 +39,8 @@ import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { HomeModulesViewMode } from "./types/ui";
 import type { ColetaModuleProfile } from "./modules/coleta-mercadoria/types";
 import { clearUserColetaSessionCache } from "./modules/coleta-mercadoria/storage";
+import type { ControleAvariasModuleProfile } from "./modules/controle-avarias/types";
+import { clearUserControleAvariasSessionCache } from "./modules/controle-avarias/storage";
 import type { AuditoriaCaixaModuleProfile } from "./modules/auditoria-caixa/types";
 import { clearUserAuditoriaCaixaSessionCache } from "./modules/auditoria-caixa/storage";
 import type { CheckListModuleProfile } from "./modules/check-list/types";
@@ -1144,6 +1146,26 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (!("scrollRestoration" in window.history)) return undefined;
+
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+
+    return () => {
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+  }, [location.pathname]);
+
   if (!supabase || supabaseInitError) {
     return (
       <div className="page-shell">
@@ -1809,6 +1831,11 @@ export default function App() {
           // Ignore local cleanup failures and proceed with logout.
         }
         try {
+          await clearUserControleAvariasSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
+        try {
           await clearUserAuditoriaCaixaSessionCache(currentUserId);
         } catch {
           // Ignore local cleanup failures and proceed with logout.
@@ -2173,6 +2200,18 @@ export default function App() {
   }, [homeModulesViewMode, profile, session]);
 
   const coletaProfile = useMemo<ColetaModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
+  const controleAvariasProfile = useMemo<ControleAvariasModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
       user_id: effectiveProfileWithCd.user_id || session.user.id,
@@ -2722,7 +2761,16 @@ export default function App() {
               )
             }
           />
-          <Route path="/modulos/controle-avarias" element={<ControleAvariasPage isOnline={isOnline} userName={displayContext.nome} />} />
+          <Route
+            path="/modulos/controle-avarias"
+            element={
+              controleAvariasProfile ? (
+                <ControleAvariasPage isOnline={isOnline} profile={controleAvariasProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/ronda"

@@ -16,6 +16,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "conferencia-pedido-direto",
   "conferencia-termo",
   "conferencia-volume-avulso",
+  "controle-avarias",
   "controle-validade",
   "devolucao-mercadoria",
   "gestao-estoque",

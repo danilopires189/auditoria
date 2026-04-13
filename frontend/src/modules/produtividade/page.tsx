@@ -690,7 +690,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       "Transf. CD",
       "Reg Lojas",
       "Aud. Caixa",
-      "Ronda Qual."
+      "Ronda Qual.",
+      "Check List"
     ]];
     const detailsBody = preview.rankingRows.map((row, index) => [
       String(row.posicao > 0 ? row.posicao : index + 1),
@@ -710,7 +711,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       formatRankingPdfPointsAndCount(row.conf_transferencia_cd_pontos, row.conf_transferencia_cd_qtd, "sku", "skus"),
       formatRankingPdfPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas"),
       formatRankingPdfPointsAndCount(row.aud_caixa_pontos, row.aud_caixa_qtd, "volume", "volumes"),
-      formatRankingPdfPointsAndCount(row.ronda_quality_pontos, row.ronda_quality_qtd, "aud.", "aud.")
+      formatRankingPdfPointsAndCount(row.ronda_quality_pontos, row.ronda_quality_qtd, "aud.", "aud."),
+      formatRankingPdfPointsAndCount(row.checklist_pontos, row.checklist_qtd, "checklist", "checklists")
     ]);
     autoTable(doc, {
       startY: 60,
@@ -742,7 +744,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         detailsHead[0],
         detailsBody,
         contentWidth,
-        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
         {
           0: 24,
           1: 92,
@@ -761,7 +763,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           14: 44,
           15: 42,
           16: 42,
-          17: 46
+          17: 46,
+          18: 46
         },
         {
           1: 122,
@@ -778,7 +781,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           14: 54,
           15: 50,
           16: 50,
-          17: 56
+          17: 56,
+          18: 56
         }
       )
     });
@@ -1171,6 +1175,15 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                             row.ronda_quality_qtd,
                                             "aud.",
                                             "aud."
+                                          )
+                                        },
+                                        {
+                                          label: "Check List",
+                                          value: formatRankingPointsAndCount(
+                                            row.checklist_pontos,
+                                            row.checklist_qtd,
+                                            "checklist",
+                                            "checklists"
                                           )
                                         }
                                       ].map((item) => (
