@@ -886,15 +886,27 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       await refreshPendingState();
       const currentActive = activeConferenceRef.current;
       if (currentActive) {
-        const refreshed = await getLocalConference(currentActive.local_key);
-        if (activeConferenceRef.current?.local_key === currentActive.local_key) {
-          if (refreshed) {
-            activeConferenceRef.current = refreshed;
-            setActiveConference(refreshed);
-          } else {
-            activeConferenceRef.current = null;
-            setActiveConference(null);
-            setNfInput("");
+        if (shouldPersistConferenceLocally(currentActive)) {
+          const refreshed = await getLocalConference(currentActive.local_key);
+          if (activeConferenceRef.current?.local_key === currentActive.local_key) {
+            if (refreshed) {
+              activeConferenceRef.current = refreshed;
+              setActiveConference(refreshed);
+            } else {
+              activeConferenceRef.current = null;
+              setActiveConference(null);
+              setNfInput("");
+            }
+          }
+        } else if (currentActive.remote_conf_id) {
+          const remoteActive = await fetchActiveTransferenciaConference();
+          if (activeConferenceRef.current?.local_key === currentActive.local_key) {
+            if (remoteActive?.conf_id === currentActive.remote_conf_id && remoteActive.status === "em_conferencia") {
+              const remoteItems = await fetchTransferenciaItems(remoteActive.conf_id);
+              const refreshedRemote = localFromRemote(profile, deriveConferenceCd(remoteActive), remoteActive, remoteItems);
+              activeConferenceRef.current = refreshedRemote;
+              setActiveConference(refreshedRemote);
+            }
           }
         }
       }
@@ -908,7 +920,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusySync(false);
     }
-  }, [busySync, isOnline, profile.user_id, refreshPendingState]);
+  }, [busySync, isOnline, profile, refreshPendingState, shouldPersistConferenceLocally]);
 
   const runManifestSync = useCallback(async () => {
     if (!isOnline || currentCd == null) {
