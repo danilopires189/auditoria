@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import { listPendingLocalConferences, removeLocalConference, saveLocalConference } from "./storage";
 import type {
+  TransferenciaCdBatchNoteRef,
   CdOption,
   TransferenciaCdConferenceRow,
   TransferenciaCdConfStatus,
@@ -51,6 +52,9 @@ export function toTransferenciaErrorMessage(error: unknown): string {
   if (raw.includes("CD_SEM_ACESSO")) return "Você não possui acesso a este CD.";
   if (raw.includes("CD_FORA_DA_TRANSFERENCIA")) return "Este CD não participa da transferência.";
   if (raw.includes("TRANSFERENCIA_NAO_ENCONTRADA")) return "Transferência não encontrada para esta NF.";
+  if (raw.includes("ETAPA_MISTA_NAO_PERMITIDA")) return "Selecione apenas notas da mesma etapa: entrada com entrada ou saída com saída.";
+  if (raw.includes("CONFERENCIA_EM_USO")) return "Uma das notas selecionadas já está em conferência por outro usuário.";
+  if (raw.includes("CONFERENCIA_JA_FINALIZADA")) return "Uma das notas selecionadas já foi finalizada e não pode entrar no lote.";
   if (raw.includes("CONFERENCIA_EM_ABERTO_OUTRA_TRANSFERENCIA")) {
     return "Existe uma conferência em andamento para seu usuário neste módulo. Retome ou finalize a NF atual antes de iniciar outra.";
   }
@@ -58,6 +62,9 @@ export function toTransferenciaErrorMessage(error: unknown): string {
   if (raw.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras não encontrado.";
   if (raw.includes("PRODUTO_FORA_DA_TRANSFERENCIA")) return "Produto fora desta transferência.";
   if (raw.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) return "Conferência não encontrada, finalizada ou aberta por outro usuário.";
+  if (raw.includes("ITEM_BLOQUEADO")) return "Este produto já foi preservado e não pode mais ser editado.";
+  if (raw.includes("CONFERENCIA_FINALIZADA_SEM_PENDENCIA")) return "Esta NF não possui itens pendentes para reabertura.";
+  if (raw.includes("NENHUM_ITEM_CONFERIDO")) return "Nenhum produto foi conferido nesta NF.";
   if (raw.includes("OCORRENCIA_INVALIDA")) return "Ocorrência inválida para esta leitura.";
   if (raw.includes("SOBRA_PENDENTE")) return "Ajuste os itens com sobra antes de finalizar.";
   if (raw.includes("FALTA_MOTIVO_OBRIGATORIO")) return "Informe o motivo da falta para finalizar.";
@@ -85,7 +92,7 @@ function parseInteger(value: unknown, fallback = 0): number {
 
 function parseStatus(value: unknown): TransferenciaCdConfStatus | null {
   const raw = String(value ?? "").toLowerCase();
-  if (raw === "em_conferencia" || raw === "finalizado_ok" || raw === "finalizado_falta") return raw;
+  if (raw === "em_conferencia" || raw === "finalizado_ok" || raw === "finalizado_falta" || raw === "finalizado_parcial") return raw;
   return null;
 }
 
@@ -95,7 +102,7 @@ function parseEtapa(value: unknown): TransferenciaCdEtapa {
 
 function parseDivergencia(value: unknown): TransferenciaCdDivergenciaTipo {
   const raw = String(value ?? "").toLowerCase();
-  return raw === "falta" || raw === "sobra" ? raw : "correto";
+  return raw === "nao_conferido" || raw === "falta" || raw === "sobra" ? raw : "correto";
 }
 
 export function normalizeBarcode(value: string): string {
@@ -219,7 +226,11 @@ function mapItem(row: Record<string, unknown>): TransferenciaCdItemRow {
     qtd_cxpad: row.qtd_cxpad == null ? null : parseInteger(row.qtd_cxpad),
     ocorrencia_avariado_qtd: Math.max(parseInteger(row.ocorrencia_avariado_qtd), 0),
     ocorrencia_vencido_qtd: Math.max(parseInteger(row.ocorrencia_vencido_qtd), 0),
-    updated_at: String(row.updated_at ?? new Date().toISOString())
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
+    is_locked: row.is_locked === true,
+    locked_by: parseNullableString(row.locked_by),
+    locked_mat: parseNullableString(row.locked_mat),
+    locked_nome: parseNullableString(row.locked_nome)
   };
 }
 
@@ -428,12 +439,85 @@ export async function openTransferenciaNote(cd: number, note: TransferenciaCdNot
   return mapConference(first);
 }
 
+export async function openTransferenciaNoteBatch(
+  cd: number,
+  notes: TransferenciaCdBatchNoteRef[]
+): Promise<TransferenciaCdConferenceRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const payload = notes.map((note) => ({
+    dt_nf: note.dt_nf,
+    nf_trf: note.nf_trf,
+    sq_nf: note.sq_nf,
+    cd_ori: note.cd_ori,
+    cd_des: note.cd_des
+  }));
+  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_open_nf_batch", {
+    p_cd: cd,
+    p_targets: payload
+  });
+  if (error) throw new Error(toTransferenciaErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapConference(row as Record<string, unknown>));
+}
+
 export async function fetchActiveTransferenciaConference(): Promise<TransferenciaCdConferenceRow | null> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_get_active_conference");
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) return null;
+  return mapConference(first);
+}
+
+export interface TransferenciaCdPartialReopenInfo {
+  conf_id: string;
+  status: TransferenciaCdConfStatus | null;
+  previous_started_by: string | null;
+  previous_started_mat: string | null;
+  previous_started_nome: string | null;
+  locked_items: number;
+  pending_items: number;
+  can_reopen: boolean;
+}
+
+export async function fetchTransferenciaPartialReopenInfo(cd: number, note: TransferenciaCdNoteRow): Promise<TransferenciaCdPartialReopenInfo> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_get_partial_reopen_info", {
+    p_cd: cd,
+    p_nf_trf: note.nf_trf,
+    p_sq_nf: note.sq_nf,
+    p_dt_nf: note.dt_nf,
+    p_cd_ori: note.cd_ori,
+    p_cd_des: note.cd_des
+  });
+  if (error) throw new Error(toTransferenciaErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao validar reabertura parcial.");
+  return {
+    conf_id: String(first.conf_id ?? ""),
+    status: parseStatus(first.status),
+    previous_started_by: parseNullableString(first.previous_started_by),
+    previous_started_mat: parseNullableString(first.previous_started_mat),
+    previous_started_nome: parseNullableString(first.previous_started_nome),
+    locked_items: Math.max(parseInteger(first.locked_items), 0),
+    pending_items: Math.max(parseInteger(first.pending_items), 0),
+    can_reopen: first.can_reopen === true
+  };
+}
+
+export async function reopenTransferenciaPartialConference(cd: number, note: TransferenciaCdNoteRow): Promise<TransferenciaCdConferenceRow> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_reopen_partial_conference", {
+    p_cd: cd,
+    p_nf_trf: note.nf_trf,
+    p_sq_nf: note.sq_nf,
+    p_dt_nf: note.dt_nf,
+    p_cd_ori: note.cd_ori,
+    p_cd_des: note.cd_des
+  });
+  if (error) throw new Error(toTransferenciaErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao reabrir conferência parcial.");
   return mapConference(first);
 }
 

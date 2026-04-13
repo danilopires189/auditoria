@@ -1,6 +1,6 @@
-export type TransferenciaCdConfStatus = "em_conferencia" | "finalizado_ok" | "finalizado_falta";
+export type TransferenciaCdConfStatus = "em_conferencia" | "finalizado_ok" | "finalizado_falta" | "finalizado_parcial";
 export type TransferenciaCdEtapa = "saida" | "entrada";
-export type TransferenciaCdDivergenciaTipo = "falta" | "sobra" | "correto";
+export type TransferenciaCdDivergenciaTipo = "nao_conferido" | "falta" | "sobra" | "correto";
 
 export interface TransferenciaCdModuleProfile {
   user_id: string;
@@ -109,6 +109,41 @@ export interface TransferenciaCdLocalItem {
   ocorrencia_avariado_qtd: number;
   ocorrencia_vencido_qtd: number;
   updated_at: string;
+  is_locked?: boolean;
+  locked_by?: string | null;
+  locked_mat?: string | null;
+  locked_nome?: string | null;
+}
+
+export interface TransferenciaCdBatchNoteRef extends TransferenciaCdNoteRow {
+  conf_id: string | null;
+}
+
+export interface TransferenciaCdBatchAllocationRow {
+  note_key: string;
+  conf_id: string | null;
+  dt_nf: string;
+  nf_trf: number;
+  sq_nf: number;
+  cd_ori: number;
+  cd_des: number;
+  cd_ori_nome: string;
+  cd_des_nome: string;
+  etapa: TransferenciaCdEtapa;
+  coddv: number;
+  descricao: string;
+  barras: string | null;
+  qtd_esperada: number;
+  qtd_conferida: number;
+  embcomp_cx: number | null;
+  qtd_cxpad: number | null;
+  ocorrencia_avariado_qtd: number;
+  ocorrencia_vencido_qtd: number;
+  updated_at: string;
+  is_locked: boolean;
+  locked_by: string | null;
+  locked_mat: string | null;
+  locked_nome: string | null;
 }
 
 export interface TransferenciaCdLocalConference extends TransferenciaCdConferenceRow {
@@ -123,6 +158,9 @@ export interface TransferenciaCdLocalConference extends TransferenciaCdConferenc
   pending_cancel: boolean;
   sync_error: string | null;
   last_synced_at: string | null;
+  conference_mode?: "single" | "batch";
+  batch_notes?: TransferenciaCdBatchNoteRef[];
+  batch_allocations?: TransferenciaCdBatchAllocationRow[];
 }
 
 export interface TransferenciaCdItemRow {
@@ -141,6 +179,10 @@ export interface TransferenciaCdItemRow {
   ocorrencia_avariado_qtd: number;
   ocorrencia_vencido_qtd: number;
   updated_at: string;
+  is_locked: boolean;
+  locked_by: string | null;
+  locked_mat: string | null;
+  locked_nome: string | null;
 }
 
 export interface TransferenciaCdPreferences {

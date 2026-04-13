@@ -35,12 +35,15 @@ import {
   fetchCdOptions,
   fetchManifestBundle,
   fetchManifestNotes,
+  fetchTransferenciaPartialReopenInfo,
   fetchTransferenciaConciliacaoRows,
   fetchTransferenciaItems,
   finalizeTransferencia,
   isTransferenciaActiveConferenceConflict,
   normalizeBarcode,
   openTransferenciaNote,
+  openTransferenciaNoteBatch,
+  reopenTransferenciaPartialConference,
   resetTransferenciaItem,
   scanTransferenciaBarcode,
   searchTransferenciaNotes,
@@ -49,7 +52,10 @@ import {
   toTransferenciaErrorMessage
 } from "./sync";
 import type {
+  TransferenciaCdBatchAllocationRow,
+  TransferenciaCdBatchNoteRef,
   CdOption,
+  TransferenciaCdConferenceRow,
   TransferenciaCdConfStatus,
   TransferenciaCdDivergenciaTipo,
   TransferenciaCdEtapa,
@@ -69,9 +75,9 @@ interface TransferenciaCdPageProps {
   profile: TransferenciaCdModuleProfile;
 }
 
-type GroupKey = "falta" | "sobra" | "correto";
+type GroupKey = "nao_conferido" | "falta" | "sobra" | "correto";
 type ScannerTarget = "nf" | "barras";
-type DialogState = { title: string; message: string; confirmLabel?: string; onConfirm?: () => void };
+type DialogState = { title: string; message: string; confirmLabel?: string; cancelLabel?: string; onConfirm?: () => void; onCancel?: () => void };
 type OcorrenciaTipo = "" | "Avariado" | "Vencido";
 
 const MODULE_DEF = getModuleByKeyOrThrow("transferencia-cd");
@@ -113,6 +119,7 @@ function formatReportDate(value: string | null | undefined): string {
 
 function formatStatus(value: TransferenciaCdConfStatus | null | undefined): string {
   if (value === "finalizado_ok") return "Finalizado OK";
+  if (value === "finalizado_parcial") return "Finalizado parcial";
   if (value === "finalizado_falta") return "Finalizado com falta";
   if (value === "em_conferencia") return "Em conferência";
   return "Não conferido";
@@ -147,7 +154,7 @@ function withDivergencia(item: TransferenciaCdLocalItem): {
 } {
   const qtd_falta = Math.max(item.qtd_esperada - item.qtd_conferida, 0);
   const qtd_sobra = Math.max(item.qtd_conferida - item.qtd_esperada, 0);
-  const divergencia = qtd_falta > 0 ? "falta" : qtd_sobra > 0 ? "sobra" : "correto";
+  const divergencia = item.qtd_conferida <= 0 ? "nao_conferido" : qtd_falta > 0 ? "falta" : qtd_sobra > 0 ? "sobra" : "correto";
   return { item, divergencia, qtd_falta, qtd_sobra };
 }
 
@@ -200,6 +207,80 @@ function conferenceResumeLabel(conf: Pick<TransferenciaCdLocalConference, "nf_tr
   return `NF ${conf.nf_trf}/${conf.sq_nf} (${formatEtapa(conf.etapa)})`;
 }
 
+function isBatchConference(conf: TransferenciaCdLocalConference | null | undefined): boolean {
+  return Boolean(conf && (conf.batch_notes?.length ?? 0) > 1);
+}
+
+function buildBatchConferenceKey(userId: string, cd: number, etapa: TransferenciaCdEtapa, notes: TransferenciaCdBatchNoteRef[]): string {
+  const keys = [...notes].map((note) => buildTransferenciaCdNoteKey(note)).sort();
+  return `transferencia-batch:${userId}:${cd}:${etapa}:${keys.join(",")}`;
+}
+
+function sortBatchAllocationsBySelection(
+  conf: Pick<TransferenciaCdLocalConference, "batch_notes">,
+  allocations: TransferenciaCdBatchAllocationRow[]
+): TransferenciaCdBatchAllocationRow[] {
+  const order = new Map((conf.batch_notes ?? []).map((note, index) => [buildTransferenciaCdNoteKey(note), index] as const));
+  return [...allocations].sort((a, b) => {
+    const left = order.get(a.note_key) ?? Number.MAX_SAFE_INTEGER;
+    const right = order.get(b.note_key) ?? Number.MAX_SAFE_INTEGER;
+    return left - right || a.note_key.localeCompare(b.note_key);
+  });
+}
+
+function aggregateBatchItems(allocations: TransferenciaCdBatchAllocationRow[]): TransferenciaCdLocalItem[] {
+  const grouped = new Map<number, TransferenciaCdLocalItem>();
+  for (const allocation of allocations) {
+    const current = grouped.get(allocation.coddv);
+    if (!current) {
+      grouped.set(allocation.coddv, {
+        coddv: allocation.coddv,
+        barras: allocation.barras,
+        descricao: allocation.descricao,
+        qtd_esperada: allocation.qtd_esperada,
+        qtd_conferida: allocation.qtd_conferida,
+        embcomp_cx: allocation.embcomp_cx,
+        qtd_cxpad: allocation.qtd_cxpad,
+        ocorrencia_avariado_qtd: allocation.ocorrencia_avariado_qtd,
+        ocorrencia_vencido_qtd: allocation.ocorrencia_vencido_qtd,
+        updated_at: allocation.updated_at,
+        is_locked: allocation.is_locked,
+        locked_by: allocation.locked_by,
+        locked_mat: allocation.locked_mat,
+        locked_nome: allocation.locked_nome
+      });
+      continue;
+    }
+    current.qtd_esperada += allocation.qtd_esperada;
+    current.qtd_conferida += allocation.qtd_conferida;
+    current.ocorrencia_avariado_qtd += allocation.ocorrencia_avariado_qtd;
+    current.ocorrencia_vencido_qtd += allocation.ocorrencia_vencido_qtd;
+    current.barras = current.barras ?? allocation.barras;
+    current.updated_at = current.updated_at > allocation.updated_at ? current.updated_at : allocation.updated_at;
+    current.is_locked = current.is_locked || allocation.is_locked;
+    current.locked_by = current.locked_by ?? allocation.locked_by;
+    current.locked_mat = current.locked_mat ?? allocation.locked_mat;
+    current.locked_nome = current.locked_nome ?? allocation.locked_nome;
+  }
+  return [...grouped.values()].sort(itemSort);
+}
+
+function batchNoteSummary(conf: TransferenciaCdLocalConference): Array<{ note: TransferenciaCdBatchNoteRef; totalEsperada: number; totalConferida: number; nextStatus: "pendente" | "finalizado_parcial" | "finalizado_ok" }> {
+  const allocations = conf.batch_allocations ?? [];
+  return (conf.batch_notes ?? []).map((note) => {
+    const noteKey = buildTransferenciaCdNoteKey(note);
+    const rows = allocations.filter((allocation) => allocation.note_key === noteKey);
+    const totalEsperada = rows.reduce((sum, row) => sum + row.qtd_esperada, 0);
+    const totalConferida = rows.reduce((sum, row) => sum + row.qtd_conferida, 0);
+    const nextStatus = totalConferida <= 0
+      ? "pendente"
+      : totalConferida >= totalEsperada && rows.every((row) => row.qtd_conferida >= row.qtd_esperada)
+        ? "finalizado_ok"
+        : "finalizado_parcial";
+    return { note, totalEsperada, totalConferida, nextStatus };
+  });
+}
+
 function deriveConferenceCd(conf: Pick<TransferenciaCdLocalConference, "etapa" | "cd_ori" | "cd_des">): number {
   return conf.etapa === "saida" ? conf.cd_ori : conf.cd_des;
 }
@@ -227,12 +308,14 @@ function applyConferenceToNote(note: TransferenciaCdNoteRow, conf: Transferencia
 
 function routeStatusLabel(status: TransferenciaCdConfStatus | null): string {
   if (status === "finalizado_ok" || status === "finalizado_falta") return "Concluído";
+  if (status === "finalizado_parcial") return "Parcial";
   if (status === "em_conferencia") return "Em andamento";
   return "Pendente";
 }
 
 function routeStatusClass(status: TransferenciaCdConfStatus | null): "correto" | "andamento" | "falta" {
   if (status === "finalizado_ok" || status === "finalizado_falta") return "correto";
+  if (status === "finalizado_parcial") return "andamento";
   if (status === "em_conferencia") return "andamento";
   return "falta";
 }
@@ -297,14 +380,21 @@ function localFromRemote(profile: TransferenciaCdModuleProfile, cd: number, conf
       qtd_cxpad: item.qtd_cxpad,
       ocorrencia_avariado_qtd: item.ocorrencia_avariado_qtd,
       ocorrencia_vencido_qtd: item.ocorrencia_vencido_qtd,
-      updated_at: item.updated_at
+      updated_at: item.updated_at,
+      is_locked: item.is_locked,
+      locked_by: item.locked_by,
+      locked_mat: item.locked_mat,
+      locked_nome: item.locked_nome
     })).sort(itemSort),
     pending_snapshot: false,
     pending_finalize: false,
     pending_finalize_reason: null,
     pending_cancel: false,
     sync_error: null,
-    last_synced_at: new Date().toISOString()
+    last_synced_at: new Date().toISOString(),
+    conference_mode: "single",
+    batch_notes: [],
+    batch_allocations: []
   };
 }
 
@@ -349,15 +439,105 @@ function localFromManifest(profile: TransferenciaCdModuleProfile, cd: number, no
       qtd_cxpad: row.qtd_cxpad,
       ocorrencia_avariado_qtd: 0,
       ocorrencia_vencido_qtd: 0,
-      updated_at: nowIso
+      updated_at: nowIso,
+      is_locked: false,
+      locked_by: null,
+      locked_mat: null,
+      locked_nome: null
     })).sort(itemSort),
     pending_snapshot: true,
     pending_finalize: false,
     pending_finalize_reason: null,
     pending_cancel: false,
     sync_error: null,
-    last_synced_at: null
+    last_synced_at: null,
+    conference_mode: "single",
+    batch_notes: [],
+    batch_allocations: []
   };
+}
+
+function batchConferenceFromRemote(
+  profile: TransferenciaCdModuleProfile,
+  cd: number,
+  opened: Array<{ note: TransferenciaCdBatchNoteRef; conference: TransferenciaCdConferenceRow; items: TransferenciaCdItemRow[] }>
+): TransferenciaCdLocalConference {
+  const first = opened[0];
+  const nowIso = new Date().toISOString();
+  const batchNotes = opened.map(({ note, conference }) => ({ ...note, conf_id: conference.conf_id }));
+  const allocations: TransferenciaCdBatchAllocationRow[] = opened.flatMap(({ note, conference, items }) => {
+    const noteKey = buildTransferenciaCdNoteKey(note);
+    return items.map((item) => ({
+      note_key: noteKey,
+      conf_id: conference.conf_id,
+      dt_nf: note.dt_nf,
+      nf_trf: note.nf_trf,
+      sq_nf: note.sq_nf,
+      cd_ori: note.cd_ori,
+      cd_des: note.cd_des,
+      cd_ori_nome: note.cd_ori_nome,
+      cd_des_nome: note.cd_des_nome,
+      etapa: note.etapa,
+      coddv: item.coddv,
+      descricao: item.descricao,
+      barras: item.barras,
+      qtd_esperada: item.qtd_esperada,
+      qtd_conferida: item.qtd_conferida,
+      embcomp_cx: item.embcomp_cx,
+      qtd_cxpad: item.qtd_cxpad,
+      ocorrencia_avariado_qtd: item.ocorrencia_avariado_qtd,
+      ocorrencia_vencido_qtd: item.ocorrencia_vencido_qtd,
+      updated_at: item.updated_at || nowIso,
+      is_locked: item.is_locked,
+      locked_by: item.locked_by,
+      locked_mat: item.locked_mat,
+      locked_nome: item.locked_nome
+    }));
+  });
+  return {
+    ...first.conference,
+    local_key: buildBatchConferenceKey(profile.user_id, cd, first.conference.etapa, batchNotes),
+    user_id: profile.user_id,
+    cd,
+    remote_conf_id: null,
+    items: aggregateBatchItems(allocations),
+    pending_snapshot: false,
+    pending_finalize: false,
+    pending_finalize_reason: null,
+    pending_cancel: false,
+    sync_error: null,
+    last_synced_at: nowIso,
+    conference_mode: "batch",
+    batch_notes: batchNotes,
+    batch_allocations: allocations
+  };
+}
+
+function replaceBatchAllocationWithRemote(
+  allocations: TransferenciaCdBatchAllocationRow[],
+  confId: string,
+  item: TransferenciaCdItemRow
+): TransferenciaCdBatchAllocationRow[] {
+  return allocations.map((allocation) => (
+    allocation.conf_id === confId && allocation.coddv === item.coddv
+      ? {
+        ...allocation,
+        barras: item.barras,
+        descricao: item.descricao,
+        qtd_esperada: item.qtd_esperada,
+        qtd_conferida: item.qtd_conferida,
+        embcomp_cx: item.embcomp_cx,
+        qtd_cxpad: item.qtd_cxpad,
+        ocorrencia_avariado_qtd: item.ocorrencia_avariado_qtd,
+        ocorrencia_vencido_qtd: item.ocorrencia_vencido_qtd,
+        updated_at: item.updated_at,
+        is_locked: item.is_locked,
+        locked_by: item.locked_by,
+        locked_mat: item.locked_mat,
+        locked_nome: item.locked_nome
+      }
+      : allocation
+  ));
 }
 
 export default function TransferenciaCdPage({ isOnline, profile }: TransferenciaCdPageProps) {
@@ -386,6 +566,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const [manifestNotes, setManifestNotes] = useState<TransferenciaCdNoteRow[]>([]);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [notesSearchInput, setNotesSearchInput] = useState("");
+  const [selectedBatchNoteKeys, setSelectedBatchNoteKeys] = useState<string[]>([]);
   const [activeConference, setActiveConference] = useState<TransferenciaCdLocalConference | null>(null);
   const [expandedCoddv, setExpandedCoddv] = useState<number | null>(null);
   const [editingCoddv, setEditingCoddv] = useState<number | null>(null);
@@ -407,7 +588,6 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const [reportBusySearch, setReportBusySearch] = useState(false);
   const [reportBusyExport, setReportBusyExport] = useState(false);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
-  const [finalizeMotivo, setFinalizeMotivo] = useState("");
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [busyManifest, setBusyManifest] = useState(false);
   const [busyOpen, setBusyOpen] = useState(false);
@@ -440,7 +620,12 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     if (!conference.is_read_only || typeof window === "undefined") return false;
     return window.sessionStorage.getItem(dismissedReadOnlyStorageKey) === buildReadOnlyConferenceSignature(conference);
   }, [buildReadOnlyConferenceSignature, dismissedReadOnlyStorageKey]);
-  const canEditActiveConference = Boolean(activeConference && !activeConference.is_read_only && activeConference.started_by === profile.user_id);
+  const canEditActiveConference = Boolean(
+    activeConference
+    && !activeConference.is_read_only
+    && activeConference.started_by === profile.user_id
+    && (!isBatchConference(activeConference) || isOnline)
+  );
   const hasOpenConference = Boolean(activeConference && activeConference.status === "em_conferencia" && !activeConference.is_read_only);
   const hasAnyItemInformed = Boolean(activeConference?.items.some((item) => item.qtd_conferida > 0));
   const isReceivingActiveConference = activeConference?.etapa === "entrada";
@@ -448,10 +633,11 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const barcodeIconClassName = `field-icon validation-status${barcodeValidationState === "validating" ? " is-validating" : ""}${barcodeValidationState === "valid" ? " is-valid" : ""}${barcodeValidationState === "invalid" ? " is-invalid" : ""}`;
 
   const groupedItems = useMemo(() => {
-    const groups = { falta: [], sobra: [], correto: [] } as Record<GroupKey, Array<ReturnType<typeof withDivergencia>>>;
+    const groups = { nao_conferido: [], falta: [], sobra: [], correto: [] } as Record<GroupKey, Array<ReturnType<typeof withDivergencia>>>;
     for (const row of activeConference?.items.map(withDivergencia) ?? []) {
       groups[row.divergencia].push(row);
     }
+    groups.nao_conferido.sort((a, b) => itemSort(a.item, b.item));
     groups.falta.sort((a, b) => itemSort(a.item, b.item));
     groups.sobra.sort((a, b) => itemSort(a.item, b.item));
     groups.correto.sort((a, b) => itemSort(a.item, b.item));
@@ -459,6 +645,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [activeConference]);
 
   const divergenciaTotals = {
+    nao_conferido: groupedItems.nao_conferido.length,
     falta: groupedItems.falta.length,
     sobra: groupedItems.sobra.length,
     correto: groupedItems.correto.length
@@ -481,6 +668,14 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       noteStatusDetail(row)
     ].join(" ")).includes(needle));
   }, [modalNotes, notesSearchInput]);
+  const selectedBatchNotes = useMemo(() => {
+    const selected = new Set(selectedBatchNoteKeys);
+    return modalNotes.filter((note) => selected.has(buildTransferenciaCdNoteKey(note)));
+  }, [modalNotes, selectedBatchNoteKeys]);
+  const selectedBatchEtapa = useMemo(() => {
+    const etapas = [...new Set(selectedBatchNotes.map((note) => note.etapa))];
+    return etapas.length === 1 ? etapas[0] : null;
+  }, [selectedBatchNotes]);
   const completionStats = useMemo(() => {
     const rows = overviewNotes.length ? overviewNotes : notes;
     const completed = rows.filter((row) => {
@@ -538,11 +733,11 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       clearDismissedReadOnlyConference();
     }
     setShowFinalizeModal(false);
-    setFinalizeMotivo("");
     setFinalizeError(null);
     setExpandedCoddv(null);
     setEditingCoddv(null);
     setLastAddedCoddv(null);
+    setSelectedBatchNoteKeys([]);
     setEditQtdInput("0");
     setBarcodeInput("");
     setOcorrenciaInput("");
@@ -565,13 +760,16 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       void persistPreferences({ cd_ativo: nextCd });
     }
     await setAndSaveActiveConference(next);
-    setNfInput(String(next.nf_trf));
+    setNfInput(isBatchConference(next) ? "" : String(next.nf_trf));
     setShowNotesModal(false);
     setNotes([]);
+    setSelectedBatchNoteKeys([]);
     setEditingCoddv(null);
     setExpandedCoddv(null);
     if (!options?.silent) {
-      setStatusMessage(options?.message ?? `Conferência retomada automaticamente: ${conferenceResumeLabel(next)}.`);
+      setStatusMessage(options?.message ?? (isBatchConference(next)
+        ? `Lote retomado automaticamente: ${(next.batch_notes?.length ?? 0)} NFs em ${formatEtapa(next.etapa)}.`
+        : `Conferência retomada automaticamente: ${conferenceResumeLabel(next)}.`));
     }
     return next;
   }, [cdAtivo, clearDismissedReadOnlyConference, isGlobalAdmin, persistPreferences, setAndSaveActiveConference]);
@@ -602,15 +800,24 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
 
   const mergeNotesWithLocalState = useCallback(async (rows: TransferenciaCdNoteRow[], targetCd: number): Promise<TransferenciaCdNoteRow[]> => {
     const localConferences = await listUserLocalConferences(profile.user_id);
-    const localByKey = new Map(
-      localConferences
-        .filter((row) => !row.pending_cancel && deriveConferenceCd(row) === targetCd && row.started_by === profile.user_id)
-        .map((row) => [buildTransferenciaCdNoteKey(row), row] as const)
-    );
+    const localByKey = new Map<string, TransferenciaCdLocalConference>();
+    for (const row of localConferences.filter((candidate) => !candidate.pending_cancel && deriveConferenceCd(candidate) === targetCd && candidate.started_by === profile.user_id)) {
+      if (isBatchConference(row)) {
+        for (const note of row.batch_notes ?? []) {
+          localByKey.set(buildTransferenciaCdNoteKey(note), row);
+        }
+      } else {
+        localByKey.set(buildTransferenciaCdNoteKey(row), row);
+      }
+    }
 
     return rows.map((row) => {
       const local = localByKey.get(buildTransferenciaCdNoteKey(row));
-      return local ? applyConferenceToNote(row, local) : row;
+      if (!local) return row;
+      if (isBatchConference(local)) {
+        return applyConferenceToNote(row, { ...local, status: "em_conferencia" });
+      }
+      return applyConferenceToNote(row, local);
     });
   }, [profile.user_id]);
 
@@ -754,6 +961,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setBusyOpen(true);
     try {
       const rows = await loadCurrentNotesSnapshot(currentCd);
+      setSelectedBatchNoteKeys([]);
       if (!preferOfflineMode && isOnline) {
         setOnlineOverviewNotes(rows);
       }
@@ -809,6 +1017,38 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
           const items = await fetchTransferenciaItems(remote.conf_id);
           if (remote.is_read_only) {
             const readOnlyConference = localFromRemote(profile, currentCd, remote, items);
+            if (remote.status === "finalizado_parcial") {
+              const reopenInfo = await fetchTransferenciaPartialReopenInfo(currentCd, note);
+              if (reopenInfo.can_reopen) {
+                setDialogState({
+                  title: "Conferência parcialmente finalizada",
+                  message: `Esta NF possui ${reopenInfo.pending_items} item(ns) não conferido(s) e ${reopenInfo.locked_items} item(ns) preservado(s). Deseja reabrir apenas os pendentes?`,
+                  confirmLabel: "Reabrir pendentes",
+                  cancelLabel: "Abrir leitura",
+                  onCancel: () => {
+                    setDialogState(null);
+                    void activateConference(readOnlyConference, { silent: true });
+                    setStatusMessage("NF aberta em modo leitura.");
+                  },
+                  onConfirm: () => {
+                    setDialogState(null);
+                    void (async () => {
+                      try {
+                        const reopened = await reopenTransferenciaPartialConference(currentCd, note);
+                        const reopenedItems = await fetchTransferenciaItems(reopened.conf_id);
+                        await activateConference(localFromRemote(profile, currentCd, reopened, reopenedItems), {
+                          silent: true
+                        });
+                        setStatusMessage("Conferência reaberta. Apenas os produtos não conferidos continuam editáveis.");
+                      } catch (reopenError) {
+                        setErrorMessage(toTransferenciaErrorMessage(reopenError));
+                      }
+                    })();
+                  }
+                });
+                return;
+              }
+            }
             setDialogState({
               title: "NF com conferência existente",
               message: remote.status === "em_conferencia"
@@ -855,6 +1095,67 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     profile,
     resumeLocalActiveConference,
     resumeRemoteActiveConference
+  ]);
+
+  const toggleBatchSelection = useCallback((note: TransferenciaCdNoteRow) => {
+    const key = buildTransferenciaCdNoteKey(note);
+    setSelectedBatchNoteKeys((current) => current.includes(key)
+      ? current.filter((value) => value !== key)
+      : [...current, key]);
+  }, []);
+
+  const openSelectedNotesBatch = useCallback(async () => {
+    if (currentCd == null) return;
+    if (selectedBatchNotes.length === 0) {
+      setErrorMessage("Selecione ao menos uma NF para iniciar o lote.");
+      return;
+    }
+    if (selectedBatchEtapa == null) {
+      setErrorMessage("O lote deve conter apenas notas da mesma etapa.");
+      return;
+    }
+    if (!isOnline || preferOfflineMode) {
+      setErrorMessage("O lote multi-NF exige conexão com a internet.");
+      return;
+    }
+    if (hasOpenConference) {
+      setErrorMessage("Finalize ou feche a conferência atual antes de iniciar outro lote.");
+      return;
+    }
+
+    setBusyOpen(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      const targetNotes = selectedBatchNotes.map((note) => ({ ...note, conf_id: null } satisfies TransferenciaCdBatchNoteRef));
+      const openedConferences = await openTransferenciaNoteBatch(currentCd, targetNotes);
+      const openedByKey = new Map(openedConferences.map((row) => [buildTransferenciaCdNoteKey(row), row] as const));
+      const opened = await Promise.all(targetNotes.map(async (note) => {
+        const conference = openedByKey.get(buildTransferenciaCdNoteKey(note));
+        if (!conference) {
+          throw new Error(`Falha ao abrir a NF ${note.nf_trf}/${note.sq_nf} no lote.`);
+        }
+        const items = await fetchTransferenciaItems(conference.conf_id);
+        return { note, conference, items };
+      }));
+      await activateConference(batchConferenceFromRemote(profile, currentCd, opened), {
+        silent: true
+      });
+      setStatusMessage(`Lote com ${opened.length} NFs aberto para ${formatEtapa(selectedBatchEtapa)}.`);
+    } catch (error) {
+      setErrorMessage(toTransferenciaErrorMessage(error));
+    } finally {
+      setBusyOpen(false);
+    }
+  }, [
+    activateConference,
+    currentCd,
+    hasOpenConference,
+    isOnline,
+    preferOfflineMode,
+    profile,
+    selectedBatchEtapa,
+    selectedBatchNotes
   ]);
 
   const runNoteSearchByValue = useCallback(async (value: string) => {
@@ -907,6 +1208,17 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     });
   }, [activeConference, setAndSaveActiveConference]);
 
+  const updateBatchConferenceFromRemoteItem = useCallback(async (confId: string, remoteItem: TransferenciaCdItemRow) => {
+    if (!activeConference || !isBatchConference(activeConference)) return;
+    const nextAllocations = replaceBatchAllocationWithRemote(activeConference.batch_allocations ?? [], confId, remoteItem);
+    await setAndSaveActiveConference({
+      ...activeConference,
+      items: aggregateBatchItems(nextAllocations),
+      batch_allocations: nextAllocations,
+      updated_at: new Date().toISOString()
+    });
+  }, [activeConference, setAndSaveActiveConference]);
+
   const handleCollectBarcode = useCallback(async (raw?: string) => {
     if (!activeConference || !canEditActiveConference || busyScan) return;
     const barras = normalizeBarcode(raw ?? barcodeInput);
@@ -917,7 +1229,23 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setErrorMessage(null);
     try {
       let nextItem: TransferenciaCdLocalItem | null = null;
-      if (queueModeFor(activeConference)) {
+      if (isBatchConference(activeConference)) {
+        const found = await getDbBarrasByBarcode(barras);
+        if (!found) throw new Error("BARRAS_NAO_ENCONTRADA");
+        const allocations = sortBatchAllocationsBySelection(
+          activeConference,
+          (activeConference.batch_allocations ?? []).filter((allocation) => allocation.coddv === found.coddv)
+        );
+        const target = allocations.find((allocation) => !allocation.is_locked && allocation.qtd_conferida < allocation.qtd_esperada)
+          ?? allocations.find((allocation) => !allocation.is_locked)
+          ?? null;
+        if (!target?.conf_id) throw new Error("PRODUTO_FORA_DA_TRANSFERENCIA");
+        const remote = await scanTransferenciaBarcode(target.conf_id, barras, qtd, activeConference.etapa === "entrada" ? ocorrenciaInput : "");
+        await updateBatchConferenceFromRemoteItem(target.conf_id, remote);
+        nextItem = aggregateBatchItems(
+          replaceBatchAllocationWithRemote(activeConference.batch_allocations ?? [], target.conf_id, remote)
+        ).find((item) => item.coddv === remote.coddv) ?? null;
+      } else if (queueModeFor(activeConference)) {
         const found = await getDbBarrasByBarcode(barras);
         if (!found) throw new Error("BARRAS_NAO_ENCONTRADA");
         const current = activeConference.items.find((item) => item.coddv === found.coddv);
@@ -941,7 +1269,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         await updateActiveItem(nextItem, true);
       } else if (activeConference.remote_conf_id) {
         const remote = await scanTransferenciaBarcode(activeConference.remote_conf_id, barras, qtd, activeConference.etapa === "entrada" ? ocorrenciaInput : "");
-        nextItem = { coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at };
+        nextItem = { coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at, is_locked: remote.is_locked, locked_by: remote.locked_by, locked_mat: remote.locked_mat, locked_nome: remote.locked_nome };
         await updateActiveItem(nextItem, false);
       }
       if (!nextItem) return;
@@ -960,7 +1288,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       setBusyScan(false);
       window.setTimeout(() => setBarcodeValidationState("idle"), 700);
     }
-  }, [activeConference, barcodeInput, busyScan, canEditActiveConference, multiploInput, ocorrenciaInput, queueModeFor, showScanFeedback, triggerScanErrorAlert, updateActiveItem]);
+  }, [activeConference, barcodeInput, busyScan, canEditActiveConference, multiploInput, ocorrenciaInput, queueModeFor, showScanFeedback, triggerScanErrorAlert, updateActiveItem, updateBatchConferenceFromRemoteItem]);
 
   const onSubmitBarras = useCallback((event: FormEvent) => {
     event.preventDefault();
@@ -973,7 +1301,31 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     const current = activeConference.items.find((item) => item.coddv === coddv);
     if (!current) return;
     try {
-      if (queueModeFor(activeConference)) {
+      if (isBatchConference(activeConference)) {
+        const allocations = sortBatchAllocationsBySelection(
+          activeConference,
+          (activeConference.batch_allocations ?? []).filter((allocation) => allocation.coddv === coddv)
+        );
+        let remaining = qtd;
+        let nextAllocations = activeConference.batch_allocations ?? [];
+        for (const allocation of allocations) {
+          if (!allocation.conf_id || allocation.is_locked) continue;
+          let targetQtd = Math.min(allocation.qtd_esperada, remaining);
+          remaining -= targetQtd;
+          if (remaining > 0 && allocation === allocations[allocations.length - 1]) {
+            targetQtd += remaining;
+            remaining = 0;
+          }
+          const remote = await setTransferenciaItemQtd(allocation.conf_id, coddv, targetQtd);
+          nextAllocations = replaceBatchAllocationWithRemote(nextAllocations, allocation.conf_id, remote);
+        }
+        await setAndSaveActiveConference({
+          ...activeConference,
+          items: aggregateBatchItems(nextAllocations),
+          batch_allocations: nextAllocations,
+          updated_at: new Date().toISOString()
+        });
+      } else if (queueModeFor(activeConference)) {
         const normalizedOcc = activeConference.etapa === "entrada"
           ? normalizeOccurrenceForQtd(current.ocorrencia_avariado_qtd, current.ocorrencia_vencido_qtd, qtd)
           : { avariado: 0, vencido: 0 };
@@ -986,30 +1338,42 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         }, true);
       } else if (activeConference.remote_conf_id) {
         const remote = await setTransferenciaItemQtd(activeConference.remote_conf_id, coddv, qtd);
-        await updateActiveItem({ coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at }, false);
+        await updateActiveItem({ coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at, is_locked: remote.is_locked, locked_by: remote.locked_by, locked_mat: remote.locked_mat, locked_nome: remote.locked_nome }, false);
       }
       setEditingCoddv(null);
       setEditQtdInput("0");
     } catch (error) {
       setErrorMessage(toTransferenciaErrorMessage(error));
     }
-  }, [activeConference, canEditActiveConference, editQtdInput, queueModeFor, updateActiveItem]);
+  }, [activeConference, canEditActiveConference, editQtdInput, queueModeFor, setAndSaveActiveConference, updateActiveItem]);
 
   const resetItem = useCallback(async (coddv: number) => {
     if (!activeConference || !canEditActiveConference) return;
     const current = activeConference.items.find((item) => item.coddv === coddv);
     if (!current) return;
     try {
-      if (queueModeFor(activeConference)) {
+      if (isBatchConference(activeConference)) {
+        let nextAllocations = activeConference.batch_allocations ?? [];
+        for (const allocation of (activeConference.batch_allocations ?? []).filter((row) => row.coddv === coddv && row.conf_id && !row.is_locked)) {
+          const remote = await resetTransferenciaItem(allocation.conf_id!, coddv);
+          nextAllocations = replaceBatchAllocationWithRemote(nextAllocations, allocation.conf_id!, remote);
+        }
+        await setAndSaveActiveConference({
+          ...activeConference,
+          items: aggregateBatchItems(nextAllocations),
+          batch_allocations: nextAllocations,
+          updated_at: new Date().toISOString()
+        });
+      } else if (queueModeFor(activeConference)) {
         await updateActiveItem({ ...current, qtd_conferida: 0, barras: null, ocorrencia_avariado_qtd: 0, ocorrencia_vencido_qtd: 0, updated_at: new Date().toISOString() }, true);
       } else if (activeConference.remote_conf_id) {
         const remote = await resetTransferenciaItem(activeConference.remote_conf_id, coddv);
-        await updateActiveItem({ coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at }, false);
+        await updateActiveItem({ coddv: remote.coddv, barras: remote.barras, descricao: remote.descricao, qtd_esperada: remote.qtd_esperada, qtd_conferida: remote.qtd_conferida, embcomp_cx: remote.embcomp_cx, qtd_cxpad: remote.qtd_cxpad, ocorrencia_avariado_qtd: remote.ocorrencia_avariado_qtd, ocorrencia_vencido_qtd: remote.ocorrencia_vencido_qtd, updated_at: remote.updated_at, is_locked: remote.is_locked, locked_by: remote.locked_by, locked_mat: remote.locked_mat, locked_nome: remote.locked_nome }, false);
       }
     } catch (error) {
       setErrorMessage(toTransferenciaErrorMessage(error));
     }
-  }, [activeConference, canEditActiveConference, queueModeFor, updateActiveItem]);
+  }, [activeConference, canEditActiveConference, queueModeFor, setAndSaveActiveConference, updateActiveItem]);
 
   const requestResetItem = useCallback((coddv: number) => {
     setDialogState({ title: "Limpar item", message: "Deseja limpar a quantidade conferida deste item?", confirmLabel: "Limpar", onConfirm: () => { setDialogState(null); void resetItem(coddv); } });
@@ -1027,7 +1391,13 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
           if (!activeConference) return;
           setBusyCancel(true);
           try {
-            if (queueModeFor(activeConference)) {
+            if (isBatchConference(activeConference)) {
+              const confIds = [...new Set((activeConference.batch_notes ?? []).map((note) => note.conf_id).filter((value): value is string => Boolean(value)))];
+              for (const confId of confIds) {
+                await cancelTransferencia(confId);
+              }
+              setStatusMessage("Lote cancelado.");
+            } else if (queueModeFor(activeConference)) {
               await setAndSaveActiveConference({ ...activeConference, pending_cancel: true, pending_snapshot: false, pending_finalize: false, updated_at: new Date().toISOString() });
               setStatusMessage("Cancelamento salvo localmente. A remoção no banco ocorrerá ao reconectar.");
             } else if (activeConference.remote_conf_id) {
@@ -1047,22 +1417,46 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
 
   const handleFinalizeConference = useCallback(async () => {
     if (!activeConference || !canEditActiveConference) return;
-    const motivo = finalizeMotivo.trim() || null;
-    if (groupedItems.falta.length > 0 && !motivo) {
-      setFinalizeError("Informe o motivo da falta para finalizar.");
-      return;
-    }
     setBusyFinalize(true);
     setFinalizeError(null);
     try {
+      if (isBatchConference(activeConference)) {
+        if (!isOnline) {
+          setFinalizeError("O lote multi-NF precisa estar online para finalizar.");
+          return;
+        }
+        const summaries = batchNoteSummary(activeConference);
+        let okCount = 0;
+        let partialCount = 0;
+        let pendingCountLocal = 0;
+        for (const summary of summaries) {
+          const confId = summary.note.conf_id;
+          if (!confId) continue;
+          if (summary.nextStatus === "pendente") {
+            await cancelTransferencia(confId);
+            pendingCountLocal += 1;
+            continue;
+          }
+          const finalized = await finalizeTransferencia(confId, null);
+          if (finalized.status === "finalizado_ok") okCount += 1;
+          else partialCount += 1;
+        }
+        setShowFinalizeModal(false);
+        clearActiveConferenceView();
+        setStatusMessage(`Lote finalizado: ${okCount} NF(s) concluída(s), ${partialCount} parcial(is) e ${pendingCountLocal} pendente(s).`);
+        return;
+      }
       if (queueModeFor(activeConference)) {
-        await setAndSaveActiveConference({ ...activeConference, status: groupedItems.falta.length > 0 ? "finalizado_falta" : "finalizado_ok", falta_motivo: motivo, finalized_at: new Date().toISOString(), is_read_only: true, pending_snapshot: true, pending_finalize: true, pending_finalize_reason: motivo, updated_at: new Date().toISOString() });
+        if (!hasAnyItemInformed) {
+          setFinalizeError("Informe ao menos um item antes de finalizar.");
+          return;
+        }
+        await setAndSaveActiveConference({ ...activeConference, status: groupedItems.nao_conferido.length > 0 ? "finalizado_parcial" : "finalizado_ok", falta_motivo: null, finalized_at: new Date().toISOString(), is_read_only: true, pending_snapshot: true, pending_finalize: true, pending_finalize_reason: null, updated_at: new Date().toISOString() });
       } else if (activeConference.remote_conf_id) {
-        const finalized = await finalizeTransferencia(activeConference.remote_conf_id, motivo);
+        const finalized = await finalizeTransferencia(activeConference.remote_conf_id, null);
         await setAndSaveActiveConference({ ...activeConference, status: finalized.status, falta_motivo: finalized.falta_motivo, finalized_at: finalized.finalized_at, is_read_only: true, updated_at: new Date().toISOString() });
       }
       setShowFinalizeModal(false);
-      setFinalizeMotivo("");
       setStatusMessage("Conferência finalizada com sucesso.");
     } catch (error) {
       const message = toTransferenciaErrorMessage(error);
@@ -1071,7 +1465,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusyFinalize(false);
     }
-  }, [activeConference, canEditActiveConference, finalizeMotivo, groupedItems.falta.length, queueModeFor, setAndSaveActiveConference]);
+  }, [activeConference, canEditActiveConference, clearActiveConferenceView, groupedItems.nao_conferido.length, hasAnyItemInformed, queueModeFor, setAndSaveActiveConference]);
 
   const requestFinalize = useCallback(() => {
     if (groupedItems.sobra.length > 0) {
@@ -1290,9 +1684,11 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const renderItemGroup = (title: string, groupKey: GroupKey, rows: Array<ReturnType<typeof withDivergencia>>) => (
     <div className="termo-list-block">
       <h4>{title} ({rows.length})</h4>
-      {rows.length === 0 ? <div className="coleta-empty">Sem itens com {groupKey === "correto" ? "conferência correta" : groupKey}.</div> : rows.map(({ item, qtd_falta, qtd_sobra }) => {
+      {rows.length === 0 ? <div className="coleta-empty">Sem itens com {groupKey === "correto" ? "conferência correta" : groupKey === "nao_conferido" ? "status não conferido" : groupKey}.</div> : rows.map(({ item, qtd_falta, qtd_sobra }) => {
         const expanded = expandedCoddv === item.coddv;
         const isLastAddedItem = lastAddedCoddv === item.coddv;
+        const itemAllocations = (activeConference?.batch_allocations ?? []).filter((allocation) => allocation.coddv === item.coddv);
+        const itemLocked = item.is_locked === true;
         return (
           <article key={`${groupKey}-${item.coddv}`} className={`termo-item-card${expanded ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
             <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
@@ -1305,7 +1701,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               </div>
               <div className="termo-item-side">
                 {isLastAddedItem ? <span className="termo-last-added-tag"><span className="termo-last-added-tag-icon" aria-hidden="true">{barcodeIcon()}</span>Último adicionado</span> : null}
-                <span className={`termo-divergencia ${groupKey}`}>{groupKey === "falta" ? `Falta ${qtd_falta}` : groupKey === "sobra" ? `Sobra ${qtd_sobra}` : "Correto"}</span>
+                <span className={`termo-divergencia ${groupKey === "nao_conferido" ? "falta" : groupKey}`}>{groupKey === "nao_conferido" ? "Não conferido" : groupKey === "falta" ? `Falta ${qtd_falta}` : groupKey === "sobra" ? `Sobra ${qtd_sobra}` : "Correto"}</span>
                 <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(expanded)}</span>
               </div>
             </button>
@@ -1314,9 +1710,11 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
                 <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                 <p>{qtdAtendidaLabel}: {item.qtd_esperada}</p>
                 <p>{itemPackageLabel(item)}</p>
+                {itemLocked ? <p className="termo-inline-note">Produto preservado por {item.locked_nome ?? "usuário"}{item.locked_mat ? ` (${item.locked_mat})` : ""}.</p> : null}
+                {itemAllocations.length > 0 ? <div className="termo-routes-list">{itemAllocations.map((allocation) => <p key={`${allocation.note_key}-${allocation.coddv}`}>NF {allocation.nf_trf}/{allocation.sq_nf}: esperada {allocation.qtd_esperada} | conferida {allocation.qtd_conferida}</p>)}</div> : null}
                 {canEditActiveConference ? (
                   <div className="termo-item-actions">
-                    {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
+                    {editingCoddv === item.coddv && item.qtd_conferida > 0 && !itemLocked ? (
                       <>
                         <input type="text" inputMode="numeric" pattern="[0-9]*" value={editQtdInput} onFocus={(event) => event.currentTarget.select()} onClick={(event) => event.currentTarget.select()} onChange={(event) => setEditQtdInput(event.target.value.replace(/\D/g, ""))} />
                         <button className="btn btn-primary" type="button" onClick={() => void handleSaveItemEdit(item.coddv)}>Salvar</button>
@@ -1324,12 +1722,13 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
                       </>
                     ) : (
                       <>
-                        {item.qtd_conferida > 0 ? <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>Editar</button> : null}
-                        {item.qtd_conferida > 0 ? <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>Limpar</button> : null}
+                        {item.qtd_conferida > 0 && !itemLocked ? <button className="btn btn-muted" type="button" onClick={() => { setEditingCoddv(item.coddv); setEditQtdInput(String(item.qtd_conferida)); }}>Editar</button> : null}
+                        {item.qtd_conferida > 0 && !itemLocked ? <button className="btn btn-muted termo-danger-btn" type="button" onClick={() => requestResetItem(item.coddv)}>Limpar</button> : null}
                       </>
                     )}
                   </div>
                 ) : null}
+                {canEditActiveConference && itemLocked ? <p className="termo-inline-note">Este produto já foi preservado e não pode mais ser alterado.</p> : null}
                 {qtd_sobra > 0 ? <p className="termo-inline-note">Sobra detectada: {qtd_sobra}</p> : null}
               </div>
             ) : null}
@@ -1442,14 +1841,16 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
           <article className="termo-volume-card">
             <div className="termo-volume-head">
               <div>
-                <h3>NF {activeConference.nf_trf} | SQ {activeConference.sq_nf}</h3>
+                <h3>{isBatchConference(activeConference) ? `Lote com ${activeConference.batch_notes?.length ?? 0} NFs` : `NF ${activeConference.nf_trf} | SQ ${activeConference.sq_nf}`}</h3>
                 <p>Origem: {activeConference.cd_ori_nome}</p>
                 <p>Destino: {activeConference.cd_des_nome}</p>
                 <p>{formatEtapa(activeConference.etapa)} para esta transferência.</p>
-                <p>Data NF: {formatReportDate(activeConference.dt_nf)}</p>
+                {!isBatchConference(activeConference) ? <p>Data NF: {formatReportDate(activeConference.dt_nf)}</p> : null}
+                {isBatchConference(activeConference) ? <p>NFs no lote: {(activeConference.batch_notes ?? []).map((note) => `${note.nf_trf}/${note.sq_nf}`).join(", ")}</p> : null}
                 {activeConference.etapa === "entrada" ? <p className="termo-inline-note">{originObservation(activeConference)}</p> : null}
                 <p>Status: {formatStatus(activeConference.status)}</p>
                 <p>{activeConferenceStatusDetail(activeConference)}</p>
+                {isBatchConference(activeConference) ? <p className="termo-inline-note">A finalização será calculada individualmente por NF do lote.</p> : null}
                 {activeConference.is_read_only ? <p className="termo-inline-note">Conferência aberta somente para leitura.</p> : null}
               </div>
               <div className="termo-volume-head-right">
@@ -1464,6 +1865,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
             </div>
             <form className="termo-form termo-scan-form" onSubmit={onSubmitBarras}>
               <h4>Conferência de produtos</h4>
+              {isBatchConference(activeConference) && !isOnline ? <div className="alert error">O lote multi-NF precisa estar online para continuar a conferência.</div> : null}
               <div className="termo-scan-grid termo-scan-grid-stack">
                 <label>Código de barras<div className="input-icon-wrap with-action"><span className={barcodeIconClassName} aria-hidden="true">{barcodeIcon()}</span><input ref={barrasRef} type="text" inputMode={barcodeInputMode} value={barcodeInput} onChange={(event) => setBarcodeInput(event.target.value)} onFocus={enableSoftKeyboard} onPointerDown={enableSoftKeyboard} onBlur={disableSoftKeyboard} autoComplete="off" placeholder="Bipe, digite ou use câmera" disabled={!canEditActiveConference || busyScan} /><button type="button" className="input-action-btn" onClick={() => { setScannerTarget("barras"); setScannerOpen(true); }} title="Ler barras pela câmera" aria-label="Ler barras pela câmera">{cameraIcon()}</button></div></label>
                 <label>Múltiplo<div className="input-icon-wrap with-stepper"><span className="field-icon" aria-hidden="true">{quantityIcon()}</span><input type="text" inputMode="numeric" pattern="[0-9]*" value={multiploInput} onChange={(event) => { const next = event.target.value.replace(/\D/g, "") || "1"; setMultiploInput(next); void persistPreferences({ multiplo_padrao: parsePositiveInteger(next, 1) }); }} disabled={!canEditActiveConference} /><div className="input-stepper-group"><button type="button" className="input-stepper-btn" onClick={() => setMultiploInput((current) => String(Math.max(1, parsePositiveInteger(current, 1) - 1)))} disabled={!canEditActiveConference}>-</button><button type="button" className="input-stepper-btn" onClick={() => setMultiploInput((current) => String(parsePositiveInteger(current, 1) + 1))} disabled={!canEditActiveConference}>+</button></div></div></label>
@@ -1471,6 +1873,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               </div>
               <button className="btn btn-primary" type="submit" disabled={!canEditActiveConference || busyScan}>{busyScan ? "Registrando..." : "Registrar leitura"}</button>
             </form>
+            {renderItemGroup("Não conferido", "nao_conferido", groupedItems.nao_conferido)}
             {renderItemGroup("Falta", "falta", groupedItems.falta)}
             {renderItemGroup("Sobra", "sobra", groupedItems.sobra)}
             {renderItemGroup("Correto", "correto", groupedItems.correto)}
@@ -1478,11 +1881,11 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         ) : <div className="coleta-empty">Nenhuma NF ativa. Informe uma NF para iniciar a conferência.</div>}
       </section>
 
-      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); const statusDetail = noteStatusDetail(note); return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><button type="button" className="termo-route-row-button termo-route-row-button-volume" disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span>{statusDetail ? <span className="termo-route-sub">{statusDetail}</span> : null}</span><span className="termo-route-actions-row"><span className="termo-route-items-count">{formatItemCount(note.total_itens)}</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button></div></div></div>, document.body) : null}
+      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{selectedBatchNoteKeys.length > 0 ? <p className="termo-inline-note">Selecionadas: {selectedBatchNoteKeys.length} NF(s){selectedBatchEtapa ? ` | ${formatEtapa(selectedBatchEtapa)}` : ""}</p> : null}{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); const statusDetail = noteStatusDetail(note); const noteKey = buildTransferenciaCdNoteKey(note); const checked = selectedBatchNoteKeys.includes(noteKey); const etapaBloqueada = selectedBatchEtapa != null && selectedBatchEtapa !== note.etapa && !checked; return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><div className="termo-route-row-button termo-route-row-button-volume"><label style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}><input type="checkbox" checked={checked} onChange={() => toggleBatchSelection(note)} disabled={busyOpen || etapaBloqueada || status === "finalizado_ok" || status === "finalizado_falta" || status === "finalizado_parcial"} /><button type="button" className="termo-route-row-button termo-route-row-button-volume" style={{ flex: 1 }} disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span>{etapaBloqueada ? <span className="termo-route-sub">Seleção bloqueada: o lote atual já está em {formatEtapa(selectedBatchEtapa)}</span> : null}{statusDetail ? <span className="termo-route-sub">{statusDetail}</span> : null}</span><span className="termo-route-actions-row"><span className="termo-route-items-count">{formatItemCount(note.total_itens)}</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></label></div></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button><button className="btn btn-primary" type="button" onClick={() => void openSelectedNotesBatch()} disabled={busyOpen || selectedBatchNoteKeys.length === 0 || selectedBatchEtapa == null}>{busyOpen ? "Abrindo..." : "Iniciar lote"}</button></div></div></div>, document.body) : null}
 
-      {showFinalizeModal && activeConference && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-finalizar-title" onClick={() => setShowFinalizeModal(false)}><div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-finalizar-title">Finalizar conferência</h3><p>Resumo: Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>{divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? <div className="termo-item-detail"><p>Itens com divergência:</p><div className="termo-routes-list termo-finalize-list">{groupedItems.falta.map(({ item, qtd_falta }) => <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>)}{groupedItems.sobra.map(({ item, qtd_sobra }) => <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>)}</div></div> : null}{divergenciaTotals.falta > 0 ? <label>Motivo da falta<textarea value={finalizeMotivo} onChange={(event) => setFinalizeMotivo(event.target.value)} placeholder="Descreva o motivo da falta" rows={3} /></label> : null}{finalizeError ? <div className="alert error">{finalizeError}</div> : null}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowFinalizeModal(false)} disabled={busyFinalize}>Cancelar</button><button className="btn btn-primary" type="button" onClick={() => void handleFinalizeConference()} disabled={busyFinalize}>{busyFinalize ? "Finalizando..." : "Confirmar finalização"}</button></div></div></div>, document.body) : null}
+      {showFinalizeModal && activeConference && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-finalizar-title" onClick={() => setShowFinalizeModal(false)}><div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-finalizar-title">Finalizar conferência</h3><p>Resumo: Não conferido {divergenciaTotals.nao_conferido} | Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>{isBatchConference(activeConference) ? <div className="termo-item-detail"><p>Prévia por NF:</p><div className="termo-routes-list termo-finalize-list">{batchNoteSummary(activeConference).map(({ note, nextStatus }) => <p key={`fim-lote-${note.dt_nf}-${note.nf_trf}-${note.sq_nf}`}>NF {note.nf_trf}/{note.sq_nf}: {nextStatus === "pendente" ? "Pendente" : nextStatus === "finalizado_ok" ? "Concluído" : "Finalizado parcial"}</p>)}</div></div> : null}{divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? <div className="termo-item-detail"><p>Itens com divergência:</p><div className="termo-routes-list termo-finalize-list">{groupedItems.falta.map(({ item, qtd_falta }) => <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>)}{groupedItems.sobra.map(({ item, qtd_sobra }) => <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>)}</div></div> : null}{finalizeError ? <div className="alert error">{finalizeError}</div> : null}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowFinalizeModal(false)} disabled={busyFinalize}>Cancelar</button><button className="btn btn-primary" type="button" onClick={() => void handleFinalizeConference()} disabled={busyFinalize}>{busyFinalize ? "Finalizando..." : "Confirmar finalização"}</button></div></div></div>, document.body) : null}
 
-      {dialogState && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-dialog" onClick={() => setDialogState(null)}><div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-dialog">{dialogState.title}</h3><p>{dialogState.message}</p><div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setDialogState(null)}>Cancelar</button><button className="btn btn-primary" type="button" onClick={dialogState.onConfirm}>{dialogState.confirmLabel ?? "Confirmar"}</button></div></div></div>, document.body) : null}
+      {dialogState && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-dialog" onClick={() => setDialogState(null)}><div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-dialog">{dialogState.title}</h3><p>{dialogState.message}</p><div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={dialogState.onCancel ?? (() => setDialogState(null))}>{dialogState.cancelLabel ?? "Cancelar"}</button><button className="btn btn-primary" type="button" onClick={dialogState.onConfirm}>{dialogState.confirmLabel ?? "Confirmar"}</button></div></div></div>, document.body) : null}
 
       {scannerOpen && typeof document !== "undefined" ? createPortal(<div className="scanner-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-scanner-title" onClick={() => setScannerOpen(false)}><div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}><div className="scanner-head"><h3 id="transferencia-scanner-title">{scannerTarget === "nf" ? "Scanner de NF" : "Scanner de barras"}</h3><div className="scanner-head-actions"><button className="scanner-close-btn" type="button" onClick={() => setScannerOpen(false)} aria-label="Fechar scanner">{closeIcon()}</button></div></div><div className="scanner-video-wrap"><video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline /><div className="scanner-frame" aria-hidden="true"><div className="scanner-frame-corner top-left" /><div className="scanner-frame-corner top-right" /><div className="scanner-frame-corner bottom-left" /><div className="scanner-frame-corner bottom-right" /><div className="scanner-frame-line" /></div></div><p className="scanner-hint">Aponte a câmera para leitura automática.</p>{scannerError ? <div className="alert error">{scannerError}</div> : null}</div></div>, document.body) : null}
     </>

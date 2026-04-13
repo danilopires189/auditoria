@@ -226,12 +226,31 @@ function normalizeLocalConference(row: TransferenciaCdLocalConference | null | u
       qtd_conferida: Math.max(0, Number(item.qtd_conferida) || 0),
       ocorrencia_avariado_qtd: Math.max(0, Number(item.ocorrencia_avariado_qtd) || 0),
       ocorrencia_vencido_qtd: Math.max(0, Number(item.ocorrencia_vencido_qtd) || 0),
-      updated_at: item.updated_at || new Date().toISOString()
+      updated_at: item.updated_at || new Date().toISOString(),
+      is_locked: item.is_locked === true,
+      locked_by: item.locked_by ?? null,
+      locked_mat: item.locked_mat ?? null,
+      locked_nome: item.locked_nome ?? null
     }))
     : [];
   return {
     ...row,
-    items: sortLocalItems(items)
+    items: sortLocalItems(items),
+    conference_mode: row.conference_mode === "batch" ? "batch" : "single",
+    batch_notes: Array.isArray(row.batch_notes) ? row.batch_notes : [],
+    batch_allocations: Array.isArray(row.batch_allocations)
+      ? row.batch_allocations.map((allocation) => ({
+        ...allocation,
+        qtd_esperada: Math.max(0, Number(allocation.qtd_esperada) || 0),
+        qtd_conferida: Math.max(0, Number(allocation.qtd_conferida) || 0),
+        ocorrencia_avariado_qtd: Math.max(0, Number(allocation.ocorrencia_avariado_qtd) || 0),
+        ocorrencia_vencido_qtd: Math.max(0, Number(allocation.ocorrencia_vencido_qtd) || 0),
+        is_locked: allocation.is_locked === true,
+        locked_by: allocation.locked_by ?? null,
+        locked_mat: allocation.locked_mat ?? null,
+        locked_nome: allocation.locked_nome ?? null
+      }))
+      : []
   };
 }
 
