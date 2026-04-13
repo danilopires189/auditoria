@@ -15577,6 +15577,10 @@ small {
   text-align: center;
 }
 
+.checklist-confirmation-dialog {
+  border-color: rgba(204, 138, 16, 0.28);
+}
+
 .checklist-completion-icon {
   width: 58px;
   height: 58px;
@@ -15587,6 +15591,11 @@ small {
   color: #0e7f58;
   font-size: 2rem;
   font-weight: 900;
+}
+
+.checklist-confirmation-dialog .checklist-completion-icon {
+  background: #fff4dc;
+  color: #b06b05;
 }
 
 .checklist-completion-dialog h3 {
@@ -15624,6 +15633,18 @@ small {
   color: #123873;
   font-family: "Sora", sans-serif;
   font-size: 1.05rem;
+}
+
+.checklist-confirmation-warning {
+  color: #8a4f00;
+  font-weight: 700;
+}
+
+.checklist-confirmation-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 @media (max-width: 980px) {
@@ -15680,8 +15701,13 @@ small {
 
   .checklist-submit-row .btn,
   .checklist-report-row .btn,
-  .checklist-lookup-row .btn {
+  .checklist-lookup-row .btn,
+  .checklist-confirmation-actions .btn {
     width: 100%;
+  }
+
+  .checklist-confirmation-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

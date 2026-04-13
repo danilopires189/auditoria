@@ -39,6 +39,18 @@ type CompletionPopup = {
   scoreMaxPoints: number | null;
   auditId: string;
 } | null;
+type ConfirmationPopup = {
+  checklistTitle: string;
+  scoringMode: ChecklistDefinition["scoring_mode"];
+  conformityPercent: number;
+  nonConformities: number;
+  riskScorePercent: number | null;
+  riskLevel: string | null;
+  scorePoints: number | null;
+  scoreMaxPoints: number | null;
+  criticalFail: boolean;
+  evaluatedLabel: string;
+} | null;
 type DraftResult = {
   conformityPercent: number;
   nonConformities: number;
@@ -202,6 +214,11 @@ function countAnswered(definition: ChecklistDefinition | null, answers: AnswerDr
 function nextPdfY(doc: jsPDF, fallback: number): number {
   const last = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY;
   return typeof last === "number" && Number.isFinite(last) ? last + 14 : fallback;
+}
+
+function scrollChecklistTop(behavior: ScrollBehavior = "smooth"): void {
+  if (typeof window === "undefined") return;
+  window.scrollTo({ top: 0, behavior });
 }
 
 async function imageUrlToDataUrl(url: string): Promise<string | null> {
@@ -410,6 +427,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
   const [busySubmit, setBusySubmit] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [confirmationPopup, setConfirmationPopup] = useState<ConfirmationPopup>(null);
   const [completionPopup, setCompletionPopup] = useState<CompletionPopup>(null);
 
   const [reportDtIni, setReportDtIni] = useState(todayIsoBrasilia());
@@ -434,7 +452,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
   const monthLabel = useMemo(() => formatMonthYearPtBR(monthKeyBrasilia()), []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") window.scrollTo(0, 0);
+    scrollChecklistTop("auto");
   }, []);
 
   const clearFormForDefinition = useCallback((definition: ChecklistDefinition | null) => {
@@ -454,11 +472,15 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
     setSelectedChecklistKey(key);
     clearFormForDefinition(definition);
     setStatusMessage(null);
+    setConfirmationPopup(null);
+    scrollChecklistTop();
   }, [clearFormForDefinition]);
 
   const switchChecklist = useCallback(() => {
     setSelectedChecklistKey(null);
     clearFormForDefinition(null);
+    setConfirmationPopup(null);
+    scrollChecklistTop();
   }, [clearFormForDefinition]);
 
   const updateAnswer = useCallback((itemNumber: number, answer: ChecklistAnswer) => {
@@ -528,44 +550,22 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
     clearFormForDefinition(selectedChecklist);
   }, [clearFormForDefinition, selectedChecklist]);
 
-  const submitChecklist = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const setChecklistError = useCallback((message: string) => {
+    setErrorMessage(message);
+    scrollChecklistTop();
+  }, []);
+
+  const executeFinalizeChecklist = useCallback(async () => {
     if (!selectedChecklist) {
-      setErrorMessage("Selecione um checklist para iniciar.");
+      setChecklistError("Selecione um checklist para iniciar.");
       return;
     }
-    if (!isOnline) {
-      setErrorMessage("Checklist disponível apenas online nesta versão.");
-      return;
-    }
-    if (activeCd == null) {
-      setErrorMessage("CD não definido para este usuário.");
-      return;
-    }
-    if (selectedChecklist.requires_evaluated_user && !evaluatedMat.trim()) {
-      setErrorMessage("Informe a matrícula do colaborador avaliado.");
-      return;
-    }
-    if (answeredCount !== selectedChecklist.total_items) {
-      setErrorMessage(`Responda todos os ${selectedChecklist.total_items} itens antes de finalizar.`);
-      return;
-    }
-    if (nonConformities > 0 && !observations.trim()) {
-      setErrorMessage("Informe a observação geral quando houver não conformidade.");
-      return;
-    }
-    if (!signatureAccepted) {
-      setErrorMessage("Confirme a assinatura eletrônica antes de finalizar.");
-      return;
-    }
-    const shouldFinalize = window.confirm(`Deseja finalizar ${selectedChecklist.title}? Após concluir, a auditoria será salva e você voltará para a tela inicial do Check List.`);
-    if (!shouldFinalize) return;
 
     setBusySubmit(true);
     try {
       const resolvedEvaluated = selectedChecklist.requires_evaluated_user ? evaluatedUser ?? await lookupEvaluated(evaluatedMat) : null;
       if (selectedChecklist.requires_evaluated_user && !resolvedEvaluated) {
-        setErrorMessage("Localize uma matrícula válida no DB_USUARIO antes de finalizar.");
+        setChecklistError("Localize uma matrícula válida no DB_USUARIO antes de finalizar.");
         return;
       }
 
@@ -588,6 +588,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
         }))
       });
       setStatusMessage(null);
+      setConfirmationPopup(null);
       setCompletionPopup({
         checklistTitle: selectedChecklist.title,
         conformityPercent: result.conformity_percent,
@@ -602,23 +603,81 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
       setErrorMessage(null);
       setSelectedChecklistKey(null);
       clearFormForDefinition(null);
+      scrollChecklistTop("auto");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao finalizar checklist.");
+      setChecklistError(error instanceof Error ? error.message : "Falha ao finalizar checklist.");
     } finally {
       setBusySubmit(false);
     }
   }, [
     activeCd,
-    answeredCount,
     answers,
     clearFormForDefinition,
     evaluatedMat,
     evaluatedUser,
-    isOnline,
     lookupEvaluated,
-    nonConformities,
     observations,
     selectedChecklist,
+    setChecklistError,
+    signatureAccepted
+  ]);
+
+  const submitChecklist = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedChecklist) {
+      setChecklistError("Selecione um checklist para iniciar.");
+      return;
+    }
+    if (!isOnline) {
+      setChecklistError("Checklist disponível apenas online nesta versão.");
+      return;
+    }
+    if (activeCd == null) {
+      setChecklistError("CD não definido para este usuário.");
+      return;
+    }
+    if (selectedChecklist.requires_evaluated_user && !evaluatedMat.trim()) {
+      setChecklistError("Informe a matrícula do colaborador avaliado.");
+      return;
+    }
+    if (answeredCount !== selectedChecklist.total_items) {
+      setChecklistError(`Responda todos os ${selectedChecklist.total_items} itens antes de finalizar.`);
+      return;
+    }
+    if (nonConformities > 0 && !observations.trim()) {
+      setChecklistError("Informe a observação geral quando houver não conformidade.");
+      return;
+    }
+    if (!signatureAccepted) {
+      setChecklistError("Confirme a assinatura eletrônica antes de finalizar.");
+      return;
+    }
+    setErrorMessage(null);
+    setConfirmationPopup({
+      checklistTitle: selectedChecklist.title,
+      scoringMode: selectedChecklist.scoring_mode,
+      conformityPercent: draftResult.conformityPercent,
+      nonConformities,
+      riskScorePercent: draftResult.riskScorePercent,
+      riskLevel: draftResult.riskLevel,
+      scorePoints: draftResult.scorePoints,
+      scoreMaxPoints: draftResult.scoreMaxPoints,
+      criticalFail: draftResult.criticalFail,
+      evaluatedLabel: selectedChecklist.requires_evaluated_user
+        ? `${evaluatedUser?.nome ?? "Colaborador não validado"} | MAT ${normalizeMat(evaluatedMat) || "-"}`
+        : currentCdLabel
+    });
+  }, [
+    activeCd,
+    answeredCount,
+    currentCdLabel,
+    draftResult,
+    evaluatedMat,
+    evaluatedUser,
+    isOnline,
+    nonConformities,
+    selectedChecklist,
+    setChecklistError,
     signatureAccepted
   ]);
 
@@ -1077,9 +1136,76 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                   )}
                 </div>
                 <small>{`ID da auditoria: ${completionPopup.auditId}`}</small>
-                <button type="button" className="btn btn-primary" onClick={() => setCompletionPopup(null)}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setCompletionPopup(null);
+                    scrollChecklistTop();
+                  }}
+                >
                   Voltar ao início
                 </button>
+              </div>
+            </div>
+          ) : null}
+
+          {confirmationPopup ? (
+            <div className="checklist-completion-overlay" role="dialog" aria-modal="true" aria-labelledby="checklist-confirmation-title">
+              <div className="checklist-completion-dialog checklist-confirmation-dialog surface-enter">
+                <span className="checklist-completion-icon" aria-hidden="true">!</span>
+                <div>
+                  <h3 id="checklist-confirmation-title">Confirmar conclusão</h3>
+                  <p>{confirmationPopup.checklistTitle}</p>
+                </div>
+                <div className="checklist-completion-metrics">
+                  {confirmationPopup.scoringMode === "risk_weighted" ? (
+                    <>
+                      <span>
+                        Risco
+                        <strong>{formatPercent(confirmationPopup.riskScorePercent ?? 0)}</strong>
+                      </span>
+                      <span>
+                        Nível
+                        <strong>{confirmationPopup.riskLevel ?? "-"}</strong>
+                      </span>
+                    </>
+                  ) : confirmationPopup.scoringMode === "score_points" ? (
+                    <>
+                      <span>
+                        Score
+                        <strong>{`${formatPoints(confirmationPopup.scorePoints)} / ${formatPoints(confirmationPopup.scoreMaxPoints)}`}</strong>
+                      </span>
+                      <span>
+                        Nível
+                        <strong>{confirmationPopup.riskLevel ?? "-"}</strong>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        Conformidade
+                        <strong>{formatPercent(confirmationPopup.conformityPercent)}</strong>
+                      </span>
+                      <span>
+                        Não conformidades
+                        <strong>{confirmationPopup.nonConformities}</strong>
+                      </span>
+                    </>
+                  )}
+                </div>
+                <small>{`Escopo: ${confirmationPopup.evaluatedLabel}`}</small>
+                {confirmationPopup.criticalFail ? (
+                  <small className="checklist-confirmation-warning">Existem itens críticos reprovados. O risco será salvo como ALTO.</small>
+                ) : null}
+                <div className="checklist-confirmation-actions">
+                  <button type="button" className="btn btn-muted" onClick={() => setConfirmationPopup(null)} disabled={busySubmit}>
+                    Revisar respostas
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={() => void executeFinalizeChecklist()} disabled={busySubmit}>
+                    {busySubmit ? "Finalizando..." : "Confirmar e concluir"}
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
