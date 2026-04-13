@@ -66,6 +66,8 @@ export interface RondaQualidadeZoneSummary {
   audited_in_month: boolean;
   total_auditorias: number;
   last_audit_at: string | null;
+  last_started_at: string | null;
+  last_finished_at: string | null;
   total_colunas: number;
   total_colunas_auditadas: number;
   total_niveis: number;
@@ -80,6 +82,8 @@ export interface RondaQualidadeColumnStat {
   audited_in_month: boolean;
   total_auditorias: number;
   last_audit_at: string | null;
+  last_started_at: string | null;
+  last_finished_at: string | null;
 }
 
 export interface RondaQualidadeLevelStat {
@@ -109,6 +113,8 @@ export interface RondaQualidadeHistorySession {
   auditor_nome: string;
   auditor_mat: string;
   created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
   occurrence_count: number;
   occurrences: RondaQualidadeHistoryOccurrence[];
 }

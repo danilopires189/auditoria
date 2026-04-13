@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatDateTimeBrasilia, monthStartIsoBrasilia } from "../../shared/brasilia-datetime";
@@ -38,10 +38,22 @@ interface RondaOfflineMeta {
   month_count: number;
 }
 
-interface RondaNoOccurrenceConfirmState {
+interface RondaConfirmState {
   title: string;
   message: string;
-  helper: string;
+  helper?: string;
+  confirmLabel: string;
+  confirmTone?: "primary" | "danger";
+}
+
+interface RondaAuditTarget {
+  zoneType: RondaQualidadeZoneType;
+  zona: string;
+  coluna: number | null;
+}
+
+interface RondaActiveAuditSession extends RondaAuditTarget {
+  startedAt: string;
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("ronda");
@@ -90,6 +102,14 @@ function checkIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 12.5l4 4 10-10" />
+    </svg>
+  );
+}
+
+function playIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 6.5v11l9-5.5z" />
     </svg>
   );
 }
@@ -260,6 +280,34 @@ function addressOptionLabel(option: RondaQualidadeAddressOption): string {
   return option.endereco;
 }
 
+function formatDurationClock(totalSeconds: number): string {
+  const normalized = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(normalized / 3600);
+  const minutes = Math.floor((normalized % 3600) / 60);
+  const seconds = normalized % 60;
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+}
+
+function formatElapsedSince(startedAt: string | null, nowMs: number): string {
+  if (!startedAt) return "00:00:00";
+  const startedMs = Date.parse(startedAt);
+  if (!Number.isFinite(startedMs)) return "00:00:00";
+  return formatDurationClock(Math.floor((nowMs - startedMs) / 1000));
+}
+
+function describeAuditTarget(target: RondaAuditTarget): string {
+  return target.zoneType === "PUL" && target.coluna != null
+    ? `coluna ${target.coluna} da zona ${target.zona}`
+    : `zona ${target.zona}`;
+}
+
+function sameAuditTarget(left: RondaAuditTarget | null, right: RondaAuditTarget | null): boolean {
+  if (!left || !right) return false;
+  return left.zoneType === right.zoneType
+    && left.zona === right.zona
+    && (left.zoneType !== "PUL" || left.coluna === right.coluna);
+}
+
 function filterAddressOptions(options: RondaQualidadeAddressOption[], search: string, levelFilter: string): RondaQualidadeAddressOption[] {
   const normalizedSearch = search.trim().toLocaleUpperCase("pt-BR");
   const normalizedLevel = levelFilter.trim().toLocaleUpperCase("pt-BR");
@@ -290,7 +338,8 @@ function renderZoneCardDetails(row: RondaQualidadeZoneSummary, expanded: boolean
     return (
       <div className="ronda-zone-card-details">
         {row.total_auditorias > 0 ? <span>{formatCount(row.total_auditorias, "auditoria em coluna", "auditorias em colunas")}</span> : null}
-        {row.last_audit_at ? <small>{`Última auditoria: ${formatDateTime(row.last_audit_at)}`}</small> : null}
+        {row.last_started_at ? <small>{`Início: ${formatDateTime(row.last_started_at)}`}</small> : null}
+        {row.last_finished_at ? <small>{`Fim: ${formatDateTime(row.last_finished_at)}`}</small> : null}
       </div>
     );
   }
@@ -300,7 +349,8 @@ function renderZoneCardDetails(row: RondaQualidadeZoneSummary, expanded: boolean
   return (
     <div className="ronda-zone-card-details">
       <span>{formatPercent(row.percentual_conformidade)}</span>
-      {row.last_audit_at ? <small>{`Última auditoria: ${formatDateTime(row.last_audit_at)}`}</small> : null}
+      {row.last_started_at ? <small>{`Início: ${formatDateTime(row.last_started_at)}`}</small> : null}
+      {row.last_finished_at ? <small>{`Fim: ${formatDateTime(row.last_finished_at)}`}</small> : null}
     </div>
   );
 }
@@ -361,6 +411,8 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   const [drafts, setDrafts] = useState<RondaQualidadeOccurrenceDraft[]>([emptyDraft()]);
   const [addressOptions, setAddressOptions] = useState<RondaQualidadeAddressOption[]>([]);
   const [addressesBusy, setAddressesBusy] = useState(false);
+  const [addressPickerIndex, setAddressPickerIndex] = useState<number | null>(null);
+  const [addressPickerSearch, setAddressPickerSearch] = useState("");
   const [addressLevelFilter, setAddressLevelFilter] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyBusy, setHistoryBusy] = useState(false);
@@ -375,7 +427,10 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   const [offlineMeta, setOfflineMeta] = useState<RondaOfflineMeta>({ updated_at: null, zone_count: 0, month_count: 0 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [noOccurrenceConfirm, setNoOccurrenceConfirm] = useState<RondaNoOccurrenceConfirmState | null>(null);
+  const [confirmState, setConfirmState] = useState<RondaConfirmState | null>(null);
+  const [activeAuditSession, setActiveAuditSession] = useState<RondaActiveAuditSession | null>(null);
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  const confirmActionRef = useRef<(() => void | Promise<void>) | null>(null);
 
   const selectedMonthRef = selectedMonthStart;
   const selectedMonthLabel = useMemo(() => formatMonthLabel(selectedMonthStart), [selectedMonthStart]);
@@ -406,12 +461,33 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     () => (selectedPulColumn == null ? null : detail?.column_stats.find((row) => row.coluna === selectedPulColumn) ?? null),
     [detail?.column_stats, selectedPulColumn]
   );
+  const selectedAuditTarget = useMemo<RondaAuditTarget | null>(() => {
+    if (!zoneType || !selectedZone) return null;
+    return {
+      zoneType,
+      zona: selectedZone,
+      coluna: zoneType === "PUL" ? selectedPulColumn : null
+    };
+  }, [selectedPulColumn, selectedZone, zoneType]);
+  const activeAuditMatchesSelection = useMemo(
+    () => sameAuditTarget(activeAuditSession, selectedAuditTarget),
+    [activeAuditSession, selectedAuditTarget]
+  );
+  const activeAuditElapsedLabel = useMemo(
+    () => formatElapsedSince(activeAuditMatchesSelection ? activeAuditSession?.startedAt ?? null : null, clockNow),
+    [activeAuditMatchesSelection, activeAuditSession?.startedAt, clockNow]
+  );
+  const activeAuditLabel = useMemo(
+    () => (activeAuditSession ? describeAuditTarget(activeAuditSession) : ""),
+    [activeAuditSession]
+  );
   const noOccurrenceAlreadyRegistered = useMemo(
     () => hasNoOccurrenceAudit(detail, zoneType, selectedPulColumn),
     [detail, selectedPulColumn, zoneType]
   );
   const noOccurrenceDisabledReason = useMemo(() => {
     if (readOnlyCorrectionMode) return "Meses anteriores ficam apenas para consulta e correção.";
+    if (!activeAuditMatchesSelection) return "Clique em Iniciar para liberar o registro desta auditoria.";
     if (zoneType === "PUL" && selectedPulColumn == null) return "Selecione uma coluna para registrar sem ocorrência.";
     if (noOccurrenceAlreadyRegistered) {
       return zoneType === "PUL"
@@ -419,7 +495,17 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
         : "Esta zona já foi registrada sem ocorrência neste mês.";
     }
     return undefined;
-  }, [noOccurrenceAlreadyRegistered, readOnlyCorrectionMode, selectedPulColumn, zoneType]);
+  }, [activeAuditMatchesSelection, noOccurrenceAlreadyRegistered, readOnlyCorrectionMode, selectedPulColumn, zoneType]);
+  const occurrenceActionDisabledReason = useMemo(() => {
+    if (readOnlyCorrectionMode) return "Meses anteriores ficam apenas para consulta e correção.";
+    if (!activeAuditMatchesSelection) return "Clique em Iniciar para liberar o lançamento de ocorrências.";
+    if (zoneType === "PUL" && selectedPulColumn == null) return "Selecione uma coluna para adicionar ocorrência.";
+    return undefined;
+  }, [activeAuditMatchesSelection, readOnlyCorrectionMode, selectedPulColumn, zoneType]);
+  const cancelAuditDisabledReason = useMemo(() => {
+    if (!activeAuditMatchesSelection) return "Nenhuma auditoria em andamento para esta seleção.";
+    return undefined;
+  }, [activeAuditMatchesSelection]);
   const addressLevelOptions = useMemo(
     () => Array.from(new Set(addressOptions.map((option) => option.nivel).filter((nivel): nivel is string => Boolean(nivel)))).sort(compareAddressLevel),
     [addressOptions]
@@ -453,7 +539,57 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     setDrafts([emptyDraft()]);
     setAddressLevelFilter("");
     setAddressOptions([]);
+    setAddressPickerIndex(null);
+    setAddressPickerSearch("");
   }, []);
+  const clearActiveAuditSession = useCallback(() => {
+    setActiveAuditSession(null);
+    resetComposerState();
+  }, [resetComposerState]);
+  const closeConfirmDialog = useCallback(() => {
+    if (auditBusy) return;
+    confirmActionRef.current = null;
+    setConfirmState(null);
+  }, [auditBusy]);
+  const openConfirmDialog = useCallback((state: RondaConfirmState, action: () => void | Promise<void>) => {
+    confirmActionRef.current = action;
+    setConfirmState(state);
+  }, []);
+  const confirmDialogAction = useCallback(async () => {
+    const action = confirmActionRef.current;
+    if (!action) return;
+    await action();
+  }, []);
+  const runWithDiscardedActiveAudit = useCallback((
+    action: () => void,
+    options?: {
+      title?: string;
+      message?: string;
+      helper?: string;
+      confirmLabel?: string;
+    }
+  ) => {
+    if (!activeAuditSession) {
+      action();
+      return;
+    }
+
+    openConfirmDialog(
+      {
+        title: options?.title ?? "Descartar auditoria em andamento",
+        message: options?.message ?? `A auditoria da ${activeAuditLabel} será descartada se você continuar.`,
+        helper: options?.helper ?? "As ocorrências preenchidas apenas nesta tela serão perdidas.",
+        confirmLabel: options?.confirmLabel ?? "Descartar e continuar",
+        confirmTone: "danger"
+      },
+      () => {
+        clearActiveAuditSession();
+        setConfirmState(null);
+        confirmActionRef.current = null;
+        action();
+      }
+    );
+  }, [activeAuditLabel, activeAuditSession, clearActiveAuditSession, openConfirmDialog]);
 
   const loadMonthOptions = useCallback(async () => {
     if (activeCd == null) {
@@ -633,12 +769,18 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [loadMonthOptions]);
 
   useEffect(() => {
+    if (!activeAuditSession) return;
+    setClockNow(Date.now());
+    const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [activeAuditSession]);
+
+  useEffect(() => {
     if (!selectedZone) {
       setDetail(null);
       setSelectedPulColumn(null);
       return;
     }
-    setSelectedPulColumn(null);
     void loadDetail(selectedZone);
   }, [loadDetail, selectedZone]);
 
@@ -663,14 +805,6 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   useEffect(() => {
     setHistoryMonth(selectedMonthStart);
   }, [selectedMonthStart]);
-
-  useEffect(() => {
-    if (!composerOpen) {
-      setDrafts([emptyDraft()]);
-      setAddressLevelFilter("");
-      setAddressOptions([]);
-    }
-  }, [composerOpen]);
 
   useEffect(() => {
     if (!composerOpen || addressesBusy) return;
@@ -721,10 +855,115 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     setHistoryOpen(true);
   }, [isOnline, offlineMeta.zone_count, selectedMonthStart, zoneType]);
 
+  const selectZoneType = useCallback((nextType: RondaQualidadeZoneType | null) => {
+    if (nextType === zoneType) return;
+    runWithDiscardedActiveAudit(() => {
+      setZoneType(nextType);
+    });
+  }, [runWithDiscardedActiveAudit, zoneType]);
+
+  const selectZone = useCallback((nextZone: string | null) => {
+    if (nextZone === selectedZone) return;
+    runWithDiscardedActiveAudit(() => {
+      setSelectedZone(nextZone);
+      setSelectedPulColumn(null);
+    });
+  }, [runWithDiscardedActiveAudit, selectedZone]);
+
+  const selectPulColumn = useCallback((nextColumn: number | null) => {
+    if (nextColumn === selectedPulColumn) return;
+    runWithDiscardedActiveAudit(() => {
+      setSelectedPulColumn(nextColumn);
+    });
+  }, [runWithDiscardedActiveAudit, selectedPulColumn]);
+
+  const startAuditSession = useCallback((target: RondaAuditTarget, alreadyAudited: boolean) => {
+    if (!isOnline || readOnlyCorrectionMode) return;
+
+    const applyStart = () => {
+      const startedAt = new Date().toISOString();
+      setSelectedZone(target.zona);
+      setSelectedPulColumn(target.zoneType === "PUL" ? target.coluna : null);
+      resetComposerState();
+      setActiveAuditSession({
+        ...target,
+        startedAt
+      });
+      setErrorMessage(null);
+      setStatusMessage(
+        alreadyAudited
+          ? `Nova auditoria iniciada para a ${describeAuditTarget(target)}.`
+          : `Auditoria iniciada para a ${describeAuditTarget(target)}.`
+      );
+      setConfirmState(null);
+      confirmActionRef.current = null;
+    };
+
+    if (sameAuditTarget(activeAuditSession, target)) {
+      setSelectedZone(target.zona);
+      setSelectedPulColumn(target.zoneType === "PUL" ? target.coluna : null);
+      setStatusMessage(`A auditoria da ${describeAuditTarget(target)} já está em andamento.`);
+      setErrorMessage(null);
+      return;
+    }
+
+    const openStartConfirm = () => openConfirmDialog(
+      {
+        title: alreadyAudited ? "Reiniciar auditoria" : "Iniciar auditoria",
+        message: alreadyAudited
+          ? `A ${describeAuditTarget(target)} já possui histórico no mês. Deseja iniciar uma nova auditoria?`
+          : `A auditoria da ${describeAuditTarget(target)} será iniciada agora. Deseja continuar?`,
+        helper: "Ao confirmar, o cronômetro começa a contar e você poderá concluir com ou sem ocorrência.",
+        confirmLabel: alreadyAudited ? "Reiniciar auditoria" : "Iniciar auditoria",
+        confirmTone: "primary"
+      },
+      applyStart
+    );
+
+    if (activeAuditSession) {
+      openConfirmDialog(
+        {
+          title: "Trocar auditoria em andamento",
+          message: `A auditoria da ${activeAuditLabel} será descartada para iniciar a ${describeAuditTarget(target)}.`,
+          helper: "Os dados locais da auditoria atual serão perdidos ao continuar.",
+          confirmLabel: alreadyAudited ? "Descartar e reiniciar" : "Descartar e iniciar",
+          confirmTone: "danger"
+        },
+        () => {
+          clearActiveAuditSession();
+          applyStart();
+        }
+      );
+      return;
+    }
+
+    openStartConfirm();
+  }, [activeAuditLabel, activeAuditSession, clearActiveAuditSession, isOnline, openConfirmDialog, readOnlyCorrectionMode, resetComposerState]);
+
+  const cancelActiveAudit = useCallback(() => {
+    if (!activeAuditSession) return;
+    openConfirmDialog(
+      {
+        title: "Cancelar auditoria em andamento",
+        message: `A auditoria da ${activeAuditLabel} será cancelada e todos os dados lançados nesta tela serão descartados. Deseja continuar?`,
+        helper: "Ao cancelar, a referência continua com o status que já possuía antes desta tentativa.",
+        confirmLabel: "Cancelar auditoria",
+        confirmTone: "danger"
+      },
+      () => {
+        clearActiveAuditSession();
+        setErrorMessage(null);
+        setStatusMessage("Auditoria cancelada. Os dados locais foram descartados.");
+        setConfirmState(null);
+        confirmActionRef.current = null;
+      }
+    );
+  }, [activeAuditLabel, activeAuditSession, clearActiveAuditSession, openConfirmDialog]);
+
   const openComposer = useCallback(() => {
-    resetComposerState();
+    if (!activeAuditMatchesSelection) return;
     setComposerOpen(true);
-  }, [resetComposerState]);
+  }, [activeAuditMatchesSelection]);
 
   const closeComposer = useCallback(() => {
     if (auditBusy) return;
@@ -814,6 +1053,10 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
 
   const handleSubmitNoOccurrence = useCallback(async () => {
     if (!isOnline || readOnlyCorrectionMode || !zoneType || !selectedZone || activeCd == null) return;
+    if (!activeAuditMatchesSelection || !activeAuditSession) {
+      setErrorMessage("Clique em Iniciar antes de concluir a auditoria.");
+      return;
+    }
     if (zoneType === "PUL" && selectedPulColumn == null) {
       setErrorMessage("Selecione uma coluna do Pulmão antes de registrar a auditoria.");
       return;
@@ -828,57 +1071,71 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     const targetLabel = zoneType === "PUL"
       ? `coluna ${selectedPulColumn} da zona ${selectedZone}`
       : `zona ${selectedZone}`;
-    setNoOccurrenceConfirm({
-      title: "Registrar auditoria sem ocorrência",
-      message: zoneType === "PUL"
-        ? `Confirma que a ${targetLabel} de pulmão foi auditada sem ocorrência?`
-        : `Confirma que a ${targetLabel} de separação foi auditada sem ocorrência?`,
-      helper: "Essa confirmação pode ser feita apenas uma vez no mês para esta referência. Se encontrar erro depois, use Adicionar ocorrência."
-    });
-  }, [activeCd, isOnline, noOccurrenceAlreadyRegistered, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
-
-  const confirmNoOccurrence = useCallback(async () => {
-    if (!isOnline || readOnlyCorrectionMode || !zoneType || !selectedZone || activeCd == null) return;
-    if (zoneType === "PUL" && selectedPulColumn == null) {
-      setNoOccurrenceConfirm(null);
-      setErrorMessage("Selecione uma coluna do Pulmão antes de registrar a auditoria.");
-      return;
-    }
-    if (noOccurrenceAlreadyRegistered) {
-      setNoOccurrenceConfirm(null);
-      setErrorMessage(zoneType === "PUL"
-        ? `A coluna ${selectedPulColumn} da zona ${selectedZone} já foi registrada sem ocorrência neste mês.`
-        : `A zona ${selectedZone} já foi registrada sem ocorrência neste mês.`);
-      return;
-    }
-    setAuditBusy(true);
-    setErrorMessage(null);
-    setStatusMessage(null);
-    try {
-      setNoOccurrenceConfirm(null);
-      await submitRondaQualidadeAudit({
-        cd: activeCd,
-        zoneType,
-        zona: selectedZone,
-        coluna: zoneType === "PUL" ? selectedPulColumn : null,
-        auditResult: "sem_ocorrencia"
-      });
-      setStatusMessage(zoneType === "PUL"
-        ? `Coluna ${selectedPulColumn} da zona ${selectedZone} registrada sem ocorrência.`
-        : `Zona ${selectedZone} registrada sem ocorrência.`);
-      await loadMonthOptions();
-      await loadZones();
-      await loadDetail(selectedZone);
-      if (historyOpen) await loadHistory();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao registrar a auditoria.");
-    } finally {
-      setAuditBusy(false);
-    }
-  }, [activeCd, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, noOccurrenceAlreadyRegistered, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
+    openConfirmDialog(
+      {
+        title: "Registrar auditoria sem ocorrência",
+        message: zoneType === "PUL"
+          ? `Confirma que a ${targetLabel} de pulmão foi auditada sem ocorrência?`
+          : `Confirma que a ${targetLabel} de separação foi auditada sem ocorrência?`,
+        helper: "Essa confirmação pode ser feita apenas uma vez no mês para esta referência. Se encontrar erro depois, use Adicionar ocorrência.",
+        confirmLabel: "Confirmar sem ocorrência",
+        confirmTone: "primary"
+      },
+      async () => {
+        if (!isOnline || readOnlyCorrectionMode || !zoneType || !selectedZone || activeCd == null) return;
+        if (!activeAuditMatchesSelection || !activeAuditSession) {
+          closeConfirmDialog();
+          setErrorMessage("Clique em Iniciar antes de concluir a auditoria.");
+          return;
+        }
+        if (zoneType === "PUL" && selectedPulColumn == null) {
+          closeConfirmDialog();
+          setErrorMessage("Selecione uma coluna do Pulmão antes de registrar a auditoria.");
+          return;
+        }
+        if (noOccurrenceAlreadyRegistered) {
+          closeConfirmDialog();
+          setErrorMessage(zoneType === "PUL"
+            ? `A coluna ${selectedPulColumn} da zona ${selectedZone} já foi registrada sem ocorrência neste mês.`
+            : `A zona ${selectedZone} já foi registrada sem ocorrência neste mês.`);
+          return;
+        }
+        setAuditBusy(true);
+        setErrorMessage(null);
+        setStatusMessage(null);
+        try {
+          closeConfirmDialog();
+          await submitRondaQualidadeAudit({
+            cd: activeCd,
+            zoneType,
+            zona: selectedZone,
+            coluna: zoneType === "PUL" ? selectedPulColumn : null,
+            auditResult: "sem_ocorrencia",
+            startedAt: activeAuditSession.startedAt
+          });
+          clearActiveAuditSession();
+          setStatusMessage(zoneType === "PUL"
+            ? `Coluna ${selectedPulColumn} da zona ${selectedZone} registrada sem ocorrência.`
+            : `Zona ${selectedZone} registrada sem ocorrência.`);
+          await loadMonthOptions();
+          await loadZones();
+          await loadDetail(selectedZone);
+          if (historyOpen) await loadHistory();
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : "Falha ao registrar a auditoria.");
+        } finally {
+          setAuditBusy(false);
+        }
+      }
+    );
+  }, [activeAuditMatchesSelection, activeAuditSession, activeCd, clearActiveAuditSession, closeConfirmDialog, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, noOccurrenceAlreadyRegistered, openConfirmDialog, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
 
   const handleSaveOccurrences = useCallback(async () => {
     if (!isOnline || readOnlyCorrectionMode || !zoneType || !selectedZone || activeCd == null) return;
+    if (!activeAuditMatchesSelection || !activeAuditSession) {
+      setErrorMessage("Clique em Iniciar antes de salvar a auditoria.");
+      return;
+    }
     if (zoneType === "PUL" && selectedPulColumn == null) {
       setErrorMessage("Selecione uma coluna do Pulmão antes de adicionar ocorrências.");
       return;
@@ -905,10 +1162,10 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
         zona: selectedZone,
         coluna: zoneType === "PUL" ? selectedPulColumn : null,
         auditResult: "com_ocorrencia",
-        occurrences: drafts
+        occurrences: drafts,
+        startedAt: activeAuditSession.startedAt
       });
-      setComposerOpen(false);
-      setDrafts([emptyDraft()]);
+      clearActiveAuditSession();
       setStatusMessage(zoneType === "PUL"
         ? `Auditoria salva com ${formatCount(result.occurrence_count, "ocorrência", "ocorrências")} na coluna ${selectedPulColumn} da zona ${selectedZone}.`
         : `Auditoria salva com ${formatCount(result.occurrence_count, "ocorrência", "ocorrências")} na zona ${selectedZone}.`);
@@ -921,7 +1178,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     } finally {
       setAuditBusy(false);
     }
-  }, [activeCd, drafts, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
+  }, [activeAuditMatchesSelection, activeAuditSession, activeCd, clearActiveAuditSession, drafts, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
 
   const handleToggleCorrection = useCallback(async (occurrenceId: string, currentStatus: RondaQualidadeCorrectionStatus) => {
     if (!isOnline) return;
@@ -945,12 +1202,17 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [historyOpen, isOnline, loadDetail, loadHistory, selectedZone]);
 
   const currentZoneSummary = detail ?? (selectedZone ? zoneRows.find((row) => row.zona === selectedZone) ?? null : null);
-  const getAddressOptionsForDraft = useCallback((draft: RondaQualidadeOccurrenceDraft) => {
-    const filtered = filterAddressOptions(addressOptions, "", zoneType === "PUL" ? addressLevelFilter : "");
-    if (!draft.endereco || filtered.some((option) => option.endereco === draft.endereco)) return filtered;
-    const selected = addressOptions.find((option) => option.endereco === draft.endereco);
-    return selected ? [selected, ...filtered] : filtered;
-  }, [addressLevelFilter, addressOptions, zoneType]);
+  const closeAddressPicker = useCallback(() => {
+    setAddressPickerIndex(null);
+    setAddressPickerSearch("");
+  }, []);
+  const openAddressPicker = useCallback((index: number) => {
+    setAddressPickerIndex(index);
+    setAddressPickerSearch("");
+  }, []);
+  const getAddressOptionsForPicker = useCallback((search: string) => (
+    filterAddressOptions(addressOptions, search, zoneType === "PUL" ? addressLevelFilter : "")
+  ), [addressLevelFilter, addressOptions, zoneType]);
 
   return (
     <>
@@ -1019,7 +1281,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                   type="button"
                   className={`ronda-type-card${zoneType === type ? " is-active" : ""}`}
                   aria-pressed={zoneType === type}
-                  onClick={() => setZoneType((current) => (current === type ? null : type))}
+                  onClick={() => selectZoneType(zoneType === type ? null : type)}
                 >
                   <div className="ronda-type-card-head">
                     <strong>{zoneTypeLabel(type)}</strong>
@@ -1101,21 +1363,43 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                     ) : (
                       <div className="ronda-zone-list">
                         {unauditedZones.map((row) => (
-                          <button
+                          <article
                             key={`${row.zone_type}:${row.zona}`}
-                            type="button"
                             className={`ronda-zone-card${selectedZone === row.zona ? " is-active" : ""}`}
-                            onClick={() => setSelectedZone(row.zona)}
                           >
                             <div className="ronda-zone-card-top">
-                              <div className="ronda-zone-card-title">
-                                <strong>{row.zona}</strong>
-                                <small>{zoneCardMetricLabel(row)}</small>
+                              <button type="button" className="ronda-zone-card-trigger" onClick={() => selectZone(row.zona)}>
+                                <div className="ronda-zone-card-title">
+                                  <strong>{row.zona}</strong>
+                                  <small>{zoneCardMetricLabel(row)}</small>
+                                </div>
+                              </button>
+                              <div className="ronda-zone-card-actions">
+                                {row.zone_type === "SEP" ? (
+                                  <button
+                                    type="button"
+                                    className={`btn btn-muted ronda-start-btn${sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null }) ? " is-active" : ""}`}
+                                    onClick={() => startAuditSession({ zoneType: "SEP", zona: row.zona, coluna: null }, row.audited_in_month)}
+                                    disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
+                                    aria-label={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
+                                      ? "Auditoria em andamento"
+                                      : row.audited_in_month ? "Reiniciar auditoria" : "Iniciar auditoria"}
+                                    title={readOnlyCorrectionMode
+                                      ? "Meses anteriores ficam apenas para consulta e correção."
+                                      : sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
+                                        ? "Esta auditoria já está em andamento."
+                                        : row.audited_in_month ? "Reiniciar auditoria" : "Iniciar auditoria"}
+                                  >
+                                    <span className="ronda-inline-icon" aria-hidden="true">
+                                      {row.audited_in_month ? refreshIcon() : playIcon()}
+                                    </span>
+                                  </button>
+                                ) : null}
+                                <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                               </div>
-                              <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                             </div>
                             {renderZoneCardDetails(row, selectedZone === row.zona)}
-                          </button>
+                          </article>
                         ))}
                       </div>
                     )}
@@ -1131,21 +1415,41 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                     ) : (
                       <div className="ronda-zone-list">
                         {auditedZones.map((row) => (
-                          <button
+                          <article
                             key={`${row.zone_type}:${row.zona}`}
-                            type="button"
                             className={`ronda-zone-card is-audited${selectedZone === row.zona ? " is-active" : ""}`}
-                            onClick={() => setSelectedZone(row.zona)}
                           >
                             <div className="ronda-zone-card-top">
-                              <div className="ronda-zone-card-title">
-                                <strong>{row.zona}</strong>
-                                <small>{zoneCardMetricLabel(row)}</small>
+                              <button type="button" className="ronda-zone-card-trigger" onClick={() => selectZone(row.zona)}>
+                                <div className="ronda-zone-card-title">
+                                  <strong>{row.zona}</strong>
+                                  <small>{zoneCardMetricLabel(row)}</small>
+                                </div>
+                              </button>
+                              <div className="ronda-zone-card-actions">
+                                {row.zone_type === "SEP" ? (
+                                  <button
+                                    type="button"
+                                    className={`btn btn-muted ronda-start-btn${sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null }) ? " is-active" : ""}`}
+                                    onClick={() => startAuditSession({ zoneType: "SEP", zona: row.zona, coluna: null }, true)}
+                                    disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
+                                    aria-label={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
+                                      ? "Auditoria em andamento"
+                                      : "Reiniciar auditoria"}
+                                    title={readOnlyCorrectionMode
+                                      ? "Meses anteriores ficam apenas para consulta e correção."
+                                      : sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
+                                        ? "Esta auditoria já está em andamento."
+                                        : "Reiniciar auditoria"}
+                                  >
+                                    <span className="ronda-inline-icon" aria-hidden="true">{refreshIcon()}</span>
+                                  </button>
+                                ) : null}
+                                <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                               </div>
-                              <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                             </div>
                             {renderZoneCardDetails(row, selectedZone === row.zona)}
-                          </button>
+                          </article>
                         ))}
                       </div>
                     )}
@@ -1157,7 +1461,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                     <button
                       type="button"
                       className="ronda-back-btn"
-                      onClick={() => setSelectedZone(null)}
+                      onClick={() => selectZone(null)}
                       aria-label="Voltar para lista de zonas"
                     >
                       <span className="ronda-inline-icon" aria-hidden="true">{chevronLeftIcon()}</span>
@@ -1179,12 +1483,19 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                         </div>
                         {zoneType === "SEP" ? (
                           <div className="ronda-detail-actions">
+                            {activeAuditMatchesSelection && activeAuditSession ? (
+                              <div className="ronda-active-audit-card">
+                                <strong>Auditoria em andamento</strong>
+                                <span>{`Tempo: ${activeAuditElapsedLabel}`}</span>
+                                <small>{`Início: ${formatDateTime(activeAuditSession.startedAt)}`}</small>
+                              </div>
+                            ) : null}
                             <button
                               type="button"
                               className="btn btn-muted"
                               onClick={openComposer}
-                              disabled={auditBusy || !isOnline || readOnlyCorrectionMode}
-                              title={readOnlyCorrectionMode ? "Meses anteriores ficam apenas para consulta e correção." : undefined}
+                              disabled={auditBusy || !isOnline || occurrenceActionDisabledReason != null}
+                              title={occurrenceActionDisabledReason}
                             >
                               <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
                               Adicionar ocorrência
@@ -1199,6 +1510,15 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                               <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
                               Sem ocorrência
                             </button>
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              onClick={cancelActiveAudit}
+                              disabled={auditBusy || cancelAuditDisabledReason != null}
+                              title={cancelAuditDisabledReason}
+                            >
+                              Cancelar
+                            </button>
                           </div>
                         ) : null}
                       </div>
@@ -1211,14 +1531,16 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                             <article className="ronda-summary-card"><span>% conformidade</span><strong>{formatPercent(currentZoneSummary.percentual_conformidade)}</strong></article>
                           ) : null}
                           <article className="ronda-summary-card"><span>Auditorias no mês</span><strong>{formatInteger(currentZoneSummary.total_auditorias)}</strong></article>
-                          <article className="ronda-summary-card"><span>Última auditoria</span><strong>{formatDateTime(currentZoneSummary.last_audit_at)}</strong></article>
+                          <article className="ronda-summary-card"><span>Último início</span><strong>{formatDateTime(currentZoneSummary.last_started_at)}</strong></article>
+                          <article className="ronda-summary-card"><span>Último fim</span><strong>{formatDateTime(currentZoneSummary.last_finished_at)}</strong></article>
                         </div>
                       ) : (
                         <div className="ronda-summary-grid">
                           <article className="ronda-summary-card"><span>Colunas</span><strong>{formatInteger(currentZoneSummary.total_colunas)}</strong></article>
                           <article className="ronda-summary-card"><span>Produtos únicos</span><strong>{formatInteger(currentZoneSummary.produtos_unicos)}</strong></article>
                           <article className="ronda-summary-card"><span>Auditorias em colunas</span><strong>{formatInteger(currentZoneSummary.total_auditorias)}</strong></article>
-                          <article className="ronda-summary-card"><span>Última auditoria</span><strong>{formatDateTime(currentZoneSummary.last_audit_at)}</strong></article>
+                          <article className="ronda-summary-card"><span>Último início</span><strong>{formatDateTime(currentZoneSummary.last_started_at)}</strong></article>
+                          <article className="ronda-summary-card"><span>Último fim</span><strong>{formatDateTime(currentZoneSummary.last_finished_at)}</strong></article>
                         </div>
                       )}
 
@@ -1234,16 +1556,45 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                 {detail.column_stats
                                   .filter((row) => selectedPulColumn == null || selectedPulColumn === row.coluna)
                                   .map((row) => (
-                                  <button
+                                  <article
                                     key={row.coluna}
-                                    type="button"
                                     className={`ronda-mini-card ronda-column-card${selectedPulColumn === row.coluna ? " is-active" : ""}`}
-                                    onClick={() => setSelectedPulColumn((current) => (current === row.coluna ? null : row.coluna))}
                                   >
-                                    <strong>{`Coluna ${row.coluna}`}</strong>
-                                    <span>{formatCount(row.produtos_unicos, "produto", "produtos")}</span>
-                                    <small>{selectedPulColumn === row.coluna ? "Selecionado" : row.audited_in_month ? formatPercent(row.percentual_conformidade) : "Pendente"}</small>
-                                  </button>
+                                    <button
+                                      type="button"
+                                      className="ronda-column-card-trigger"
+                                      onClick={() => selectPulColumn(selectedPulColumn === row.coluna ? null : row.coluna)}
+                                    >
+                                      <strong>{`Coluna ${row.coluna}`}</strong>
+                                      <span>{formatCount(row.produtos_unicos, "produto", "produtos")}</span>
+                                      <small>{selectedPulColumn === row.coluna ? "Selecionado" : row.audited_in_month ? formatPercent(row.percentual_conformidade) : "Pendente"}</small>
+                                      {row.last_started_at ? <small>{`Início: ${formatDateTime(row.last_started_at)}`}</small> : null}
+                                      {row.last_finished_at ? <small>{`Fim: ${formatDateTime(row.last_finished_at)}`}</small> : null}
+                                    </button>
+                                    <div className="ronda-column-card-footer">
+                                      <button
+                                        type="button"
+                                        className={`btn btn-muted ronda-start-btn${sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna }) ? " is-active" : ""}`}
+                                        onClick={() => startAuditSession({ zoneType: "PUL", zona: selectedZone, coluna: row.coluna }, row.audited_in_month)}
+                                        disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna })}
+                                        aria-label={sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna })
+                                          ? "Auditoria em andamento"
+                                          : row.audited_in_month ? "Reiniciar auditoria" : "Iniciar auditoria"}
+                                        title={readOnlyCorrectionMode
+                                          ? "Meses anteriores ficam apenas para consulta e correção."
+                                          : sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna })
+                                            ? "Esta auditoria já está em andamento."
+                                            : row.audited_in_month ? "Reiniciar auditoria" : "Iniciar auditoria"}
+                                      >
+                                        <span className="ronda-inline-icon" aria-hidden="true">
+                                          {row.audited_in_month ? refreshIcon() : playIcon()}
+                                        </span>
+                                      </button>
+                                      <span className={`ronda-zone-badge ${row.audited_in_month ? "is-audited" : "is-pending"}`}>
+                                        {row.audited_in_month ? "Auditada" : "Pendente"}
+                                      </span>
+                                    </div>
+                                  </article>
                                 ))}
                               </div>
                             ) : <div className="ronda-empty-card">Sem colunas identificadas nesta zona.</div>}
@@ -1261,12 +1612,19 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                               </div>
                             </div>
                             <div className="ronda-detail-actions">
+                              {activeAuditMatchesSelection && activeAuditSession ? (
+                                <div className="ronda-active-audit-card">
+                                  <strong>Auditoria em andamento</strong>
+                                  <span>{`Tempo: ${activeAuditElapsedLabel}`}</span>
+                                  <small>{`Início: ${formatDateTime(activeAuditSession.startedAt)}`}</small>
+                                </div>
+                              ) : null}
                               <button
                                 type="button"
                                 className="btn btn-muted"
                                 onClick={openComposer}
-                                disabled={auditBusy || !isOnline || readOnlyCorrectionMode || selectedPulColumn == null}
-                                title={selectedPulColumn == null ? "Selecione uma coluna para adicionar ocorrência." : readOnlyCorrectionMode ? "Meses anteriores ficam apenas para consulta e correção." : undefined}
+                                disabled={auditBusy || !isOnline || occurrenceActionDisabledReason != null}
+                                title={occurrenceActionDisabledReason}
                               >
                                 <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
                                 Adicionar ocorrência
@@ -1280,6 +1638,15 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                               >
                                 <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
                                 Sem ocorrência
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-danger"
+                                onClick={cancelActiveAudit}
+                                disabled={auditBusy || cancelAuditDisabledReason != null}
+                                title={cancelAuditDisabledReason}
+                              >
+                                Cancelar
                               </button>
                             </div>
                           </section>
@@ -1304,7 +1671,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                         : `${session.auditor_nome} | MAT ${session.auditor_mat}`}
                                     </span>
                                   </div>
-                                  <small>{formatDateTime(session.created_at)}</small>
+                                  <small>{`Início: ${formatDateTime(session.started_at)} | Fim: ${formatDateTime(session.finished_at)}`}</small>
                                 </div>
 
                                 {session.occurrences.length === 0 ? (
@@ -1378,19 +1745,24 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
         </article>
       </section>
 
-      {noOccurrenceConfirm && typeof document !== "undefined"
+      {confirmState && typeof document !== "undefined"
         ? createPortal(
-            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="ronda-sem-ocorrencia-title" onClick={() => setNoOccurrenceConfirm(null)}>
+            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="ronda-confirm-title" onClick={closeConfirmDialog}>
               <div className="confirm-dialog ronda-confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
-                <h3 id="ronda-sem-ocorrencia-title">{noOccurrenceConfirm.title}</h3>
-                <p>{noOccurrenceConfirm.message}</p>
-                <small>{noOccurrenceConfirm.helper}</small>
+                <h3 id="ronda-confirm-title">{confirmState.title}</h3>
+                <p>{confirmState.message}</p>
+                {confirmState.helper ? <small>{confirmState.helper}</small> : null}
                 <div className="confirm-actions">
-                  <button className="btn btn-muted" type="button" onClick={() => setNoOccurrenceConfirm(null)} disabled={auditBusy}>
+                  <button className="btn btn-muted" type="button" onClick={closeConfirmDialog} disabled={auditBusy}>
                     Cancelar
                   </button>
-                  <button className="btn btn-primary" type="button" onClick={() => void confirmNoOccurrence()} disabled={auditBusy}>
-                    {auditBusy ? "Registrando..." : "Confirmar sem ocorrência"}
+                  <button
+                    className={confirmState.confirmTone === "danger" ? "btn btn-danger" : "btn btn-primary"}
+                    type="button"
+                    onClick={() => void confirmDialogAction()}
+                    disabled={auditBusy}
+                  >
+                    {auditBusy ? "Processando..." : confirmState.confirmLabel}
                   </button>
                 </div>
               </div>
@@ -1475,32 +1847,108 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
 
                       <label className="field">
                         <span>Endereço</span>
-                        <select
-                          value={draft.endereco}
-                          onChange={(event) => {
-                            const nextValue = event.target.value;
-                            const selectedAddress = addressOptions.find((option) => option.endereco === nextValue);
-                            setDrafts((current) => current.map((item, itemIndex) => (
-                              itemIndex === index ? { ...item, endereco: nextValue, nivel: selectedAddress?.nivel ?? "" } : item
-                            )));
-                          }}
-                          disabled={auditBusy || addressesBusy || addressOptions.length === 0}
-                        >
-                          <option value="">Selecione o endereço</option>
-                          {getAddressOptionsForDraft(draft).map((option) => (
-                            <option key={`${option.endereco}:${option.nivel ?? "sem-nivel"}`} value={option.endereco}>
-                              {addressOptionLabel(option)}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="input-icon-wrap with-action ronda-address-input-wrap">
+                          <input
+                            type="text"
+                            value={draft.endereco}
+                            onChange={(event) => {
+                              const nextValue = event.target.value.toLocaleUpperCase("pt-BR");
+                              const selectedAddress = addressOptions.find((option) => option.endereco === nextValue);
+                              if (nextValue.trim() !== "") {
+                                closeAddressPicker();
+                              }
+                              setDrafts((current) => current.map((item, itemIndex) => (
+                                itemIndex === index ? { ...item, endereco: nextValue, nivel: selectedAddress?.nivel ?? "" } : item
+                              )));
+                            }}
+                            placeholder="Informe ou busque o endereço"
+                            inputMode="search"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            disabled={auditBusy || addressesBusy}
+                          />
+                          {draft.endereco.trim() === "" ? (
+                            <button
+                              type="button"
+                              className="input-action-btn ronda-address-search-btn"
+                              onClick={() => {
+                                if (addressPickerIndex === index) {
+                                  closeAddressPicker();
+                                  return;
+                                }
+                                openAddressPicker(index);
+                              }}
+                              disabled={auditBusy || addressesBusy || addressOptions.length === 0}
+                              title="Buscar endereço na lista"
+                              aria-label="Buscar endereço na lista"
+                            >
+                              {searchIcon()}
+                            </button>
+                          ) : null}
+                        </div>
+                        {addressPickerIndex === index && draft.endereco.trim() === "" ? (
+                          <div className="ronda-address-picker">
+                            <div className="ronda-address-picker-search">
+                              <span className="ronda-address-picker-search-icon" aria-hidden="true">{searchIcon()}</span>
+                              <input
+                                type="text"
+                                value={addressPickerSearch}
+                                onChange={(event) => setAddressPickerSearch(event.target.value)}
+                                placeholder="Buscar endereço disponível"
+                                inputMode="search"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                disabled={auditBusy || addressesBusy}
+                              />
+                              <button
+                                type="button"
+                                className="ronda-address-picker-close"
+                                onClick={closeAddressPicker}
+                                aria-label="Fechar busca de endereços"
+                              >
+                                {closeIcon()}
+                              </button>
+                            </div>
+                            <div className="ronda-address-picker-list">
+                              {getAddressOptionsForPicker(addressPickerSearch).length > 0 ? (
+                                getAddressOptionsForPicker(addressPickerSearch).map((option) => (
+                                  <button
+                                    key={`${option.endereco}:${option.nivel ?? "sem-nivel"}`}
+                                    type="button"
+                                    className="ronda-address-picker-option"
+                                    onClick={() => {
+                                      setDrafts((current) => current.map((item, itemIndex) => (
+                                        itemIndex === index
+                                          ? { ...item, endereco: option.endereco, nivel: option.nivel ?? "" }
+                                          : item
+                                      )));
+                                      closeAddressPicker();
+                                    }}
+                                  >
+                                    <strong>{addressOptionLabel(option)}</strong>
+                                    <span>{option.nivel ? `Nível ${option.nivel}` : "Sem nível"}</span>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="ronda-address-picker-empty">Nenhum endereço encontrado.</div>
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
                         {addressOptions.length === 0 && !addressesBusy ? (
                           <small>Nenhum endereço disponível para a zona selecionada.</small>
                         ) : null}
-                        {getAddressOptionsForDraft(draft).length === 0 && addressOptions.length > 0 ? (
+                        {addressPickerIndex === index && getAddressOptionsForPicker(addressPickerSearch).length === 0 && addressOptions.length > 0 ? (
                           <small>Nenhum endereço disponível com o filtro atual.</small>
                         ) : null}
-                        {draft.endereco && addressOptions.some((option) => option.endereco === draft.endereco) ? (
-                          <small>{`Selecionado: ${draft.endereco}`}</small>
+                        {draft.endereco ? (
+                          <small>
+                            {addressOptions.some((option) => option.endereco === draft.endereco)
+                              ? `Selecionado: ${draft.endereco}`
+                              : `Digitado manualmente: ${draft.endereco}`}
+                          </small>
                         ) : null}
                       </label>
 

@@ -116,6 +116,8 @@ function mapZoneSummary(raw: Record<string, unknown>): RondaQualidadeZoneSummary
     audited_in_month: Boolean(raw.audited_in_month),
     total_auditorias: Math.max(parseInteger(raw.total_auditorias), 0),
     last_audit_at: parseNullableString(raw.last_audit_at),
+    last_started_at: parseNullableString(raw.last_started_at),
+    last_finished_at: parseNullableString(raw.last_finished_at),
     total_colunas: Math.max(parseInteger(raw.total_colunas), 0),
     total_colunas_auditadas: Math.max(parseInteger(raw.total_colunas_auditadas), 0),
     total_niveis: Math.max(parseInteger(raw.total_niveis), 0)
@@ -138,7 +140,9 @@ function parseColumnStats(value: unknown): RondaQualidadeZoneDetail["column_stat
         percentual_conformidade: Math.max(parseNumber(raw.percentual_conformidade), 0),
         audited_in_month: Boolean(raw.audited_in_month),
         total_auditorias: Math.max(parseInteger(raw.total_auditorias), 0),
-        last_audit_at: parseNullableString(raw.last_audit_at)
+        last_audit_at: parseNullableString(raw.last_audit_at),
+        last_started_at: parseNullableString(raw.last_started_at),
+        last_finished_at: parseNullableString(raw.last_finished_at)
       };
     })
     .filter((item): item is RondaQualidadeZoneDetail["column_stats"][number] => item != null);
@@ -175,6 +179,8 @@ function parseHistoryRows(value: unknown): RondaQualidadeZoneDetail["history_row
         auditor_nome: parseString(raw.auditor_nome, "Usuário"),
         auditor_mat: parseString(raw.auditor_mat, "-"),
         created_at: parseString(raw.created_at),
+        started_at: parseNullableString(raw.started_at),
+        finished_at: parseNullableString(raw.finished_at),
         occurrence_count: Math.max(parseInteger(raw.occurrence_count), 0),
         occurrences: occurrencesRaw
           .map((occurrence) => {
@@ -321,7 +327,8 @@ export async function submitRondaQualidadeAudit(params: {
   coluna?: number | null;
   auditResult: "sem_ocorrencia" | "com_ocorrencia";
   occurrences?: RondaQualidadeOccurrenceDraft[];
-}): Promise<{ audit_id: string; occurrence_count: number; created_at: string | null }> {
+  startedAt?: string | null;
+}): Promise<{ audit_id: string; occurrence_count: number; created_at: string | null; started_at: string | null; finished_at: string | null }> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const payload = (params.occurrences ?? []).map((occurrence) => ({
@@ -336,7 +343,8 @@ export async function submitRondaQualidadeAudit(params: {
     p_zona: params.zona,
     p_coluna: params.coluna ?? null,
     p_audit_result: params.auditResult,
-    p_occurrences: payload
+    p_occurrences: payload,
+    p_started_at: params.startedAt ?? null
   });
 
   if (error) throw new Error(toErrorMessage(error));
@@ -345,7 +353,9 @@ export async function submitRondaQualidadeAudit(params: {
   return {
     audit_id: parseString(first.audit_id),
     occurrence_count: Math.max(parseInteger(first.occurrence_count), 0),
-    created_at: parseNullableString(first.created_at)
+    created_at: parseNullableString(first.created_at),
+    started_at: parseNullableString(first.started_at),
+    finished_at: parseNullableString(first.finished_at)
   };
 }
 

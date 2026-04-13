@@ -16076,6 +16076,58 @@ small {
   gap: 8px;
 }
 
+.ronda-zone-card-trigger,
+.ronda-column-card-trigger {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ronda-zone-card-trigger {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ronda-zone-card-actions,
+.ronda-column-card-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ronda-start-btn {
+  min-width: 28px;
+  min-height: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ronda-start-btn .ronda-inline-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.ronda-start-btn .ronda-inline-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.ronda-start-btn.is-active {
+  border-color: rgba(18, 56, 115, 0.2);
+  background: rgba(18, 56, 115, 0.08);
+}
+
 .ronda-zone-card-title {
   display: grid;
   gap: 2px;
@@ -16120,6 +16172,7 @@ small {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
+  height: 22px;
   padding: 0 9px;
   border-radius: 999px;
   font-size: 0.68rem;
@@ -16256,7 +16309,6 @@ small {
   border: 1px solid rgba(18, 56, 115, 0.12);
   text-align: left;
   color: inherit;
-  cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
@@ -16276,6 +16328,37 @@ small {
 .ronda-column-card.is-active small {
   color: #11724b;
   font-weight: 700;
+}
+
+.ronda-column-card-trigger {
+  display: grid;
+  gap: 6px;
+}
+
+.ronda-column-card-footer {
+  margin-top: 6px;
+  justify-content: space-between;
+}
+
+.ronda-active-audit-card {
+  flex: 1 1 240px;
+  min-width: 220px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(22, 132, 86, 0.2);
+  background: linear-gradient(145deg, #f4fff8, #ffffff);
+  display: grid;
+  gap: 4px;
+}
+
+.ronda-active-audit-card strong {
+  font-family: "Sora", sans-serif;
+  color: #0f6b47;
+}
+
+.ronda-active-audit-card span,
+.ronda-active-audit-card small {
+  color: #466050;
 }
 
 .ronda-column-audit-panel {
@@ -16355,6 +16438,120 @@ small {
   font-size: 16px;
 }
 
+.ronda-address-input-wrap input {
+  padding-left: 14px;
+  padding-right: 44px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ronda-address-input-wrap input:focus,
+.ronda-address-input-wrap input:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.ronda-address-search-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ronda-address-picker {
+  margin-top: 8px;
+  border: 1px solid rgba(18, 56, 115, 0.14);
+  border-radius: 16px;
+  background: linear-gradient(160deg, #ffffff, #f7faff);
+  box-shadow: 0 16px 28px rgba(9, 21, 39, 0.08);
+  overflow: hidden;
+}
+
+.ronda-address-picker-search {
+  position: relative;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(18, 56, 115, 0.1);
+  background: rgba(244, 248, 255, 0.92);
+}
+
+.ronda-address-picker-search input {
+  padding-left: 34px;
+  padding-right: 34px;
+}
+
+.ronda-address-picker-search-icon,
+.ronda-address-picker-close {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #5f7294;
+}
+
+.ronda-address-picker-search-icon {
+  left: 24px;
+  pointer-events: none;
+}
+
+.ronda-address-picker-close {
+  right: 24px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ronda-address-picker-search-icon svg,
+.ronda-address-picker-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ronda-address-picker-list {
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+}
+
+.ronda-address-picker-option {
+  border: 0;
+  border-top: 1px solid rgba(18, 56, 115, 0.08);
+  background: transparent;
+  padding: 12px 14px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ronda-address-picker-option:first-child {
+  border-top: 0;
+}
+
+.ronda-address-picker-option:hover {
+  background: rgba(18, 56, 115, 0.05);
+}
+
+.ronda-address-picker-option strong {
+  font-family: "Sora", sans-serif;
+  color: #123873;
+}
+
+.ronda-address-picker-option span,
+.ronda-address-picker-empty {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.ronda-address-picker-empty {
+  padding: 14px;
+}
+
 .ronda-sheet .field textarea {
   resize: vertical;
 }
@@ -16367,6 +16564,11 @@ small {
 
 .ronda-sheet-wide {
   width: min(100%, 1120px);
+}
+
+.ronda-sheet .ronda-sheet-head,
+.ronda-sheet-wide .ronda-sheet-head {
+  position: static;
 }
 
 .ronda-sheet-head {
