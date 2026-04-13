@@ -286,7 +286,7 @@ const EXPEDICAO_ITEMS: ChecklistItem[] = [
 const AVARIA_ITEMS: ChecklistItem[] = [
   item(1, "avaria", "Avaria", "As avarias estão sendo registradas mensalmente no sistema e encaminhadas ao SDPF pela Logística dentro do prazo, sem gerar acúmulo de materiais no setor?", { max_points: 20, criticality: "Crítico", is_critical: true }),
   item(2, "avaria", "Avaria", "A Logística está seguindo o padrão definido para a criação de volumes avulsos, contendo corretamente QR Code, identificação do produto, quantidade, lote e data de vencimento?", { max_points: 15, criticality: "Importante" }),
-  item(3, "avaria", "Avaria", "Os processos relacionados a desvio de qualidade estão sendo avaliados e formalmente aprovados pelo farmacêutico responsável, conforme estabelecido no PO SD4?", { max_points: 20, criticality: "Crítico", is_critical: true }),
+  item(3, "avaria", "Avaria", "Os processos relacionados a desvio de qualidade estão sendo avaliados e formalmente aprovados pelo farmacêutico responsável, conforme estabelecido no PO?", { max_points: 20, criticality: "Crítico", is_critical: true }),
   item(4, "avaria", "Avaria", "Os volumes registrados no sistema correspondem integralmente aos volumes físicos existentes e conferidos no setor?", { max_points: 20, criticality: "Crítico", is_critical: true }),
   item(5, "avaria", "Avaria", "O setor de avarias e não conformes possui câmeras de monitoramento operantes e com cobertura adequada da área?", { max_points: 5, criticality: "Controle" }),
   item(6, "avaria", "Avaria", "O processo de tratamento de avarias e não conformidades está sendo executado em área devidamente segregada, conforme normas vigentes e procedimentos internos?", { max_points: 15, criticality: "Importante" }),
