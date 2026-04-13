@@ -97,7 +97,7 @@ function mapManifestItem(raw: Record<string, unknown>): TermoManifestItemRow {
     rota: parseNullableString(raw.rota),
     coddv: parseInteger(raw.coddv),
     descricao: String(raw.descricao ?? "").trim(),
-    qtd_esperada: Math.max(parseInteger(raw.qtd_esperada, 1), 1)
+    qtd_esperada: Math.max(parseInteger(raw.qtd_esperada, 0), 0)
   };
 }
 

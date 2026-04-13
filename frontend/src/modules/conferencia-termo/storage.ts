@@ -103,6 +103,12 @@ function parsePositiveInt(value: unknown, fallback = 1): number {
   return parsed > 0 ? parsed : fallback;
 }
 
+function parseNonNegativeInt(value: unknown, fallback = 0): number {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return parsed >= 0 ? parsed : fallback;
+}
+
 function normalizePrefs(value: Partial<TermoPreferences> | null | undefined): TermoPreferences {
   return {
     prefer_offline_mode: Boolean(value?.prefer_offline_mode),
@@ -396,7 +402,7 @@ export async function saveManifestSnapshot(params: {
         rota: row.rota ?? null,
         coddv,
         descricao: row.descricao,
-        qtd_esperada: parsePositiveInt(row.qtd_esperada, 1)
+        qtd_esperada: parseNonNegativeInt(row.qtd_esperada, 0)
       };
       itemsStore.put(payload);
     }

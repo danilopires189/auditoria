@@ -233,6 +233,10 @@ function withDivergencia(item: TermoLocalItem): {
   return { item, divergencia, qtd_falta: qtdFalta, qtd_sobra: qtdSobra };
 }
 
+function isNaoAtendidoItem(item: TermoLocalItem): boolean {
+  return item.qtd_esperada <= 0 && item.qtd_conferida <= 0;
+}
+
 function itemSort(a: TermoLocalItem, b: TermoLocalItem): number {
   const byDesc = a.descricao.localeCompare(b.descricao);
   if (byDesc !== 0) return byDesc;
@@ -3629,6 +3633,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
               ) : (
                 groupedItems.correto.map(({ item }) => {
                   const isLastAddedItem = activeLastAddedCoddv === item.coddv;
+                  const isNaoAtendido = isNaoAtendidoItem(item);
                   return (
                   <article key={`correto-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
@@ -3653,6 +3658,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
                     </button>
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
+                        {isNaoAtendido ? <span className="termo-divergencia andamento">Não Atendido</span> : null}
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
                         {canEditActiveVolume ? (
                           <div className="termo-item-actions">

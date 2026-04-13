@@ -44,6 +44,10 @@ const COMPACT_CURRENCY_FORMATTER = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
 });
+const ACTIVITY_LABEL_COLLATOR = new Intl.Collator("pt-BR", {
+  numeric: true,
+  sensitivity: "base"
+});
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
@@ -334,12 +338,16 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
           fetchMetaMesMonthOptions(activeCd)
         ]);
         if (cancelled) return;
-        setActivities(nextActivities);
+        const sortedActivities = [...nextActivities].sort((left, right) => (
+          ACTIVITY_LABEL_COLLATOR.compare(left.activity_label, right.activity_label)
+          || left.sort_order - right.sort_order
+        ));
+        setActivities(sortedActivities);
         setMonthOptions(nextMonths);
         setSelectedActivityKey((current) => (
-          current && nextActivities.some((item) => item.activity_key === current)
+          current && sortedActivities.some((item) => item.activity_key === current)
             ? current
-            : nextActivities[0]?.activity_key || ""
+            : sortedActivities[0]?.activity_key || ""
         ));
         setSelectedMonthStart((current) => (
           current && nextMonths.some((item) => item.month_start === current)
