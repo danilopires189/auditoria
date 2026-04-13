@@ -1,13 +1,15 @@
 import { todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import {
   AUDITORIA_CAIXA_OCCURRENCIAS,
-  type AuditoriaCaixaOccurrence
+  type AuditoriaCaixaOccurrence,
+  type AuditoriaCaixaOccurrenceOption
 } from "./types";
 
 export const AUDITORIA_CAIXA_ALLOWED_LENGTHS = [17, 18, 23, 25, 26, 27] as const;
 export const AUDITORIA_CAIXA_MAX_LENGTH = 27;
 export const AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE = "Etiqueta inválida, revise e tente novamente!";
 export const AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE = "Etiqueta Knapp inválida, revise e tente novamente!";
+const OCCURRENCE_SPLIT_REGEX = /\s*(?:,|;|\|)\s*/;
 
 export interface ParsedAuditoriaCaixaEtiqueta {
   etiqueta: string;
@@ -50,10 +52,61 @@ export function stripLeadingZeros(value: string | null | undefined): string | nu
   return stripped || "0";
 }
 
-export function normalizeOccurrenceInput(value: string | null | undefined): AuditoriaCaixaOccurrence {
+export function normalizeOccurrenceOption(value: string | null | undefined): AuditoriaCaixaOccurrenceOption | null {
   const normalized = String(value ?? "").trim();
   if (!normalized) return null;
   return AUDITORIA_CAIXA_OCCURRENCIAS.find((item) => item === normalized) ?? null;
+}
+
+function tokenizeOccurrenceInput(value: string | null | undefined): string[] {
+  return String(value ?? "")
+    .trim()
+    .split(OCCURRENCE_SPLIT_REGEX)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function parseOccurrenceSelections(value: string | null | undefined): AuditoriaCaixaOccurrenceOption[] {
+  const tokens = tokenizeOccurrenceInput(value)
+    .map((item) => normalizeOccurrenceOption(item))
+    .filter((item): item is AuditoriaCaixaOccurrenceOption => item != null);
+
+  if (tokens.length === 0) return [];
+  const selected = new Set(tokens);
+  return AUDITORIA_CAIXA_OCCURRENCIAS.filter((item) => selected.has(item));
+}
+
+export function joinOccurrenceSelections(
+  values: readonly (AuditoriaCaixaOccurrenceOption | null | undefined)[]
+): AuditoriaCaixaOccurrence {
+  const selected = new Set(
+    values.filter((item): item is AuditoriaCaixaOccurrenceOption => item != null)
+  );
+  if (selected.size === 0) return null;
+  return AUDITORIA_CAIXA_OCCURRENCIAS.filter((item) => selected.has(item)).join(", ");
+}
+
+export function normalizeOccurrenceInput(value: string | null | undefined): AuditoriaCaixaOccurrence {
+  const tokens = tokenizeOccurrenceInput(value);
+  if (tokens.length === 0) return null;
+
+  const selected = tokens.map((item) => normalizeOccurrenceOption(item));
+  if (selected.some((item) => item == null)) return null;
+
+  return joinOccurrenceSelections(selected);
+}
+
+export function toggleOccurrenceSelection(
+  current: string | null | undefined,
+  value: AuditoriaCaixaOccurrenceOption
+): AuditoriaCaixaOccurrence {
+  const selected = new Set(parseOccurrenceSelections(current));
+  if (selected.has(value)) {
+    selected.delete(value);
+  } else {
+    selected.add(value);
+  }
+  return joinOccurrenceSelections(Array.from(selected));
 }
 
 export function requiresKnappId(value: string | number): boolean {

@@ -23,11 +23,14 @@ import {
   AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE,
   AUDITORIA_CAIXA_MAX_LENGTH,
   clampEtiquetaInput,
+  joinOccurrenceSelections,
   isAllowedEtiquetaLength,
   normalizeOccurrenceInput,
   normalizeEtiquetaInput,
+  parseOccurrenceSelections,
   parseAuditoriaCaixaEtiqueta,
   requiresKnappId,
+  toggleOccurrenceSelection,
   toDisplayName,
   normalizeSearchText
 } from "./logic";
@@ -52,7 +55,7 @@ import {
 import {
   AUDITORIA_CAIXA_OCCURRENCIAS,
   type AuditoriaCaixaModuleProfile,
-  type AuditoriaCaixaOccurrence,
+  type AuditoriaCaixaOccurrenceOption,
   type AuditoriaCaixaReportFilters,
   type AuditoriaCaixaRow,
   type CdOption
@@ -66,7 +69,7 @@ interface AuditoriaCaixaPageProps {
 type EditDraft = {
   etiqueta: string;
   id_knapp: string;
-  ocorrencia: "" | Exclude<AuditoriaCaixaOccurrence, null>;
+  ocorrencia: string;
 };
 
 type OccurrenceModalTarget =
@@ -130,7 +133,7 @@ const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const TRANSIENT_MESSAGE_DURATION_MS = 5_000;
 const NOT_FOUND_CHIME_DURATION_MS = 420;
-const MIXED_VOLUME_OCCURRENCE: Exclude<AuditoriaCaixaOccurrence, null> = "Volume misturado";
+const MIXED_VOLUME_OCCURRENCE: AuditoriaCaixaOccurrenceOption = "Volume misturado";
 const PENDING_SYNC_STATUSES = new Set<AuditoriaCaixaRow["sync_status"]>([
   "pending_insert",
   "pending_update",
@@ -539,7 +542,7 @@ function buildEditDraft(row: AuditoriaCaixaRow): EditDraft {
   return {
     etiqueta: row.etiqueta,
     id_knapp: row.id_knapp ?? "",
-    ocorrencia: (row.ocorrencia ?? "") as EditDraft["ocorrencia"]
+    ocorrencia: row.ocorrencia ?? ""
   };
 }
 
@@ -551,7 +554,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
   const [etiquetaInput, setEtiquetaInput] = useState("");
   const [idKnappInput, setIdKnappInput] = useState("");
-  const [ocorrenciaInput, setOcorrenciaInput] = useState<EditDraft["ocorrencia"]>("");
+  const [ocorrenciaInput, setOcorrenciaInput] = useState("");
   const [localRows, setLocalRows] = useState<AuditoriaCaixaRow[]>([]);
   const [sharedTodayRows, setSharedTodayRows] = useState<AuditoriaCaixaRow[]>([]);
   const [dbRotasCount, setDbRotasCount] = useState(0);
@@ -970,15 +973,20 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     await runDbRotasRefresh(true);
   }, [dbRotasCount, isDesktop, isOnline, preferOfflineMode, runDbRotasRefresh]);
 
-  const applyOccurrence = useCallback((value: AuditoriaCaixaOccurrence) => {
+  const applyOccurrence = useCallback((value: AuditoriaCaixaOccurrenceOption | null) => {
     if (!occurrenceModalTarget) return;
+    const nextOccurrence = (currentValue: string): string => {
+      if (value == null) return "";
+      return toggleOccurrenceSelection(currentValue, value) ?? "";
+    };
+
     if (occurrenceModalTarget.kind === "form") {
-      setOcorrenciaInput((value ?? "") as EditDraft["ocorrencia"]);
+      setOcorrenciaInput((current) => nextOccurrence(current));
     } else {
-      setEditDraft((current) => (current ? { ...current, ocorrencia: (value ?? "") as EditDraft["ocorrencia"] } : current));
+      setEditDraft((current) => (
+        current ? { ...current, ocorrencia: nextOccurrence(current.ocorrencia) } : current
+      ));
     }
-    setOccurrenceModalTarget(null);
-    setOccurrenceSearch("");
   }, [occurrenceModalTarget]);
 
   const clearScannerInputTimer = useCallback(() => {
@@ -1053,7 +1061,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       const resolvedOccurrence = isStoreContextCollect
         ? null
         : isMixedVolume
-          ? MIXED_VOLUME_OCCURRENCE
+          ? joinOccurrenceSelections([MIXED_VOLUME_OCCURRENCE])
           : normalizeOccurrenceInput(ocorrenciaInput);
       const nowIso = new Date().toISOString();
       const nextRow: AuditoriaCaixaRow = {
@@ -1802,6 +1810,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const occurrenceModalValue = occurrenceModalTarget?.kind === "form"
     ? normalizeOccurrenceInput(ocorrenciaInput)
     : normalizeOccurrenceInput(editDraft?.ocorrencia ?? "");
+  const occurrenceModalSelections = parseOccurrenceSelections(occurrenceModalValue);
   const showCollectionControls = activeStoreContext != null || pendingStoreContextAction != null;
   const showFormIcons = showCollectionControls;
   const showOnlineBadge = (
@@ -2455,8 +2464,8 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
               >
                 <div className="confirm-dialog aud-caixa-occurrence-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                   <div className="aud-caixa-occurrence-dialog-head">
-                    <h3 id="aud-caixa-occurrence-title">Selecione o tipo de não conformidade</h3>
-                    <p>Escolha uma ocorrência ou finalize sem selecionar para manter o campo vazio.</p>
+                    <h3 id="aud-caixa-occurrence-title">Selecione as não conformidades</h3>
+                    <p>Marque uma ou mais ocorrências. Se preferir, finalize sem selecionar para manter o campo vazio.</p>
                   </div>
 
                   <div className="input-icon-wrap aud-caixa-occurrence-search">
@@ -2472,10 +2481,16 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                     />
                   </div>
 
-                  <div className="aud-caixa-occurrence-list" role="listbox" aria-label="Ocorrências disponíveis">
+                  <div
+                    className="aud-caixa-occurrence-list"
+                    role="listbox"
+                    aria-label="Ocorrências disponíveis"
+                    aria-multiselectable="true"
+                  >
                     <button
                       type="button"
-                      className={`aud-caixa-occurrence-option${occurrenceModalValue == null ? " is-active" : ""}`}
+                      className={`aud-caixa-occurrence-option${occurrenceModalSelections.length === 0 ? " is-active" : ""}`}
+                      aria-pressed={occurrenceModalSelections.length === 0}
                       onClick={() => applyOccurrence(null)}
                     >
                       <span className="aud-caixa-occurrence-check" aria-hidden="true" />
@@ -2487,7 +2502,8 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                         <button
                           key={item}
                           type="button"
-                          className={`aud-caixa-occurrence-option${occurrenceModalValue === item ? " is-active" : ""}`}
+                          className={`aud-caixa-occurrence-option${occurrenceModalSelections.includes(item) ? " is-active" : ""}`}
+                          aria-pressed={occurrenceModalSelections.includes(item)}
                           onClick={() => applyOccurrence(item)}
                         >
                           <span className="aud-caixa-occurrence-check" aria-hidden="true" />
@@ -2500,7 +2516,13 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                   </div>
 
                   <div className="confirm-actions aud-caixa-occurrence-actions">
-                    <button className="btn btn-muted" type="button" onClick={() => applyOccurrence(null)}>
+                    <button
+                      className="btn btn-muted"
+                      type="button"
+                      onClick={() => {
+                        applyOccurrence(null);
+                      }}
+                    >
                       Limpar
                     </button>
                     <button

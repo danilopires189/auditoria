@@ -13,7 +13,8 @@ export const AUDITORIA_CAIXA_OCCURRENCIAS = [
   "Volume misturado"
 ] as const;
 
-export type AuditoriaCaixaOccurrence = typeof AUDITORIA_CAIXA_OCCURRENCIAS[number] | null;
+export type AuditoriaCaixaOccurrenceOption = typeof AUDITORIA_CAIXA_OCCURRENCIAS[number];
+export type AuditoriaCaixaOccurrence = string | null;
 
 export type AuditoriaCaixaSyncStatus = "pending_insert" | "pending_update" | "pending_delete" | "synced" | "error";
 
