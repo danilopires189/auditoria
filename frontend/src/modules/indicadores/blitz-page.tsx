@@ -645,9 +645,12 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                             <span className="indicadores-day-description">
                               <span className="indicadores-day-description-head">
                                 <strong>{row.descricao}</strong>
+                              </span>
+                              <span className="indicadores-day-description-meta">
+                                <small>Pedido {formatPlainInteger(row.pedido)}</small>
+                                <small>COD {formatPlainInteger(row.coddv)}</small>
                                 <small className="indicadores-day-date">{formatDate(row.data_conf)}</small>
                               </span>
-                              <small>Pedido {formatPlainInteger(row.pedido)} · COD {formatPlainInteger(row.coddv)}</small>
                             </span>
                             <span className="indicadores-day-address" title={formatAddress(row.endereco)}>
                               {formatAddress(row.endereco)}

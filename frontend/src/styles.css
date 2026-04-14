@@ -11630,7 +11630,7 @@ small {
 .indicadores-day-list-head,
 .indicadores-day-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.45fr) minmax(180px, 1.2fr) 118px 108px 132px;
+  grid-template-columns: minmax(218px, 1.72fr) minmax(180px, 1.08fr) 118px 108px 132px;
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -11643,6 +11643,21 @@ small {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   padding: 0 6px;
+}
+
+.indicadores-day-list-head > span:nth-child(2),
+.indicadores-day-row > span:nth-child(2) {
+  padding-left: 38px;
+}
+
+.indicadores-day-list-head > span:nth-child(3),
+.indicadores-day-row > span:nth-child(3) {
+  margin-left: -38px;
+}
+
+.indicadores-day-list-head > span:nth-child(4),
+.indicadores-day-row > span:nth-child(4) {
+  margin-left: -57px;
 }
 
 .indicadores-day-row {
@@ -11663,10 +11678,7 @@ small {
 }
 
 .indicadores-day-description-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+  display: block;
   min-width: 0;
 }
 
@@ -11677,6 +11689,7 @@ small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.28;
 }
 
 .indicadores-day-description small {
@@ -11686,12 +11699,19 @@ small {
   white-space: nowrap;
 }
 
+.indicadores-day-description-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .indicadores-day-date {
-  flex: 0 0 auto;
-  color: #274a77;
+  color: inherit;
   font-size: inherit;
-  font-weight: 500;
-  line-height: 1.35;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 .indicadores-day-address {
@@ -11892,8 +11912,23 @@ small {
     min-height: auto;
   }
 
+  .indicadores-day-list-head > span:nth-child(2),
+  .indicadores-day-row > span:nth-child(2) {
+    padding-left: 0;
+  }
+
+  .indicadores-day-list-head > span:nth-child(3),
+  .indicadores-day-row > span:nth-child(3) {
+    margin-left: 0;
+  }
+
+  .indicadores-day-list-head > span:nth-child(4),
+  .indicadores-day-row > span:nth-child(4) {
+    margin-left: 0;
+  }
+
   .indicadores-day-description-head {
-    flex-wrap: wrap;
+    display: block;
   }
 
   .indicadores-day-address {
@@ -11919,6 +11954,10 @@ small {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .indicadores-day-description-meta {
+    gap: 8px;
   }
 }
 

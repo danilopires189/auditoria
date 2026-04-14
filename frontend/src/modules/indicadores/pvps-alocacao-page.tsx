@@ -123,6 +123,12 @@ function formatTipoLabel(tipo: IndicadoresPvpsAlocTipo): string {
   return "Ambos";
 }
 
+function eligibleAuditLabel(tipo: IndicadoresPvpsAlocTipo): string {
+  if (tipo === "alocacao") return "Validades informadas";
+  if (tipo === "ambos") return "Auditorias elegíveis";
+  return "Endereços auditados";
+}
+
 function formatModuloLabel(modulo: IndicadoresPvpsAlocDayDetailRow["modulo"]): string {
   return modulo === "pvps" ? "PVPS" : "Alocação";
 }
@@ -556,9 +562,9 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
       { label: "% Obstruído", value: formatPercent(percentualObstruido, 2), accent: "warning" },
       { label: "Ocorr. Obstruído", value: formatInteger(summary.ocorrencias_obstruido), accent: "warning" },
       { label: showingMonthDetails ? "Erros do mês" : "Erros do dia", value: selectedDayErrors, accent: "danger" },
-      { label: "Endereços auditados", value: formatInteger(summary.enderecos_auditados) }
+      { label: eligibleAuditLabel(selectedType), value: formatInteger(summary.enderecos_auditados) }
     ];
-  }, [selectedDaySeries, showingMonthDetails, summary]);
+  }, [selectedDaySeries, selectedType, showingMonthDetails, summary]);
 
   return (
     <>
@@ -662,7 +668,7 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
             <section className="indicadores-panel indicadores-panel-wide indicadores-panel-conferencia indicadores-panel-conferencia-pvps-aloc">
               <div className="indicadores-panel-head">
                 <h3>Conformidade do mês</h3>
-                <span>{loadingDashboard ? "Atualizando..." : "Barras de endereços auditados e linha de conformidade"}</span>
+                <span>{loadingDashboard ? "Atualizando..." : `Barras de ${eligibleAuditLabel(selectedType).toLocaleLowerCase("pt-BR")} e linha de conformidade`}</span>
               </div>
               {loadingDashboard && !summary ? (
                 <div className="indicadores-empty-box"><p>Carregando dados do mês...</p></div>
@@ -725,9 +731,11 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
                             <span className="indicadores-day-description">
                               <span className="indicadores-day-description-head">
                                 <strong>{row.descricao}</strong>
+                              </span>
+                              <span className="indicadores-day-description-meta">
+                                <small>COD {formatPlainInteger(row.coddv)}</small>
                                 <small className="indicadores-day-date">{formatDate(row.date_ref)}</small>
                               </span>
-                              <small>COD {formatPlainInteger(row.coddv)}</small>
                             </span>
                             <span className="indicadores-day-address" title={formatAddress(row.endereco)}>
                               {formatAddress(row.endereco)}
