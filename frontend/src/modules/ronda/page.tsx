@@ -312,23 +312,24 @@ function auditActionLabel(auditedInMonth: boolean): string {
 
 function RondaStartButton(props: {
   active: boolean;
+  auditedInMonth: boolean;
   disabled: boolean;
   onClick: () => void;
   ariaLabel: string;
   title: string;
 }) {
-  const { active, disabled, onClick, ariaLabel, title } = props;
+  const { active, auditedInMonth, disabled, onClick, ariaLabel, title } = props;
   return (
     <button
       type="button"
-      className={`ronda-start-btn${active ? " is-active" : ""}`}
+      className={`ronda-start-btn ${auditedInMonth ? "is-resume" : "is-start"}${active ? " is-active" : ""}`}
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
       title={title}
     >
       <span className="ronda-inline-icon" aria-hidden="true">
-        {playIcon()}
+        {auditedInMonth ? refreshIcon() : playIcon()}
       </span>
     </button>
   );
@@ -1625,11 +1626,11 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                     >
                                       <strong>{`Coluna ${row.coluna}`}</strong>
                                       <span>{formatCount(row.produtos_unicos, "produto", "produtos")}</span>
-                                      <small>{selectedPulColumn === row.coluna ? "Selecionado" : row.audited_in_month ? formatPercent(row.percentual_conformidade) : "Pendente"}</small>
+                                      {row.audited_in_month ? <small>{formatPercent(row.percentual_conformidade)}</small> : null}
                                       {row.last_started_at ? <small>{`Início: ${formatDateTime(row.last_started_at)}`}</small> : null}
                                       {row.last_finished_at ? <small>{`Fim: ${formatDateTime(row.last_finished_at)}`}</small> : null}
                                     </button>
-                                    <div className="ronda-column-card-footer">
+                                    <div className="ronda-zone-card-actions">
                                       <RondaStartButton
                                         active={sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna })}
                                         onClick={() => startAuditSession({ zoneType: "PUL", zona: selectedZone, coluna: row.coluna }, row.audited_in_month)}

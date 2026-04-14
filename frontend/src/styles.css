@@ -16471,11 +16471,6 @@ small {
   gap: 6px;
 }
 
-.ronda-column-card-footer {
-  margin-top: 6px;
-  justify-content: space-between;
-}
-
 .ronda-active-audit-card {
   flex: 1 1 240px;
   min-width: 220px;
