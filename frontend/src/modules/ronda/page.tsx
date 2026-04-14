@@ -1856,6 +1856,9 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                   </button>
                 </div>
 
+                {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
+                {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
+
                 {zoneType === "PUL" && addressLevelOptions.length > 0 ? (
                   <label className="field">
                     <span>Filtrar nível da coluna</span>
