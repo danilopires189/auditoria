@@ -84,6 +84,8 @@ export interface IndicadoresPvpsAlocSummary {
   percentual_erro: number;
   conformes_elegiveis: number;
   percentual_conformidade: number;
+  produtos_unicos_auditados: number;
+  media_sku_dia: number;
 }
 
 export interface IndicadoresPvpsAlocDailyRow {

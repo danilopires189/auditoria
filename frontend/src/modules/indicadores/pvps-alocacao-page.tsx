@@ -28,6 +28,7 @@ interface IndicadoresPvpsAlocacaoPageProps {
 }
 
 interface MetricCardDefinition {
+  key: string;
   label: string;
   value: string;
   accent?: "danger" | "warning" | "neutral";
@@ -124,9 +125,8 @@ function formatTipoLabel(tipo: IndicadoresPvpsAlocTipo): string {
 }
 
 function eligibleAuditLabel(tipo: IndicadoresPvpsAlocTipo): string {
-  if (tipo === "alocacao") return "Validades informadas";
-  if (tipo === "ambos") return "Auditorias elegíveis";
-  return "Endereços auditados";
+  void tipo;
+  return "End. auditado";
 }
 
 function formatModuloLabel(modulo: IndicadoresPvpsAlocDayDetailRow["modulo"]): string {
@@ -537,33 +537,22 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
 
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
-    const occurrenceBase = summary.enderecos_auditados + summary.ocorrencias_total;
-    const percentualOcorrencias = occurrenceBase > 0
-      ? (summary.ocorrencias_total / occurrenceBase) * 100
-      : 0;
-    const percentualVazio = occurrenceBase > 0
-      ? (summary.ocorrencias_vazio / occurrenceBase) * 100
-      : 0;
-    const percentualObstruido = occurrenceBase > 0
-      ? (summary.ocorrencias_obstruido / occurrenceBase) * 100
-      : 0;
-    const selectedDayErrors = showingMonthDetails
-      ? formatInteger(summary.erros_total)
-      : formatInteger(selectedDaySeries?.erros_total ?? 0);
+    const selectedDayErrors = formatInteger(selectedDaySeries?.nao_conformes ?? 0);
 
-    return [
-      { label: "% Conformidade", value: formatPercent(summary.percentual_conformidade, 2) },
-      { label: "Não conformes", value: formatInteger(summary.nao_conformes), accent: "danger" },
-      { label: "% Erro", value: formatPercent(summary.percentual_erro, 2), accent: "danger" },
-      { label: "% Ocorrências", value: formatPercent(percentualOcorrencias, 2), accent: "warning" },
-      { label: "Ocorrências", value: formatInteger(summary.ocorrencias_total), accent: "warning" },
-      { label: "% Vazio", value: formatPercent(percentualVazio, 2), accent: "warning" },
-      { label: "Ocorr. Vazio", value: formatInteger(summary.ocorrencias_vazio), accent: "warning" },
-      { label: "% Obstruído", value: formatPercent(percentualObstruido, 2), accent: "warning" },
-      { label: "Ocorr. Obstruído", value: formatInteger(summary.ocorrencias_obstruido), accent: "warning" },
-      { label: showingMonthDetails ? "Erros do mês" : "Erros do dia", value: selectedDayErrors, accent: "danger" },
-      { label: eligibleAuditLabel(selectedType), value: formatInteger(summary.enderecos_auditados) }
+    const cards: MetricCardDefinition[] = [
+      { key: "percentual-conformidade", label: "% Conformidade", value: formatPercent(summary.percentual_conformidade, 2) },
+      { key: "enderecos-conforme", label: "End. Conforme", value: formatInteger(summary.conformes_elegiveis) },
+      { key: "enderecos-auditado", label: eligibleAuditLabel(selectedType), value: formatInteger(summary.enderecos_auditados) },
+      { key: "percentual-nao-conforme", label: "% Não Conforme", value: formatPercent(summary.percentual_erro, 2), accent: "danger" },
+      { key: "enderecos-nao-conforme", label: "End. Não Conforme", value: formatInteger(summary.nao_conformes), accent: "danger" },
+      { key: "media-sku-dia", label: "Média Sku Dia", value: formatInteger(summary.media_sku_dia) }
     ];
+
+    if (!showingMonthDetails) {
+      cards.push({ key: "erros-dia", label: "Erros do dia", value: selectedDayErrors, accent: "danger" });
+    }
+
+    return cards;
   }, [selectedDaySeries, selectedType, showingMonthDetails, summary]);
 
   return (
@@ -655,9 +644,9 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
 
           {errorMessage ? <div className="indicadores-feedback is-error">{errorMessage}</div> : null}
 
-          <div className="indicadores-metrics-grid">
+          <div className="indicadores-metrics-grid indicadores-metrics-grid-pvps-aloc">
             {metricCards.map((card) => (
-              <article key={card.label} className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""}`}>
+              <article key={card.key} className={`indicadores-metric-card indicadores-metric-card-${card.key} ${card.accent ? `accent-${card.accent}` : ""}`}>
                 <span>{card.label}</span>
                 <strong>{card.value}</strong>
               </article>

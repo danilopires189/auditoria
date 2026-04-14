@@ -157,7 +157,9 @@ function mapPvpsAlocSummary(raw: Record<string, unknown>): IndicadoresPvpsAlocSu
     erros_percentual_total: parseInteger(raw.erros_percentual_total),
     percentual_erro: parseNumber(raw.percentual_erro),
     conformes_elegiveis: parseInteger(raw.conformes_elegiveis),
-    percentual_conformidade: parseNumber(raw.percentual_conformidade)
+    percentual_conformidade: parseNumber(raw.percentual_conformidade),
+    produtos_unicos_auditados: parseInteger(raw.produtos_unicos_auditados),
+    media_sku_dia: parseNumber(raw.media_sku_dia)
   };
 }
 

@@ -11272,6 +11272,41 @@ small {
     linear-gradient(165deg, #ffffff 0%, #fff6e8 100%);
 }
 
+.indicadores-metrics-grid-pvps-aloc .indicadores-metric-card-percentual-conformidade {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.indicadores-metrics-grid-pvps-aloc .indicadores-metric-card-enderecos-conforme {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.indicadores-metrics-grid-pvps-aloc .indicadores-metric-card-enderecos-auditado {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.indicadores-metrics-grid-pvps-aloc .indicadores-metric-card-media-sku-dia {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.indicadores-metrics-grid-pvps-aloc .indicadores-metric-card-percentual-nao-conforme {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.indicadores-metrics-grid-pvps-aloc .indicadores-metric-card-enderecos-nao-conforme {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.indicadores-metrics-grid-pvps-aloc .indicadores-metric-card-erros-dia {
+  grid-column: 4;
+  grid-row: 2;
+}
+
 .indicadores-layout-grid {
   --indicadores-row-height: clamp(360px, 41vh, 430px);
   display: grid;
@@ -11771,6 +11806,11 @@ small {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .indicadores-metrics-grid-pvps-aloc .indicadores-metric-card {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
   .indicadores-layout-grid {
     grid-template-columns: 1fr;
     grid-template-rows: auto;
@@ -11845,6 +11885,11 @@ small {
   .indicadores-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .indicadores-metrics-grid-pvps-aloc .indicadores-metric-card {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .indicadores-metric-card {
