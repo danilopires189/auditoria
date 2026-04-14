@@ -16228,16 +16228,8 @@ small {
   flex: 0 0 auto;
   cursor: pointer;
   transition: background 160ms ease, transform 120ms ease, box-shadow 160ms ease, opacity 120ms ease;
-}
-
-.ronda-start-btn.is-start {
   background: linear-gradient(130deg, #295ec0, #3b6ec6);
   box-shadow: 0 2px 6px rgba(27, 63, 124, 0.28);
-}
-
-.ronda-start-btn.is-resume {
-  background: linear-gradient(130deg, #1f4f9f, #2c64bc);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 2px 6px rgba(18, 56, 115, 0.26);
 }
 
 .ronda-start-btn:disabled {
@@ -16246,61 +16238,28 @@ small {
 }
 
 .ronda-start-btn .ronda-inline-icon {
-  width: 11px;
-  height: 11px;
-}
-
-.ronda-start-btn.is-resume .ronda-inline-icon {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
 }
 
 .ronda-start-btn .ronda-inline-icon svg {
-  width: 11px;
-  height: 11px;
-}
-
-.ronda-start-btn.is-resume .ronda-inline-icon svg {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
 }
 
 .ronda-start-btn .ronda-inline-icon svg path,
 .ronda-start-btn .ronda-inline-icon svg circle {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.ronda-start-btn .ronda-inline-icon svg .ronda-icon-fill {
   fill: currentColor;
   stroke: none;
 }
 
-.ronda-start-btn .ronda-inline-icon svg .ronda-icon-stroke {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .ronda-start-btn.is-active {
-  box-shadow: 0 1px 4px rgba(27, 63, 124, 0.24);
+  box-shadow: 0 2px 6px rgba(27, 63, 124, 0.28);
 }
 
 .ronda-start-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-.ronda-start-btn.is-start:hover:not(:disabled) {
   background: linear-gradient(130deg, #244f9f, #2f64c0);
-}
-
-.ronda-start-btn.is-resume:hover:not(:disabled) {
-  background: linear-gradient(130deg, #1a4588, #2558a6);
+  transform: translateY(-1px);
 }
 
 
@@ -16525,11 +16484,23 @@ small {
 .ronda-active-audit-card strong {
   font-family: "Sora", sans-serif;
   color: #0f6b47;
+  font-size: 0.94rem;
 }
 
 .ronda-active-audit-card span,
 .ronda-active-audit-card small {
   color: #466050;
+}
+
+.ronda-active-audit-card span {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #688072;
+}
+
+.ronda-active-audit-card small {
+  font-size: 0.78rem;
+  color: #7b9084;
 }
 
 .ronda-column-audit-panel {
@@ -16937,18 +16908,18 @@ small {
     font-size: 0.78rem;
   }
 
-  /* Ações lado a lado no mobile */
-  .ronda-detail-actions,
-  .ronda-sheet-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px;
+  .ronda-detail-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 
-  .ronda-detail-actions .btn,
-  .ronda-sheet-actions .btn {
-    flex: 1 1 0;
+  .ronda-detail-actions > * {
+    width: 100%;
     min-width: 0;
+  }
+
+  .ronda-detail-actions .btn {
     justify-content: center;
   }
 

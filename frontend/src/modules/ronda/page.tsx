@@ -106,10 +106,18 @@ function checkIcon() {
   );
 }
 
-function playIcon() {
+function auditStartIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path className="ronda-icon-fill" d="M8 6v12l10-6z" />
+      <path d="M9 7.5v9l7.5-4.5z" />
+    </svg>
+  );
+}
+
+function auditResumeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 7.5v9l7.5-4.5z" />
     </svg>
   );
 }
@@ -117,8 +125,8 @@ function playIcon() {
 function refreshIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path className="ronda-icon-stroke" d="M21 12a9 9 0 1 1-3-6.7" />
-      <path className="ronda-icon-stroke" d="M21 3v6h-6" />
+      <path d="M21 12a9 9 0 1 1-3-6.7" />
+      <path d="M21 3v6h-6" />
     </svg>
   );
 }
@@ -322,14 +330,14 @@ function RondaStartButton(props: {
   return (
     <button
       type="button"
-      className={`ronda-start-btn ${auditedInMonth ? "is-resume" : "is-start"}${active ? " is-active" : ""}`}
+      className={`ronda-start-btn${active ? " is-active" : ""}`}
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
       title={title}
     >
       <span className="ronda-inline-icon" aria-hidden="true">
-        {auditedInMonth ? refreshIcon() : playIcon()}
+        {auditedInMonth ? auditResumeIcon() : auditStartIcon()}
       </span>
     </button>
   );
@@ -810,6 +818,13 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [activeAuditSession]);
 
   useEffect(() => {
+    if (zoneType !== "PUL" || !activeAuditSession || activeAuditSession.zoneType !== "PUL") return;
+    if (selectedZone !== activeAuditSession.zona) return;
+    if (selectedPulColumn != null || activeAuditSession.coluna == null) return;
+    setSelectedPulColumn(activeAuditSession.coluna);
+  }, [activeAuditSession, selectedPulColumn, selectedZone, zoneType]);
+
+  useEffect(() => {
     if (!selectedZone) {
       setDetail(null);
       setSelectedPulColumn(null);
@@ -979,9 +994,17 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [activeAuditLabel, activeAuditSession, clearActiveAuditSession, openConfirmDialog]);
 
   const openComposer = useCallback(() => {
-    if (!activeAuditMatchesSelection) return;
+    if (!activeAuditMatchesSelection) {
+      setErrorMessage("Clique em Iniciar antes de adicionar ocorrência.");
+      return;
+    }
+    if (zoneType === "PUL" && selectedPulColumn == null) {
+      setErrorMessage("Selecione uma coluna do Pulmão antes de adicionar ocorrência.");
+      return;
+    }
+    setErrorMessage(null);
     setComposerOpen(true);
-  }, [activeAuditMatchesSelection]);
+  }, [activeAuditMatchesSelection, selectedPulColumn, zoneType]);
 
   const closeComposer = useCallback(() => {
     if (auditBusy) return;
