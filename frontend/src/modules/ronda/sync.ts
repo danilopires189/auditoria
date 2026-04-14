@@ -335,7 +335,8 @@ export async function submitRondaQualidadeAudit(params: {
     motivo: occurrence.motivo.trim(),
     endereco: occurrence.endereco.trim().toUpperCase(),
     observacao: occurrence.observacao.trim() || null,
-    nivel: occurrence.nivel.trim() || null
+    nivel: occurrence.nivel.trim() || null,
+    endereco_manual: occurrence.enderecoManual
   }));
 
   const { data, error } = await supabase.rpc("rpc_ronda_quality_submit_audit", {

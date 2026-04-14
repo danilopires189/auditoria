@@ -264,7 +264,8 @@ function emptyDraft(): RondaQualidadeOccurrenceDraft {
     motivo: "",
     endereco: "",
     observacao: "",
-    nivel: ""
+    nivel: "",
+    enderecoManual: false
   };
 }
 
@@ -278,6 +279,10 @@ function auditResultLabel(value: "sem_ocorrencia" | "com_ocorrencia"): string {
 
 function addressOptionLabel(option: RondaQualidadeAddressOption): string {
   return option.endereco;
+}
+
+function normalizeAddressValue(value: string): string {
+  return value.trim().toLocaleUpperCase("pt-BR");
 }
 
 function formatDurationClock(totalSeconds: number): string {
@@ -835,22 +840,6 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [selectedMonthStart]);
 
   useEffect(() => {
-    if (!composerOpen || addressesBusy) return;
-    setDrafts((current) => current.map((draft) => {
-      if (!draft.endereco) return draft;
-      const selectedStillExists = addressOptions.some((option) => option.endereco === draft.endereco);
-      if (!selectedStillExists) return { ...draft, endereco: "", nivel: "" };
-      if (zoneType === "PUL" && addressLevelFilter.trim()) {
-        const selected = addressOptions.find((option) => option.endereco === draft.endereco);
-        const selectedLevel = selected?.nivel?.toLocaleUpperCase("pt-BR") ?? "";
-        const selectedLevelMatches = selectedLevel === addressLevelFilter.trim().toLocaleUpperCase("pt-BR");
-        return selectedLevelMatches ? draft : { ...draft, endereco: "", nivel: "" };
-      }
-      return draft;
-    }));
-  }, [addressLevelFilter, addressOptions, addressesBusy, composerOpen, zoneType]);
-
-  useEffect(() => {
     if (zoneType !== "PUL" || selectedPulColumn == null || detail == null) return;
     if (detail.column_stats.some((row) => row.coluna === selectedPulColumn)) return;
     setSelectedPulColumn(null);
@@ -1201,15 +1190,6 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
       return;
     }
 
-    const invalidAddressDraft = drafts.find((draft) => (
-      !addressOptions.some((option) => option.endereco === draft.endereco.trim().toUpperCase())
-    ));
-
-    if (invalidAddressDraft) {
-      setErrorMessage("Selecione um endereço válido da lista para salvar a auditoria.");
-      return;
-    }
-
     setAuditBusy(true);
     setErrorMessage(null);
     setStatusMessage(null);
@@ -1236,7 +1216,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     } finally {
       setAuditBusy(false);
     }
-  }, [activeAuditMatchesSelection, activeAuditSession, activeCd, addressOptions, clearActiveAuditSession, drafts, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
+  }, [activeAuditMatchesSelection, activeAuditSession, activeCd, clearActiveAuditSession, drafts, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
 
   const handleToggleCorrection = useCallback(async (occurrenceId: string, currentStatus: RondaQualidadeCorrectionStatus) => {
     if (!isOnline) return;
@@ -1929,12 +1909,22 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                             value={draft.endereco}
                             onChange={(event) => {
                               const nextValue = event.target.value.toLocaleUpperCase("pt-BR");
-                              const selectedAddress = addressOptions.find((option) => option.endereco === nextValue);
+                              const normalizedNextValue = normalizeAddressValue(nextValue);
+                              const selectedAddress = addressOptions.find((option) => (
+                                normalizeAddressValue(option.endereco) === normalizedNextValue
+                              ));
                               if (nextValue.trim() !== "") {
                                 closeAddressPicker();
                               }
                               setDrafts((current) => current.map((item, itemIndex) => (
-                                itemIndex === index ? { ...item, endereco: nextValue, nivel: selectedAddress?.nivel ?? "" } : item
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      endereco: selectedAddress?.endereco ?? nextValue,
+                                      nivel: selectedAddress?.nivel ?? item.nivel,
+                                      enderecoManual: normalizedNextValue !== "" && !selectedAddress
+                                    }
+                                  : item
                               )));
                             }}
                             placeholder="Informe ou busque o endereço"
@@ -1997,7 +1987,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                     onClick={() => {
                                       setDrafts((current) => current.map((item, itemIndex) => (
                                         itemIndex === index
-                                          ? { ...item, endereco: option.endereco, nivel: option.nivel ?? "" }
+                                          ? { ...item, endereco: option.endereco, nivel: option.nivel ?? "", enderecoManual: false }
                                           : item
                                       )));
                                       closeAddressPicker();
@@ -2021,9 +2011,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                         ) : null}
                         {draft.endereco ? (
                           <small>
-                            {addressOptions.some((option) => option.endereco === draft.endereco)
-                              ? `Selecionado: ${draft.endereco}`
-                              : `Digitado manualmente: ${draft.endereco}`}
+                            {draft.enderecoManual ? `Digitado manualmente: ${draft.endereco}` : `Selecionado: ${draft.endereco}`}
                           </small>
                         ) : null}
                       </label>

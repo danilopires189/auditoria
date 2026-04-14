@@ -130,6 +130,7 @@ export interface RondaQualidadeOccurrenceDraft {
   endereco: string;
   observacao: string;
   nivel: string;
+  enderecoManual: boolean;
 }
 
 export interface RondaQualidadeOccurrenceHistoryRow {
