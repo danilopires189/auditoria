@@ -108,16 +108,45 @@ function checkIcon() {
 
 function auditStartIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 7.5v9l7.5-4.5z" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 8.5l5 3.5-5 3.5z" fill="currentColor" stroke="none" />
     </svg>
   );
 }
 
 function auditResumeIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 7.5v9l7.5-4.5z" />
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 0 1 15.36-5.64" />
+      <path d="M21 3v5h-5" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="M10.5 10.5l3 1.5-3 1.5z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function separacaoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <path d="M12 6v12" />
+      <path d="M7 10h0" />
+      <path d="M7 14h0" />
+      <path d="M17 10h0" />
+      <path d="M17 14h0" />
+    </svg>
+  );
+}
+
+function pulmaoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M6 4v16" />
+      <path d="M10 4v16" />
+      <path d="M14 4v16" />
+      <path d="M18 4v16" />
     </svg>
   );
 }
@@ -376,21 +405,19 @@ function compareAddressLevel(left: string, right: string): number {
 function renderZoneCardDetails(row: RondaQualidadeZoneSummary, expanded: boolean) {
   if (!expanded) return null;
 
-  if (row.zone_type === "PUL") {
-    return (
-      <div className="ronda-zone-card-details">
-        {row.total_auditorias > 0 ? <span>{formatCount(row.total_auditorias, "auditoria em coluna", "auditorias em colunas")}</span> : null}
-        {row.last_started_at ? <small>{`Início: ${formatDateTime(row.last_started_at)}`}</small> : null}
-        {row.last_finished_at ? <small>{`Fim: ${formatDateTime(row.last_finished_at)}`}</small> : null}
-      </div>
-    );
-  }
-
-  if (!row.audited_in_month) return null;
-
   return (
     <div className="ronda-zone-card-details">
-      <span>{formatPercent(row.percentual_conformidade)}</span>
+      {row.zone_type === "PUL" ? (
+        <>
+          {row.total_auditorias > 0 ? <span>{formatCount(row.total_auditorias, "auditoria em coluna", "auditorias em colunas")}</span> : null}
+          {row.total_colunas > 0 ? <span>{formatCount(row.total_colunas, "coluna", "colunas")}</span> : null}
+        </>
+      ) : (
+        <>
+          {row.total_enderecos > 0 ? <span>{formatCount(row.total_enderecos, "endereço", "endereços")}</span> : null}
+          {row.audited_in_month ? <span>{formatPercent(row.percentual_conformidade)}</span> : null}
+        </>
+      )}
       {row.last_started_at ? <small>{`Início: ${formatDateTime(row.last_started_at)}`}</small> : null}
       {row.last_finished_at ? <small>{`Fim: ${formatDateTime(row.last_finished_at)}`}</small> : null}
     </div>
@@ -1346,7 +1373,12 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                   onClick={() => selectZoneType(zoneType === type ? null : type)}
                 >
                   <div className="ronda-type-card-head">
-                    <strong>{zoneTypeLabel(type)}</strong>
+                    <strong>
+                      <span className="ronda-type-icon" aria-hidden="true">
+                        {type === "SEP" ? separacaoIcon() : pulmaoIcon()}
+                      </span>
+                      {zoneTypeLabel(type)}
+                    </strong>
                     {zoneType === type ? (
                       <span className="ronda-type-selected-dot" aria-label="Selecionado" title="Selecionado" />
                     ) : (
@@ -1356,7 +1388,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                   <p>
                     {type === "SEP"
                       ? "Auditoria por zona de separação."
-                      : "Auditoria por zona e coluna."}
+                      : "Auditoria por zona e coluna do pulmão."}
                   </p>
                 </button>
               ))}
@@ -1437,22 +1469,20 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                 </div>
                               </button>
                               <div className="ronda-zone-card-actions">
-                                {row.zone_type === "SEP" ? (
-                                  <RondaStartButton
-                                    active={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
-                                    auditedInMonth={row.audited_in_month}
-                                    onClick={() => startAuditSession({ zoneType: "SEP", zona: row.zona, coluna: null }, row.audited_in_month)}
-                                    disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
-                                    ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
-                                      ? "Auditoria em andamento"
-                                      : auditActionLabel(row.audited_in_month)}
-                                    title={readOnlyCorrectionMode
-                                      ? "Meses anteriores ficam apenas para consulta e correção."
-                                      : sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
-                                      ? "Esta auditoria já está em andamento."
-                                        : auditActionLabel(row.audited_in_month)}
-                                  />
-                                ) : null}
+                                <RondaStartButton
+                                  active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                  auditedInMonth={row.audited_in_month}
+                                  onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, row.audited_in_month)}
+                                  disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                  ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                    ? "Auditoria em andamento"
+                                    : auditActionLabel(row.audited_in_month)}
+                                  title={readOnlyCorrectionMode
+                                    ? "Meses anteriores ficam apenas para consulta e correção."
+                                    : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                    ? "Esta auditoria já está em andamento."
+                                    : auditActionLabel(row.audited_in_month)}
+                                />
                                 <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                               </div>
                             </div>
@@ -1485,22 +1515,20 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                 </div>
                               </button>
                               <div className="ronda-zone-card-actions">
-                                {row.zone_type === "SEP" ? (
-                                  <RondaStartButton
-                                    active={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
-                                    auditedInMonth={true}
-                                    onClick={() => startAuditSession({ zoneType: "SEP", zona: row.zona, coluna: null }, true)}
-                                    disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
-                                    ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
-                                      ? "Auditoria em andamento"
+                                <RondaStartButton
+                                  active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                  auditedInMonth={true}
+                                  onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, true)}
+                                  disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                  ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                    ? "Auditoria em andamento"
+                                    : auditActionLabel(true)}
+                                  title={readOnlyCorrectionMode
+                                    ? "Meses anteriores ficam apenas para consulta e correção."
+                                    : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                      ? "Esta auditoria já está em andamento."
                                       : auditActionLabel(true)}
-                                    title={readOnlyCorrectionMode
-                                      ? "Meses anteriores ficam apenas para consulta e correção."
-                                      : sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
-                                        ? "Esta auditoria já está em andamento."
-                                        : auditActionLabel(true)}
-                                  />
-                                ) : null}
+                                />
                                 <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                               </div>
                             </div>
@@ -1568,68 +1596,68 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                           </div>
                           <span>{zoneTypeLabel(zoneType)}</span>
                         </div>
-                        {zoneType === "SEP" ? (
-                          <div className="ronda-detail-actions">
-                            {activeAuditMatchesSelection && activeAuditSession ? (
-                              <div className="ronda-active-audit-card">
-                                <strong>Auditoria em andamento</strong>
-                                <span>{`Tempo: ${activeAuditElapsedLabel}`}</span>
-                                <small>{`Início: ${formatDateTime(activeAuditSession.startedAt)}`}</small>
-                              </div>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="btn btn-muted"
-                              onClick={openComposer}
-                              disabled={auditBusy || !isOnline || occurrenceActionDisabledReason != null}
-                              title={occurrenceActionDisabledReason}
-                            >
-                              <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
-                              Adicionar ocorrência
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-primary"
-                              onClick={() => void handleSubmitNoOccurrence()}
-                              disabled={auditBusy || !isOnline || noOccurrenceDisabledReason != null}
-                              title={noOccurrenceDisabledReason}
-                            >
-                              <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
-                              Sem ocorrência
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-danger"
-                              onClick={cancelActiveAudit}
-                              disabled={auditBusy || cancelAuditDisabledReason != null}
-                              title={cancelAuditDisabledReason}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        ) : null}
+                        <div className="ronda-detail-actions">
+                          {activeAuditMatchesSelection && activeAuditSession ? (
+                            <div className="ronda-active-audit-card">
+                              <strong>Auditoria em andamento</strong>
+                              <span>{`Tempo: ${activeAuditElapsedLabel}`}</span>
+                              <small>{`Início: ${formatDateTime(activeAuditSession.startedAt)}`}</small>
+                            </div>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="btn btn-muted"
+                            onClick={openComposer}
+                            disabled={auditBusy || !isOnline || occurrenceActionDisabledReason != null}
+                            title={occurrenceActionDisabledReason}
+                          >
+                            <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
+                            Adicionar ocorrência
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => void handleSubmitNoOccurrence()}
+                            disabled={auditBusy || !isOnline || noOccurrenceDisabledReason != null}
+                            title={noOccurrenceDisabledReason}
+                          >
+                            <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
+                            Sem ocorrência
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={cancelActiveAudit}
+                            disabled={auditBusy || cancelAuditDisabledReason != null}
+                            title={cancelAuditDisabledReason}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
                       </div>
 
-                      {zoneType === "SEP" ? (
-                        <div className="ronda-summary-grid">
-                          <article className="ronda-summary-card"><span>Endereços</span><strong>{formatInteger(currentZoneSummary.total_enderecos)}</strong></article>
-                          <article className="ronda-summary-card"><span>Endereços com ocorrência</span><strong>{formatInteger(currentZoneSummary.enderecos_com_ocorrencia)}</strong></article>
-                          {currentZoneSummary.audited_in_month ? (
-                            <article className="ronda-summary-card"><span>% conformidade</span><strong>{formatPercent(currentZoneSummary.percentual_conformidade)}</strong></article>
-                          ) : null}
-                          <article className="ronda-summary-card"><span>Auditorias no mês</span><strong>{formatInteger(currentZoneSummary.total_auditorias)}</strong></article>
-                          <article className="ronda-summary-card"><span>Último início</span><strong>{formatDateTime(currentZoneSummary.last_started_at)}</strong></article>
-                          <article className="ronda-summary-card"><span>Último fim</span><strong>{formatDateTime(currentZoneSummary.last_finished_at)}</strong></article>
-                        </div>
-                      ) : (
-                        <div className="ronda-summary-grid">
-                          <article className="ronda-summary-card"><span>Colunas</span><strong>{formatInteger(currentZoneSummary.total_colunas)}</strong></article>
-                          <article className="ronda-summary-card"><span>Produtos únicos</span><strong>{formatInteger(currentZoneSummary.produtos_unicos)}</strong></article>
-                          <article className="ronda-summary-card"><span>Auditorias em colunas</span><strong>{formatInteger(currentZoneSummary.total_auditorias)}</strong></article>
-                          <article className="ronda-summary-card"><span>Último início</span><strong>{formatDateTime(currentZoneSummary.last_started_at)}</strong></article>
-                          <article className="ronda-summary-card"><span>Último fim</span><strong>{formatDateTime(currentZoneSummary.last_finished_at)}</strong></article>
-                        </div>
-                      )}
+                      <div className="ronda-summary-grid">
+                        {zoneType === "SEP" ? (
+                          <>
+                            <article className="ronda-summary-card"><span>Endereços</span><strong>{formatInteger(currentZoneSummary.total_enderecos)}</strong></article>
+                            <article className="ronda-summary-card"><span>Endereços com ocorrência</span><strong>{formatInteger(currentZoneSummary.enderecos_com_ocorrencia)}</strong></article>
+                            {currentZoneSummary.audited_in_month ? (
+                              <article className="ronda-summary-card"><span>% conformidade</span><strong>{formatPercent(currentZoneSummary.percentual_conformidade)}</strong></article>
+                            ) : null}
+                            <article className="ronda-summary-card"><span>Auditorias no mês</span><strong>{formatInteger(currentZoneSummary.total_auditorias)}</strong></article>
+                            <article className="ronda-summary-card"><span>Último início</span><strong>{formatDateTime(currentZoneSummary.last_started_at)}</strong></article>
+                            <article className="ronda-summary-card"><span>Último fim</span><strong>{formatDateTime(currentZoneSummary.last_finished_at)}</strong></article>
+                          </>
+                        ) : (
+                          <>
+                            <article className="ronda-summary-card"><span>Colunas</span><strong>{formatInteger(currentZoneSummary.total_colunas)}</strong></article>
+                            <article className="ronda-summary-card"><span>Produtos únicos</span><strong>{formatInteger(currentZoneSummary.produtos_unicos)}</strong></article>
+                            <article className="ronda-summary-card"><span>Auditorias em colunas</span><strong>{formatInteger(currentZoneSummary.total_auditorias)}</strong></article>
+                            <article className="ronda-summary-card"><span>Último início</span><strong>{formatDateTime(currentZoneSummary.last_started_at)}</strong></article>
+                            <article className="ronda-summary-card"><span>Último fim</span><strong>{formatDateTime(currentZoneSummary.last_finished_at)}</strong></article>
+                          </>
+                        )}
+                      </div>
 
                       {zoneType === "PUL" ? (
                         <div className="ronda-pul-grid">
