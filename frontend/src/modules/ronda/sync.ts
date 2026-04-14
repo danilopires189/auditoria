@@ -334,7 +334,7 @@ export async function submitRondaQualidadeAudit(params: {
   const payload = (params.occurrences ?? []).map((occurrence) => ({
     motivo: occurrence.motivo.trim(),
     endereco: occurrence.endereco.trim().toUpperCase(),
-    observacao: occurrence.observacao.trim(),
+    observacao: occurrence.observacao.trim() || null,
     nivel: occurrence.nivel.trim() || null
   }));
 

@@ -1194,11 +1194,19 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     const invalidDraft = drafts.find((draft) => (
       !draft.motivo.trim()
       || !draft.endereco.trim()
-      || !draft.observacao.trim()
     ));
 
     if (invalidDraft) {
-      setErrorMessage("Preencha motivo, endereço e observação em todas as ocorrências.");
+      setErrorMessage("Preencha motivo e endereço em todas as ocorrências.");
+      return;
+    }
+
+    const invalidAddressDraft = drafts.find((draft) => (
+      !addressOptions.some((option) => option.endereco === draft.endereco.trim().toUpperCase())
+    ));
+
+    if (invalidAddressDraft) {
+      setErrorMessage("Selecione um endereço válido da lista para salvar a auditoria.");
       return;
     }
 
@@ -1228,7 +1236,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     } finally {
       setAuditBusy(false);
     }
-  }, [activeAuditMatchesSelection, activeAuditSession, activeCd, clearActiveAuditSession, drafts, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
+  }, [activeAuditMatchesSelection, activeAuditSession, activeCd, addressOptions, clearActiveAuditSession, drafts, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
 
   const handleToggleCorrection = useCallback(async (occurrenceId: string, currentStatus: RondaQualidadeCorrectionStatus) => {
     if (!isOnline) return;
@@ -2021,7 +2029,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                       </label>
 
                       <label className="field">
-                        <span>Observação</span>
+                        <span>Observação (opcional)</span>
                         <textarea
                           rows={3}
                           value={draft.observacao}
@@ -2031,7 +2039,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                               itemIndex === index ? { ...item, observacao: nextValue } : item
                             )));
                           }}
-                          placeholder="Descreva a ocorrência encontrada."
+                          placeholder="Descreva a ocorrência encontrada, se necessário."
                           disabled={auditBusy}
                         />
                       </label>
