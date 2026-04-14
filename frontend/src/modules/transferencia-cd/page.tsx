@@ -9,7 +9,6 @@ import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "..
 import { formatCountLabel } from "../../shared/inflection";
 import { getDbBarrasByBarcode, getDbBarrasMeta } from "../../shared/db-barras/storage";
 import { refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
-import { shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -22,6 +21,7 @@ import {
   getManifestMetaLocal,
   getPendingSummary,
   getTransferenciaCdPreferences,
+  listPendingLocalConferences,
   listUserLocalConferences,
   listManifestNotesLocal,
   removeLocalConference,
@@ -560,6 +560,9 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const [manifestInfo, setManifestInfo] = useState("");
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingErrors, setPendingErrors] = useState(0);
+  const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [pendingSyncRows, setPendingSyncRows] = useState<TransferenciaCdLocalConference[]>([]);
+  const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
@@ -696,6 +699,12 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setPendingErrors(pending.errors_count);
   }, [profile.user_id]);
 
+  const loadPendingSyncRows = useCallback(async () => {
+    const rows = await listPendingLocalConferences(profile.user_id);
+    setPendingSyncRows(rows);
+    return rows;
+  }, [profile.user_id]);
+
   useEffect(() => {
     activeConferenceRef.current = activeConference;
   }, [activeConference]);
@@ -767,13 +776,56 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     await refreshPendingState();
   }, [refreshPendingState]);
 
+  const openPendingSyncModal = useCallback(async () => {
+    const rows = await loadPendingSyncRows();
+    if (!rows.length) {
+      setStatusMessage("Não há pendências locais para revisar.");
+      return;
+    }
+    setShowPendingSyncModal(true);
+  }, [loadPendingSyncRows]);
+
+  const discardPendingSyncRow = useCallback(async (row: TransferenciaCdLocalConference) => {
+    setBusyPendingDiscard(true);
+    try {
+      await removeLocalConference(row.local_key);
+      if (activeConferenceRef.current?.local_key === row.local_key) {
+        clearActiveConferenceView();
+      }
+      const remaining = await loadPendingSyncRows();
+      await refreshPendingState();
+      if (!remaining.length) setShowPendingSyncModal(false);
+      setStatusMessage("Pendência descartada do dispositivo.");
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [clearActiveConferenceView, loadPendingSyncRows, refreshPendingState]);
+
+  const discardAllPendingSyncRows = useCallback(async () => {
+    setBusyPendingDiscard(true);
+    try {
+      const rows = await listPendingLocalConferences(profile.user_id);
+      for (const row of rows) {
+        await removeLocalConference(row.local_key);
+      }
+      if (activeConferenceRef.current && rows.some((row) => row.local_key === activeConferenceRef.current?.local_key)) {
+        clearActiveConferenceView();
+      }
+      await refreshPendingState();
+      setPendingSyncRows([]);
+      setShowPendingSyncModal(false);
+      setStatusMessage("Pendências locais descartadas.");
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [clearActiveConferenceView, profile.user_id, refreshPendingState]);
+
   const cleanupAuthoritativeRemoteCache = useCallback(async () => {
     if (preferOfflineMode || !isOnline) return;
     const rows = await listUserLocalConferences(profile.user_id);
     let removedAny = false;
     for (const row of rows) {
       if (!row.local_key) continue;
-      if (hasPendingLocalState(row)) continue;
       if (row.remote_conf_id || isBatchConference(row)) {
         await removeLocalConference(row.local_key);
         removedAny = true;
@@ -871,7 +923,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [isOnline, mergeNotesWithLocalState, preferOfflineMode, profile.user_id]);
 
   const queueModeFor = useCallback((conference: TransferenciaCdLocalConference) => (
-    shouldUseQueuedMutationFlow({ isOnline, preferOfflineMode, hasRemoteTarget: Boolean(conference.remote_conf_id) }) || !conference.remote_conf_id
+    preferOfflineMode || !isOnline || !conference.remote_conf_id
   ), [isOnline, preferOfflineMode]);
 
   const runPendingSync = useCallback(async (silent = false) => {
@@ -1811,7 +1863,12 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
             <span>Início</span>
           </Link>
           <div className="module-topbar-user-side">
-            <PendingSyncBadge pendingCount={pendingCount} errorCount={pendingErrors} title="Conferências pendentes de envio" />
+            <PendingSyncBadge
+              pendingCount={pendingCount}
+              errorCount={pendingErrors}
+              title="Conferências pendentes de envio"
+              onClick={pendingCount > 0 || pendingErrors > 0 ? () => void openPendingSyncModal() : undefined}
+            />
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "🟢 Online" : "🔴 Offline"}</span>
           </div>
         </div>
@@ -1948,6 +2005,8 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{selectedBatchNoteKeys.length > 0 ? <p className="termo-inline-note">Selecionadas: {selectedBatchNoteKeys.length} NF(s){selectedBatchEtapa ? ` | ${formatEtapa(selectedBatchEtapa)}` : ""}</p> : null}{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); const statusDetail = noteStatusDetail(note); const noteKey = buildTransferenciaCdNoteKey(note); const checked = selectedBatchNoteKeys.includes(noteKey); const etapaBloqueada = selectedBatchEtapa != null && selectedBatchEtapa !== note.etapa && !checked; return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><div className="termo-route-row-button termo-route-row-button-volume"><label style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}><input type="checkbox" checked={checked} onChange={() => toggleBatchSelection(note)} disabled={busyOpen || etapaBloqueada || status === "finalizado_ok" || status === "finalizado_falta" || status === "finalizado_parcial"} /><button type="button" className="termo-route-row-button termo-route-row-button-volume" style={{ flex: 1 }} disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span>{etapaBloqueada ? <span className="termo-route-sub">Seleção bloqueada: o lote atual já está em {formatEtapa(selectedBatchEtapa)}</span> : null}{statusDetail ? <span className="termo-route-sub">{statusDetail}</span> : null}</span><span className="termo-route-actions-row"><span className="termo-route-items-count">{formatItemCount(note.total_itens)}</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></label></div></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button><button className="btn btn-primary" type="button" onClick={() => void openSelectedNotesBatch()} disabled={busyOpen || selectedBatchNoteKeys.length === 0 || selectedBatchEtapa == null}>{busyOpen ? "Abrindo..." : "Iniciar lote"}</button></div></div></div>, document.body) : null}
 
       {showFinalizeModal && activeConference && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-finalizar-title" onClick={() => setShowFinalizeModal(false)}><div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-finalizar-title">Finalizar conferência</h3><p>Resumo: Não conferido {divergenciaTotals.nao_conferido} | Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>{isBatchConference(activeConference) ? <div className="termo-item-detail"><p>Prévia por NF:</p><div className="termo-routes-list termo-finalize-list">{batchNoteSummary(activeConference).map(({ note, nextStatus }) => <p key={`fim-lote-${note.dt_nf}-${note.nf_trf}-${note.sq_nf}`}>NF {note.nf_trf}/{note.sq_nf}: {nextStatus === "pendente" ? "Pendente" : nextStatus === "finalizado_ok" ? "Concluído" : "Finalizado parcial"}</p>)}</div></div> : null}{divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? <div className="termo-item-detail"><p>Itens com divergência:</p><div className="termo-routes-list termo-finalize-list">{groupedItems.falta.map(({ item, qtd_falta }) => <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>)}{groupedItems.sobra.map(({ item, qtd_sobra }) => <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>)}</div></div> : null}{finalizeError ? <div className="alert error">{finalizeError}</div> : null}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowFinalizeModal(false)} disabled={busyFinalize}>Cancelar</button><button className="btn btn-primary" type="button" onClick={() => void handleFinalizeConference()} disabled={busyFinalize}>{busyFinalize ? "Finalizando..." : "Confirmar finalização"}</button></div></div></div>, document.body) : null}
+
+      {showPendingSyncModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-pendencias-title" onClick={() => setShowPendingSyncModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-pendencias-title">Pendências locais</h3>{pendingSyncRows.length === 0 ? <p>Não há pendências locais para este módulo.</p> : <div className="termo-routes-list">{pendingSyncRows.map((row) => <div key={row.local_key} className="termo-route-group"><div className="termo-item-detail"><p><strong>{isBatchConference(row) ? `Lote com ${row.batch_notes?.length ?? 0} NFs` : `NF ${row.nf_trf}/${row.sq_nf}`}</strong></p><p>{formatEtapa(row.etapa)} | Status {formatStatus(row.status)}</p>{row.sync_error ? <p className="termo-inline-note">Erro: {row.sync_error}</p> : null}<p>Pendências: {[row.pending_snapshot ? "snapshot" : null, row.pending_finalize ? "finalização" : null, row.pending_cancel ? "cancelamento" : null].filter(Boolean).join(", ") || "sem detalhe"}</p><p>Última alteração: {formatDateTime(row.updated_at)}</p><div className="confirm-actions"><button className="btn btn-muted termo-danger-btn" type="button" disabled={busyPendingDiscard} onClick={() => void discardPendingSyncRow(row)}>Descartar</button></div></div></div>)}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowPendingSyncModal(false)} disabled={busyPendingDiscard}>Fechar</button><button className="btn btn-primary termo-danger-btn" type="button" onClick={() => void discardAllPendingSyncRows()} disabled={busyPendingDiscard || pendingSyncRows.length === 0}>{busyPendingDiscard ? "Descartando..." : "Descartar tudo"}</button></div></div></div>, document.body) : null}
 
       {dialogState && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-dialog" onClick={() => setDialogState(null)}><div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-dialog">{dialogState.title}</h3><p>{dialogState.message}</p><div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={dialogState.onCancel ?? (() => setDialogState(null))}>{dialogState.cancelLabel ?? "Cancelar"}</button><button className="btn btn-primary" type="button" onClick={dialogState.onConfirm}>{dialogState.confirmLabel ?? "Confirmar"}</button></div></div></div>, document.body) : null}
 
