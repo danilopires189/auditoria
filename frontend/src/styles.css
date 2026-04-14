@@ -11445,6 +11445,24 @@ small {
   fill: #b21d2f;
 }
 
+@media (min-width: 960px) {
+  .indicadores-layout-grid-pvps-aloc {
+    grid-template-rows: calc(var(--indicadores-row-height) * 1.5) var(--indicadores-row-height);
+  }
+
+  .indicadores-panel-conferencia-pvps-aloc {
+    height: calc(var(--indicadores-row-height) * 1.5);
+    max-height: calc(var(--indicadores-row-height) * 1.5);
+  }
+
+  .indicadores-panel-divergencias-pvps-aloc {
+    height: calc((var(--indicadores-row-height) * 2.5) + 16px);
+    max-height: calc((var(--indicadores-row-height) * 2.5) + 16px);
+  }
+}
+
+
+
 .indicadores-chart-legend {
   display: flex;
   flex-wrap: wrap;

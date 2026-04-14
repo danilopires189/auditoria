@@ -14,6 +14,7 @@ import GestaoEstoquePage from "./modules/gestao-estoque/page";
 import IndicadoresPage from "./modules/indicadores/page";
 import IndicadoresBlitzPage from "./modules/indicadores/blitz-page";
 import IndicadoresGestaoEstoquePage from "./modules/indicadores/gestao-estoque-page";
+import IndicadoresPvpsAlocacaoPage from "./modules/indicadores/pvps-alocacao-page";
 import ValidarEnderecamentoPage from "./modules/validar-enderecamento/page";
 import ValidarEtiquetaPulmaoPage from "./modules/validar-etiqueta-pulmao/page";
 import AuditoriaCaixaPage from "./modules/auditoria-caixa/page";
@@ -104,7 +105,7 @@ interface AuthBranding {
   authCaption: string;
   hiddenModuleKeys: DashboardModuleKey[];
   allowedModuleKeys?: DashboardModuleKey[] | null;
-  allowedIndicatorKeys?: Array<"blitz" | "gestao-estoque"> | null;
+  allowedIndicatorKeys?: Array<"blitz" | "gestao-estoque" | "pvps-alocacao"> | null;
   defaultRoute?: string | null;
 }
 
@@ -121,7 +122,7 @@ const INDICADORES_AUTH_BRANDING: AuthBranding = {
   authCaption: "Indicadores CDs",
   hiddenModuleKeys: [],
   allowedModuleKeys: ["indicadores"],
-  allowedIndicatorKeys: ["blitz", "gestao-estoque"],
+  allowedIndicatorKeys: ["blitz", "gestao-estoque", "pvps-alocacao"],
   defaultRoute: null
 };
 
@@ -2627,6 +2628,16 @@ export default function App() {
                 <IndicadoresGestaoEstoquePage isOnline={isOnline} profile={indicadoresProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/indicadores/pvps-alocacao"
+            element={
+              indicadoresProfile && (!authBranding.allowedIndicatorKeys || authBranding.allowedIndicatorKeys.includes("pvps-alocacao")) ? (
+                <IndicadoresPvpsAlocacaoPage isOnline={isOnline} profile={indicadoresProfile} />
+              ) : (
+                <Navigate to="/modulos/indicadores" replace />
               )
             }
           />

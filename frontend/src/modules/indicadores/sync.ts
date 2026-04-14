@@ -4,7 +4,13 @@ import type {
   IndicadoresBlitzDayDetailRow,
   IndicadoresBlitzMonthOption,
   IndicadoresBlitzSummary,
-  IndicadoresBlitzZoneTotalRow
+  IndicadoresBlitzZoneTotalRow,
+  IndicadoresPvpsAlocDailyRow,
+  IndicadoresPvpsAlocDayDetailRow,
+  IndicadoresPvpsAlocMonthOption,
+  IndicadoresPvpsAlocSummary,
+  IndicadoresPvpsAlocTipo,
+  IndicadoresPvpsAlocZoneTotalRow
 } from "./types";
 
 function toErrorMessage(error: unknown): string {
@@ -128,6 +134,70 @@ function mapDayDetailRow(raw: Record<string, unknown>): IndicadoresBlitzDayDetai
   };
 }
 
+function mapPvpsAlocMonthOption(raw: Record<string, unknown>): IndicadoresPvpsAlocMonthOption {
+  return {
+    month_start: parseString(raw.month_start),
+    month_label: parseString(raw.month_label)
+  };
+}
+
+function mapPvpsAlocSummary(raw: Record<string, unknown>): IndicadoresPvpsAlocSummary {
+  return {
+    month_start: parseString(raw.month_start),
+    month_end: parseString(raw.month_end),
+    available_day_start: parseNullableString(raw.available_day_start),
+    available_day_end: parseNullableString(raw.available_day_end),
+    updated_at: parseNullableString(raw.updated_at),
+    enderecos_auditados: parseInteger(raw.enderecos_auditados),
+    nao_conformes: parseInteger(raw.nao_conformes),
+    ocorrencias_total: parseInteger(raw.ocorrencias_total),
+    ocorrencias_vazio: parseInteger(raw.ocorrencias_vazio),
+    ocorrencias_obstruido: parseInteger(raw.ocorrencias_obstruido),
+    erros_total: parseInteger(raw.erros_total),
+    erros_percentual_total: parseInteger(raw.erros_percentual_total),
+    percentual_erro: parseNumber(raw.percentual_erro),
+    conformes_elegiveis: parseInteger(raw.conformes_elegiveis),
+    percentual_conformidade: parseNumber(raw.percentual_conformidade)
+  };
+}
+
+function mapPvpsAlocDailyRow(raw: Record<string, unknown>): IndicadoresPvpsAlocDailyRow {
+  return {
+    date_ref: parseString(raw.date_ref),
+    enderecos_auditados: parseInteger(raw.enderecos_auditados),
+    nao_conformes: parseInteger(raw.nao_conformes),
+    ocorrencias_total: parseInteger(raw.ocorrencias_total),
+    erros_total: parseInteger(raw.erros_total),
+    erros_percentual_total: parseInteger(raw.erros_percentual_total),
+    percentual_erro: parseNumber(raw.percentual_erro),
+    conformes_elegiveis: parseInteger(raw.conformes_elegiveis),
+    percentual_conformidade: parseNumber(raw.percentual_conformidade)
+  };
+}
+
+function mapPvpsAlocZoneRow(raw: Record<string, unknown>): IndicadoresPvpsAlocZoneTotalRow {
+  return {
+    zona: parseString(raw.zona, "Sem zona"),
+    nao_conforme_total: parseInteger(raw.nao_conforme_total),
+    vazio_total: parseInteger(raw.vazio_total),
+    obstruido_total: parseInteger(raw.obstruido_total),
+    erro_total: parseInteger(raw.erro_total)
+  };
+}
+
+function mapPvpsAlocDayDetailRow(raw: Record<string, unknown>): IndicadoresPvpsAlocDayDetailRow {
+  return {
+    date_ref: parseString(raw.date_ref),
+    modulo: parseString(raw.modulo, "pvps") as IndicadoresPvpsAlocDayDetailRow["modulo"],
+    zona: parseString(raw.zona, "Sem zona"),
+    endereco: parseString(raw.endereco, "Sem endereço"),
+    descricao: parseString(raw.descricao, "Item sem descrição"),
+    coddv: parseInteger(raw.coddv),
+    status_dashboard: parseString(raw.status_dashboard, "nao_conforme") as IndicadoresPvpsAlocDayDetailRow["status_dashboard"],
+    quantidade: parseInteger(raw.quantidade, 1)
+  };
+}
+
 export async function fetchIndicadoresBlitzMonthOptions(cd: number | null): Promise<IndicadoresBlitzMonthOption[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
@@ -196,4 +266,95 @@ export async function fetchIndicadoresBlitzDayDetails(
   if (!Array.isArray(data)) return [];
 
   return data.map((row) => mapDayDetailRow(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresPvpsAlocMonthOptions(
+  cd: number | null,
+  tipo: IndicadoresPvpsAlocTipo
+): Promise<IndicadoresPvpsAlocMonthOption[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_pvps_aloc_month_options", {
+    p_cd: cd,
+    p_tipo: tipo
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapPvpsAlocMonthOption(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresPvpsAlocSummary(
+  cd: number | null,
+  monthStart: string,
+  tipo: IndicadoresPvpsAlocTipo
+): Promise<IndicadoresPvpsAlocSummary> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_pvps_aloc_summary", {
+    p_cd: cd,
+    p_month_start: monthStart,
+    p_tipo: tipo
+  });
+  if (error) throw new Error(toErrorMessage(error));
+
+  const row = firstRow(data);
+  if (!row) throw new Error("Falha ao carregar o resumo do dashboard PVPS e Alocação.");
+  return mapPvpsAlocSummary(row);
+}
+
+export async function fetchIndicadoresPvpsAlocDailySeries(
+  cd: number | null,
+  monthStart: string,
+  tipo: IndicadoresPvpsAlocTipo
+): Promise<IndicadoresPvpsAlocDailyRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_pvps_aloc_daily_series", {
+    p_cd: cd,
+    p_month_start: monthStart,
+    p_tipo: tipo
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapPvpsAlocDailyRow(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresPvpsAlocZoneTotals(
+  cd: number | null,
+  monthStart: string,
+  tipo: IndicadoresPvpsAlocTipo
+): Promise<IndicadoresPvpsAlocZoneTotalRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_pvps_aloc_zone_totals", {
+    p_cd: cd,
+    p_month_start: monthStart,
+    p_tipo: tipo
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapPvpsAlocZoneRow(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresPvpsAlocDayDetails(
+  cd: number | null,
+  monthStart: string,
+  tipo: IndicadoresPvpsAlocTipo,
+  day: string | null
+): Promise<IndicadoresPvpsAlocDayDetailRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_pvps_aloc_day_details", {
+    p_cd: cd,
+    p_month_start: monthStart,
+    p_tipo: tipo,
+    p_day: day
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapPvpsAlocDayDetailRow(row as Record<string, unknown>));
 }

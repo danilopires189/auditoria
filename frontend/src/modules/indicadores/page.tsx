@@ -7,7 +7,7 @@ import type { IndicadoresModuleProfile } from "./types";
 interface IndicadoresPageProps {
   isOnline: boolean;
   profile: IndicadoresModuleProfile;
-  allowedIndicatorKeys?: Array<"blitz" | "gestao-estoque"> | null;
+  allowedIndicatorKeys?: Array<"blitz" | "gestao-estoque" | "pvps-alocacao"> | null;
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
@@ -26,6 +26,7 @@ export default function IndicadoresPage({ isOnline, profile, allowedIndicatorKey
   const allowedIndicatorSet = allowedIndicatorKeys ? new Set(allowedIndicatorKeys) : null;
   const showBlitz = !allowedIndicatorSet || allowedIndicatorSet.has("blitz");
   const showGestaoEstoque = !allowedIndicatorSet || allowedIndicatorSet.has("gestao-estoque");
+  const showPvpsAlocacao = !allowedIndicatorSet || allowedIndicatorSet.has("pvps-alocacao");
   return (
     <>
       <header className="module-topbar module-topbar-fixed indicadores-topbar">
@@ -89,6 +90,20 @@ export default function IndicadoresPage({ isOnline, profile, allowedIndicatorKey
                 <div className="indicadores-entry-main">
                   <strong>Gestão de Estoque</strong>
                   <p>Perda acumulada, entradas e saídas, top 30 e reentrada de produtos no ano.</p>
+                </div>
+                <span className="indicadores-entry-action">Abrir dashboard</span>
+              </Link>
+            ) : null}
+
+            {showPvpsAlocacao ? (
+              <Link to="/modulos/indicadores/pvps-alocacao" className="indicadores-entry-card">
+                <div className="indicadores-entry-head">
+                  <span className="indicadores-entry-chip">Indicador</span>
+                  <span className="indicadores-entry-live">Novo</span>
+                </div>
+                <div className="indicadores-entry-main">
+                  <strong>PVPS e Alocação</strong>
+                  <p>Conformidade mensal, divergentes por dia e erro por zona com filtro por tipo.</p>
                 </div>
                 <span className="indicadores-entry-action">Abrir dashboard</span>
               </Link>
