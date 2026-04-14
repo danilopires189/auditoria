@@ -12,6 +12,7 @@ import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "..
 import { formatCountLabel } from "../../shared/inflection";
 import { shouldTriggerQueuedBackgroundSync, shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import {
   getDbBarrasByBarcode,
   getDbBarrasMeta,
@@ -34,6 +35,7 @@ import {
   getPendingSummary,
   getRouteOverviewLocal,
   getEntradaNotasPreferences,
+  listPendingLocalVolumes,
   listUserLocalVolumes,
   saveLocalVolume,
   saveManifestSnapshot,
@@ -1008,6 +1010,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   });
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingErrors, setPendingErrors] = useState(0);
+  const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [pendingSyncRows, setPendingSyncRows] = useState<EntradaNotasLocalVolume[]>([]);
+  const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
@@ -2407,6 +2412,21 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setPendingErrors(pending.errors_count);
   }, [profile.user_id]);
 
+  const loadPendingSyncRows = useCallback(async () => {
+    const rows = await listPendingLocalVolumes(profile.user_id);
+    setPendingSyncRows(rows);
+    return rows;
+  }, [profile.user_id]);
+
+  const openPendingSyncModal = useCallback(async () => {
+    const rows = await loadPendingSyncRows();
+    if (rows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setShowPendingSyncModal(true);
+  }, [loadPendingSyncRows]);
+
   const persistPreferences = useCallback(async (next: {
     prefer_offline_mode?: boolean;
     multiplo_padrao?: number;
@@ -3744,6 +3764,45 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       etiquetaRef.current?.focus();
     });
   }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
+
+  const discardPendingSyncRow = useCallback(async (localKey: string) => {
+    setBusyPendingDiscard(true);
+    try {
+      await removeLocalVolume(localKey);
+      const rows = await loadPendingSyncRows();
+      await refreshPendingState();
+      if (activeVolume?.local_key === localKey) {
+        clearConferenceScreen();
+      }
+      if (rows.length <= 0) {
+        setShowPendingSyncModal(false);
+      }
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [activeVolume?.local_key, clearConferenceScreen, loadPendingSyncRows, refreshPendingState]);
+
+  const discardAllPendingSyncRows = useCallback(async () => {
+    if (pendingSyncRows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setBusyPendingDiscard(true);
+    try {
+      const activeLocalKey = activeVolume?.local_key ?? null;
+      for (const row of pendingSyncRows) {
+        await removeLocalVolume(row.local_key);
+      }
+      await refreshPendingState();
+      setPendingSyncRows([]);
+      setShowPendingSyncModal(false);
+      if (activeLocalKey && pendingSyncRows.some((row) => row.local_key === activeLocalKey)) {
+        clearConferenceScreen();
+      }
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [activeVolume?.local_key, clearConferenceScreen, pendingSyncRows, refreshPendingState]);
 
   const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
@@ -5647,6 +5706,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               pendingCount={pendingCount}
               errorCount={pendingErrors}
               title="Conferências pendentes de envio"
+              onClick={pendingCount > 0 || pendingErrors > 0 ? () => void openPendingSyncModal() : undefined}
             />
             {showOnlineBadge}
           </div>
@@ -6501,6 +6561,28 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         )}
       </section>
 
+      <PendingSyncDialog
+        isOpen={showPendingSyncModal}
+        title="Pendências de sincronização"
+        items={pendingSyncRows.map((row) => ({
+          id: row.local_key,
+          title: `Volume ${row.nr_volume}`,
+          subtitle: `Status ${row.status}`,
+          detail: [
+            row.pending_snapshot ? "Snapshot pendente" : null,
+            row.pending_finalize ? "Finalização pendente" : null,
+            row.pending_cancel ? "Cancelamento pendente" : null
+          ].filter(Boolean).join(" | ") || "Pendência local",
+          error: row.sync_error,
+          updatedAt: formatDateTimeBrasilia(row.updated_at, { includeSeconds: true, emptyFallback: "-", invalidFallback: "-" }),
+          onDiscard: () => void discardPendingSyncRow(row.local_key)
+        }))}
+        emptyText="Nenhuma pendência encontrada."
+        busy={busyPendingDiscard}
+        onClose={() => setShowPendingSyncModal(false)}
+        onDiscardAll={pendingSyncRows.length > 0 ? () => void discardAllPendingSyncRows() : undefined}
+      />
+
       {showRoutesModal && typeof document !== "undefined"
         ? createPortal(
             <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-rotas-title" onClick={() => setShowRoutesModal(false)}>
@@ -6946,4 +7028,3 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     </>
   );
 }
-

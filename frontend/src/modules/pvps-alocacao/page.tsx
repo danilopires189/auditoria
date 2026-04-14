@@ -17,6 +17,7 @@ import {
 import { formatCountLabel } from "../../shared/inflection";
 import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   createAdminRule,
@@ -46,6 +47,7 @@ import {
   hasOfflineSepCache,
   listPendingOfflineEvents,
   loadOfflineSnapshot,
+  removeOfflineEvent,
   removeOfflineAlocacaoEvent,
   saveOfflineAlocacaoEvent,
   saveOfflineSnapshot,
@@ -1237,6 +1239,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [busySync, setBusySync] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingErrors, setPendingErrors] = useState(0);
+  const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [pendingSyncRows, setPendingSyncRows] = useState<PvpsAlocOfflineEventRow[]>([]);
+  const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [manifestReady, setManifestReady] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [offlineDiscardedInSession, setOfflineDiscardedInSession] = useState(0);
@@ -1320,6 +1325,57 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     } catch {
       setPendingCount(0);
       setPendingErrors(0);
+    }
+  }
+
+  async function loadPendingSyncRows(): Promise<PvpsAlocOfflineEventRow[]> {
+    if (activeCd == null) {
+      setPendingSyncRows([]);
+      return [];
+    }
+    const rows = await listPendingOfflineEvents(profile.user_id, activeCd).catch(() => []);
+    setPendingSyncRows(rows);
+    return rows;
+  }
+
+  async function openPendingSyncModal(): Promise<void> {
+    const rows = await loadPendingSyncRows();
+    if (rows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setShowPendingSyncModal(true);
+  }
+
+  async function discardPendingSyncRow(eventId: string): Promise<void> {
+    setBusyPendingDiscard(true);
+    try {
+      await removeOfflineEvent(eventId);
+      const rows = await loadPendingSyncRows();
+      await refreshPendingState();
+      if (rows.length <= 0) {
+        setShowPendingSyncModal(false);
+      }
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }
+
+  async function discardAllPendingSyncRows(): Promise<void> {
+    if (pendingSyncRows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setBusyPendingDiscard(true);
+    try {
+      for (const row of pendingSyncRows) {
+        await removeOfflineEvent(row.event_id);
+      }
+      await refreshPendingState();
+      setPendingSyncRows([]);
+      setShowPendingSyncModal(false);
+    } finally {
+      setBusyPendingDiscard(false);
     }
   }
 
@@ -4699,6 +4755,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               pendingCount={pendingCount}
               errorCount={pendingErrors}
               title="Eventos offline pendentes de sincronização"
+              onClick={pendingCount > 0 || pendingErrors > 0 ? () => void openPendingSyncModal() : undefined}
             />
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "🟢 Online" : "🔴 Offline"}</span>
           </div>
@@ -4710,6 +4767,32 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           <span className="module-title">Auditoria de PVPS e Alocação</span>
         </div>
       </header>
+
+      <PendingSyncDialog
+        isOpen={showPendingSyncModal}
+        title="Pendências de sincronização"
+        items={pendingSyncRows.map((row) => ({
+          id: row.event_id,
+          title: row.kind === "sep"
+            ? `SEP ${row.coddv}`
+            : row.kind === "pul"
+              ? `PUL ${row.coddv}`
+              : `Alocação ${row.coddv}`,
+          subtitle: `Status ${row.status} | Tentativas ${row.attempt_count}`,
+          detail: [
+            row.end_sep ? `End. SEP ${row.end_sep}` : null,
+            row.end_pul ? `End. PUL ${row.end_pul}` : null,
+            row.queue_id ? `Fila ${row.queue_id}` : null
+          ].filter(Boolean).join(" | ") || `Evento ${row.event_id}`,
+          error: row.error_message,
+          updatedAt: formatDateTimeBrasilia(row.updated_at, { includeSeconds: true, emptyFallback: "-", invalidFallback: "-" }),
+          onDiscard: () => void discardPendingSyncRow(row.event_id)
+        }))}
+        emptyText="Nenhuma pendência encontrada."
+        busy={busyPendingDiscard}
+        onClose={() => setShowPendingSyncModal(false)}
+        onDiscardAll={pendingSyncRows.length > 0 ? () => void discardAllPendingSyncRows() : undefined}
+      />
 
       <section className="modules-shell">
         <article className="module-screen surface-enter pvps-module-shell">

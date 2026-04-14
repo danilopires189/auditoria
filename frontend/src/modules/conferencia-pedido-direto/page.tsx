@@ -12,6 +12,7 @@ import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "..
 import { formatCountLabel } from "../../shared/inflection";
 import { shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import {
   getDbBarrasByBarcode,
   getDbBarrasMeta,
@@ -34,6 +35,7 @@ import {
   getPendingSummary,
   getRouteOverviewLocal,
   getPedidoDiretoPreferences,
+  listPendingLocalVolumes,
   listUserLocalVolumes,
   saveLocalVolume,
   saveManifestSnapshot,
@@ -633,6 +635,9 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const [manifestInfo, setManifestInfo] = useState<string>("");
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingErrors, setPendingErrors] = useState(0);
+  const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [pendingSyncRows, setPendingSyncRows] = useState<PedidoDiretoLocalVolume[]>([]);
+  const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
@@ -1183,6 +1188,21 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     setPendingErrors(pending.errors_count);
   }, [profile.user_id]);
 
+  const loadPendingSyncRows = useCallback(async () => {
+    const rows = await listPendingLocalVolumes(profile.user_id);
+    setPendingSyncRows(rows);
+    return rows;
+  }, [profile.user_id]);
+
+  const openPendingSyncModal = useCallback(async () => {
+    const rows = await loadPendingSyncRows();
+    if (!rows.length) {
+      setStatusMessage("Não há pendências locais para revisar.");
+      return;
+    }
+    setShowPendingSyncModal(true);
+  }, [loadPendingSyncRows]);
+
   const persistPreferences = useCallback(async (next: {
     prefer_offline_mode?: boolean;
     multiplo_padrao?: number;
@@ -1711,6 +1731,37 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       etiquetaRef.current?.focus();
     });
   }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
+
+  const discardPendingSyncRow = useCallback(async (row: PedidoDiretoLocalVolume) => {
+    setBusyPendingDiscard(true);
+    try {
+      await removeLocalVolume(row.local_key);
+      if (activeVolume?.local_key === row.local_key) clearConferenceScreen();
+      const remaining = await loadPendingSyncRows();
+      await refreshPendingState();
+      if (!remaining.length) setShowPendingSyncModal(false);
+      setStatusMessage("Pendência descartada do dispositivo.");
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [activeVolume, clearConferenceScreen, loadPendingSyncRows, refreshPendingState]);
+
+  const discardAllPendingSyncRows = useCallback(async () => {
+    setBusyPendingDiscard(true);
+    try {
+      const rows = await listPendingLocalVolumes(profile.user_id);
+      for (const row of rows) {
+        await removeLocalVolume(row.local_key);
+      }
+      if (activeVolume && rows.some((row) => row.local_key === activeVolume.local_key)) clearConferenceScreen();
+      await refreshPendingState();
+      setPendingSyncRows([]);
+      setShowPendingSyncModal(false);
+      setStatusMessage("Pendências locais descartadas.");
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [activeVolume, clearConferenceScreen, profile.user_id, refreshPendingState]);
 
   const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
@@ -2904,6 +2955,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               pendingCount={pendingCount}
               errorCount={pendingErrors}
               title="Conferências pendentes de envio"
+              onClick={pendingCount > 0 || pendingErrors > 0 ? () => void openPendingSyncModal() : undefined}
             />
             {showOnlineBadge}
           </div>
@@ -3513,6 +3565,23 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           </div>
         )}
       </section>
+
+      <PendingSyncDialog
+        isOpen={showPendingSyncModal}
+        title="Pendências locais"
+        items={pendingSyncRows.map((row) => ({
+          id: row.local_key,
+          title: `PedidoSeq ${row.id_vol}`,
+          subtitle: `Status ${row.status}`,
+          detail: `Pendências: ${[row.pending_snapshot ? "snapshot" : null, row.pending_finalize ? "finalização" : null, row.pending_cancel ? "cancelamento" : null].filter(Boolean).join(", ") || "sem detalhe"}`,
+          error: row.sync_error,
+          updatedAt: formatDateTime(row.updated_at),
+          onDiscard: () => void discardPendingSyncRow(row)
+        }))}
+        busy={busyPendingDiscard}
+        onClose={() => setShowPendingSyncModal(false)}
+        onDiscardAll={() => void discardAllPendingSyncRows()}
+      />
 
       {showRoutesModal && typeof document !== "undefined"
         ? createPortal(

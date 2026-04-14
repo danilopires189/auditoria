@@ -10,10 +10,13 @@ import { refreshDbEndCacheSmart } from "../../shared/db-end/sync";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { BackIcon, EyeIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   getControleValidadePrefs,
   hasOfflineSnapshot,
+  listPendingOfflineEvents,
+  removeOfflineEvent,
   saveControleValidadePrefs,
   saveOfflineSnapshot
 } from "./storage";
@@ -39,6 +42,7 @@ import {
 } from "./sync";
 import type {
   ControleValidadeModuleProfile,
+  ControleValidadeOfflineEventRow,
   LinhaColetaLookupResult,
   LinhaColetaHistoryRow,
   LinhaRetiradaRow,
@@ -420,6 +424,9 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingErrors, setPendingErrors] = useState(0);
+  const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [pendingSyncRows, setPendingSyncRows] = useState<ControleValidadeOfflineEventRow[]>([]);
+  const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [dbBarrasCount, setDbBarrasCount] = useState(0);
   const [dbEndCount, setDbEndCount] = useState(0);
   const [offlineSnapshotReady, setOfflineSnapshotReady] = useState(false);
@@ -498,6 +505,57 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     setPendingCount(stats.pending);
     setPendingErrors(stats.errors);
   }, [activeCd, profile.user_id]);
+
+  const loadPendingSyncRows = useCallback(async () => {
+    if (activeCd == null) {
+      setPendingSyncRows([]);
+      return [];
+    }
+    const rows = await listPendingOfflineEvents(profile.user_id, activeCd);
+    setPendingSyncRows(rows);
+    return rows;
+  }, [activeCd, profile.user_id]);
+
+  const openPendingSyncModal = useCallback(async () => {
+    const rows = await loadPendingSyncRows();
+    if (rows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setShowPendingSyncModal(true);
+  }, [loadPendingSyncRows]);
+
+  const discardPendingSyncRow = useCallback(async (eventId: string) => {
+    setBusyPendingDiscard(true);
+    try {
+      await removeOfflineEvent(eventId);
+      const rows = await loadPendingSyncRows();
+      await refreshQueueStats();
+      if (rows.length <= 0) {
+        setShowPendingSyncModal(false);
+      }
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [loadPendingSyncRows, refreshQueueStats]);
+
+  const discardAllPendingSyncRows = useCallback(async () => {
+    if (pendingSyncRows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setBusyPendingDiscard(true);
+    try {
+      for (const row of pendingSyncRows) {
+        await removeOfflineEvent(row.event_id);
+      }
+      await refreshQueueStats();
+      setPendingSyncRows([]);
+      setShowPendingSyncModal(false);
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [pendingSyncRows, refreshQueueStats]);
 
   const refreshOfflineMeta = useCallback(async () => {
     if (activeCd == null) {
@@ -1673,6 +1731,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
               pendingCount={pendingCount}
               errorCount={pendingErrors}
               title="Eventos offline pendentes de sincronização"
+              onClick={pendingCount > 0 || pendingErrors > 0 ? () => void openPendingSyncModal() : undefined}
             />
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
               {isOnline ? "🟢 Online" : "🔴 Offline"}
@@ -1686,6 +1745,28 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           <span className="module-title">{MODULE_DEF.title}</span>
         </div>
       </header>
+
+      <PendingSyncDialog
+        isOpen={showPendingSyncModal}
+        title="Pendências de sincronização"
+        items={pendingSyncRows.map((row) => ({
+          id: row.event_id,
+          title: row.kind === "linha_coleta"
+            ? "Coleta de linha"
+            : row.kind === "linha_retirada"
+              ? "Retirada de linha"
+              : "Retirada de pulmão",
+          subtitle: `Status ${row.status} | Tentativas ${row.attempt_count}`,
+          detail: `Evento ${row.event_id}`,
+          error: row.error_message,
+          updatedAt: formatDateTimeBrasilia(row.updated_at, { includeSeconds: true, emptyFallback: "-", invalidFallback: "-" }),
+          onDiscard: () => void discardPendingSyncRow(row.event_id)
+        }))}
+        emptyText="Nenhuma pendência encontrada."
+        busy={busyPendingDiscard}
+        onClose={() => setShowPendingSyncModal(false)}
+        onDiscardAll={pendingSyncRows.length > 0 ? () => void discardAllPendingSyncRows() : undefined}
+      />
 
       <section className="modules-shell controle-validade-shell">
         <article className="module-screen surface-enter controle-validade-screen">

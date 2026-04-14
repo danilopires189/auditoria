@@ -4,6 +4,7 @@ import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia } from "../../shared/brasilia-datetime";
 import {
   fetchDbBarrasByBarcodeOnline,
@@ -733,6 +734,10 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const [manifestItems, setManifestItems] = useState<InventarioManifestItemRow[]>([]);
   const [remoteState, setRemoteState] = useState<InventarioSyncPullState>(defaultState);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingErrors, setPendingErrors] = useState(0);
+  const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [pendingSyncRows, setPendingSyncRows] = useState<InventarioPendingEvent[]>([]);
+  const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [dbBarrasCount, setDbBarrasCount] = useState(0);
   const [dbBarrasLastSyncAt, setDbBarrasLastSyncAt] = useState<string | null>(null);
 
@@ -1055,9 +1060,66 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   }, [resolveScannerTrack, supportsTrackTorch, torchEnabled]);
 
   const refreshPending = useCallback(async () => {
-    if (cd == null) return setPendingCount(0);
-    setPendingCount(await countPendingEventsByCycle(profile.user_id, cd, CYCLE_DATE));
+    if (cd == null) {
+      setPendingCount(0);
+      setPendingErrors(0);
+      return;
+    }
+    const rows = await listPendingEventsByCycle(profile.user_id, cd, CYCLE_DATE);
+    setPendingCount(rows.length);
+    setPendingErrors(rows.filter((row) => row.status === "error").length);
   }, [cd, profile.user_id]);
+
+  const loadPendingSyncRows = useCallback(async () => {
+    if (cd == null) {
+      setPendingSyncRows([]);
+      return [];
+    }
+    const rows = await listPendingEventsByCycle(profile.user_id, cd, CYCLE_DATE);
+    setPendingSyncRows(rows);
+    return rows;
+  }, [cd, profile.user_id]);
+
+  const openPendingSyncModal = useCallback(async () => {
+    const rows = await loadPendingSyncRows();
+    if (rows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setShowPendingSyncModal(true);
+  }, [loadPendingSyncRows]);
+
+  const discardPendingSyncRow = useCallback(async (eventId: string) => {
+    setBusyPendingDiscard(true);
+    try {
+      await removePendingEvent(eventId);
+      const rows = await loadPendingSyncRows();
+      await refreshPending();
+      if (rows.length <= 0) {
+        setShowPendingSyncModal(false);
+      }
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [loadPendingSyncRows, refreshPending]);
+
+  const discardAllPendingSyncRows = useCallback(async () => {
+    if (pendingSyncRows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setBusyPendingDiscard(true);
+    try {
+      for (const row of pendingSyncRows) {
+        await removePendingEvent(row.event_id);
+      }
+      await refreshPending();
+      setPendingSyncRows([]);
+      setShowPendingSyncModal(false);
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [pendingSyncRows, refreshPending]);
 
   const loadLocal = useCallback(async () => {
     if (cd == null) return;
@@ -1114,7 +1176,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
       }
     }
     const remaining = await countPendingEventsByCycle(profile.user_id, cd, CYCLE_DATE);
-    setPendingCount(remaining);
+    await refreshPending();
     return { synced, failed, discarded, remaining };
   }, [cd, isOnline, profile.user_id, refreshPending]);
 
@@ -3126,7 +3188,12 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
             <span>Início</span>
           </Link>
           <div className="module-topbar-user-side">
-            <PendingSyncBadge pendingCount={pendingCount} title="Eventos pendentes" />
+            <PendingSyncBadge
+              pendingCount={pendingCount}
+              errorCount={pendingErrors}
+              title="Eventos pendentes"
+              onClick={pendingCount > 0 || pendingErrors > 0 ? () => void openPendingSyncModal() : undefined}
+            />
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>{isOnline ? "Online" : "Offline"}</span>
           </div>
         </div>
@@ -4318,6 +4385,24 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
           )
           : null}
       </section>
+
+      <PendingSyncDialog
+        isOpen={showPendingSyncModal}
+        title="Pendências de sincronização"
+        items={pendingSyncRows.map((row) => ({
+          id: row.event_id,
+          title: `Evento ${row.event_type}`,
+          subtitle: `Status ${row.status} | Tentativas ${row.attempt_count}`,
+          detail: `Ciclo ${row.cycle_date}`,
+          error: row.error_message,
+          updatedAt: formatDateTimeBrasilia(row.updated_at, { includeSeconds: true, emptyFallback: "-", invalidFallback: "-" }),
+          onDiscard: () => void discardPendingSyncRow(row.event_id)
+        }))}
+        emptyText="Nenhuma pendência encontrada."
+        busy={busyPendingDiscard}
+        onClose={() => setShowPendingSyncModal(false)}
+        onDiscardAll={pendingSyncRows.length > 0 ? () => void discardAllPendingSyncRows() : undefined}
+      />
     </>
   );
 }

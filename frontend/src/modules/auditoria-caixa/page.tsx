@@ -17,6 +17,7 @@ import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-po
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   AUDITORIA_CAIXA_INVALID_ETIQUETA_MESSAGE,
@@ -39,6 +40,7 @@ import {
   getAuditoriaCaixaPreferences,
   getDbRotasByFilial,
   getDbRotasMeta,
+  getPendingAuditoriaCaixaRows,
   getUserAuditoriaCaixaRows,
   removeAuditoriaCaixaRow,
   saveAuditoriaCaixaPreferences,
@@ -562,6 +564,10 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const [busyRefresh, setBusyRefresh] = useState(false);
   const [busySync, setBusySync] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingErrors, setPendingErrors] = useState(0);
+  const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [pendingSyncRows, setPendingSyncRows] = useState<AuditoriaCaixaRow[]>([]);
+  const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
@@ -748,6 +754,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     ), 0);
     setLocalRows(nextRows);
     setPendingCount(nextPending);
+    setPendingErrors(nextRows.filter((row) => row.sync_status === "error").length);
 
     if (currentCd == null) {
       setDbRotasCount(0);
@@ -759,6 +766,53 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     setDbRotasCount(nextMeta.row_count);
     setDbRotasLastSyncAt(nextMeta.last_sync_at);
   }, [currentCd, profile.user_id]);
+
+  const loadPendingSyncRows = useCallback(async () => {
+    const rows = await getPendingAuditoriaCaixaRows(profile.user_id);
+    setPendingSyncRows(rows);
+    return rows;
+  }, [profile.user_id]);
+
+  const openPendingSyncModal = useCallback(async () => {
+    const rows = await loadPendingSyncRows();
+    if (rows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setShowPendingSyncModal(true);
+  }, [loadPendingSyncRows]);
+
+  const discardPendingSyncRow = useCallback(async (localId: string) => {
+    setBusyPendingDiscard(true);
+    try {
+      await removeAuditoriaCaixaRow(localId);
+      const rows = await loadPendingSyncRows();
+      await refreshLocalState();
+      if (rows.length <= 0) {
+        setShowPendingSyncModal(false);
+      }
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [loadPendingSyncRows, refreshLocalState]);
+
+  const discardAllPendingSyncRows = useCallback(async () => {
+    if (pendingSyncRows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setBusyPendingDiscard(true);
+    try {
+      for (const row of pendingSyncRows) {
+        await removeAuditoriaCaixaRow(row.local_id);
+      }
+      await refreshLocalState();
+      setPendingSyncRows([]);
+      setShowPendingSyncModal(false);
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [pendingSyncRows, refreshLocalState]);
 
   const refreshSharedState = useCallback(async () => {
     if (!isOnline || currentCd == null) return;
@@ -1831,7 +1885,12 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
           </Link>
 
           <div className="module-topbar-user-side">
-            <PendingSyncBadge pendingCount={pendingCount} title="Etiquetas pendentes de envio" />
+            <PendingSyncBadge
+              pendingCount={pendingCount}
+              errorCount={pendingErrors}
+              title="Etiquetas pendentes de envio"
+              onClick={pendingCount > 0 || pendingErrors > 0 ? () => void openPendingSyncModal() : undefined}
+            />
             {showOnlineBadge}
           </div>
         </div>
@@ -2743,6 +2802,28 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
             )
           : null}
       </section>
+
+      <PendingSyncDialog
+        isOpen={showPendingSyncModal}
+        title="Pendências de sincronização"
+        items={pendingSyncRows.map((row) => ({
+          id: row.local_id,
+          title: `Etiqueta ${row.etiqueta}`,
+          subtitle: `Status ${asStatusLabel(row.sync_status)}`,
+          detail: [
+            row.filial_nome ? `Loja ${row.filial_nome}` : null,
+            row.rota ? `Rota ${row.rota}` : null,
+            row.volume ? `Volume ${row.volume}` : null
+          ].filter(Boolean).join(" | ") || `Pedido ${row.pedido}`,
+          error: row.sync_error,
+          updatedAt: formatDateTime(row.updated_at),
+          onDiscard: () => void discardPendingSyncRow(row.local_id)
+        }))}
+        emptyText="Nenhuma pendência encontrada."
+        busy={busyPendingDiscard}
+        onClose={() => setShowPendingSyncModal(false)}
+        onDiscardAll={pendingSyncRows.length > 0 ? () => void discardAllPendingSyncRows() : undefined}
+      />
     </>
   );
 }

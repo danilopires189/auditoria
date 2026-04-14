@@ -14,6 +14,7 @@ import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import {
   getDbBarrasByBarcode,
   getDbBarrasMeta,
@@ -31,6 +32,7 @@ import { getModuleByKeyOrThrow } from "../registry";
 import {
   cleanupExpiredColetaRows,
   getColetaPreferences,
+  getPendingRows,
   getUserColetaRows,
   removeColetaRow,
   saveColetaPreferences,
@@ -398,6 +400,10 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const [localRows, setLocalRows] = useState<ColetaRow[]>([]);
   const [sharedTodayRows, setSharedTodayRows] = useState<ColetaRow[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingErrors, setPendingErrors] = useState(0);
+  const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [pendingSyncRows, setPendingSyncRows] = useState<ColetaRow[]>([]);
+  const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [dbBarrasCount, setDbBarrasCount] = useState(0);
   const [dbBarrasLastSyncAt, setDbBarrasLastSyncAt] = useState<string | null>(null);
 
@@ -522,9 +528,57 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
     ), 0);
     setLocalRows(nextRows);
     setPendingCount(nextPending);
+    setPendingErrors(nextRows.filter((row) => row.sync_status === "error").length);
     setDbBarrasCount(nextMeta.row_count);
     setDbBarrasLastSyncAt(nextMeta.last_sync_at);
   }, [profile.user_id]);
+
+  const loadPendingSyncRows = useCallback(async () => {
+    const rows = await getPendingRows(profile.user_id);
+    setPendingSyncRows(rows);
+    return rows;
+  }, [profile.user_id]);
+
+  const openPendingSyncModal = useCallback(async () => {
+    const rows = await loadPendingSyncRows();
+    if (rows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setShowPendingSyncModal(true);
+  }, [loadPendingSyncRows]);
+
+  const discardPendingSyncRow = useCallback(async (localId: string) => {
+    setBusyPendingDiscard(true);
+    try {
+      await removeColetaRow(localId);
+      const rows = await loadPendingSyncRows();
+      await refreshLocalState();
+      if (rows.length <= 0) {
+        setShowPendingSyncModal(false);
+      }
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [loadPendingSyncRows, refreshLocalState]);
+
+  const discardAllPendingSyncRows = useCallback(async () => {
+    if (pendingSyncRows.length <= 0) {
+      setShowPendingSyncModal(false);
+      return;
+    }
+    setBusyPendingDiscard(true);
+    try {
+      for (const row of pendingSyncRows) {
+        await removeColetaRow(row.local_id);
+      }
+      await refreshLocalState();
+      setPendingSyncRows([]);
+      setShowPendingSyncModal(false);
+    } finally {
+      setBusyPendingDiscard(false);
+    }
+  }, [pendingSyncRows, refreshLocalState]);
 
   const refreshSharedState = useCallback(async () => {
     if (!isOnline || currentCd == null) return;
@@ -1746,7 +1800,9 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           <div className="module-topbar-user-side">
             <PendingSyncBadge
               pendingCount={pendingCount}
+              errorCount={pendingErrors}
               title="Linhas pendentes de envio"
+              onClick={pendingCount > 0 || pendingErrors > 0 ? () => void openPendingSyncModal() : undefined}
             />
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
               {isOnline ? "🟢 Online" : "🔴 Offline"}
@@ -1761,6 +1817,28 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
           <span className="module-title">{MODULE_DEF.title}</span>
         </div>
       </header>
+
+      <PendingSyncDialog
+        isOpen={showPendingSyncModal}
+        title="Pendências de sincronização"
+        items={pendingSyncRows.map((row) => ({
+          id: row.local_id,
+          title: `Produto ${row.coddv} - ${row.descricao}`,
+          subtitle: `Status ${asStatusLabel(row.sync_status)}`,
+          detail: [
+            row.etiqueta ? `Etiqueta ${row.etiqueta}` : null,
+            row.lote ? `Lote ${row.lote}` : null,
+            row.val_mmaa ? `Validade ${row.val_mmaa}` : null
+          ].filter(Boolean).join(" | ") || `Barras ${row.barras}`,
+          error: row.sync_error,
+          updatedAt: formatDateTime(row.updated_at),
+          onDiscard: () => void discardPendingSyncRow(row.local_id)
+        }))}
+        emptyText="Nenhuma pendência encontrada."
+        busy={busyPendingDiscard}
+        onClose={() => setShowPendingSyncModal(false)}
+        onDiscardAll={pendingSyncRows.length > 0 ? () => void discardAllPendingSyncRows() : undefined}
+      />
 
       <section className="modules-shell coleta-shell">
         <div className="coleta-head">
