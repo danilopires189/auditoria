@@ -109,7 +109,7 @@ function checkIcon() {
 function playIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8 6v12l10-6z" />
+      <path className="ronda-icon-fill" d="M8 6v12l10-6z" />
     </svg>
   );
 }
@@ -117,8 +117,8 @@ function playIcon() {
 function refreshIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M21 12a9 9 0 1 1-3-6.7" />
-      <path d="M21 3v6h-6" />
+      <path className="ronda-icon-stroke" d="M21 12a9 9 0 1 1-3-6.7" />
+      <path className="ronda-icon-stroke" d="M21 3v6h-6" />
     </svg>
   );
 }
@@ -1417,6 +1417,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                 {row.zone_type === "SEP" ? (
                                   <RondaStartButton
                                     active={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
+                                    auditedInMonth={row.audited_in_month}
                                     onClick={() => startAuditSession({ zoneType: "SEP", zona: row.zona, coluna: null }, row.audited_in_month)}
                                     disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
                                     ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
@@ -1464,6 +1465,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                 {row.zone_type === "SEP" ? (
                                   <RondaStartButton
                                     active={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
+                                    auditedInMonth={true}
                                     onClick={() => startAuditSession({ zoneType: "SEP", zona: row.zona, coluna: null }, true)}
                                     disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })}
                                     ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: "SEP", zona: row.zona, coluna: null })
@@ -1514,6 +1516,9 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                             {zoneType === "SEP" || (zoneType === "PUL" && selectedColumnStat) ? (
                               <RondaStartButton
                                 active={activeAuditMatchesSelection}
+                                auditedInMonth={zoneType === "SEP"
+                                  ? currentZoneSummary.audited_in_month
+                                  : selectedColumnStat?.audited_in_month ?? false}
                                 onClick={() => startAuditSession(
                                   zoneType === "SEP"
                                     ? { zoneType: "SEP", zona: selectedZone, coluna: null }
@@ -1633,6 +1638,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                     <div className="ronda-zone-card-actions">
                                       <RondaStartButton
                                         active={sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna })}
+                                        auditedInMonth={row.audited_in_month}
                                         onClick={() => startAuditSession({ zoneType: "PUL", zona: selectedZone, coluna: row.coluna }, row.audited_in_month)}
                                         disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna })}
                                         ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna })
