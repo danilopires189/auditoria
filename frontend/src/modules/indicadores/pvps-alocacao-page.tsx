@@ -126,7 +126,7 @@ function formatTipoLabel(tipo: IndicadoresPvpsAlocTipo): string {
 
 function eligibleAuditLabel(tipo: IndicadoresPvpsAlocTipo): string {
   void tipo;
-  return "End. auditado";
+  return "End. Auditado";
 }
 
 function formatModuloLabel(modulo: IndicadoresPvpsAlocDayDetailRow["modulo"]): string {
