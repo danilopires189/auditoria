@@ -332,9 +332,10 @@ export async function submitRondaQualidadeAudit(params: {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const payload = (params.occurrences ?? []).map((occurrence) => ({
-    motivo: occurrence.motivo,
+    motivo: occurrence.motivo.trim(),
     endereco: occurrence.endereco.trim().toUpperCase(),
-    observacao: occurrence.observacao.trim()
+    observacao: occurrence.observacao.trim(),
+    nivel: occurrence.nivel.trim() || null
   }));
 
   const { data, error } = await supabase.rpc("rpc_ronda_quality_submit_audit", {
@@ -348,7 +349,9 @@ export async function submitRondaQualidadeAudit(params: {
   });
 
   if (error) throw new Error(toErrorMessage(error));
-  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  const first = Array.isArray(data)
+    ? (data[0] as Record<string, unknown> | undefined)
+    : (data && typeof data === "object" ? data as Record<string, unknown> : undefined);
   if (!first) throw new Error("Falha ao salvar auditoria.");
   return {
     audit_id: parseString(first.audit_id),
