@@ -17869,3 +17869,372 @@ small {
     justify-content: flex-end;
   }
 }
+
+/* ══════════════════════════════════════════════════════
+   COMPOSER — popup de registro de ocorrências
+   ══════════════════════════════════════════════════════ */
+
+/* Sheet específica do composer — mais larga */
+.ronda-composer-sheet {
+  width: min(100%, 680px);
+}
+
+/* ── Cabeçalho ── */
+.ronda-composer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ronda-composer-head-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Badge de tipo de zona */
+.ronda-composer-zone-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  align-self: start;
+}
+
+.ronda-composer-zone-badge svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.ronda-composer-zone-badge.is-sep {
+  background: linear-gradient(135deg, #dbeafe, #eff6ff);
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.ronda-composer-zone-badge.is-pul {
+  background: linear-gradient(135deg, #fce7f3, #fdf4ff);
+  color: #9d174d;
+  border: 1px solid #fbcfe8;
+}
+
+/* Título e subtítulo */
+.ronda-composer-zone-title {
+  margin: 0;
+  font-family: "Sora", sans-serif;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #0f1725;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.ronda-composer-zone-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7a94;
+  font-weight: 500;
+}
+
+/* ── Filtro de nível por chips ── */
+.ronda-composer-level-filter {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(244, 248, 255, 0.8), rgba(237, 244, 253, 0.9));
+  border: 1px solid rgba(18, 56, 115, 0.1);
+}
+
+.ronda-composer-level-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #3d5a82;
+}
+
+.ronda-composer-level-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ronda-composer-level-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(18, 56, 115, 0.18);
+  background: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #3a5278;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 130ms ease;
+  white-space: nowrap;
+}
+
+.ronda-composer-level-chip:hover:not(:disabled) {
+  background: linear-gradient(145deg, #eef4ff, #e6f0fc);
+  border-color: rgba(18, 56, 115, 0.3);
+  transform: translateY(-1px);
+}
+
+.ronda-composer-level-chip.is-active {
+  background: linear-gradient(135deg, #1a3f87, #123873);
+  border-color: #1a3f87;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(18, 56, 115, 0.3);
+}
+
+.ronda-composer-level-chip.is-active:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1f4a9c, #153f8a);
+  transform: translateY(-1px);
+}
+
+.ronda-composer-level-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Loading de endereços ── */
+.ronda-composer-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  font-size: 0.88rem;
+  color: #5a7394;
+  font-weight: 500;
+  border-radius: 14px;
+  background: rgba(18, 56, 115, 0.03);
+}
+
+/* ── Draft cards ── */
+
+/* Cabeçalho do draft: número + label + botão remover */
+.ronda-draft-head-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ronda-draft-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a3f87, #123873);
+  color: #fff;
+  font-family: "Sora", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(18, 56, 115, 0.3);
+}
+
+.ronda-draft-label {
+  font-family: "Sora", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #123873;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Botão remover draft (ícone only) */
+.ronda-draft-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.07), rgba(220, 38, 38, 0.05));
+  color: #b91c1c;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 150ms ease, border-color 150ms ease, transform 130ms ease;
+}
+
+.ronda-draft-remove-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
+}
+
+.ronda-draft-remove-btn:hover:not(:disabled) {
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.12));
+  border-color: rgba(239, 68, 68, 0.35);
+  transform: scale(1.08);
+}
+
+.ronda-draft-remove-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.ronda-draft-remove-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Campos do draft */
+.ronda-draft-fields {
+  display: grid;
+  gap: 10px;
+}
+
+/* ── Botão adicionar ocorrência ── */
+.ronda-composer-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  border-radius: 16px;
+  border: 2px dashed rgba(18, 56, 115, 0.22);
+  background: rgba(18, 56, 115, 0.03);
+  color: #2c4a7c;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 140ms ease;
+}
+
+.ronda-composer-add-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.4;
+}
+
+.ronda-composer-add-btn:hover:not(:disabled) {
+  background: rgba(18, 56, 115, 0.07);
+  border-color: rgba(18, 56, 115, 0.38);
+  color: #1a3a6a;
+  transform: translateY(-1px);
+}
+
+.ronda-composer-add-btn:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.ronda-composer-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Footer de ação ── */
+.ronda-composer-footer {
+  position: sticky;
+  bottom: 0;
+  padding: 14px 0 2px;
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.98) 80%, transparent);
+  margin-top: 4px;
+}
+
+.ronda-composer-save-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 54px;
+  border-radius: 16px;
+  border: 0;
+  background: linear-gradient(135deg, #1a3f87, #123873);
+  color: #fff;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow:
+    0 8px 20px rgba(18, 56, 115, 0.32),
+    0 3px 8px rgba(18, 56, 115, 0.2);
+  transition: background 180ms ease, transform 150ms ease, box-shadow 180ms ease;
+}
+
+.ronda-composer-save-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.4;
+}
+
+.ronda-composer-save-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1f4a9c, #153f8a);
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 28px rgba(18, 56, 115, 0.38),
+    0 5px 12px rgba(18, 56, 115, 0.24);
+}
+
+.ronda-composer-save-btn:active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow:
+    0 4px 12px rgba(18, 56, 115, 0.25),
+    0 2px 6px rgba(18, 56, 115, 0.15);
+}
+
+.ronda-composer-save-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Responsividade ── */
+@media (max-width: 720px) {
+  .ronda-composer-head {
+    gap: 10px;
+  }
+
+  .ronda-composer-zone-title {
+    font-size: 1.1rem;
+  }
+
+  .ronda-composer-level-chips {
+    gap: 5px;
+  }
+
+  .ronda-composer-level-chip {
+    height: 30px;
+    padding: 0 12px;
+    font-size: 0.8rem;
+  }
+
+  /* Keep draft head as flex row even on mobile */
+  .ronda-draft-head {
+    display: flex;
+    grid-template-columns: unset;
+  }
+
+  .ronda-composer-save-btn {
+    height: 50px;
+    font-size: 0.95rem;
+  }
+
+  .ronda-composer-footer {
+    padding-bottom: 0;
+  }
+}

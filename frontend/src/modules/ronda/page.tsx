@@ -1938,11 +1938,21 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
       {composerOpen && selectedZone && zoneType && typeof document !== "undefined"
         ? createPortal(
             <div className="ronda-overlay" onClick={closeComposer}>
-              <div className="ronda-sheet surface-enter" onClick={(event) => event.stopPropagation()}>
-                <div className="ronda-sheet-head">
-                  <div>
-                    <h3>{`Ocorrências da zona ${selectedZone}`}</h3>
-                    <span>{zoneType === "PUL" && selectedPulColumn != null ? `${zoneTypeLabel(zoneType)} | Coluna ${selectedPulColumn}` : zoneTypeLabel(zoneType)}</span>
+              <div className="ronda-sheet ronda-composer-sheet surface-enter" onClick={(event) => event.stopPropagation()}>
+
+                {/* Cabeçalho do composer */}
+                <div className="ronda-composer-head">
+                  <div className="ronda-composer-head-info">
+                    <span className={`ronda-composer-zone-badge is-${zoneType.toLowerCase()}`}>
+                      {zoneType === "PUL" ? pulmaoIcon() : separacaoIcon()}
+                      {zoneType === "PUL" && selectedPulColumn != null
+                        ? `${zoneTypeLabel(zoneType)} · Col. ${selectedPulColumn}`
+                        : zoneTypeLabel(zoneType)}
+                    </span>
+                    <h3 className="ronda-composer-zone-title">{`Zona ${selectedZone}`}</h3>
+                    <p className="ronda-composer-zone-sub">
+                      {`${drafts.length} ocorrência${drafts.length !== 1 ? "s" : ""} em rascunho`}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -1958,208 +1968,247 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                 {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
                 {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
+                {/* Filtro de nível (Pulmão) */}
                 {zoneType === "PUL" && addressLevelOptions.length > 0 ? (
-                  <label className="field">
-                    <span>Filtrar nível da coluna</span>
-                    <select
-                      value={addressLevelFilter}
-                      onChange={(event) => setAddressLevelFilter(event.target.value)}
-                      disabled={auditBusy || addressesBusy}
-                    >
-                      <option value="">Todos os níveis</option>
+                  <div className="ronda-composer-level-filter">
+                    <span className="ronda-composer-level-label">Nível da coluna</span>
+                    <div className="ronda-composer-level-chips">
+                      <button
+                        type="button"
+                        className={`ronda-composer-level-chip${addressLevelFilter === "" ? " is-active" : ""}`}
+                        onClick={() => setAddressLevelFilter("")}
+                        disabled={auditBusy || addressesBusy}
+                      >
+                        Todos
+                      </button>
                       {addressLevelOptions.map((nivel) => (
-                        <option key={nivel} value={nivel}>{nivel}</option>
+                        <button
+                          key={nivel}
+                          type="button"
+                          className={`ronda-composer-level-chip${addressLevelFilter === nivel ? " is-active" : ""}`}
+                          onClick={() => setAddressLevelFilter(nivel)}
+                          disabled={auditBusy || addressesBusy}
+                        >
+                          {nivel}
+                        </button>
                       ))}
-                    </select>
-                  </label>
+                    </div>
+                  </div>
                 ) : null}
 
-                {addressesBusy ? <div className="ronda-empty-card">Carregando endereços da zona...</div> : null}
+                {addressesBusy ? (
+                  <div className="ronda-composer-loading">
+                    <div className="ronda-hist-spinner" aria-hidden="true" />
+                    <span>Carregando endereços…</span>
+                  </div>
+                ) : null}
 
+                {/* Lista de rascunhos */}
                 <div className="ronda-draft-list">
                   {drafts.map((draft, index) => (
                     <article key={`draft-${index}`} className="ronda-draft-card">
+
                       <div className="ronda-draft-head">
-                        <strong>{`Ocorrência ${index + 1}`}</strong>
+                        <div className="ronda-draft-head-left">
+                          <span className="ronda-draft-number">{index + 1}</span>
+                          <strong className="ronda-draft-label">
+                            {draft.motivo || "Ocorrência sem motivo"}
+                          </strong>
+                        </div>
                         {drafts.length > 1 ? (
                           <button
                             type="button"
-                            className="btn btn-muted"
-                            onClick={() => setDrafts((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                            className="ronda-draft-remove-btn"
+                            onClick={() => setDrafts((current) => current.filter((_, i) => i !== index))}
                             disabled={auditBusy}
+                            aria-label={`Remover ocorrência ${index + 1}`}
+                            title="Remover esta ocorrência"
                           >
-                            Remover
+                            {closeIcon()}
                           </button>
                         ) : null}
                       </div>
 
-                      <label className="field">
-                        <span>Motivo</span>
-                        <select
-                          value={draft.motivo}
-                          onChange={(event) => {
-                            const nextValue = event.target.value;
-                            setDrafts((current) => current.map((item, itemIndex) => (
-                              itemIndex === index ? { ...item, motivo: nextValue } : item
-                            )));
-                          }}
-                          disabled={auditBusy}
-                        >
-                          <option value="">Selecione o motivo</option>
-                          {reasonOptions.map((reason) => (
-                            <option key={reason} value={reason}>{reason}</option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="field">
-                        <span>Endereço</span>
-                        <div className="input-icon-wrap with-action ronda-address-input-wrap">
-                          <input
-                            type="text"
-                            value={draft.endereco}
+                      <div className="ronda-draft-fields">
+                        <label className="field">
+                          <span>Motivo</span>
+                          <select
+                            value={draft.motivo}
                             onChange={(event) => {
-                              const nextValue = event.target.value.toLocaleUpperCase("pt-BR");
-                              const normalizedNextValue = normalizeAddressValue(nextValue);
-                              const selectedAddress = addressOptions.find((option) => (
-                                normalizeAddressValue(option.endereco) === normalizedNextValue
-                              ));
-                              if (nextValue.trim() !== "") {
-                                closeAddressPicker();
-                              }
+                              const nextValue = event.target.value;
                               setDrafts((current) => current.map((item, itemIndex) => (
-                                itemIndex === index
-                                  ? {
-                                      ...item,
-                                      endereco: selectedAddress?.endereco ?? nextValue,
-                                      nivel: selectedAddress?.nivel ?? item.nivel,
-                                      enderecoManual: normalizedNextValue !== "" && !selectedAddress
-                                    }
-                                  : item
+                                itemIndex === index ? { ...item, motivo: nextValue } : item
                               )));
                             }}
-                            placeholder="Informe ou busque o endereço"
-                            inputMode="search"
-                            autoComplete="off"
-                            autoCorrect="off"
-                            spellCheck={false}
-                            disabled={auditBusy || addressesBusy}
-                          />
-                          {draft.endereco.trim() === "" ? (
-                            <button
-                              type="button"
-                              className="input-action-btn ronda-address-search-btn"
-                              onClick={() => {
-                                if (addressPickerIndex === index) {
-                                  closeAddressPicker();
-                                  return;
-                                }
-                                openAddressPicker(index);
+                            disabled={auditBusy}
+                          >
+                            <option value="">Selecione o motivo</option>
+                            {reasonOptions.map((reason) => (
+                              <option key={reason} value={reason}>{reason}</option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="field">
+                          <span>Endereço</span>
+                          <div className="input-icon-wrap with-action ronda-address-input-wrap">
+                            <input
+                              type="text"
+                              value={draft.endereco}
+                              onChange={(event) => {
+                                const nextValue = event.target.value.toLocaleUpperCase("pt-BR");
+                                const normalizedNextValue = normalizeAddressValue(nextValue);
+                                const selectedAddress = addressOptions.find((option) => (
+                                  normalizeAddressValue(option.endereco) === normalizedNextValue
+                                ));
+                                if (nextValue.trim() !== "") closeAddressPicker();
+                                setDrafts((current) => current.map((item, itemIndex) => (
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        endereco: selectedAddress?.endereco ?? nextValue,
+                                        nivel: selectedAddress?.nivel ?? item.nivel,
+                                        enderecoManual: normalizedNextValue !== "" && !selectedAddress
+                                      }
+                                    : item
+                                )));
                               }}
-                              disabled={auditBusy || addressesBusy || addressOptions.length === 0}
-                              title="Buscar endereço na lista"
-                              aria-label="Buscar endereço na lista"
-                            >
-                              {searchIcon()}
-                            </button>
-                          ) : null}
-                        </div>
-                        {addressPickerIndex === index && draft.endereco.trim() === "" ? (
-                          <div className="ronda-address-picker">
-                            <div className="ronda-address-picker-search">
-                              <span className="ronda-address-picker-search-icon" aria-hidden="true">{searchIcon()}</span>
-                              <input
-                                type="text"
-                                value={addressPickerSearch}
-                                onChange={(event) => setAddressPickerSearch(event.target.value)}
-                                placeholder="Buscar endereço disponível"
-                                inputMode="search"
-                                autoComplete="off"
-                                autoCorrect="off"
-                                spellCheck={false}
-                                disabled={auditBusy || addressesBusy}
-                              />
+                              placeholder="Informe ou busque o endereço"
+                              inputMode="search"
+                              autoComplete="off"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              disabled={auditBusy || addressesBusy}
+                            />
+                            {draft.endereco.trim() === "" ? (
                               <button
                                 type="button"
-                                className="ronda-address-picker-close"
-                                onClick={closeAddressPicker}
-                                aria-label="Fechar busca de endereços"
+                                className="input-action-btn ronda-address-search-btn"
+                                onClick={() => {
+                                  if (addressPickerIndex === index) { closeAddressPicker(); return; }
+                                  openAddressPicker(index);
+                                }}
+                                disabled={auditBusy || addressesBusy || addressOptions.length === 0}
+                                title="Buscar endereço na lista"
+                                aria-label="Buscar endereço na lista"
                               >
-                                {closeIcon()}
+                                {searchIcon()}
                               </button>
-                            </div>
-                            <div className="ronda-address-picker-list">
-                              {getAddressOptionsForPicker(addressPickerSearch).length > 0 ? (
-                                getAddressOptionsForPicker(addressPickerSearch).map((option) => (
-                                  <button
-                                    key={`${option.endereco}:${option.nivel ?? "sem-nivel"}`}
-                                    type="button"
-                                    className="ronda-address-picker-option"
-                                    onClick={() => {
-                                      setDrafts((current) => current.map((item, itemIndex) => (
-                                        itemIndex === index
-                                          ? { ...item, endereco: option.endereco, nivel: option.nivel ?? "", enderecoManual: false }
-                                          : item
-                                      )));
-                                      closeAddressPicker();
-                                    }}
-                                  >
-                                    <strong>{addressOptionLabel(option)}</strong>
-                                    <span>{option.nivel ? `Nível ${option.nivel}` : "Sem nível"}</span>
-                                  </button>
-                                ))
-                              ) : (
-                                <div className="ronda-address-picker-empty">Nenhum endereço encontrado.</div>
-                              )}
-                            </div>
+                            ) : null}
                           </div>
-                        ) : null}
-                        {addressOptions.length === 0 && !addressesBusy ? (
-                          <small>Nenhum endereço disponível para a zona selecionada.</small>
-                        ) : null}
-                        {addressPickerIndex === index && getAddressOptionsForPicker(addressPickerSearch).length === 0 && addressOptions.length > 0 ? (
-                          <small>Nenhum endereço disponível com o filtro atual.</small>
-                        ) : null}
-                        {draft.endereco ? (
-                          <small>
-                            {draft.enderecoManual ? `Digitado manualmente: ${draft.endereco}` : `Selecionado: ${draft.endereco}`}
-                          </small>
-                        ) : null}
-                      </label>
+                          {addressPickerIndex === index && draft.endereco.trim() === "" ? (
+                            <div className="ronda-address-picker">
+                              <div className="ronda-address-picker-search">
+                                <span className="ronda-address-picker-search-icon" aria-hidden="true">{searchIcon()}</span>
+                                <input
+                                  type="text"
+                                  value={addressPickerSearch}
+                                  onChange={(event) => setAddressPickerSearch(event.target.value)}
+                                  placeholder="Buscar endereço disponível"
+                                  inputMode="search"
+                                  autoComplete="off"
+                                  autoCorrect="off"
+                                  spellCheck={false}
+                                  disabled={auditBusy || addressesBusy}
+                                />
+                                <button
+                                  type="button"
+                                  className="ronda-address-picker-close"
+                                  onClick={closeAddressPicker}
+                                  aria-label="Fechar busca de endereços"
+                                >
+                                  {closeIcon()}
+                                </button>
+                              </div>
+                              <div className="ronda-address-picker-list">
+                                {getAddressOptionsForPicker(addressPickerSearch).length > 0 ? (
+                                  getAddressOptionsForPicker(addressPickerSearch).map((option) => (
+                                    <button
+                                      key={`${option.endereco}:${option.nivel ?? "sem-nivel"}`}
+                                      type="button"
+                                      className="ronda-address-picker-option"
+                                      onClick={() => {
+                                        setDrafts((current) => current.map((item, itemIndex) => (
+                                          itemIndex === index
+                                            ? { ...item, endereco: option.endereco, nivel: option.nivel ?? "", enderecoManual: false }
+                                            : item
+                                        )));
+                                        closeAddressPicker();
+                                      }}
+                                    >
+                                      <strong>{addressOptionLabel(option)}</strong>
+                                      <span>{option.nivel ? `Nível ${option.nivel}` : "Sem nível"}</span>
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="ronda-address-picker-empty">Nenhum endereço encontrado.</div>
+                                )}
+                              </div>
+                            </div>
+                          ) : null}
+                          {addressOptions.length === 0 && !addressesBusy ? (
+                            <small>Nenhum endereço disponível para a zona selecionada.</small>
+                          ) : null}
+                          {draft.endereco ? (
+                            <small>
+                              {draft.enderecoManual ? `✏️ Digitado manualmente` : `✓ ${draft.endereco}`}
+                            </small>
+                          ) : null}
+                        </label>
 
-                      <label className="field">
-                        <span>Observação (opcional)</span>
-                        <textarea
-                          rows={3}
-                          value={draft.observacao}
-                          onChange={(event) => {
-                            const nextValue = event.target.value;
-                            setDrafts((current) => current.map((item, itemIndex) => (
-                              itemIndex === index ? { ...item, observacao: nextValue } : item
-                            )));
-                          }}
-                          placeholder="Descreva a ocorrência encontrada, se necessário."
-                          disabled={auditBusy}
-                        />
-                      </label>
+                        <label className="field">
+                          <span>Observação <em>(opcional)</em></span>
+                          <textarea
+                            rows={3}
+                            value={draft.observacao}
+                            onChange={(event) => {
+                              const nextValue = event.target.value;
+                              setDrafts((current) => current.map((item, itemIndex) => (
+                                itemIndex === index ? { ...item, observacao: nextValue } : item
+                              )));
+                            }}
+                            placeholder="Descreva a ocorrência encontrada, se necessário."
+                            disabled={auditBusy}
+                          />
+                        </label>
+                      </div>
                     </article>
                   ))}
                 </div>
 
-                <div className="ronda-sheet-actions">
+                {/* Botão adicionar ocorrência */}
+                <button
+                  type="button"
+                  className="ronda-composer-add-btn"
+                  onClick={() => setDrafts((current) => [...current, emptyDraft()])}
+                  disabled={auditBusy}
+                >
+                  <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
+                  Adicionar ocorrência
+                </button>
+
+                {/* Barra de ação — salvar */}
+                <div className="ronda-composer-footer">
                   <button
                     type="button"
-                    className="btn btn-muted"
-                    onClick={() => setDrafts((current) => [...current, emptyDraft()])}
+                    className="ronda-composer-save-btn"
+                    onClick={() => void handleSaveOccurrences()}
                     disabled={auditBusy}
                   >
-                    <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
-                    Adicionar ocorrência
-                  </button>
-                  <button type="button" className="btn btn-primary" onClick={() => void handleSaveOccurrences()} disabled={auditBusy}>
-                    {auditBusy ? "Salvando..." : "Salvar auditoria"}
+                    {auditBusy ? (
+                      <>
+                        <div className="ronda-hist-spinner" aria-hidden="true" />
+                        Salvando…
+                      </>
+                    ) : (
+                      <>
+                        {checkIcon()}
+                        Salvar auditoria
+                      </>
+                    )}
                   </button>
                 </div>
+
               </div>
             </div>,
             document.body
