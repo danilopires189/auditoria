@@ -23,9 +23,11 @@ import {
   fetchAndCacheCaixaTermicaBoxes,
   fetchCaixaTermicaFeedDiario,
   fetchCaixaTermicaHistorico,
+  rpcDeleteCaixaTermica,
   rpcExpedirCaixaTermica,
   rpcInsertCaixaTermica,
   rpcReceberCaixaTermica,
+  rpcUpdateCaixaTermica,
   syncPendingCaixaTermicaBoxes
 } from "./sync";
 import {
@@ -37,9 +39,11 @@ import {
 import type {
   CaixaTermicaBox,
   CaixaTermicaFeedRow,
+  CaixaTermicaMarca,
   CaixaTermicaModuleProfile,
   CaixaTermicaMov,
   CaixaTermicaView,
+  EditarCaixaDraft,
   ExpedicaoDraft,
   NovaCaixaDraft,
   RecebimentoDraft
@@ -54,6 +58,15 @@ const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const QUICK_SYNC_THROTTLE_MS = 2500;
 const FEED_REFRESH_INTERVAL_MS = 60_000;
 const PLATE_RE = /^[A-Z]{3}-?(?:\d{4}|\d[A-Z]\d{2})$/i;
+const CAIXA_TERMICA_TITLE = "Caixa Térmica";
+const CAIXA_TERMICA_MARCAS: CaixaTermicaMarca[] = ["Ecobox", "Coleman", "Isopor genérica"];
+const EMPTY_REGISTER_DRAFT: NovaCaixaDraft = {
+  codigo: "",
+  descricao: "",
+  capacidadeLitros: "",
+  marca: "",
+  observacoes: ""
+};
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -70,6 +83,14 @@ function formatTransitTime(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
+function formatOptionalDate(value: string | null): string | null {
+  return value ? formatDateOnlyPtBR(value) : null;
+}
+
+function scannerQrIcon() {
+  return <ModuleIcon name="qr" />;
 }
 
 function toDisplayName(nome: string): string {
@@ -138,6 +159,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   const [loadingBoxes, setLoadingBoxes] = useState(false);
   const [boxesError, setBoxesError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set());
 
   // ── Search ──
   const [searchInput, setSearchInput] = useState("");
@@ -166,9 +188,17 @@ export default function RegistroEmbarqueCaixaTermicaPage({
 
   // ── Modal: Register new box ──
   const [registerOpen, setRegisterOpen] = useState(false);
-  const [registerDraft, setRegisterDraft] = useState<NovaCaixaDraft>({ codigo: "", descricao: "", observacoes: "" });
+  const [registerDraft, setRegisterDraft] = useState<NovaCaixaDraft>(EMPTY_REGISTER_DRAFT);
   const [registerBusy, setRegisterBusy] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
+
+  // ── Modal: Admin edit/delete ──
+  const [editDraft, setEditDraft] = useState<EditarCaixaDraft | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CaixaTermicaBox | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ── Modal: Expedition ──
   const [expedicaoOpen, setExpedicaoOpen] = useState(false);
@@ -214,6 +244,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     () => filteredBoxes.filter((b) => b.status === "em_transito"),
     [filteredBoxes]
   );
+  const canAdminEdit = profile.role === "admin" && isOnline;
 
   // ── Load CD prefs ──
   useEffect(() => {
@@ -288,6 +319,15 @@ export default function RegistroEmbarqueCaixaTermicaPage({
       if (pending === 0) setRefreshNonce((n) => n + 1);
     }).catch(() => {/* silent */});
   }, [isOnline, profile.user_id]);
+
+  const toggleBoxExpanded = useCallback((boxKey: string) => {
+    setExpandedBoxIds((current) => {
+      const next = new Set(current);
+      if (next.has(boxKey)) next.delete(boxKey);
+      else next.add(boxKey);
+      return next;
+    });
+  }, []);
 
   // ── Success toast ──
   const showSuccess = useCallback((msg: string) => {
@@ -404,6 +444,8 @@ export default function RegistroEmbarqueCaixaTermicaPage({
       filial: null,
       filialNome: null,
       rota: null,
+      pedido: null,
+      dataPedido: null,
       placa: "",
       placaError: null
     });
@@ -453,6 +495,84 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     }
   }, [isOnline]);
 
+  const openEditCaixa = useCallback((box: CaixaTermicaBox) => {
+    setEditDraft({
+      caixaId: box.id,
+      codigoOriginal: box.codigo,
+      codigo: box.codigo,
+      descricao: box.descricao,
+      capacidadeLitros: box.capacidade_litros ? String(box.capacidade_litros) : "",
+      marca: box.marca ?? "",
+      observacoes: box.observacoes ?? ""
+    });
+    setEditError(null);
+  }, []);
+
+  const confirmEditCaixa = useCallback(async () => {
+    if (!editDraft || !currentCd) return;
+    const parsedCapacidade = Number.parseInt(editDraft.capacidadeLitros, 10);
+
+    if (!editDraft.codigo.trim()) { setEditError("Informe o código da caixa."); return; }
+    if (!editDraft.descricao.trim()) { setEditError("Informe a descrição da caixa."); return; }
+    if (!Number.isFinite(parsedCapacidade) || parsedCapacidade <= 0) {
+      setEditError("Informe a capacidade da caixa em litros.");
+      return;
+    }
+    if (!editDraft.marca) { setEditError("Informe a marca da caixa."); return; }
+
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      await rpcUpdateCaixaTermica({
+        caixaId: editDraft.caixaId,
+        cd: currentCd,
+        codigo: editDraft.codigo.trim().toUpperCase(),
+        descricao: editDraft.descricao.trim(),
+        observacoes: editDraft.observacoes.trim() || null,
+        capacidadeLitros: parsedCapacidade,
+        marca: editDraft.marca,
+        userId: profile.user_id,
+        mat: profile.mat,
+        nome: profile.nome
+      });
+      setEditDraft(null);
+      setRefreshNonce((n) => n + 1);
+      showSuccess("Caixa atualizada com sucesso.");
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Erro ao editar caixa.");
+    } finally {
+      setEditBusy(false);
+    }
+  }, [currentCd, editDraft, profile, showSuccess]);
+
+  const openDeleteCaixa = useCallback((box: CaixaTermicaBox) => {
+    setDeleteTarget(box);
+    setDeleteError(null);
+  }, []);
+
+  const confirmDeleteCaixa = useCallback(async () => {
+    if (!deleteTarget || !currentCd) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await rpcDeleteCaixaTermica({
+        box: deleteTarget,
+        cd: currentCd,
+        userId: profile.user_id,
+        mat: profile.mat,
+        nome: profile.nome
+      });
+      setBoxes((current) => current.filter((box) => box.local_id !== deleteTarget.local_id));
+      setDeleteTarget(null);
+      setRefreshNonce((n) => n + 1);
+      showSuccess("Caixa inativada com sucesso.");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Erro ao excluir caixa.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [currentCd, deleteTarget, profile, showSuccess]);
+
   // ── Etiqueta volume → filial/rota lookup ──
   const handleEtiquetaVolumeChange = useCallback(async (value: string) => {
     setExpedicaoDraft((d) => d ? {
@@ -460,7 +580,9 @@ export default function RegistroEmbarqueCaixaTermicaPage({
       etiquetaVolume: value,
       filial: null,
       filialNome: null,
-      rota: null
+      rota: null,
+      pedido: null,
+      dataPedido: null
     } : d);
 
     if (value.length < 17 || !currentCd) return;
@@ -473,7 +595,9 @@ export default function RegistroEmbarqueCaixaTermicaPage({
         ...d,
         filial: parsed.filial,
         filialNome: rotaRow?.nome ?? null,
-        rota: rotaRow?.rota ?? null
+        rota: rotaRow?.rota ?? "Sem rota",
+        pedido: parsed.pedido,
+        dataPedido: parsed.data_pedido
       } : d);
     } catch {
       // Etiqueta inválida — clear silently, expedição pode prosseguir sem rota
@@ -485,10 +609,16 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   // ── Confirm register ──
   const confirmRegister = useCallback(async () => {
     if (!currentCd) return;
-    const { codigo, descricao, observacoes } = registerDraft;
+    const { codigo, descricao, capacidadeLitros, marca, observacoes } = registerDraft;
+    const parsedCapacidade = Number.parseInt(capacidadeLitros, 10);
 
     if (!codigo.trim()) { setRegisterError("Informe o código da caixa."); return; }
     if (!descricao.trim()) { setRegisterError("Informe a descrição da caixa."); return; }
+    if (!Number.isFinite(parsedCapacidade) || parsedCapacidade <= 0) {
+      setRegisterError("Informe a capacidade da caixa em litros.");
+      return;
+    }
+    if (!marca) { setRegisterError("Informe a marca da caixa."); return; }
 
     // Duplicate check
     const existing = await getCaixaTermicaBoxByCodigo(profile.user_id, currentCd, codigo.trim());
@@ -504,6 +634,8 @@ export default function RegistroEmbarqueCaixaTermicaPage({
           codigo: codigo.trim().toUpperCase(),
           descricao: descricao.trim(),
           observacoes: observacoes.trim() || null,
+          capacidadeLitros: parsedCapacidade,
+          marca,
           userId: profile.user_id,
           mat: profile.mat,
           nome: profile.nome
@@ -520,10 +652,21 @@ export default function RegistroEmbarqueCaixaTermicaPage({
           codigo: codigo.trim().toUpperCase(),
           descricao: descricao.trim(),
           observacoes: observacoes.trim() || null,
+          capacidade_litros: parsedCapacidade,
+          marca,
           status: "disponivel",
           created_at: now,
           created_by: profile.user_id,
+          created_mat: profile.mat,
+          created_nome: profile.nome,
           updated_at: now,
+          updated_by: null,
+          updated_mat: null,
+          updated_nome: null,
+          deleted_at: null,
+          deleted_by: null,
+          deleted_mat: null,
+          deleted_nome: null,
           sync_status: "pending_insert",
           sync_error: null,
           last_mov_tipo: null,
@@ -531,12 +674,16 @@ export default function RegistroEmbarqueCaixaTermicaPage({
           last_mov_placa: null,
           last_mov_rota: null,
           last_mov_filial: null,
-          last_mov_filial_nome: null
+          last_mov_filial_nome: null,
+          last_mov_pedido: null,
+          last_mov_data_pedido: null,
+          last_mov_mat_resp: null,
+          last_mov_nome_resp: null
         });
       }
 
       setRegisterOpen(false);
-      setRegisterDraft({ codigo: "", descricao: "", observacoes: "" });
+      setRegisterDraft(EMPTY_REGISTER_DRAFT);
       setRefreshNonce((n) => n + 1);
       showSuccess("Caixa cadastrada com sucesso.");
     } catch (err) {
@@ -666,7 +813,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
           <span className="module-icon" aria-hidden="true">
             <ModuleIcon name={MODULE_DEF.icon} />
           </span>
-          <span className="module-title">{MODULE_DEF.title}</span>
+          <span className="module-title">{CAIXA_TERMICA_TITLE}</span>
         </div>
       </header>
 
@@ -706,7 +853,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                       setScannerOpen(true);
                     }}
                   >
-                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="15" y="3" width="6" height="6" rx="1" /><rect x="3" y="15" width="6" height="6" rx="1" /><path d="M15 15h2"/><path d="M15 19v2"/><path d="M19 15v2"/><path d="M17 21h4"/><path d="M21 19h0"/></svg>
+                    {scannerQrIcon()}
                   </button>
                 )}
               </div>
@@ -714,7 +861,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                 type="button"
                 className="btn btn-primary"
                 onClick={() => {
-                  setRegisterDraft({ codigo: "", descricao: "", observacoes: "" });
+                  setRegisterDraft(EMPTY_REGISTER_DRAFT);
                   setRegisterError(null);
                   setRegisterOpen(true);
                 }}
@@ -758,8 +905,13 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                     <CaixaCard
                       key={box.local_id}
                       box={box}
+                      isExpanded={expandedBoxIds.has(box.local_id)}
+                      onToggleExpanded={() => toggleBoxExpanded(box.local_id)}
                       onAction={() => openExpedicao(box)}
                       onHistory={() => void openHistorico(box)}
+                      canAdminEdit={canAdminEdit}
+                      onEdit={() => openEditCaixa(box)}
+                      onDelete={() => openDeleteCaixa(box)}
                     />
                   ))}
                 </div>
@@ -782,8 +934,13 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                     <CaixaCard
                       key={box.local_id}
                       box={box}
+                      isExpanded={expandedBoxIds.has(box.local_id)}
+                      onToggleExpanded={() => toggleBoxExpanded(box.local_id)}
                       onAction={() => openRecebimento(box)}
                       onHistory={() => void openHistorico(box)}
+                      canAdminEdit={canAdminEdit}
+                      onEdit={() => openEditCaixa(box)}
+                      onDelete={() => openDeleteCaixa(box)}
                     />
                   ))}
                 </div>
@@ -823,17 +980,18 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                   {!row.filial_nome && row.filial && ` — Filial ${row.filial}`}
                 </p>
                 <div className="caixa-feed-stats">
-                  <span className="caixa-feed-stat">🚚 {row.expedicoes} expediç{row.expedicoes !== 1 ? "ões" : "ão"}</span>
-                  <span className="caixa-feed-stat">✅ {row.recebimentos} recebimento{row.recebimentos !== 1 ? "s" : ""}</span>
+                  <span className="caixa-feed-stat">{row.expedicoes} expediç{row.expedicoes !== 1 ? "ões" : "ão"}</span>
+                  <span className="caixa-feed-stat">{row.recebimentos} recebimento{row.recebimentos !== 1 ? "s" : ""}</span>
                 </div>
                 <div className="caixa-feed-items">
                   {row.caixas.map((c, ci) => (
                     <div key={ci} className="caixa-feed-item">
                       <span className="caixa-feed-item-codigo">{c.codigo}</span>
-                      <span>{c.tipo === "expedicao" ? "🚚" : "✅"}</span>
+                      <span>{c.tipo === "expedicao" ? "Expedição" : "Recebimento"}</span>
                       <span className="caixa-feed-item-time">
                         {formatDateTimeBrasilia(c.data_hr)}
                       </span>
+                      {c.pedido && <span className="caixa-feed-item-time">Pedido {c.pedido}</span>}
                     </div>
                   ))}
                 </div>
@@ -887,7 +1045,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                       setScannerOpen(true);
                     }}
                   >
-                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="15" y="3" width="6" height="6" rx="1" /><rect x="3" y="15" width="6" height="6" rx="1" /><path d="M15 15h2"/><path d="M15 19v2"/><path d="M19 15v2"/><path d="M17 21h4"/><path d="M21 19h0"/></svg>
+                    {scannerQrIcon()}
                   </button>
                 )}
               </div>
@@ -905,6 +1063,40 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                 placeholder="Ex: Caixa grande azul"
                 disabled={registerBusy}
               />
+            </div>
+
+            <div className="caixa-modal-field">
+              <label htmlFor="reg-capacidade">Capacidade (litros) *</label>
+              <input
+                id="reg-capacidade"
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={registerDraft.capacidadeLitros}
+                onChange={(e) =>
+                  setRegisterDraft((d) => ({ ...d, capacidadeLitros: e.target.value.replace(/\D/g, "") }))
+                }
+                placeholder="Ex: 45"
+                disabled={registerBusy}
+              />
+            </div>
+
+            <div className="caixa-modal-field">
+              <label htmlFor="reg-marca">Marca *</label>
+              <select
+                id="reg-marca"
+                value={registerDraft.marca}
+                onChange={(e) =>
+                  setRegisterDraft((d) => ({ ...d, marca: e.target.value as CaixaTermicaMarca | "" }))
+                }
+                disabled={registerBusy}
+              >
+                <option value="">Selecione</option>
+                {CAIXA_TERMICA_MARCAS.map((marca) => (
+                  <option key={marca} value={marca}>{marca}</option>
+                ))}
+              </select>
             </div>
 
             <div className="caixa-modal-field">
@@ -960,14 +1152,14 @@ export default function RegistroEmbarqueCaixaTermicaPage({
             className="confirm-dialog surface-enter"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="expedicao-modal-title">🚚 Expedir Caixa</h3>
+            <h3 id="expedicao-modal-title">Expedir Caixa</h3>
             <p style={{ fontSize: "0.9rem", color: "#4b5671", marginBottom: "12px" }}>
               Caixa: <strong>{expedicaoDraft.codigo}</strong> — {expedicaoDraft.descricao}
             </p>
 
             {expedicaoDraft.observacoes && (
               <div className="alert warning" style={{ marginBottom: "12px" }}>
-                ⚠️ Danos pré-existentes: {expedicaoDraft.observacoes}
+                Danos pré-existentes: {expedicaoDraft.observacoes}
               </div>
             )}
 
@@ -997,7 +1189,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                       setScannerOpen(true);
                     }}
                   >
-                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="15" y="3" width="6" height="6" rx="1" /><rect x="3" y="15" width="6" height="6" rx="1" /><path d="M15 15h2"/><path d="M15 19v2"/><path d="M19 15v2"/><path d="M17 21h4"/><path d="M21 19h0"/></svg>
+                    {scannerQrIcon()}
                   </button>
                 )}
               </div>
@@ -1006,8 +1198,10 @@ export default function RegistroEmbarqueCaixaTermicaPage({
               )}
               {!etiquetaLookupBusy && expedicaoDraft.rota && (
                 <span className="caixa-etiqueta-meta">
-                  ✓ Rota {expedicaoDraft.rota}
-                  {expedicaoDraft.filialNome && ` — ${expedicaoDraft.filialNome}`}
+                  Rota {expedicaoDraft.rota}
+                  {expedicaoDraft.pedido && ` | Pedido ${expedicaoDraft.pedido}`}
+                  {expedicaoDraft.dataPedido && ` | ${formatDateOnlyPtBR(expedicaoDraft.dataPedido)}`}
+                  {expedicaoDraft.filialNome && ` | ${expedicaoDraft.filialNome}`}
                 </span>
               )}
             </div>
@@ -1074,14 +1268,14 @@ export default function RegistroEmbarqueCaixaTermicaPage({
             className="confirm-dialog surface-enter"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="recebimento-modal-title">✅ Receber Caixa</h3>
+            <h3 id="recebimento-modal-title">Receber Caixa</h3>
             <p style={{ fontSize: "0.9rem", color: "#4b5671", marginBottom: "12px" }}>
               Caixa: <strong>{recebimentoDraft.codigo}</strong> — {recebimentoDraft.descricao}
             </p>
 
             {recebimentoDraft.observacoes ? (
               <div className="alert warning" style={{ marginBottom: "12px" }}>
-                ⚠️ Atenção: danos pré-existentes registrados: &ldquo;{recebimentoDraft.observacoes}&rdquo;
+                Atenção: danos pré-existentes registrados: &ldquo;{recebimentoDraft.observacoes}&rdquo;
               </div>
             ) : (
               <div className="alert success" style={{ marginBottom: "12px" }}>
@@ -1152,6 +1346,146 @@ export default function RegistroEmbarqueCaixaTermicaPage({
       )}
 
       {/* ══════════════════════════════════════════
+          MODAL: ADMIN EDIT
+         ══════════════════════════════════════════ */}
+      {editDraft && typeof document !== "undefined" && createPortal(
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-modal-title"
+          onClick={() => { if (!editBusy) setEditDraft(null); }}
+        >
+          <div
+            className="confirm-dialog surface-enter"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="edit-modal-title">Editar Caixa Térmica</h3>
+
+            {editError && <div className="alert error">{editError}</div>}
+
+            <div className="caixa-modal-field">
+              <label htmlFor="edit-codigo">Código *</label>
+              <input
+                id="edit-codigo"
+                type="text"
+                value={editDraft.codigo}
+                onChange={(e) => setEditDraft((d) => d ? { ...d, codigo: e.target.value.toUpperCase() } : d)}
+                disabled={editBusy}
+              />
+            </div>
+
+            <div className="caixa-modal-field">
+              <label htmlFor="edit-descricao">Descrição *</label>
+              <input
+                id="edit-descricao"
+                type="text"
+                value={editDraft.descricao}
+                onChange={(e) => setEditDraft((d) => d ? { ...d, descricao: e.target.value } : d)}
+                disabled={editBusy}
+              />
+            </div>
+
+            <div className="caixa-modal-field">
+              <label htmlFor="edit-capacidade">Capacidade (litros) *</label>
+              <input
+                id="edit-capacidade"
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={editDraft.capacidadeLitros}
+                onChange={(e) =>
+                  setEditDraft((d) => d ? { ...d, capacidadeLitros: e.target.value.replace(/\D/g, "") } : d)
+                }
+                disabled={editBusy}
+              />
+            </div>
+
+            <div className="caixa-modal-field">
+              <label htmlFor="edit-marca">Marca *</label>
+              <select
+                id="edit-marca"
+                value={editDraft.marca}
+                onChange={(e) =>
+                  setEditDraft((d) => d ? { ...d, marca: e.target.value as CaixaTermicaMarca | "" } : d)
+                }
+                disabled={editBusy}
+              >
+                <option value="">Selecione</option>
+                {CAIXA_TERMICA_MARCAS.map((marca) => (
+                  <option key={marca} value={marca}>{marca}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="caixa-modal-field">
+              <label htmlFor="edit-obs">Observações</label>
+              <textarea
+                id="edit-obs"
+                value={editDraft.observacoes}
+                onChange={(e) => setEditDraft((d) => d ? { ...d, observacoes: e.target.value } : d)}
+                rows={3}
+                disabled={editBusy}
+                style={{ resize: "vertical" }}
+              />
+            </div>
+
+            <div className="confirm-actions">
+              <button className="btn btn-muted" type="button" onClick={() => setEditDraft(null)} disabled={editBusy}>
+                Cancelar
+              </button>
+              <button className="btn btn-primary" type="button" onClick={() => void confirmEditCaixa()} disabled={editBusy}>
+                {editBusy ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ══════════════════════════════════════════
+          MODAL: ADMIN DELETE
+         ══════════════════════════════════════════ */}
+      {deleteTarget && typeof document !== "undefined" && createPortal(
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+          onClick={() => { if (!deleteBusy) setDeleteTarget(null); }}
+        >
+          <div
+            className="confirm-dialog surface-enter"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-modal-title">Excluir Caixa Térmica</h3>
+            <p style={{ fontSize: "0.9rem", color: "#4b5671", marginBottom: "12px" }}>
+              A caixa <strong>{deleteTarget.codigo}</strong> será inativada e sairá da listagem. O histórico continuará salvo no banco.
+            </p>
+            {deleteTarget.status === "em_transito" && (
+              <div className="alert warning">Receba esta caixa antes de excluir/inativar.</div>
+            )}
+            {deleteError && <div className="alert error">{deleteError}</div>}
+            <div className="confirm-actions">
+              <button className="btn btn-muted" type="button" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={() => void confirmDeleteCaixa()}
+                disabled={deleteBusy || deleteTarget.status === "em_transito"}
+              >
+                {deleteBusy ? "Excluindo..." : "Excluir"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ══════════════════════════════════════════
           MODAL: HISTORY
          ══════════════════════════════════════════ */}
       {historicoOpen && historicoCaixa && typeof document !== "undefined" && createPortal(
@@ -1167,7 +1501,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
             style={{ maxWidth: "520px", width: "95vw" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="historico-modal-title">📋 Histórico — {historicoCaixa.codigo}</h3>
+            <h3 id="historico-modal-title">Histórico — {historicoCaixa.codigo}</h3>
 
             {historicoLoading && (
               <p style={{ fontSize: "0.88rem", color: "#4b5671" }}>Carregando histórico...</p>
@@ -1182,14 +1516,14 @@ export default function RegistroEmbarqueCaixaTermicaPage({
               {historicoMovs.map((mov) => (
                 <div key={mov.id} className={`caixa-historico-item ${mov.tipo}`}>
                   <span className="caixa-historico-tipo">
-                    {mov.tipo === "expedicao" ? "🚚 Expedição" : "✅ Recebimento"}
+                    {mov.tipo === "expedicao" ? "Expedição" : "Recebimento"}
                   </span>
                   <span className="caixa-historico-meta">
                     {formatDateTimeBrasilia(mov.data_hr)}
                   </span>
                   {mov.transit_minutes != null && (
                     <span className="caixa-historico-transit">
-                      ⏱ Tempo em trânsito: {formatTransitTime(mov.transit_minutes)}
+                      Tempo em trânsito: {formatTransitTime(mov.transit_minutes)}
                     </span>
                   )}
                   {mov.placa && (
@@ -1198,8 +1532,14 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                   {(mov.rota || mov.filial_nome || mov.filial) && (
                     <span className="caixa-historico-meta">
                       Rota: {mov.rota ?? "—"}
-                      {mov.filial_nome && ` — ${mov.filial_nome}`}
-                      {!mov.filial_nome && mov.filial && ` — Filial ${mov.filial}`}
+                      {mov.filial_nome && ` | ${mov.filial_nome}`}
+                      {!mov.filial_nome && mov.filial && ` | Filial ${mov.filial}`}
+                    </span>
+                  )}
+                  {(mov.pedido || mov.data_pedido) && (
+                    <span className="caixa-historico-meta">
+                      Pedido: {mov.pedido ?? "—"}
+                      {mov.data_pedido && ` | ${formatDateOnlyPtBR(mov.data_pedido)}`}
                     </span>
                   )}
                   {mov.obs_recebimento && (
@@ -1276,22 +1616,41 @@ export default function RegistroEmbarqueCaixaTermicaPage({
 
 interface CaixaCardProps {
   box: CaixaTermicaBox;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
   onAction: () => void;
   onHistory: () => void;
+  canAdminEdit: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
-function CaixaCard({ box, onAction, onHistory }: CaixaCardProps) {
+function CaixaCard({
+  box,
+  isExpanded,
+  onToggleExpanded,
+  onAction,
+  onHistory,
+  canAdminEdit,
+  onEdit,
+  onDelete
+}: CaixaCardProps) {
   const syncDotClass =
     box.sync_status === "synced" ? "synced"
     : box.sync_status === "error" ? "error"
     : "pending";
+  const statusLabel = box.status === "disponivel" ? "✅ Disponível" : "🚚 Em Trânsito";
+  const dataPedido = formatOptionalDate(box.last_mov_data_pedido);
 
   return (
     <div className="caixa-card">
       <div className="caixa-card-header">
-        <span className="caixa-card-codigo">{box.codigo}</span>
+        <div className="caixa-card-title-block">
+          <span className="caixa-card-codigo">{box.codigo}</span>
+          <p className="caixa-card-descricao">{box.descricao}</p>
+        </div>
         <span className={`caixa-card-status ${box.status}`}>
-          {box.status === "disponivel" ? "✅ Disponível" : "🚚 Em Trânsito"}
+          {statusLabel}
         </span>
         <span
           className={`caixa-card-sync-dot ${syncDotClass}`}
@@ -1301,37 +1660,65 @@ function CaixaCard({ box, onAction, onHistory }: CaixaCardProps) {
             : "Pendente de sincronização"
           }
         />
-      </div>
-
-      <p className="caixa-card-descricao">{box.descricao}</p>
-
-      {box.observacoes && (
-        <p className="caixa-card-obs">⚠️ {box.observacoes}</p>
-      )}
-
-      {box.last_mov_data_hr && (
-        <p className="caixa-card-meta">
-          Último mov.: {formatDateTimeBrasilia(box.last_mov_data_hr)}
-        </p>
-      )}
-      {box.last_mov_placa && (
-        <p className="caixa-card-meta">Placa: {box.last_mov_placa}</p>
-      )}
-      {(box.last_mov_rota || box.last_mov_filial_nome) && (
-        <p className="caixa-card-meta">
-          {box.last_mov_rota && `Rota: ${box.last_mov_rota}`}
-          {box.last_mov_filial_nome && ` — ${box.last_mov_filial_nome}`}
-        </p>
-      )}
-
-      <div className="caixa-card-actions">
-        <button type="button" className="btn btn-muted" onClick={onHistory}>
-          📋 Histórico
-        </button>
-        <button type="button" className="btn btn-primary" onClick={onAction}>
-          {box.status === "disponivel" ? "🚚 Expedir" : "✅ Receber"}
+        <button
+          type="button"
+          className="caixa-card-expand-btn"
+          onClick={onToggleExpanded}
+          aria-expanded={isExpanded}
+          title={isExpanded ? "Ocultar detalhes" : "Ver detalhes"}
+        >
+          {isExpanded ? "Ocultar" : "Detalhes"}
         </button>
       </div>
+
+      {isExpanded && (
+        <div className="caixa-card-details">
+          <div className="caixa-card-meta-grid">
+            <span>Capacidade: <strong>{box.capacidade_litros ? `${box.capacidade_litros} L` : "-"}</strong></span>
+            <span>Marca: <strong>{box.marca ?? "-"}</strong></span>
+            {box.last_mov_data_hr && (
+              <span>Último mov.: <strong>{formatDateTimeBrasilia(box.last_mov_data_hr)}</strong></span>
+            )}
+            {box.last_mov_placa && <span>Placa: <strong>{box.last_mov_placa}</strong></span>}
+            {box.last_mov_nome_resp && (
+              <span>Responsável: <strong>{box.last_mov_nome_resp}</strong>{box.last_mov_mat_resp && ` (${box.last_mov_mat_resp})`}</span>
+            )}
+            {(box.last_mov_rota || box.last_mov_filial_nome || box.last_mov_filial) && (
+              <span>
+                Rota: <strong>{box.last_mov_rota ?? "Sem rota"}</strong>
+                {box.last_mov_filial_nome && ` | ${box.last_mov_filial_nome}`}
+                {!box.last_mov_filial_nome && box.last_mov_filial && ` | Filial ${box.last_mov_filial}`}
+              </span>
+            )}
+            {(box.last_mov_pedido || dataPedido) && (
+              <span>Pedido: <strong>{box.last_mov_pedido ?? "-"}</strong>{dataPedido && ` | ${dataPedido}`}</span>
+            )}
+          </div>
+
+          {box.observacoes && (
+            <p className="caixa-card-obs">{box.observacoes}</p>
+          )}
+
+          <div className="caixa-card-actions">
+            <button type="button" className="btn btn-muted" onClick={onHistory}>
+              📋 Histórico
+            </button>
+            <button type="button" className="btn btn-primary" onClick={onAction}>
+              {box.status === "disponivel" ? "🚚 Expedir" : "✅ Receber"}
+            </button>
+            {canAdminEdit && (
+              <>
+                <button type="button" className="btn btn-muted" onClick={onEdit}>
+                  Editar
+                </button>
+                <button type="button" className="btn btn-muted" onClick={onDelete}>
+                  Excluir
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

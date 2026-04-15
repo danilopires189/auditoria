@@ -1,6 +1,7 @@
 export type CaixaTermicaStatus = "disponivel" | "em_transito";
 export type CaixaTermicaTipoMov = "expedicao" | "recebimento";
 export type CaixaTermicaSyncStatus = "pending_insert" | "synced" | "error";
+export type CaixaTermicaMarca = "Ecobox" | "Coleman" | "Isopor genérica";
 
 export interface CaixaTermicaModuleProfile {
   user_id: string;
@@ -19,10 +20,21 @@ export interface CaixaTermicaBox {
   codigo: string;
   descricao: string;
   observacoes: string | null;
+  capacidade_litros: number | null;
+  marca: CaixaTermicaMarca | null;
   status: CaixaTermicaStatus;
   created_at: string;
   created_by: string;
+  created_mat: string | null;
+  created_nome: string | null;
   updated_at: string;
+  updated_by: string | null;
+  updated_mat: string | null;
+  updated_nome: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  deleted_mat: string | null;
+  deleted_nome: string | null;
   sync_status: CaixaTermicaSyncStatus;
   sync_error: string | null;
   // Desnormalizado do último mov
@@ -32,6 +44,10 @@ export interface CaixaTermicaBox {
   last_mov_rota: string | null;
   last_mov_filial: number | null;
   last_mov_filial_nome: string | null;
+  last_mov_pedido: number | null;
+  last_mov_data_pedido: string | null;
+  last_mov_mat_resp: string | null;
+  last_mov_nome_resp: string | null;
 }
 
 export interface CaixaTermicaMov {
@@ -43,6 +59,8 @@ export interface CaixaTermicaMov {
   filial: number | null;
   filial_nome: string | null;
   rota: string | null;
+  pedido: number | null;
+  data_pedido: string | null;
   placa: string | null;
   obs_recebimento: string | null;
   mat_resp: string;
@@ -55,6 +73,18 @@ export interface CaixaTermicaMov {
 export interface NovaCaixaDraft {
   codigo: string;
   descricao: string;
+  capacidadeLitros: string;
+  marca: CaixaTermicaMarca | "";
+  observacoes: string;
+}
+
+export interface EditarCaixaDraft {
+  caixaId: string;
+  codigoOriginal: string;
+  codigo: string;
+  descricao: string;
+  capacidadeLitros: string;
+  marca: CaixaTermicaMarca | "";
   observacoes: string;
 }
 
@@ -67,6 +97,8 @@ export interface ExpedicaoDraft {
   filial: number | null;
   filialNome: string | null;
   rota: string | null;
+  pedido: number | null;
+  dataPedido: string | null;
   placa: string;
   placaError: string | null;
 }
@@ -87,7 +119,13 @@ export interface CaixaTermicaFeedRow {
   expedicoes: number;
   recebimentos: number;
   ultimo_mov: string | null;
-  caixas: { codigo: string; tipo: CaixaTermicaTipoMov; data_hr: string }[];
+  caixas: {
+    codigo: string;
+    tipo: CaixaTermicaTipoMov;
+    data_hr: string;
+    pedido: number | null;
+    data_pedido: string | null;
+  }[];
 }
 
 export interface CaixaTermicaPrefs {

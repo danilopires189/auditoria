@@ -6,7 +6,7 @@ import type {
 } from "./types";
 
 const DB_NAME = "auditoria-caixa-termica-v1";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 const STORE_BOXES = "caixa_boxes";
 const STORE_MOVS = "caixa_movs";
@@ -109,13 +109,20 @@ export async function upsertCaixaTermicaBox(box: CaixaTermicaBox): Promise<void>
   await transactionDone(transaction);
 }
 
+export async function deleteCaixaTermicaBox(localId: string): Promise<void> {
+  const db = await getDb();
+  const transaction = db.transaction(STORE_BOXES, "readwrite");
+  transaction.objectStore(STORE_BOXES).delete(localId);
+  await transactionDone(transaction);
+}
+
 export async function getAllCaixaTermicaBoxes(userId: string, cd: number): Promise<CaixaTermicaBox[]> {
   const db = await getDb();
   const transaction = db.transaction(STORE_BOXES, "readonly");
   const index = transaction.objectStore(STORE_BOXES).index(INDEX_BOXES_BY_USER_CD);
   const rows = (await requestToPromise(index.getAll(IDBKeyRange.only([userId, cd])))) as CaixaTermicaBox[];
   await transactionDone(transaction);
-  return sortBoxes(rows ?? []);
+  return sortBoxes((rows ?? []).filter((box) => !box.deleted_at));
 }
 
 export async function getCaixaTermicaBoxByCodigo(
@@ -128,7 +135,7 @@ export async function getCaixaTermicaBoxByCodigo(
   const index = transaction.objectStore(STORE_BOXES).index(INDEX_BOXES_BY_CODIGO);
   const rows = (await requestToPromise(index.getAll(IDBKeyRange.only(codigo.toUpperCase())))) as CaixaTermicaBox[];
   await transactionDone(transaction);
-  const match = rows.find((b) => b.created_by === userId && b.cd === cd);
+  const match = rows.find((b) => b.created_by === userId && b.cd === cd && !b.deleted_at);
   return match ?? null;
 }
 

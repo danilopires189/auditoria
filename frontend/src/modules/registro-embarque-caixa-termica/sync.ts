@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import {
   countPendingCaixaTermicaBoxes,
+  deleteCaixaTermicaBox,
   getCaixaTermicaBoxByCodigo,
   getPendingCaixaTermicaBoxes,
   upsertCaixaTermicaBox,
@@ -9,6 +10,7 @@ import {
 import type {
   CaixaTermicaBox,
   CaixaTermicaFeedRow,
+  CaixaTermicaMarca,
   CaixaTermicaMov,
   CaixaTermicaTipoMov
 } from "./types";
@@ -27,7 +29,15 @@ function toErrorMessage(error: unknown): string {
     if (n.includes("CAIXA_NAO_EM_TRANSITO")) return "Esta caixa não está em trânsito para recebimento.";
     if (n.includes("CODIGO_OBRIGATORIO")) return "O código da caixa é obrigatório.";
     if (n.includes("DESCRICAO_OBRIGATORIA")) return "A descrição da caixa é obrigatória.";
+    if (n.includes("CAPACIDADE_OBRIGATORIA")) return "Informe a capacidade da caixa em litros.";
+    if (n.includes("MARCA_OBRIGATORIA")) return "Informe a marca da caixa.";
+    if (n.includes("MARCA_INVALIDA")) return "Selecione uma marca válida para a caixa.";
+    if (n.includes("APENAS_ADMIN")) return "Apenas administradores podem editar ou excluir caixas.";
+    if (n.includes("CAIXA_EM_TRANSITO_NAO_PODE_EXCLUIR")) return "Receba a caixa antes de excluir/inativar.";
     if (n.includes("CAIXA_ID_OBRIGATORIO")) return "ID da caixa não informado.";
+    if (n.includes("ETIQUETA_") || n.includes("PEDIDO_INVALIDO") || n.includes("FILIAL_INVALIDA")) {
+      return "Etiqueta de volume inválida. Revise e tente novamente.";
+    }
     if (/statement timeout|canceling statement/i.test(raw)) {
       return "A consulta demorou além do limite. Tente novamente em instantes.";
     }
@@ -75,6 +85,12 @@ function parseNullableInteger(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseMarca(value: unknown): CaixaTermicaMarca | null {
+  const parsed = parseNullableString(value);
+  if (parsed === "Ecobox" || parsed === "Coleman" || parsed === "Isopor genérica") return parsed;
+  return null;
+}
+
 function parseTipoMov(value: unknown): CaixaTermicaTipoMov | null {
   return value === "expedicao" || value === "recebimento" ? value : null;
 }
@@ -89,10 +105,21 @@ function mapRpcBoxRow(raw: Record<string, unknown>): CaixaTermicaBox {
     codigo: parseString(raw.codigo).toUpperCase(),
     descricao: parseString(raw.descricao),
     observacoes: parseNullableString(raw.observacoes),
+    capacidade_litros: parseNullableInteger(raw.capacidade_litros),
+    marca: parseMarca(raw.marca),
     status: raw.status === "em_transito" ? "em_transito" : "disponivel",
     created_at: parseString(raw.created_at),
     created_by: parseString(raw.created_by),
+    created_mat: parseNullableString(raw.created_mat),
+    created_nome: parseNullableString(raw.created_nome),
     updated_at: parseString(raw.updated_at),
+    updated_by: parseNullableString(raw.updated_by),
+    updated_mat: parseNullableString(raw.updated_mat),
+    updated_nome: parseNullableString(raw.updated_nome),
+    deleted_at: parseNullableString(raw.deleted_at),
+    deleted_by: parseNullableString(raw.deleted_by),
+    deleted_mat: parseNullableString(raw.deleted_mat),
+    deleted_nome: parseNullableString(raw.deleted_nome),
     sync_status: "synced",
     sync_error: null,
     last_mov_tipo: parseTipoMov(raw.last_mov_tipo),
@@ -100,7 +127,11 @@ function mapRpcBoxRow(raw: Record<string, unknown>): CaixaTermicaBox {
     last_mov_placa: parseNullableString(raw.last_mov_placa),
     last_mov_rota: parseNullableString(raw.last_mov_rota),
     last_mov_filial: parseNullableInteger(raw.last_mov_filial),
-    last_mov_filial_nome: parseNullableString(raw.last_mov_filial_nome)
+    last_mov_filial_nome: parseNullableString(raw.last_mov_filial_nome),
+    last_mov_pedido: parseNullableInteger(raw.last_mov_pedido),
+    last_mov_data_pedido: parseNullableString(raw.last_mov_data_pedido),
+    last_mov_mat_resp: parseNullableString(raw.last_mov_mat_resp),
+    last_mov_nome_resp: parseNullableString(raw.last_mov_nome_resp)
   };
 }
 
@@ -114,6 +145,8 @@ function mapRpcMovRow(raw: Record<string, unknown>): CaixaTermicaMov {
     filial: parseNullableInteger(raw.filial),
     filial_nome: parseNullableString(raw.filial_nome),
     rota: parseNullableString(raw.rota),
+    pedido: parseNullableInteger(raw.pedido),
+    data_pedido: parseNullableString(raw.data_pedido),
     placa: parseNullableString(raw.placa),
     obs_recebimento: parseNullableString(raw.obs_recebimento),
     mat_resp: parseString(raw.mat_resp),
@@ -191,6 +224,8 @@ export async function rpcInsertCaixaTermica(params: {
   codigo: string;
   descricao: string;
   observacoes: string | null;
+  capacidadeLitros: number;
+  marca: CaixaTermicaMarca;
   userId: string;
   mat: string;
   nome: string;
@@ -201,6 +236,8 @@ export async function rpcInsertCaixaTermica(params: {
     p_codigo: params.codigo,
     p_descricao: params.descricao,
     p_observacoes: params.observacoes,
+    p_capacidade_litros: params.capacidadeLitros,
+    p_marca: params.marca,
     p_user_id: params.userId,
     p_mat: params.mat,
     p_nome: params.nome
@@ -222,10 +259,21 @@ export async function rpcInsertCaixaTermica(params: {
     codigo: parseString(raw.codigo).toUpperCase(),
     descricao: parseString(raw.descricao),
     observacoes: parseNullableString(raw.observacoes),
+    capacidade_litros: parseNullableInteger(raw.capacidade_litros),
+    marca: parseMarca(raw.marca),
     status: "disponivel",
     created_at: parseString(raw.created_at),
     created_by: params.userId,
+    created_mat: parseNullableString(raw.created_mat) ?? params.mat,
+    created_nome: parseNullableString(raw.created_nome) ?? params.nome,
     updated_at: parseString(raw.updated_at),
+    updated_by: parseNullableString(raw.updated_by),
+    updated_mat: parseNullableString(raw.updated_mat),
+    updated_nome: parseNullableString(raw.updated_nome),
+    deleted_at: null,
+    deleted_by: null,
+    deleted_mat: null,
+    deleted_nome: null,
     sync_status: "synced",
     sync_error: null,
     last_mov_tipo: null,
@@ -233,7 +281,11 @@ export async function rpcInsertCaixaTermica(params: {
     last_mov_placa: null,
     last_mov_rota: null,
     last_mov_filial: null,
-    last_mov_filial_nome: null
+    last_mov_filial_nome: null,
+    last_mov_pedido: null,
+    last_mov_data_pedido: null,
+    last_mov_mat_resp: null,
+    last_mov_nome_resp: null
   };
 
   await upsertCaixaTermicaBox(box);
@@ -281,10 +333,21 @@ export async function rpcExpedirCaixaTermica(params: {
     codigo: parseString(raw.box_codigo).toUpperCase(),
     descricao: "",
     observacoes: null,
+    capacidade_litros: null,
+    marca: null,
     status: "em_transito",
     created_at: "",
     created_by: params.userId,
+    created_mat: null,
+    created_nome: null,
     updated_at: parseString(raw.box_updated_at),
+    updated_by: null,
+    updated_mat: null,
+    updated_nome: null,
+    deleted_at: null,
+    deleted_by: null,
+    deleted_mat: null,
+    deleted_nome: null,
     sync_status: "synced",
     sync_error: null,
     last_mov_tipo: "expedicao",
@@ -292,7 +355,11 @@ export async function rpcExpedirCaixaTermica(params: {
     last_mov_placa: parseNullableString(raw.mov_placa),
     last_mov_rota: parseNullableString(raw.mov_rota),
     last_mov_filial: parseNullableInteger(raw.mov_filial),
-    last_mov_filial_nome: parseNullableString(raw.mov_filial_nome)
+    last_mov_filial_nome: parseNullableString(raw.mov_filial_nome),
+    last_mov_pedido: parseNullableInteger(raw.mov_pedido),
+    last_mov_data_pedido: parseNullableString(raw.mov_data_pedido),
+    last_mov_mat_resp: params.mat,
+    last_mov_nome_resp: params.nome
   };
 
   const mov: CaixaTermicaMov = {
@@ -304,6 +371,8 @@ export async function rpcExpedirCaixaTermica(params: {
     filial: parseNullableInteger(raw.mov_filial),
     filial_nome: parseNullableString(raw.mov_filial_nome),
     rota: parseNullableString(raw.mov_rota),
+    pedido: parseNullableInteger(raw.mov_pedido),
+    data_pedido: parseNullableString(raw.mov_data_pedido),
     placa: parseNullableString(raw.mov_placa),
     obs_recebimento: null,
     mat_resp: params.mat,
@@ -354,10 +423,21 @@ export async function rpcReceberCaixaTermica(params: {
     codigo: parseString(raw.box_codigo).toUpperCase(),
     descricao: "",
     observacoes: null,
+    capacidade_litros: null,
+    marca: null,
     status: "disponivel",
     created_at: "",
     created_by: params.userId,
+    created_mat: null,
+    created_nome: null,
     updated_at: parseString(raw.box_updated_at),
+    updated_by: null,
+    updated_mat: null,
+    updated_nome: null,
+    deleted_at: null,
+    deleted_by: null,
+    deleted_mat: null,
+    deleted_nome: null,
     sync_status: "synced",
     sync_error: null,
     last_mov_tipo: "recebimento",
@@ -365,7 +445,11 @@ export async function rpcReceberCaixaTermica(params: {
     last_mov_placa: null,
     last_mov_rota: null,
     last_mov_filial: null,
-    last_mov_filial_nome: null
+    last_mov_filial_nome: null,
+    last_mov_pedido: null,
+    last_mov_data_pedido: null,
+    last_mov_mat_resp: params.mat,
+    last_mov_nome_resp: params.nome
   };
 
   const mov: CaixaTermicaMov = {
@@ -377,6 +461,8 @@ export async function rpcReceberCaixaTermica(params: {
     filial: null,
     filial_nome: null,
     rota: null,
+    pedido: null,
+    data_pedido: null,
     placa: null,
     obs_recebimento: params.obsRecebimento,
     mat_resp: params.mat,
@@ -392,6 +478,61 @@ export async function rpcReceberCaixaTermica(params: {
   ]);
 
   return { box, mov };
+}
+
+export async function rpcUpdateCaixaTermica(params: {
+  caixaId: string;
+  cd: number;
+  codigo: string;
+  descricao: string;
+  observacoes: string | null;
+  capacidadeLitros: number;
+  marca: CaixaTermicaMarca;
+  userId: string;
+  mat: string;
+  nome: string;
+}): Promise<CaixaTermicaBox> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_caixa_termica_update", {
+    p_caixa_id: params.caixaId,
+    p_cd: params.cd,
+    p_codigo: params.codigo,
+    p_descricao: params.descricao,
+    p_observacoes: params.observacoes,
+    p_capacidade_litros: params.capacidadeLitros,
+    p_marca: params.marca,
+    p_user_id: params.userId,
+    p_mat: params.mat,
+    p_nome: params.nome
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+
+  const rows = Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+  if (rows.length === 0) throw new Error("Nenhum dado retornado pelo servidor.");
+  const box = mapRpcBoxRow(rows[0]);
+  await upsertCaixaTermicaBox(box);
+  return box;
+}
+
+export async function rpcDeleteCaixaTermica(params: {
+  box: CaixaTermicaBox;
+  cd: number;
+  userId: string;
+  mat: string;
+  nome: string;
+}): Promise<void> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { error } = await supabase.rpc("rpc_caixa_termica_delete", {
+    p_caixa_id: params.box.id,
+    p_cd: params.cd,
+    p_user_id: params.userId,
+    p_mat: params.mat,
+    p_nome: params.nome
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+  await deleteCaixaTermicaBox(params.box.local_id);
 }
 
 export async function fetchCaixaTermicaHistorico(
@@ -432,7 +573,9 @@ export async function fetchCaixaTermicaFeedDiario(
       ? (caixasRaw as Record<string, unknown>[]).map((c) => ({
           codigo: parseString(c.codigo),
           tipo: (c.tipo === "expedicao" ? "expedicao" : "recebimento") as CaixaTermicaTipoMov,
-          data_hr: parseString(c.data_hr)
+          data_hr: parseString(c.data_hr),
+          pedido: parseNullableInteger(c.pedido),
+          data_pedido: parseNullableString(c.data_pedido)
         }))
       : [];
 
@@ -464,6 +607,8 @@ export async function syncPendingCaixaTermicaBoxes(
         p_codigo: box.codigo,
         p_descricao: box.descricao,
         p_observacoes: box.observacoes,
+        p_capacidade_litros: box.capacidade_litros,
+        p_marca: box.marca,
         p_user_id: userId,
         p_mat: "",
         p_nome: ""
