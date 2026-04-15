@@ -34,8 +34,12 @@ import {
   parseAuditoriaCaixaEtiqueta
 } from "../auditoria-caixa/logic";
 import {
-  getDbRotasByFilial
+  getDbRotasByFilial,
+  getDbRotasMeta
 } from "../auditoria-caixa/storage";
+import {
+  refreshDbRotasCache
+} from "../auditoria-caixa/sync";
 import type {
   CaixaTermicaBox,
   CaixaTermicaFeedRow,
@@ -57,6 +61,7 @@ const SCANNER_INPUT_MIN_BURST_CHARS = 12;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const QUICK_SYNC_THROTTLE_MS = 2500;
 const FEED_REFRESH_INTERVAL_MS = 60_000;
+const ROUTE_CACHE_REFRESH_COOLDOWN_MS = 45_000;
 const PLATE_RE = /^[A-Z]{3}-?(?:\d{4}|\d[A-Z]\d{2})$/i;
 const CAIXA_TERMICA_TITLE = "Caixa Térmica";
 const CAIXA_TERMICA_MARCAS: CaixaTermicaMarca[] = ["Ecobox", "Coleman", "Isopor genérica"];
@@ -67,6 +72,22 @@ const EMPTY_REGISTER_DRAFT: NovaCaixaDraft = {
   marca: "",
   observacoes: ""
 };
+
+function cdCodeLabel(cd: number | null): string {
+  if (cd == null) return "CD não definido";
+  return `CD ${String(cd).padStart(2, "0")}`;
+}
+
+function SyncIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 7v5h-5" />
+      <path d="M4 17v-5h5" />
+      <path d="M7.5 9A6 6 0 0 1 18 7" />
+      <path d="M16.5 15A6 6 0 0 1 6 17" />
+    </svg>
+  );
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -150,6 +171,12 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   // ── CD resolution ──
   const [activeCd, setActiveCd] = useState<number | null>(null);
   const currentCd = activeCd ?? profile.cd_default;
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const [preferOfflineMode, setPreferOfflineMode] = useState(false);
+  const [dbRotasCount, setDbRotasCount] = useState(0);
+  const [dbRotasLastSyncAt, setDbRotasLastSyncAt] = useState<string | null>(null);
+  const [busyRefresh, setBusyRefresh] = useState(false);
+  const [busySync, setBusySync] = useState(false);
 
   // ── View ──
   const [view, setView] = useState<CaixaTermicaView>("list");
@@ -169,9 +196,12 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   // ── Pending sync ──
   const [pendingCount, setPendingCount] = useState(0);
   const lastQuickSyncAtRef = useRef(0);
+  const lastRouteRefreshAtRef = useRef(0);
 
   // ── Alerts ──
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [offlineErrorMessage, setOfflineErrorMessage] = useState<string | null>(null);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Scanner (camera) ──
@@ -245,14 +275,36 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     [filteredBoxes]
   );
   const canAdminEdit = profile.role === "admin" && isOnline;
+  const offlineReady = preferOfflineMode && dbRotasCount > 0;
 
   // ── Load CD prefs ──
   useEffect(() => {
     if (!profile.user_id) return;
+    setPreferencesReady(false);
     getCaixaTermicaPrefs(profile.user_id).then((prefs) => {
       if (prefs.cd_ativo != null) setActiveCd(prefs.cd_ativo);
-    }).catch(() => {/* ignore */});
+      setPreferOfflineMode(Boolean(prefs.prefer_offline_mode));
+    }).catch(() => {/* ignore */}).finally(() => setPreferencesReady(true));
   }, [profile.user_id]);
+
+  useEffect(() => {
+    if (!profile.user_id || !preferencesReady) return;
+    void saveCaixaTermicaPrefs(profile.user_id, {
+      cd_ativo: activeCd,
+      prefer_offline_mode: preferOfflineMode
+    }).catch(() => undefined);
+  }, [activeCd, preferOfflineMode, preferencesReady, profile.user_id]);
+
+  const refreshRouteMeta = useCallback(async () => {
+    if (!currentCd) {
+      setDbRotasCount(0);
+      setDbRotasLastSyncAt(null);
+      return;
+    }
+    const meta = await getDbRotasMeta(profile.user_id, currentCd);
+    setDbRotasCount(meta.row_count);
+    setDbRotasLastSyncAt(meta.last_sync_at);
+  }, [currentCd, profile.user_id]);
 
   // ── Load boxes ──
   useEffect(() => {
@@ -275,6 +327,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
 
         const pending = await countPendingCaixaTermicaBoxes(profile.user_id);
         if (!cancelled) setPendingCount(pending);
+        if (!cancelled) await refreshRouteMeta();
       } catch (err) {
         if (!cancelled) setBoxesError(err instanceof Error ? err.message : "Erro ao carregar caixas.");
       } finally {
@@ -283,7 +336,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     })();
 
     return () => { cancelled = true; };
-  }, [refreshNonce, currentCd, profile.user_id, isOnline]);
+  }, [refreshNonce, currentCd, profile.user_id, isOnline, refreshRouteMeta]);
 
   // ── Feed loader ──
   useEffect(() => {
@@ -308,17 +361,112 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     return () => { cancelled = true; clearInterval(interval); };
   }, [view, currentCd, isOnline]);
 
+  // ── Success toast ──
+  const showSuccess = useCallback((msg: string) => {
+    setSuccessMessage(msg);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
+  }, []);
+
   // ── Background sync trigger ──
   const triggerQuickSync = useCallback(() => {
     const now = Date.now();
     if (now - lastQuickSyncAtRef.current < QUICK_SYNC_THROTTLE_MS) return;
     if (!isOnline) return;
     lastQuickSyncAtRef.current = now;
+    setBusySync(true);
     syncPendingCaixaTermicaBoxes(profile.user_id).then(({ pending }) => {
       setPendingCount(pending);
       if (pending === 0) setRefreshNonce((n) => n + 1);
-    }).catch(() => {/* silent */});
+    }).catch(() => {/* silent */}).finally(() => setBusySync(false));
   }, [isOnline, profile.user_id]);
+
+  const runDbRotasRefresh = useCallback(async (showMessages = true) => {
+    if (!isOnline || !currentCd) return;
+    const nowMs = Date.now();
+    if (!showMessages && nowMs - lastRouteRefreshAtRef.current < ROUTE_CACHE_REFRESH_COOLDOWN_MS) {
+      return;
+    }
+
+    lastRouteRefreshAtRef.current = nowMs;
+    setBusyRefresh(true);
+    if (showMessages) {
+      setOfflineErrorMessage(null);
+      setProgressMessage("Atualizando base local de rotas...");
+    }
+
+    try {
+      const result = await refreshDbRotasCache(profile.user_id, currentCd, (progress) => {
+        if (!showMessages) return;
+        setProgressMessage(
+          `Atualizando rotas... ${progress.percent}% (${progress.rowsFetched}/${Math.max(progress.totalRows, progress.rowsFetched)})`
+        );
+      });
+      await refreshRouteMeta();
+      if (showMessages) {
+        showSuccess(`Base local de rotas atualizada (${result.rows} filiais).`);
+      }
+    } catch (err) {
+      if (showMessages) {
+        setOfflineErrorMessage(err instanceof Error ? err.message : "Falha ao atualizar base local de rotas.");
+      }
+    } finally {
+      setBusyRefresh(false);
+      setProgressMessage(null);
+    }
+  }, [currentCd, isOnline, profile.user_id, refreshRouteMeta, showSuccess]);
+
+  const runManualSync = useCallback(async () => {
+    if (!isOnline || !currentCd || busyRefresh || busySync) return;
+    setBusySync(true);
+    setOfflineErrorMessage(null);
+
+    try {
+      await runDbRotasRefresh(true);
+      const pendingResult = await syncPendingCaixaTermicaBoxes(profile.user_id);
+      const remote = await fetchAndCacheCaixaTermicaBoxes(profile.user_id, currentCd);
+      setBoxes(remote);
+      setPendingCount(pendingResult.pending);
+      setRefreshNonce((n) => n + 1);
+
+      if (pendingResult.failed > 0) {
+        showSuccess(`${pendingResult.synced} cadastro(s) sincronizado(s) e ${pendingResult.failed} com erro.`);
+      } else if (pendingResult.processed > 0) {
+        showSuccess(`${pendingResult.synced} cadastro(s) sincronizado(s).`);
+      } else {
+        showSuccess("Cadastro, situações das caixas e rotas atualizados.");
+      }
+    } catch (err) {
+      setOfflineErrorMessage(err instanceof Error ? err.message : "Falha ao sincronizar dados locais.");
+    } finally {
+      setBusySync(false);
+    }
+  }, [busyRefresh, busySync, currentCd, isOnline, profile.user_id, runDbRotasRefresh, showSuccess]);
+
+  const toggleOfflineMode = useCallback(async () => {
+    setOfflineErrorMessage(null);
+    setProgressMessage(null);
+
+    if (preferOfflineMode) {
+      setPreferOfflineMode(false);
+      showSuccess("Modo online ativado.");
+      return;
+    }
+
+    if (!isOnline && dbRotasCount <= 0) {
+      setOfflineErrorMessage("Sem base local de rotas. Conecte-se para atualizar antes de trabalhar offline.");
+      return;
+    }
+
+    setPreferOfflineMode(true);
+    if (isOnline) {
+      showSuccess("Modo offline local ativado. Preparando rotas, cadastros e situações das caixas.");
+      await runManualSync();
+      return;
+    }
+
+    showSuccess("Modo offline local ativado.");
+  }, [dbRotasCount, isOnline, preferOfflineMode, runManualSync, showSuccess]);
 
   const toggleBoxExpanded = useCallback((boxKey: string) => {
     setExpandedBoxIds((current) => {
@@ -327,13 +475,6 @@ export default function RegistroEmbarqueCaixaTermicaPage({
       else next.add(boxKey);
       return next;
     });
-  }, []);
-
-  // ── Success toast ──
-  const showSuccess = useCallback((msg: string) => {
-    setSuccessMessage(msg);
-    if (successTimerRef.current) clearTimeout(successTimerRef.current);
-    successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
   }, []);
 
   // ── Camera scanner lifecycle ──
@@ -803,7 +944,6 @@ export default function RegistroEmbarqueCaixaTermicaPage({
               title="Cadastros pendentes de sincronização"
               onClick={pendingCount > 0 ? () => triggerQuickSync() : undefined}
             />
-            <span className="module-user-greeting">Olá, {displayUserName}</span>
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
               {isOnline ? "🟢 Online" : "🔴 Offline"}
             </span>
@@ -818,13 +958,61 @@ export default function RegistroEmbarqueCaixaTermicaPage({
       </header>
 
       {/* ── MAIN CONTENT ── */}
-      <section className="modules-shell caixa-termica-shell">
+      <section className="modules-shell coleta-shell caixa-termica-shell">
+        <div className="coleta-head">
+          <h2>Olá, {displayUserName}</h2>
+          <p>Cadastre caixas térmicas, acompanhe a situação e consulte rotas no cache local.</p>
+          <p className="coleta-meta-line">
+            CD atual: <strong>{cdCodeLabel(currentCd)}</strong>
+            {" | "}Base local de rotas: <strong>{dbRotasCount}</strong> filiais
+            {dbRotasLastSyncAt ? ` | Atualizada em ${formatDateTimeBrasilia(dbRotasLastSyncAt)}` : " | Sem atualização ainda"}
+          </p>
+        </div>
+
         {/* Success toast */}
         {successMessage && (
-          <div style={{ padding: "12px 16px 0" }}>
-            <div className="alert success">{successMessage}</div>
-          </div>
+          <div className="alert success">{successMessage}</div>
         )}
+        {offlineErrorMessage ? <div className="alert error">{offlineErrorMessage}</div> : null}
+        {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {offlineReady ? (
+          <div className="alert success">
+            Modo offline ativo: rotas, cadastros e situações das caixas serão usados do cache local.
+          </div>
+        ) : null}
+        {preferOfflineMode && dbRotasCount <= 0 ? (
+          <div className={isOnline ? "alert success" : "alert error"}>
+            {isOnline
+              ? "Modo offline ativo sem base local completa. Sincronize antes de ficar sem internet."
+              : "Modo offline ativo sem base local. Conecte-se para carregar rotas, cadastros e situações das caixas."}
+          </div>
+        ) : null}
+        {!preferOfflineMode && !isOnline ? (
+          <div className="alert error">
+            Você está sem internet. Para consultar o cache local, ative Trabalhar offline.
+          </div>
+        ) : null}
+
+        <div className="termo-actions-row">
+          <button
+            type="button"
+            className={`btn btn-muted termo-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
+            onClick={() => void toggleOfflineMode()}
+            disabled={busyRefresh || busySync}
+            title={preferOfflineMode ? "Desativar modo offline local" : "Ativar modo offline local"}
+          >
+            {preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-muted termo-sync-btn"
+            onClick={() => void runManualSync()}
+            disabled={!isOnline || currentCd == null || busyRefresh || busySync}
+          >
+            <span aria-hidden="true"><SyncIcon /></span>
+            {busyRefresh || busySync ? "Sincronizando..." : "Sincronizar agora"}
+          </button>
+        </div>
 
         {/* ── LIST VIEW ── */}
         {view === "list" && (

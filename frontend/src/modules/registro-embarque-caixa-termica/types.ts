@@ -130,6 +130,7 @@ export interface CaixaTermicaFeedRow {
 
 export interface CaixaTermicaPrefs {
   cd_ativo: number | null;
+  prefer_offline_mode: boolean;
 }
 
 export type CaixaTermicaView = "list" | "feed";

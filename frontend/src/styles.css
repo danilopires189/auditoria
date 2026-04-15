@@ -1211,7 +1211,7 @@ small {
 .scanner-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1300;
+  z-index: 1500;
   display: grid;
   justify-items: center;
   align-content: start;

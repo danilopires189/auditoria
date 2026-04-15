@@ -212,19 +212,26 @@ export async function getCaixaTermicaPrefs(userId: string): Promise<CaixaTermica
   const raw = await requestToPromise(transaction.objectStore(STORE_PREFS).get(prefsKey(userId)));
   await transactionDone(transaction);
 
-  if (!raw || typeof raw !== "object") return { cd_ativo: null };
+  if (!raw || typeof raw !== "object") return { cd_ativo: null, prefer_offline_mode: false };
   const payload = (raw as { value?: Partial<CaixaTermicaPrefs> }).value;
   return {
     cd_ativo: typeof payload?.cd_ativo === "number" && Number.isFinite(payload.cd_ativo)
       ? Math.trunc(payload.cd_ativo)
-      : null
+      : null,
+    prefer_offline_mode: Boolean(payload?.prefer_offline_mode)
   };
 }
 
 export async function saveCaixaTermicaPrefs(userId: string, prefs: CaixaTermicaPrefs): Promise<void> {
   const db = await getDb();
   const transaction = db.transaction(STORE_PREFS, "readwrite");
-  transaction.objectStore(STORE_PREFS).put({ key: prefsKey(userId), value: { cd_ativo: prefs.cd_ativo } });
+  transaction.objectStore(STORE_PREFS).put({
+    key: prefsKey(userId),
+    value: {
+      cd_ativo: prefs.cd_ativo,
+      prefer_offline_mode: Boolean(prefs.prefer_offline_mode)
+    }
+  });
   await transactionDone(transaction);
 }
 
