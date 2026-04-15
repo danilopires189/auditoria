@@ -71,6 +71,8 @@ import type { ProdutividadeModuleProfile } from "./modules/produtividade/types";
 import type { RondaQualidadeModuleProfile } from "./modules/ronda/types";
 import type { ControleValidadeModuleProfile } from "./modules/controle-validade/types";
 import { clearUserControleValidadeCache } from "./modules/controle-validade/storage";
+import type { CaixaTermicaModuleProfile } from "./modules/registro-embarque-caixa-termica/types";
+import { clearUserCaixaTermicaSessionCache } from "./modules/registro-embarque-caixa-termica/storage";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
@@ -1877,6 +1879,11 @@ export default function App() {
         } catch {
           // Ignore local cleanup failures and proceed with logout.
         }
+        try {
+          await clearUserCaixaTermicaSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
       }
       const signOutResult = await signOutWithFallback(signOutScope);
       setAuthMode("login");
@@ -2250,6 +2257,18 @@ export default function App() {
   }, [effectiveProfileWithCd, session]);
 
   const controleValidadeProfile = useMemo<ControleValidadeModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
+  const caixaTermicaProfile = useMemo<CaixaTermicaModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
       user_id: effectiveProfileWithCd.user_id || session.user.id,
@@ -2786,7 +2805,13 @@ export default function App() {
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/registro-embarque-caixa-termica"
-            element={<RegistroEmbarqueCaixaTermicaPage isOnline={isOnline} userName={displayContext.nome} />}
+            element={
+              caixaTermicaProfile ? (
+                <RegistroEmbarqueCaixaTermicaPage isOnline={isOnline} profile={caixaTermicaProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
           />
           <Route
             path="/modulos/ronda"

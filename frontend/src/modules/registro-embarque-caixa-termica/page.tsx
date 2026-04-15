@@ -1,3 +1,1337 @@
-import { createModulePage } from "../createModulePage";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { IScannerControls } from "@zxing/browser";
+import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
+import { BackIcon, ModuleIcon } from "../../ui/icons";
+import { PendingSyncBadge } from "../../ui/pending-sync-badge";
+import {
+  formatDateOnlyPtBR,
+  formatDateTimeBrasilia,
+  todayIsoBrasilia
+} from "../../shared/brasilia-datetime";
+import { getModuleByKeyOrThrow } from "../registry";
+import {
+  getAllCaixaTermicaBoxes,
+  getCaixaTermicaBoxByCodigo,
+  getCaixaTermicaPrefs,
+  getMovsByBox,
+  saveCaixaTermicaPrefs,
+  upsertCaixaTermicaBox,
+  countPendingCaixaTermicaBoxes
+} from "./storage";
+import {
+  fetchAndCacheCaixaTermicaBoxes,
+  fetchCaixaTermicaFeedDiario,
+  fetchCaixaTermicaHistorico,
+  rpcExpedirCaixaTermica,
+  rpcInsertCaixaTermica,
+  rpcReceberCaixaTermica,
+  syncPendingCaixaTermicaBoxes
+} from "./sync";
+import {
+  parseAuditoriaCaixaEtiqueta
+} from "../auditoria-caixa/logic";
+import {
+  getDbRotasByFilial
+} from "../auditoria-caixa/storage";
+import type {
+  CaixaTermicaBox,
+  CaixaTermicaFeedRow,
+  CaixaTermicaModuleProfile,
+  CaixaTermicaMov,
+  CaixaTermicaView,
+  ExpedicaoDraft,
+  NovaCaixaDraft,
+  RecebimentoDraft
+} from "./types";
 
-export default createModulePage("registro-embarque-caixa-termica");
+// ── Constants ────────────────────────────────────────────────
+
+const MODULE_DEF = getModuleByKeyOrThrow("registro-embarque-caixa-termica");
+const SCANNER_INPUT_MAX_INTERVAL_MS = 50;
+const SCANNER_INPUT_MIN_BURST_CHARS = 12;
+const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
+const QUICK_SYNC_THROTTLE_MS = 2500;
+const FEED_REFRESH_INTERVAL_MS = 60_000;
+const PLATE_RE = /^[A-Z]{3}-?(?:\d{4}|\d[A-Z]\d{2})$/i;
+
+// ── Helpers ──────────────────────────────────────────────────
+
+function isValidBrazilianPlate(v: string): boolean {
+  return PLATE_RE.test(v.replace(/\s/g, ""));
+}
+
+function normalizePlateInput(v: string): string {
+  return v.replace(/[^A-Za-z0-9-]/g, "").toUpperCase().slice(0, 8);
+}
+
+function formatTransitTime(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
+function toDisplayName(nome: string): string {
+  const compact = nome.trim().replace(/\s+/g, " ");
+  if (!compact) return "Usuário";
+  return compact
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((chunk) => chunk.charAt(0).toLocaleUpperCase("pt-BR") + chunk.slice(1))
+    .join(" ");
+}
+
+function safeUuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// ── Scanner input state ──────────────────────────────────────
+
+interface ScannerInputState {
+  lastInputAt: number;
+  lastLength: number;
+  burstChars: number;
+  timerId: number | null;
+  lastSubmittedValue: string;
+  lastSubmittedAt: number;
+}
+
+function createScannerInputState(): ScannerInputState {
+  return {
+    lastInputAt: 0,
+    lastLength: 0,
+    burstChars: 0,
+    timerId: null,
+    lastSubmittedValue: "",
+    lastSubmittedAt: 0
+  };
+}
+
+// ── Props ────────────────────────────────────────────────────
+
+interface RegistroEmbarqueCaixaTermicaPageProps {
+  isOnline: boolean;
+  profile: CaixaTermicaModuleProfile;
+}
+
+// ── Component ────────────────────────────────────────────────
+
+export default function RegistroEmbarqueCaixaTermicaPage({
+  isOnline,
+  profile
+}: RegistroEmbarqueCaixaTermicaPageProps) {
+  const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
+
+  // ── CD resolution ──
+  const [activeCd, setActiveCd] = useState<number | null>(null);
+  const currentCd = activeCd ?? profile.cd_default;
+
+  // ── View ──
+  const [view, setView] = useState<CaixaTermicaView>("list");
+
+  // ── Box list ──
+  const [boxes, setBoxes] = useState<CaixaTermicaBox[]>([]);
+  const [loadingBoxes, setLoadingBoxes] = useState(false);
+  const [boxesError, setBoxesError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  // ── Search ──
+  const [searchInput, setSearchInput] = useState("");
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const searchScannerState = useRef<ScannerInputState>(createScannerInputState());
+
+  // ── Pending sync ──
+  const [pendingCount, setPendingCount] = useState(0);
+  const lastQuickSyncAtRef = useRef(0);
+
+  // ── Alerts ──
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Scanner (camera) ──
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerTarget, setScannerTarget] = useState<"search" | "register" | "expedicao">("search");
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+
+  const cameraSupported = useMemo(
+    () => typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function",
+    []
+  );
+
+  // ── Modal: Register new box ──
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registerDraft, setRegisterDraft] = useState<NovaCaixaDraft>({ codigo: "", descricao: "", observacoes: "" });
+  const [registerBusy, setRegisterBusy] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+
+  // ── Modal: Expedition ──
+  const [expedicaoOpen, setExpedicaoOpen] = useState(false);
+  const [expedicaoDraft, setExpedicaoDraft] = useState<ExpedicaoDraft | null>(null);
+  const [expedicaoBusy, setExpedicaoBusy] = useState(false);
+  const [expedicaoError, setExpedicaoError] = useState<string | null>(null);
+  const [etiquetaLookupBusy, setEtiquetaLookupBusy] = useState(false);
+
+  // ── Modal: Reception ──
+  const [recebimentoOpen, setRecebimentoOpen] = useState(false);
+  const [recebimentoDraft, setRecebimentoDraft] = useState<RecebimentoDraft | null>(null);
+  const [recebimentoBusy, setRecebimentoBusy] = useState(false);
+  const [recebimentoError, setRecebimentoError] = useState<string | null>(null);
+
+  // ── Modal: History ──
+  const [historicoOpen, setHistoricoOpen] = useState(false);
+  const [historicoCaixa, setHistoricoCaixa] = useState<{ id: string; codigo: string } | null>(null);
+  const [historicoMovs, setHistoricoMovs] = useState<CaixaTermicaMov[]>([]);
+  const [historicoLoading, setHistoricoLoading] = useState(false);
+  const [historicoError, setHistoricoError] = useState<string | null>(null);
+
+  // ── Feed ──
+  const [feedRows, setFeedRows] = useState<CaixaTermicaFeedRow[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
+
+  // ── Derived state ──
+  const filteredBoxes = useMemo(() => {
+    if (!searchInput.trim()) return boxes;
+    const q = searchInput.trim().toUpperCase();
+    return boxes.filter(
+      (b) =>
+        b.codigo.toUpperCase().includes(q) ||
+        b.descricao.toUpperCase().includes(q)
+    );
+  }, [boxes, searchInput]);
+
+  const disponiveisBoxes = useMemo(
+    () => filteredBoxes.filter((b) => b.status === "disponivel"),
+    [filteredBoxes]
+  );
+  const emTransitoBoxes = useMemo(
+    () => filteredBoxes.filter((b) => b.status === "em_transito"),
+    [filteredBoxes]
+  );
+
+  // ── Load CD prefs ──
+  useEffect(() => {
+    if (!profile.user_id) return;
+    getCaixaTermicaPrefs(profile.user_id).then((prefs) => {
+      if (prefs.cd_ativo != null) setActiveCd(prefs.cd_ativo);
+    }).catch(() => {/* ignore */});
+  }, [profile.user_id]);
+
+  // ── Load boxes ──
+  useEffect(() => {
+    if (!currentCd) return;
+    let cancelled = false;
+    setLoadingBoxes(true);
+    setBoxesError(null);
+
+    (async () => {
+      try {
+        // Immediate local render
+        const local = await getAllCaixaTermicaBoxes(profile.user_id, currentCd);
+        if (!cancelled) setBoxes(local);
+
+        // Background remote fetch
+        if (isOnline) {
+          const remote = await fetchAndCacheCaixaTermicaBoxes(profile.user_id, currentCd);
+          if (!cancelled) setBoxes(remote);
+        }
+
+        const pending = await countPendingCaixaTermicaBoxes(profile.user_id);
+        if (!cancelled) setPendingCount(pending);
+      } catch (err) {
+        if (!cancelled) setBoxesError(err instanceof Error ? err.message : "Erro ao carregar caixas.");
+      } finally {
+        if (!cancelled) setLoadingBoxes(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [refreshNonce, currentCd, profile.user_id, isOnline]);
+
+  // ── Feed loader ──
+  useEffect(() => {
+    if (view !== "feed" || !currentCd) return;
+    let cancelled = false;
+
+    const loadFeed = async () => {
+      setFeedLoading(true);
+      setFeedError(null);
+      try {
+        const rows = await fetchCaixaTermicaFeedDiario(currentCd, todayIsoBrasilia());
+        if (!cancelled) setFeedRows(rows);
+      } catch (err) {
+        if (!cancelled) setFeedError(err instanceof Error ? err.message : "Erro ao carregar feed.");
+      } finally {
+        if (!cancelled) setFeedLoading(false);
+      }
+    };
+
+    void loadFeed();
+    const interval = setInterval(() => { if (isOnline) void loadFeed(); }, FEED_REFRESH_INTERVAL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [view, currentCd, isOnline]);
+
+  // ── Background sync trigger ──
+  const triggerQuickSync = useCallback(() => {
+    const now = Date.now();
+    if (now - lastQuickSyncAtRef.current < QUICK_SYNC_THROTTLE_MS) return;
+    if (!isOnline) return;
+    lastQuickSyncAtRef.current = now;
+    syncPendingCaixaTermicaBoxes(profile.user_id).then(({ pending }) => {
+      setPendingCount(pending);
+      if (pending === 0) setRefreshNonce((n) => n + 1);
+    }).catch(() => {/* silent */});
+  }, [isOnline, profile.user_id]);
+
+  // ── Success toast ──
+  const showSuccess = useCallback((msg: string) => {
+    setSuccessMessage(msg);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
+  }, []);
+
+  // ── Camera scanner lifecycle ──
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+    let cancelled = false;
+    setScannerError(null);
+
+    const start = async () => {
+      const videoEl = scannerVideoRef.current;
+      if (!videoEl) return;
+      try {
+        const zxing = await import("@zxing/browser");
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints(
+          { audio: false, video: { facingMode: { ideal: "environment" } } },
+          videoEl,
+          (result, error) => {
+            if (cancelled) return;
+            if (error) return;
+            if (!result) return;
+            const text = result.getText()?.trim() ?? "";
+            if (!text) return;
+            controls.stop();
+            scannerControlsRef.current = null;
+            setScannerOpen(false);
+            handleScannerResult(text);
+          }
+        );
+        if (!cancelled) scannerControlsRef.current = controls;
+      } catch (err) {
+        if (!cancelled) {
+          setScannerError(err instanceof Error ? err.message : "Erro ao iniciar câmera.");
+        }
+      }
+    };
+
+    void start();
+    return () => {
+      cancelled = true;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scannerOpen]);
+
+  const closeScanner = useCallback(() => {
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+    setScannerOpen(false);
+    setScannerError(null);
+  }, []);
+
+  const handleScannerResult = useCallback((text: string) => {
+    if (scannerTarget === "register") {
+      setRegisterDraft((d) => ({ ...d, codigo: text.toUpperCase() }));
+    } else if (scannerTarget === "expedicao") {
+      handleEtiquetaVolumeChange(text);
+    } else {
+      setSearchInput(text.toUpperCase());
+      triggerQuickSync();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scannerTarget]);
+
+  // ── Barcode gun input detection ──
+  const handleSearchInputChange = useCallback((value: string) => {
+    const state = searchScannerState.current;
+    const now = Date.now();
+    const elapsed = now - state.lastInputAt;
+
+    if (elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+      state.burstChars += Math.abs(value.length - state.lastLength);
+    } else {
+      state.burstChars = value.length;
+    }
+
+    state.lastInputAt = now;
+    state.lastLength = value.length;
+    setSearchInput(value.toUpperCase());
+
+    if (state.timerId !== null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+
+    if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+      state.timerId = window.setTimeout(() => {
+        state.timerId = null;
+        state.burstChars = 0;
+        triggerQuickSync();
+      }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+    }
+  }, [triggerQuickSync]);
+
+  // ── Open expedition ──
+  const openExpedicao = useCallback((box: CaixaTermicaBox) => {
+    if (box.status !== "disponivel") {
+      setExpedicaoError("Esta caixa não está disponível para expedição.");
+      return;
+    }
+    setExpedicaoDraft({
+      caixaId: box.id,
+      codigo: box.codigo,
+      descricao: box.descricao,
+      observacoes: box.observacoes,
+      etiquetaVolume: "",
+      filial: null,
+      filialNome: null,
+      rota: null,
+      placa: "",
+      placaError: null
+    });
+    setExpedicaoError(null);
+    setExpedicaoOpen(true);
+  }, []);
+
+  // ── Open reception ──
+  const openRecebimento = useCallback((box: CaixaTermicaBox) => {
+    if (box.status !== "em_transito") {
+      setRecebimentoError("Esta caixa não está em trânsito.");
+      return;
+    }
+    setRecebimentoDraft({
+      caixaId: box.id,
+      codigo: box.codigo,
+      descricao: box.descricao,
+      observacoes: box.observacoes,
+      obsRecebimento: "",
+      semAvarias: false
+    });
+    setRecebimentoError(null);
+    setRecebimentoOpen(true);
+  }, []);
+
+  // ── Open history ──
+  const openHistorico = useCallback(async (box: CaixaTermicaBox) => {
+    setHistoricoCaixa({ id: box.id, codigo: box.codigo });
+    setHistoricoMovs([]);
+    setHistoricoError(null);
+    setHistoricoLoading(true);
+    setHistoricoOpen(true);
+
+    try {
+      // Local first
+      const local = await getMovsByBox(box.id);
+      setHistoricoMovs(local);
+
+      if (isOnline) {
+        const remote = await fetchCaixaTermicaHistorico(box.id);
+        setHistoricoMovs(remote);
+      }
+    } catch (err) {
+      setHistoricoError(err instanceof Error ? err.message : "Erro ao carregar histórico.");
+    } finally {
+      setHistoricoLoading(false);
+    }
+  }, [isOnline]);
+
+  // ── Etiqueta volume → filial/rota lookup ──
+  const handleEtiquetaVolumeChange = useCallback(async (value: string) => {
+    setExpedicaoDraft((d) => d ? {
+      ...d,
+      etiquetaVolume: value,
+      filial: null,
+      filialNome: null,
+      rota: null
+    } : d);
+
+    if (value.length < 17 || !currentCd) return;
+
+    try {
+      setEtiquetaLookupBusy(true);
+      const parsed = parseAuditoriaCaixaEtiqueta(value, null, { currentCd });
+      const rotaRow = await getDbRotasByFilial(profile.user_id, currentCd, parsed.filial);
+      setExpedicaoDraft((d) => d ? {
+        ...d,
+        filial: parsed.filial,
+        filialNome: rotaRow?.nome ?? null,
+        rota: rotaRow?.rota ?? null
+      } : d);
+    } catch {
+      // Etiqueta inválida — clear silently, expedição pode prosseguir sem rota
+    } finally {
+      setEtiquetaLookupBusy(false);
+    }
+  }, [currentCd, profile.user_id]);
+
+  // ── Confirm register ──
+  const confirmRegister = useCallback(async () => {
+    if (!currentCd) return;
+    const { codigo, descricao, observacoes } = registerDraft;
+
+    if (!codigo.trim()) { setRegisterError("Informe o código da caixa."); return; }
+    if (!descricao.trim()) { setRegisterError("Informe a descrição da caixa."); return; }
+
+    // Duplicate check
+    const existing = await getCaixaTermicaBoxByCodigo(profile.user_id, currentCd, codigo.trim());
+    if (existing) { setRegisterError("Já existe uma caixa com este código neste CD."); return; }
+
+    setRegisterBusy(true);
+    setRegisterError(null);
+
+    try {
+      if (isOnline) {
+        await rpcInsertCaixaTermica({
+          cd: currentCd,
+          codigo: codigo.trim().toUpperCase(),
+          descricao: descricao.trim(),
+          observacoes: observacoes.trim() || null,
+          userId: profile.user_id,
+          mat: profile.mat,
+          nome: profile.nome
+        });
+      } else {
+        // Offline: save locally
+        const localId = `local:${safeUuid()}`;
+        const now = new Date().toISOString();
+        await upsertCaixaTermicaBox({
+          id: localId,
+          local_id: localId,
+          remote_id: null,
+          cd: currentCd,
+          codigo: codigo.trim().toUpperCase(),
+          descricao: descricao.trim(),
+          observacoes: observacoes.trim() || null,
+          status: "disponivel",
+          created_at: now,
+          created_by: profile.user_id,
+          updated_at: now,
+          sync_status: "pending_insert",
+          sync_error: null,
+          last_mov_tipo: null,
+          last_mov_data_hr: null,
+          last_mov_placa: null,
+          last_mov_rota: null,
+          last_mov_filial: null,
+          last_mov_filial_nome: null
+        });
+      }
+
+      setRegisterOpen(false);
+      setRegisterDraft({ codigo: "", descricao: "", observacoes: "" });
+      setRefreshNonce((n) => n + 1);
+      showSuccess("Caixa cadastrada com sucesso.");
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : "Erro ao cadastrar caixa.");
+    } finally {
+      setRegisterBusy(false);
+    }
+  }, [currentCd, registerDraft, profile, isOnline, showSuccess]);
+
+  // ── Confirm expedition ──
+  const confirmExpedicao = useCallback(async () => {
+    if (!expedicaoDraft || !currentCd) return;
+
+    if (!expedicaoDraft.placa.trim()) {
+      setExpedicaoError("Informe a placa do veículo.");
+      return;
+    }
+    if (!isValidBrazilianPlate(expedicaoDraft.placa)) {
+      setExpedicaoError("Placa inválida. Use o formato ABC-1234 ou ABC1D23.");
+      return;
+    }
+    if (!isOnline) {
+      setExpedicaoError("A expedição requer conexão com a internet.");
+      return;
+    }
+
+    setExpedicaoBusy(true);
+    setExpedicaoError(null);
+
+    try {
+      await rpcExpedirCaixaTermica({
+        caixaId: expedicaoDraft.caixaId,
+        cd: currentCd,
+        etiquetaVolume: expedicaoDraft.etiquetaVolume.trim() || null,
+        filial: expedicaoDraft.filial,
+        filialNome: expedicaoDraft.filialNome,
+        rota: expedicaoDraft.rota,
+        placa: expedicaoDraft.placa.trim().toUpperCase(),
+        mat: profile.mat,
+        nome: profile.nome,
+        userId: profile.user_id
+      });
+
+      setExpedicaoOpen(false);
+      setExpedicaoDraft(null);
+      setRefreshNonce((n) => n + 1);
+      showSuccess(`Caixa ${expedicaoDraft.codigo} expedida com sucesso.`);
+      triggerQuickSync();
+    } catch (err) {
+      setExpedicaoError(err instanceof Error ? err.message : "Erro ao expedir caixa.");
+    } finally {
+      setExpedicaoBusy(false);
+    }
+  }, [expedicaoDraft, currentCd, isOnline, profile, showSuccess, triggerQuickSync]);
+
+  // ── Confirm reception ──
+  const confirmRecebimento = useCallback(async () => {
+    if (!recebimentoDraft || !currentCd) return;
+
+    if (!recebimentoDraft.semAvarias && !recebimentoDraft.obsRecebimento.trim()) {
+      setRecebimentoError("Marque 'Recebido sem avarias' ou descreva as avarias encontradas.");
+      return;
+    }
+    if (!isOnline) {
+      setRecebimentoError("O recebimento requer conexão com a internet.");
+      return;
+    }
+
+    setRecebimentoBusy(true);
+    setRecebimentoError(null);
+
+    try {
+      await rpcReceberCaixaTermica({
+        caixaId: recebimentoDraft.caixaId,
+        cd: currentCd,
+        obsRecebimento: recebimentoDraft.semAvarias
+          ? null
+          : recebimentoDraft.obsRecebimento.trim() || null,
+        mat: profile.mat,
+        nome: profile.nome,
+        userId: profile.user_id
+      });
+
+      setRecebimentoOpen(false);
+      setRecebimentoDraft(null);
+      setRefreshNonce((n) => n + 1);
+      showSuccess(`Caixa ${recebimentoDraft.codigo} recebida com sucesso.`);
+      triggerQuickSync();
+    } catch (err) {
+      setRecebimentoError(err instanceof Error ? err.message : "Erro ao receber caixa.");
+    } finally {
+      setRecebimentoBusy(false);
+    }
+  }, [recebimentoDraft, currentCd, isOnline, profile, showSuccess, triggerQuickSync]);
+
+  // ── Render ────────────────────────────────────────────────
+
+  return (
+    <>
+      {/* ── TOPBAR ── */}
+      <header className="module-topbar module-topbar-fixed">
+        <div className="module-topbar-line1">
+          <Link
+            to="/inicio"
+            className="module-home-btn"
+            aria-label="Voltar para o Início"
+            title="Voltar para o Início"
+          >
+            <span className="module-back-icon" aria-hidden="true">
+              <BackIcon />
+            </span>
+            <span>Início</span>
+          </Link>
+          <div className="module-topbar-user-side">
+            <PendingSyncBadge
+              pendingCount={pendingCount}
+              title="Cadastros pendentes de sincronização"
+              onClick={pendingCount > 0 ? () => triggerQuickSync() : undefined}
+            />
+            <span className="module-user-greeting">Olá, {displayUserName}</span>
+            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
+              {isOnline ? "🟢 Online" : "🔴 Offline"}
+            </span>
+          </div>
+        </div>
+        <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
+          <span className="module-icon" aria-hidden="true">
+            <ModuleIcon name={MODULE_DEF.icon} />
+          </span>
+          <span className="module-title">{MODULE_DEF.title}</span>
+        </div>
+      </header>
+
+      {/* ── MAIN CONTENT ── */}
+      <section className="modules-shell caixa-termica-shell">
+        {/* Success toast */}
+        {successMessage && (
+          <div style={{ padding: "12px 16px 0" }}>
+            <div className="alert success">{successMessage}</div>
+          </div>
+        )}
+
+        {/* ── LIST VIEW ── */}
+        {view === "list" && (
+          <>
+            {/* Toolbar */}
+            <div className="caixa-termica-toolbar">
+              <div className="caixa-input-scan-wrap" style={{ flex: "1 1 160px", minWidth: "120px" }}>
+                <input
+                  ref={searchRef}
+                  type="search"
+                  className="caixa-search-input"
+                  placeholder="Buscar por código ou descrição..."
+                  value={searchInput}
+                  onChange={(e) => handleSearchInputChange(e.target.value)}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                {cameraSupported && (
+                  <button
+                    type="button"
+                    className="caixa-scanner-btn"
+                    title="Escanear código via câmera"
+                    onClick={() => {
+                      setScannerTarget("search");
+                      setScannerOpen(true);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="15" y="3" width="6" height="6" rx="1" /><rect x="3" y="15" width="6" height="6" rx="1" /><path d="M15 15h2"/><path d="M15 19v2"/><path d="M19 15v2"/><path d="M17 21h4"/><path d="M21 19h0"/></svg>
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setRegisterDraft({ codigo: "", descricao: "", observacoes: "" });
+                  setRegisterError(null);
+                  setRegisterOpen(true);
+                }}
+              >
+                + Nova Caixa
+              </button>
+              <button
+                type="button"
+                className="btn btn-muted"
+                onClick={() => setView("feed")}
+              >
+                Feed do Dia
+              </button>
+            </div>
+
+            {/* Error state */}
+            {boxesError && (
+              <div style={{ padding: "0 16px" }}>
+                <div className="alert error">{boxesError}</div>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {loadingBoxes && boxes.length === 0 && (
+              <p className="caixa-sem-itens">Carregando caixas...</p>
+            )}
+
+            {/* DISPONÍVEL section */}
+            <div className="caixa-section">
+              <p className="caixa-section-title">
+                ✅ Disponíveis
+                <span className="caixa-section-count">{disponiveisBoxes.length}</span>
+              </p>
+              {disponiveisBoxes.length === 0 ? (
+                <p className="caixa-sem-itens">
+                  {searchInput ? "Nenhuma caixa disponível para este filtro." : "Nenhuma caixa disponível."}
+                </p>
+              ) : (
+                <div className="caixa-cards-list">
+                  {disponiveisBoxes.map((box) => (
+                    <CaixaCard
+                      key={box.local_id}
+                      box={box}
+                      onAction={() => openExpedicao(box)}
+                      onHistory={() => void openHistorico(box)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* EM TRÂNSITO section */}
+            <div className="caixa-section">
+              <p className="caixa-section-title">
+                🚚 Em Trânsito
+                <span className="caixa-section-count">{emTransitoBoxes.length}</span>
+              </p>
+              {emTransitoBoxes.length === 0 ? (
+                <p className="caixa-sem-itens">
+                  {searchInput ? "Nenhuma caixa em trânsito para este filtro." : "Nenhuma caixa em trânsito."}
+                </p>
+              ) : (
+                <div className="caixa-cards-list">
+                  {emTransitoBoxes.map((box) => (
+                    <CaixaCard
+                      key={box.local_id}
+                      box={box}
+                      onAction={() => openRecebimento(box)}
+                      onHistory={() => void openHistorico(box)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── FEED VIEW ── */}
+        {view === "feed" && (
+          <div className="caixa-feed-section">
+            <div className="caixa-feed-header">
+              <button
+                type="button"
+                className="btn btn-muted"
+                onClick={() => setView("list")}
+              >
+                ← Voltar
+              </button>
+              <h2 style={{ margin: 0, fontSize: "1rem", fontFamily: "Sora, sans-serif", fontWeight: 700 }}>
+                Feed do Dia — {formatDateOnlyPtBR(todayIsoBrasilia())}
+              </h2>
+            </div>
+
+            {feedLoading && <p className="caixa-sem-itens">Carregando feed...</p>}
+            {feedError && <div className="alert error">{feedError}</div>}
+
+            {!feedLoading && !feedError && feedRows.length === 0 && (
+              <p className="caixa-sem-itens">Nenhuma movimentação registrada hoje.</p>
+            )}
+
+            {feedRows.map((row, idx) => (
+              <div key={`feed-${idx}`} className="caixa-feed-group">
+                <p className="caixa-feed-group-title">
+                  {row.rota ?? "Sem rota"}
+                  {row.filial_nome && ` — ${row.filial_nome}`}
+                  {!row.filial_nome && row.filial && ` — Filial ${row.filial}`}
+                </p>
+                <div className="caixa-feed-stats">
+                  <span className="caixa-feed-stat">🚚 {row.expedicoes} expediç{row.expedicoes !== 1 ? "ões" : "ão"}</span>
+                  <span className="caixa-feed-stat">✅ {row.recebimentos} recebimento{row.recebimentos !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="caixa-feed-items">
+                  {row.caixas.map((c, ci) => (
+                    <div key={ci} className="caixa-feed-item">
+                      <span className="caixa-feed-item-codigo">{c.codigo}</span>
+                      <span>{c.tipo === "expedicao" ? "🚚" : "✅"}</span>
+                      <span className="caixa-feed-item-time">
+                        {formatDateTimeBrasilia(c.data_hr)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ══════════════════════════════════════════
+          MODAL: REGISTER NEW BOX
+         ══════════════════════════════════════════ */}
+      {registerOpen && typeof document !== "undefined" && createPortal(
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="register-modal-title"
+          onClick={() => { if (!registerBusy) setRegisterOpen(false); }}
+        >
+          <div
+            className="confirm-dialog surface-enter"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="register-modal-title">Registrar Nova Caixa Térmica</h3>
+
+            {registerError && <div className="alert error">{registerError}</div>}
+
+            <div className="caixa-modal-field">
+              <label htmlFor="reg-codigo">Código *</label>
+              <div className="caixa-input-scan-wrap">
+                <input
+                  id="reg-codigo"
+                  type="text"
+                  value={registerDraft.codigo}
+                  onChange={(e) =>
+                    setRegisterDraft((d) => ({ ...d, codigo: e.target.value.toUpperCase() }))
+                  }
+                  placeholder="Ex: CX001"
+                  autoComplete="off"
+                  disabled={registerBusy}
+                />
+                {cameraSupported && (
+                  <button
+                    type="button"
+                    className="caixa-scanner-btn"
+                    title="Escanear via câmera"
+                    disabled={registerBusy}
+                    onClick={() => {
+                      setScannerTarget("register");
+                      setScannerOpen(true);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="15" y="3" width="6" height="6" rx="1" /><rect x="3" y="15" width="6" height="6" rx="1" /><path d="M15 15h2"/><path d="M15 19v2"/><path d="M19 15v2"/><path d="M17 21h4"/><path d="M21 19h0"/></svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="caixa-modal-field">
+              <label htmlFor="reg-descricao">Descrição *</label>
+              <input
+                id="reg-descricao"
+                type="text"
+                value={registerDraft.descricao}
+                onChange={(e) =>
+                  setRegisterDraft((d) => ({ ...d, descricao: e.target.value }))
+                }
+                placeholder="Ex: Caixa grande azul"
+                disabled={registerBusy}
+              />
+            </div>
+
+            <div className="caixa-modal-field">
+              <label htmlFor="reg-obs">Observações (danos pré-existentes)</label>
+              <textarea
+                id="reg-obs"
+                value={registerDraft.observacoes}
+                onChange={(e) =>
+                  setRegisterDraft((d) => ({ ...d, observacoes: e.target.value }))
+                }
+                placeholder="Descreva avarias existentes, se houver..."
+                rows={3}
+                disabled={registerBusy}
+                style={{ resize: "vertical" }}
+              />
+            </div>
+
+            <div className="confirm-actions">
+              <button
+                className="btn btn-muted"
+                type="button"
+                onClick={() => setRegisterOpen(false)}
+                disabled={registerBusy}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={() => void confirmRegister()}
+                disabled={registerBusy}
+              >
+                {registerBusy ? "Registrando..." : "Registrar"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ══════════════════════════════════════════
+          MODAL: EXPEDITION
+         ══════════════════════════════════════════ */}
+      {expedicaoOpen && expedicaoDraft && typeof document !== "undefined" && createPortal(
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="expedicao-modal-title"
+          onClick={() => { if (!expedicaoBusy) { setExpedicaoOpen(false); setExpedicaoDraft(null); } }}
+        >
+          <div
+            className="confirm-dialog surface-enter"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="expedicao-modal-title">🚚 Expedir Caixa</h3>
+            <p style={{ fontSize: "0.9rem", color: "#4b5671", marginBottom: "12px" }}>
+              Caixa: <strong>{expedicaoDraft.codigo}</strong> — {expedicaoDraft.descricao}
+            </p>
+
+            {expedicaoDraft.observacoes && (
+              <div className="alert warning" style={{ marginBottom: "12px" }}>
+                ⚠️ Danos pré-existentes: {expedicaoDraft.observacoes}
+              </div>
+            )}
+
+            {expedicaoError && <div className="alert error">{expedicaoError}</div>}
+
+            {/* Etiqueta de Volume */}
+            <div className="caixa-modal-field">
+              <label htmlFor="exp-etiqueta">Etiqueta de Volume</label>
+              <div className="caixa-input-scan-wrap">
+                <input
+                  id="exp-etiqueta"
+                  type="text"
+                  value={expedicaoDraft.etiquetaVolume}
+                  onChange={(e) => void handleEtiquetaVolumeChange(e.target.value)}
+                  placeholder="Bipar ou digitar etiqueta"
+                  autoComplete="off"
+                  disabled={expedicaoBusy}
+                />
+                {cameraSupported && (
+                  <button
+                    type="button"
+                    className="caixa-scanner-btn"
+                    title="Escanear etiqueta via câmera"
+                    disabled={expedicaoBusy}
+                    onClick={() => {
+                      setScannerTarget("expedicao");
+                      setScannerOpen(true);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="15" y="3" width="6" height="6" rx="1" /><rect x="3" y="15" width="6" height="6" rx="1" /><path d="M15 15h2"/><path d="M15 19v2"/><path d="M19 15v2"/><path d="M17 21h4"/><path d="M21 19h0"/></svg>
+                  </button>
+                )}
+              </div>
+              {etiquetaLookupBusy && (
+                <span style={{ fontSize: "0.78rem", color: "#4b5671" }}>Buscando rota...</span>
+              )}
+              {!etiquetaLookupBusy && expedicaoDraft.rota && (
+                <span className="caixa-etiqueta-meta">
+                  ✓ Rota {expedicaoDraft.rota}
+                  {expedicaoDraft.filialNome && ` — ${expedicaoDraft.filialNome}`}
+                </span>
+              )}
+            </div>
+
+            {/* Placa */}
+            <div className="caixa-modal-field">
+              <label htmlFor="exp-placa">Placa do Veículo *</label>
+              <input
+                id="exp-placa"
+                type="text"
+                value={expedicaoDraft.placa}
+                onChange={(e) => {
+                  const upper = normalizePlateInput(e.target.value);
+                  const placaError = upper.length > 0 && !isValidBrazilianPlate(upper)
+                    ? "Placa inválida. Use ABC-1234 ou ABC1D23."
+                    : null;
+                  setExpedicaoDraft((d) => d ? { ...d, placa: upper, placaError } : d);
+                }}
+                placeholder="Ex: ABC-1234 ou ABC1D23"
+                autoComplete="off"
+                disabled={expedicaoBusy}
+                maxLength={8}
+              />
+              {expedicaoDraft.placaError && (
+                <span className="caixa-placa-error">{expedicaoDraft.placaError}</span>
+              )}
+            </div>
+
+            <div className="confirm-actions">
+              <button
+                className="btn btn-muted"
+                type="button"
+                onClick={() => { setExpedicaoOpen(false); setExpedicaoDraft(null); }}
+                disabled={expedicaoBusy}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={() => void confirmExpedicao()}
+                disabled={expedicaoBusy || Boolean(expedicaoDraft.placaError)}
+              >
+                {expedicaoBusy ? "Expedindo..." : "Confirmar Envio"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ══════════════════════════════════════════
+          MODAL: RECEPTION
+         ══════════════════════════════════════════ */}
+      {recebimentoOpen && recebimentoDraft && typeof document !== "undefined" && createPortal(
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="recebimento-modal-title"
+          onClick={() => { if (!recebimentoBusy) { setRecebimentoOpen(false); setRecebimentoDraft(null); } }}
+        >
+          <div
+            className="confirm-dialog surface-enter"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="recebimento-modal-title">✅ Receber Caixa</h3>
+            <p style={{ fontSize: "0.9rem", color: "#4b5671", marginBottom: "12px" }}>
+              Caixa: <strong>{recebimentoDraft.codigo}</strong> — {recebimentoDraft.descricao}
+            </p>
+
+            {recebimentoDraft.observacoes ? (
+              <div className="alert warning" style={{ marginBottom: "12px" }}>
+                ⚠️ Atenção: danos pré-existentes registrados: &ldquo;{recebimentoDraft.observacoes}&rdquo;
+              </div>
+            ) : (
+              <div className="alert success" style={{ marginBottom: "12px" }}>
+                ✓ Nenhuma avaria pré-existente registrada.
+              </div>
+            )}
+
+            {recebimentoError && <div className="alert error">{recebimentoError}</div>}
+
+            {/* Sem avarias toggle */}
+            <label className="caixa-checkbox-row">
+              <input
+                type="checkbox"
+                checked={recebimentoDraft.semAvarias}
+                onChange={(e) =>
+                  setRecebimentoDraft((d) =>
+                    d ? {
+                      ...d,
+                      semAvarias: e.target.checked,
+                      obsRecebimento: e.target.checked ? "" : d.obsRecebimento
+                    } : d
+                  )
+                }
+                disabled={recebimentoBusy}
+              />
+              Caixa recebida sem avarias
+            </label>
+
+            {/* Damage notes (visible when sem_avarias is false) */}
+            {!recebimentoDraft.semAvarias && (
+              <div className="caixa-modal-field">
+                <label htmlFor="rec-obs">Descreva as avarias encontradas</label>
+                <textarea
+                  id="rec-obs"
+                  value={recebimentoDraft.obsRecebimento}
+                  onChange={(e) =>
+                    setRecebimentoDraft((d) => d ? { ...d, obsRecebimento: e.target.value } : d)
+                  }
+                  placeholder="Descreva avarias detectadas no recebimento..."
+                  rows={3}
+                  disabled={recebimentoBusy}
+                  style={{ resize: "vertical" }}
+                />
+              </div>
+            )}
+
+            <div className="confirm-actions">
+              <button
+                className="btn btn-muted"
+                type="button"
+                onClick={() => { setRecebimentoOpen(false); setRecebimentoDraft(null); }}
+                disabled={recebimentoBusy}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={() => void confirmRecebimento()}
+                disabled={recebimentoBusy}
+              >
+                {recebimentoBusy ? "Recebendo..." : "Confirmar Recebimento"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ══════════════════════════════════════════
+          MODAL: HISTORY
+         ══════════════════════════════════════════ */}
+      {historicoOpen && historicoCaixa && typeof document !== "undefined" && createPortal(
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="historico-modal-title"
+          onClick={() => setHistoricoOpen(false)}
+        >
+          <div
+            className="confirm-dialog surface-enter"
+            style={{ maxWidth: "520px", width: "95vw" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="historico-modal-title">📋 Histórico — {historicoCaixa.codigo}</h3>
+
+            {historicoLoading && (
+              <p style={{ fontSize: "0.88rem", color: "#4b5671" }}>Carregando histórico...</p>
+            )}
+            {historicoError && <div className="alert error">{historicoError}</div>}
+
+            {!historicoLoading && !historicoError && historicoMovs.length === 0 && (
+              <p style={{ fontSize: "0.88rem", color: "#4b5671" }}>Nenhuma movimentação registrada.</p>
+            )}
+
+            <div className="caixa-historico-timeline">
+              {historicoMovs.map((mov) => (
+                <div key={mov.id} className={`caixa-historico-item ${mov.tipo}`}>
+                  <span className="caixa-historico-tipo">
+                    {mov.tipo === "expedicao" ? "🚚 Expedição" : "✅ Recebimento"}
+                  </span>
+                  <span className="caixa-historico-meta">
+                    {formatDateTimeBrasilia(mov.data_hr)}
+                  </span>
+                  {mov.transit_minutes != null && (
+                    <span className="caixa-historico-transit">
+                      ⏱ Tempo em trânsito: {formatTransitTime(mov.transit_minutes)}
+                    </span>
+                  )}
+                  {mov.placa && (
+                    <span className="caixa-historico-meta">Placa: {mov.placa}</span>
+                  )}
+                  {(mov.rota || mov.filial_nome || mov.filial) && (
+                    <span className="caixa-historico-meta">
+                      Rota: {mov.rota ?? "—"}
+                      {mov.filial_nome && ` — ${mov.filial_nome}`}
+                      {!mov.filial_nome && mov.filial && ` — Filial ${mov.filial}`}
+                    </span>
+                  )}
+                  {mov.obs_recebimento && (
+                    <span className="caixa-historico-obs">
+                      Avarias: {mov.obs_recebimento}
+                    </span>
+                  )}
+                  <span className="caixa-historico-meta">
+                    Responsável: {mov.nome_resp} ({mov.mat_resp})
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="confirm-actions" style={{ marginTop: "16px" }}>
+              <button
+                className="btn btn-muted"
+                type="button"
+                onClick={() => setHistoricoOpen(false)}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ══════════════════════════════════════════
+          CAMERA SCANNER OVERLAY
+         ══════════════════════════════════════════ */}
+      {scannerOpen && typeof document !== "undefined" && createPortal(
+        <div className="scanner-overlay" role="dialog" aria-modal="true">
+          <div className="scanner-dialog surface-enter">
+            <div className="scanner-head">
+              <h3>Escanear código</h3>
+              <div className="scanner-head-actions">
+                <button
+                  type="button"
+                  className="btn btn-muted"
+                  onClick={closeScanner}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+            <div className="scanner-video-wrap">
+              <video
+                ref={scannerVideoRef}
+                className="scanner-video"
+                autoPlay
+                muted
+                playsInline
+              />
+              <div className="scanner-frame">
+                <span className="scanner-frame-corner top-left" />
+                <span className="scanner-frame-corner top-right" />
+                <span className="scanner-frame-corner bottom-left" />
+                <span className="scanner-frame-corner bottom-right" />
+                <span className="scanner-frame-line" />
+              </div>
+            </div>
+            <p className="scanner-hint">Aponte a câmera para leitura automática.</p>
+            {scannerError && <div className="alert error">{scannerError}</div>}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
+// ── CaixaCard sub-component ──────────────────────────────────
+
+interface CaixaCardProps {
+  box: CaixaTermicaBox;
+  onAction: () => void;
+  onHistory: () => void;
+}
+
+function CaixaCard({ box, onAction, onHistory }: CaixaCardProps) {
+  const syncDotClass =
+    box.sync_status === "synced" ? "synced"
+    : box.sync_status === "error" ? "error"
+    : "pending";
+
+  return (
+    <div className="caixa-card">
+      <div className="caixa-card-header">
+        <span className="caixa-card-codigo">{box.codigo}</span>
+        <span className={`caixa-card-status ${box.status}`}>
+          {box.status === "disponivel" ? "✅ Disponível" : "🚚 Em Trânsito"}
+        </span>
+        <span
+          className={`caixa-card-sync-dot ${syncDotClass}`}
+          title={
+            box.sync_status === "synced" ? "Sincronizado"
+            : box.sync_status === "error" ? `Erro: ${box.sync_error ?? "desconhecido"}`
+            : "Pendente de sincronização"
+          }
+        />
+      </div>
+
+      <p className="caixa-card-descricao">{box.descricao}</p>
+
+      {box.observacoes && (
+        <p className="caixa-card-obs">⚠️ {box.observacoes}</p>
+      )}
+
+      {box.last_mov_data_hr && (
+        <p className="caixa-card-meta">
+          Último mov.: {formatDateTimeBrasilia(box.last_mov_data_hr)}
+        </p>
+      )}
+      {box.last_mov_placa && (
+        <p className="caixa-card-meta">Placa: {box.last_mov_placa}</p>
+      )}
+      {(box.last_mov_rota || box.last_mov_filial_nome) && (
+        <p className="caixa-card-meta">
+          {box.last_mov_rota && `Rota: ${box.last_mov_rota}`}
+          {box.last_mov_filial_nome && ` — ${box.last_mov_filial_nome}`}
+        </p>
+      )}
+
+      <div className="caixa-card-actions">
+        <button type="button" className="btn btn-muted" onClick={onHistory}>
+          📋 Histórico
+        </button>
+        <button type="button" className="btn btn-primary" onClick={onAction}>
+          {box.status === "disponivel" ? "🚚 Expedir" : "✅ Receber"}
+        </button>
+      </div>
+    </div>
+  );
+}
