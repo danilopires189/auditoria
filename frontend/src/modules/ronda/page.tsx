@@ -505,6 +505,20 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
 
   const isAdmin = useMemo(() => profile.role === "admin", [profile.role]);
 
+  const sortedHistoryRows = useMemo(
+    () => [...historyRows].sort(compareOccurrenceReason),
+    [historyRows]
+  );
+  const historyCounts = useMemo(() => {
+    let corrigido = 0;
+    let nao_corrigido = 0;
+    for (const r of historyRows) {
+      if (r.correction_status === "corrigido") corrigido++;
+      else nao_corrigido++;
+    }
+    return { corrigido, nao_corrigido };
+  }, [historyRows]);
+
   const selectedMonthRef = selectedMonthStart;
   const selectedMonthLabel = useMemo(() => formatMonthLabel(selectedMonthStart), [selectedMonthStart]);
   const offlineStoragePrefix = useMemo(
@@ -1321,7 +1335,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
         }
       }
     );
-  }, [confirmActionRef, historyOpen, isAdmin, isOnline, loadDetail, loadHistory, openConfirmDialog, selectedZone]);
+  }, [historyOpen, isAdmin, isOnline, loadDetail, loadHistory, openConfirmDialog, selectedZone]);
 
   const currentZoneSummary = detail ?? (selectedZone ? zoneRows.find((row) => row.zona === selectedZone) ?? null : null);
   const closeAddressPicker = useCallback(() => {
@@ -2159,7 +2173,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                 <div className="ronda-sheet-head">
                   <div>
                     <h3>Acompanhamento de ocorrências</h3>
-                    <span>Histórico consolidado do banco com check de correção</span>
+                    <span>Histórico consolidado · check de correção em tempo real</span>
                   </div>
                   <button
                     type="button"
@@ -2171,127 +2185,193 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                   </button>
                 </div>
 
-                <div className="ronda-history-filters">
-                  <label className="field">
-                    <span>Tipo</span>
-                    <select
-                      value={historyZoneType}
-                      onChange={(event) => setHistoryZoneType(event.target.value as typeof HISTORY_ALL_TYPES | RondaQualidadeZoneType)}
-                    >
-                      <option value={HISTORY_ALL_TYPES}>Todos</option>
-                      <option value="SEP">Separação</option>
-                      <option value="PUL">Pulmão</option>
-                    </select>
-                  </label>
+                <div className="ronda-hist-toolbar">
+                  <div className="ronda-hist-selects">
+                    <div className="ronda-hist-select-wrap">
+                      <span className="ronda-hist-select-label">Tipo</span>
+                      <select
+                        className="ronda-hist-select"
+                        value={historyZoneType}
+                        onChange={(event) => setHistoryZoneType(event.target.value as typeof HISTORY_ALL_TYPES | RondaQualidadeZoneType)}
+                      >
+                        <option value={HISTORY_ALL_TYPES}>Todos</option>
+                        <option value="SEP">Separação</option>
+                        <option value="PUL">Pulmão</option>
+                      </select>
+                    </div>
 
-                  <label className="field">
-                    <span>Mês</span>
-                    <select
-                      value={historyMonth}
-                      onChange={(event) => setHistoryMonth(event.target.value)}
-                    >
-                      <option value="">Todos os meses</option>
-                      {monthOptions.map((option) => (
-                      <option key={`history:${option.month_start}`} value={option.month_start}>
-                          {formatCompactMonthLabel(option.month_start)}
-                      </option>
-                    ))}
-                  </select>
-                  </label>
+                    <div className="ronda-hist-select-wrap">
+                      <span className="ronda-hist-select-label">Mês</span>
+                      <select
+                        className="ronda-hist-select"
+                        value={historyMonth}
+                        onChange={(event) => setHistoryMonth(event.target.value)}
+                      >
+                        <option value="">Todos os meses</option>
+                        {monthOptions.map((option) => (
+                          <option key={`history:${option.month_start}`} value={option.month_start}>
+                            {formatCompactMonthLabel(option.month_start)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <label className="field">
-                    <span>Status</span>
-                    <select
-                      value={historyStatus}
-                      onChange={(event) => setHistoryStatus(event.target.value as "todos" | RondaQualidadeCorrectionStatus)}
-                    >
-                      <option value="todos">Todos</option>
-                      <option value="nao_corrigido">Não corrigido</option>
-                      <option value="corrigido">Corrigido</option>
-                    </select>
-                  </label>
+                    <div className="ronda-hist-select-wrap">
+                      <span className="ronda-hist-select-label">Status</span>
+                      <select
+                        className="ronda-hist-select"
+                        value={historyStatus}
+                        onChange={(event) => setHistoryStatus(event.target.value as "todos" | RondaQualidadeCorrectionStatus)}
+                      >
+                        <option value="todos">Todos</option>
+                        <option value="nao_corrigido">Não corrigido</option>
+                        <option value="corrigido">Corrigido</option>
+                      </select>
+                    </div>
+                  </div>
 
-                  <label className="field ronda-history-search">
-                    <span>Busca</span>
+                  <div className="ronda-hist-search-wrap">
+                    <span className="ronda-hist-search-icon" aria-hidden="true">{searchIcon()}</span>
                     <input
+                      className="ronda-hist-search-input"
                       type="text"
                       value={historySearch}
                       onChange={(event) => setHistorySearch(event.target.value)}
-                      placeholder="Zona, endereço, motivo ou observação"
+                      placeholder="Zona, endereço, motivo ou observação…"
                       inputMode="search"
                       autoComplete="off"
                     />
-                  </label>
+                    {historySearch ? (
+                      <button
+                        type="button"
+                        className="ronda-search-clear"
+                        onClick={() => setHistorySearch("")}
+                        aria-label="Limpar busca"
+                      >
+                        {closeIcon()}
+                      </button>
+                    ) : null}
+                  </div>
 
-                  <button type="button" className="btn btn-muted" onClick={() => void loadHistory()} disabled={historyBusy || !isOnline}>
-                    <span className="ronda-inline-icon" aria-hidden="true">{refreshIcon()}</span>
-                    Atualizar
+                  <button
+                    type="button"
+                    className="ronda-hist-refresh-btn"
+                    onClick={() => void loadHistory()}
+                    disabled={historyBusy || !isOnline}
+                    aria-label="Atualizar"
+                    title="Atualizar"
+                  >
+                    <span aria-hidden="true">{refreshIcon()}</span>
+                    <span>Atualizar</span>
                   </button>
                 </div>
 
-                {historyBusy ? <div className="ronda-empty-card">Carregando histórico...</div> : null}
+                {!historyBusy && historyRows.length > 0 ? (
+                  <div className="ronda-hist-count-bar">
+                    <span className="ronda-hist-count-total">
+                      {`${historyRows.length} ocorrência${historyRows.length !== 1 ? "s" : ""}`}
+                    </span>
+                    <span className="ronda-hist-count-pill is-nao_corrigido">
+                      {`${historyCounts.nao_corrigido} não corrigidas`}
+                    </span>
+                    <span className="ronda-hist-count-pill is-corrigido">
+                      {`${historyCounts.corrigido} corrigidas`}
+                    </span>
+                  </div>
+                ) : null}
+
+                {historyBusy ? (
+                  <div className="ronda-hist-loading">
+                    <div className="ronda-hist-spinner" aria-hidden="true" />
+                    <span>Carregando histórico…</span>
+                  </div>
+                ) : null}
 
                 {!historyBusy && historyRows.length === 0 ? (
-                  <div className="ronda-empty-card">Nenhuma ocorrência encontrada com os filtros atuais.</div>
+                  <div className="ronda-hist-empty">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="M21 21l-4.35-4.35" />
+                      <path d="M8 11h6" />
+                    </svg>
+                    <strong>Nenhuma ocorrência encontrada</strong>
+                    <span>Tente ajustar os filtros ou a busca.</span>
+                  </div>
                 ) : null}
 
                 {!historyBusy && historyRows.length > 0 ? (
-                  <div className="ronda-history-list">
-                    {[...historyRows].sort(compareOccurrenceReason).map((row) => (
-                      <article key={row.occurrence_id} className="ronda-history-row">
-                        <div className="ronda-history-row-head">
-                          <div>
-                            <strong>{row.motivo}</strong>
-                            <span>{`${zoneTypeLabel(row.zone_type)} | Zona ${row.zona}${row.nivel ? ` | Nível ${row.nivel}` : ""} | Endereço ${row.endereco}`}</span>
+                  <div className="ronda-hist-list">
+                    {sortedHistoryRows.map((row) => (
+                      <article key={row.occurrence_id} className={`ronda-hist-card is-${row.correction_status}`}>
+                        <div className="ronda-hist-card-accent" aria-hidden="true" />
+                        <div className="ronda-hist-card-body">
+                          <div className="ronda-hist-card-header">
+                            <strong className="ronda-hist-card-motivo">{row.motivo}</strong>
+                            <div className="ronda-hist-card-badges">
+                              <span className={`ronda-hist-type-badge is-${row.zone_type.toLowerCase()}`}>
+                                {zoneTypeLabel(row.zone_type)}
+                              </span>
+                              <span className={`ronda-correction-pill is-${row.correction_status}`}>
+                                {correctionStatusLabel(row.correction_status)}
+                              </span>
+                            </div>
                           </div>
-                          <span className={`ronda-correction-pill is-${row.correction_status}`}>
-                            {correctionStatusLabel(row.correction_status)}
-                          </span>
-                        </div>
-
-                        <div className="ronda-occurrence-meta">
-                          <span>{`Auditoria: ${auditResultLabel(row.audit_result)}`}</span>
-                          <span>{`Auditor: ${row.auditor_nome} | MAT ${row.auditor_mat}`}</span>
-                          <span>{`Lançamento: ${formatDateTime(row.created_at)}`}</span>
-                          <span>{`Mês: ${formatMonthLabel(formatMonthFromDate(row.month_ref))}`}</span>
-                          {row.coluna != null ? <span>{`Coluna: ${row.coluna}`}</span> : null}
-                        </div>
-
-                        <p>{row.observacao}</p>
-
-                        <div className="ronda-occurrence-footer">
-                          <small>
-                            {row.correction_updated_at
-                              ? `Último check: ${correctionStatusLabel(row.correction_status)} por ${row.correction_updated_nome ?? "Usuário"} em ${formatDateTime(row.correction_updated_at)}`
-                              : "Sem check de correção registrado."}
-                          </small>
-                          <button
-                            type="button"
-                            className="btn btn-muted"
-                            onClick={() => void handleToggleCorrection(row.occurrence_id, row.correction_status)}
-                            disabled={!isOnline || updatingOccurrenceId === row.occurrence_id}
-                          >
-                            {updatingOccurrenceId === row.occurrence_id
-                              ? "Salvando..."
-                              : row.correction_status === "corrigido"
-                                ? "Marcar não corrigido"
-                                : "Marcar corrigido"}
-                          </button>
-                          {isAdmin ? (
-                            <button
-                              type="button"
-                              className="btn btn-danger"
-                              onClick={() => handleDeleteOccurrence(row.occurrence_id)}
-                              disabled={!isOnline || auditBusy}
-                            >
-                              Excluir
-                            </button>
+                          <div className="ronda-hist-chips">
+                            <span className="ronda-hist-chip ronda-hist-chip-loc">{`Zona ${row.zona}`}</span>
+                            <span className="ronda-hist-chip ronda-hist-chip-loc">{`End. ${row.endereco}`}</span>
+                            {row.nivel ? (
+                              <span className="ronda-hist-chip ronda-hist-chip-loc">{`Nível ${row.nivel}`}</span>
+                            ) : null}
+                            {row.coluna != null ? (
+                              <span className="ronda-hist-chip ronda-hist-chip-loc">{`Col. ${row.coluna}`}</span>
+                            ) : null}
+                          </div>
+                          <div className="ronda-hist-chips">
+                            <span className="ronda-hist-chip">{`${row.auditor_nome} · ${row.auditor_mat}`}</span>
+                            <span className="ronda-hist-chip">{formatDateTime(row.created_at)}</span>
+                            <span className="ronda-hist-chip">{formatMonthLabel(formatMonthFromDate(row.month_ref))}</span>
+                          </div>
+                          {row.observacao ? (
+                            <p className="ronda-hist-card-obs">{row.observacao}</p>
                           ) : null}
+                          <div className="ronda-hist-card-footer">
+                            <span className="ronda-hist-check-info">
+                              {row.correction_updated_at
+                                ? `Último check: ${correctionStatusLabel(row.correction_status)} por ${row.correction_updated_nome ?? "Usuário"} em ${formatDateTime(row.correction_updated_at)}`
+                                : "Sem check de correção registrado."}
+                            </span>
+                            <div className="ronda-hist-card-actions">
+                              <button
+                                type="button"
+                                className={`ronda-hist-action-btn${row.correction_status === "corrigido" ? " is-undo" : " is-check"}`}
+                                onClick={() => void handleToggleCorrection(row.occurrence_id, row.correction_status)}
+                                disabled={!isOnline || updatingOccurrenceId === row.occurrence_id}
+                              >
+                                {updatingOccurrenceId === row.occurrence_id
+                                  ? "Salvando…"
+                                  : row.correction_status === "corrigido"
+                                    ? "Desfazer correção"
+                                    : "Marcar corrigido"}
+                              </button>
+                              {isAdmin ? (
+                                <button
+                                  type="button"
+                                  className="ronda-hist-action-btn is-delete"
+                                  onClick={() => handleDeleteOccurrence(row.occurrence_id)}
+                                  disabled={!isOnline || auditBusy}
+                                  aria-label="Excluir ocorrência"
+                                >
+                                  Excluir
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
                         </div>
                       </article>
                     ))}
                   </div>
                 ) : null}
+
               </div>
             </div>,
             document.body
