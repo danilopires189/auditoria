@@ -43,6 +43,7 @@ interface RondaConfirmState {
   title: string;
   message: string;
   helper?: string;
+  items?: string[];
   confirmLabel: string;
   confirmTone?: "primary" | "danger";
 }
@@ -502,6 +503,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [deletingOccurrenceId, setDeletingOccurrenceId] = useState<string | null>(null);
   const confirmActionRef = useRef<(() => void | Promise<void>) | null>(null);
+  const lastDraftRef = useRef<HTMLElement | null>(null);
 
   const isAdmin = useMemo(() => profile.role === "admin", [profile.role]);
 
@@ -943,6 +945,12 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     return () => window.removeEventListener("focus", onFocus);
   }, [historyOpen, loadDetail, loadHistory, loadMonthOptions, loadZones, selectedZone]);
 
+  useEffect(() => {
+    if (drafts.length > 1 && lastDraftRef.current) {
+      lastDraftRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [drafts.length]);
+
   const openHistory = useCallback(() => {
     if (!isOnline && offlineMeta.zone_count <= 0) return;
     setHistoryZoneType(zoneType ?? HISTORY_ALL_TYPES);
@@ -1325,6 +1333,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
         helper: count > 0
           ? `${formatCount(count, "ocorrência", "ocorrências")} será${count === 1 ? "" : "ão"} enviada${count === 1 ? "" : "s"} ao servidor.`
           : "A auditoria será registrada sem divergências para esta referência.",
+        items: count > 0 ? drafts.map((d, i) => `#${i + 1}  ${d.motivo} — ${d.endereco}`) : undefined,
         confirmLabel: "Finalizar Auditoria",
         confirmTone: count > 0 ? "primary" : "danger",
       },
@@ -1995,6 +2004,13 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                 <h3 id="ronda-confirm-title">{confirmState.title}</h3>
                 <p>{confirmState.message}</p>
                 {confirmState.helper ? <small>{confirmState.helper}</small> : null}
+                {confirmState.items && confirmState.items.length > 0 ? (
+                  <ul className="confirm-items-list">
+                    {confirmState.items.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="confirm-actions">
                   <button className="btn btn-muted" type="button" onClick={closeConfirmDialog} disabled={auditBusy}>
                     Cancelar
@@ -2085,7 +2101,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                 {/* Lista de rascunhos */}
                 <div className="ronda-draft-list">
                   {drafts.map((draft, index) => (
-                    <article key={`draft-${index}`} className="ronda-draft-card">
+                    <article key={`draft-${index}`} className="ronda-draft-card" ref={index === drafts.length - 1 ? (el) => { lastDraftRef.current = el; } : undefined}>
 
                       <div className="ronda-draft-head">
                         <div className="ronda-draft-head-left">
@@ -2255,16 +2271,18 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                   ))}
                 </div>
 
-                {/* Botão adicionar ocorrência */}
-                <button
-                  type="button"
-                  className="ronda-composer-add-btn"
-                  onClick={() => setDrafts((current) => [...current, emptyDraft()])}
-                  disabled={auditBusy}
-                >
-                  <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
-                  Adicionar ocorrência
-                </button>
+                {/* Botão adicionar ocorrência — só aparece quando todos os drafts têm motivo e endereço */}
+                {drafts.every((d) => d.motivo.trim() && d.endereco.trim()) ? (
+                  <button
+                    type="button"
+                    className="ronda-composer-add-btn"
+                    onClick={() => setDrafts((current) => [...current, emptyDraft()])}
+                    disabled={auditBusy}
+                  >
+                    <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
+                    Adicionar ocorrência
+                  </button>
+                ) : null}
 
                 {/* Barra de ação — finalizar */}
                 <div className="ronda-composer-footer">

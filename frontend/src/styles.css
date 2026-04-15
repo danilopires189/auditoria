@@ -1067,7 +1067,7 @@ small {
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: 1400;
   display: grid;
   place-items: center;
   padding:
@@ -1110,6 +1110,33 @@ small {
 
 .confirm-dialog .alert {
   margin-bottom: 0;
+}
+
+.confirm-items-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  border-radius: 10px;
+  background: rgba(18, 56, 115, 0.04);
+  border: 1px solid rgba(18, 56, 115, 0.1);
+  padding: 8px 10px;
+}
+
+.confirm-items-list li {
+  font-size: 0.8rem;
+  color: #2c3e5a;
+  line-height: 1.4;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(18, 56, 115, 0.06);
+  overflow-wrap: anywhere;
+}
+
+.confirm-items-list li:last-child {
+  border-bottom: none;
 }
 
 .confirm-actions {
@@ -16901,7 +16928,7 @@ small {
   border-radius: 14px;
   border: 1px solid rgba(18, 56, 115, 0.12);
   background: #ffffff;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
