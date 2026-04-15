@@ -1287,6 +1287,41 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     }
   }, [activeAuditMatchesSelection, activeAuditSession, activeCd, clearActiveAuditSession, drafts, historyOpen, isOnline, loadDetail, loadHistory, loadMonthOptions, loadZones, readOnlyCorrectionMode, selectedPulColumn, selectedZone, zoneType]);
 
+  const handleFinalizeAudit = useCallback(() => {
+    if (!isOnline) { setErrorMessage("Conecte-se à internet para salvar a auditoria."); return; }
+    if (readOnlyCorrectionMode) { setErrorMessage("Meses anteriores ficam apenas para consulta e correção."); return; }
+    if (!zoneType || !selectedZone || activeCd == null) { setErrorMessage("Selecione a zona antes de salvar a auditoria."); return; }
+    if (!activeAuditMatchesSelection || !activeAuditSession) { setErrorMessage("Clique em Iniciar antes de salvar a auditoria."); return; }
+    if (zoneType === "PUL" && selectedPulColumn == null) { setErrorMessage("Selecione uma coluna do Pulmão antes de adicionar ocorrências."); return; }
+
+    const invalidDraft = drafts.find((d) => !d.motivo.trim() || !d.endereco.trim());
+    if (invalidDraft) { setErrorMessage("Preencha motivo e endereço em todas as ocorrências."); return; }
+
+    const count = drafts.length;
+
+    openConfirmDialog(
+      {
+        title: "Finalizar Auditoria",
+        message: count > 0
+          ? `Deseja finalizar a auditoria com ${formatCount(count, "ocorrência", "ocorrências")} registrada${count === 1 ? "" : "s"}?`
+          : "Você não adicionou nenhuma ocorrência. Deseja finalizar a auditoria assim mesmo?",
+        helper: count > 0
+          ? `${formatCount(count, "ocorrência", "ocorrências")} será${count === 1 ? "" : "ão"} enviada${count === 1 ? "" : "s"} ao servidor.`
+          : "A auditoria será registrada sem divergências para esta referência.",
+        confirmLabel: "Finalizar Auditoria",
+        confirmTone: count > 0 ? "primary" : "danger",
+      },
+      () => {
+        setConfirmState(null);
+        void handleSaveOccurrences();
+      }
+    );
+  }, [
+    activeAuditMatchesSelection, activeAuditSession, activeCd, drafts,
+    isOnline, openConfirmDialog, readOnlyCorrectionMode,
+    selectedPulColumn, selectedZone, zoneType, handleSaveOccurrences
+  ]);
+
   const handleToggleCorrection = useCallback(async (occurrenceId: string, currentStatus: RondaQualidadeCorrectionStatus) => {
     if (!isOnline) return;
     const nextStatus: RondaQualidadeCorrectionStatus = currentStatus === "corrigido" ? "nao_corrigido" : "corrigido";
@@ -1813,75 +1848,111 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                           <span>{formatCount(detail?.history_rows.length ?? 0, "auditoria", "auditorias")}</span>
                         </div>
                         {detail?.history_rows.length ? (
-                          <div className="ronda-session-list">
+                          <div className="ronda-det-session-list">
                             {detail.history_rows.map((session) => (
-                              <article key={session.audit_id} className="ronda-session-card">
-                                <div className="ronda-session-head">
-                                  <div>
-                                    <strong>{auditResultLabel(session.audit_result)}</strong>
-                                    <span>
+                              <article key={session.audit_id} className="ronda-det-session">
+
+                                {/* Cabeçalho da sessão */}
+                                <div className="ronda-det-session-head">
+                                  <span className={`ronda-det-result-badge is-${session.audit_result}`}>
+                                    {auditResultLabel(session.audit_result)}
+                                  </span>
+                                  <div className="ronda-det-session-info">
+                                    <strong className="ronda-det-session-auditor">
+                                      {session.auditor_nome}
+                                      <span className="ronda-det-session-mat">{` · MAT ${session.auditor_mat}`}</span>
                                       {zoneType === "PUL" && session.coluna != null
-                                        ? `Coluna ${session.coluna} | ${session.auditor_nome} | MAT ${session.auditor_mat}`
-                                        : `${session.auditor_nome} | MAT ${session.auditor_mat}`}
+                                        ? <span className="ronda-det-session-mat">{` · Col. ${session.coluna}`}</span>
+                                        : null}
+                                    </strong>
+                                    <span className="ronda-det-session-time">
+                                      {session.started_at ? formatDateTime(session.started_at) : "—"}
+                                      {session.finished_at ? ` → ${formatDateTime(session.finished_at)}` : ""}
                                     </span>
                                   </div>
-                                  <small>{`Início: ${formatDateTime(session.started_at)} | Fim: ${formatDateTime(session.finished_at)}`}</small>
                                 </div>
 
+                                {/* Ocorrências */}
                                 {session.occurrences.length === 0 ? (
-                                  <div className="ronda-session-empty">
-                                    Nenhuma ocorrência registrada nesta auditoria.
-                                  </div>
+                                  <p className="ronda-det-session-empty">
+                                    Nenhuma ocorrência registrada.
+                                  </p>
                                 ) : (
-                                  <div className="ronda-occurrence-list">
+                                  <div className="ronda-det-occ-list">
                                     {[...session.occurrences].sort(compareOccurrenceReason).map((occurrence) => (
-                                      <article key={occurrence.occurrence_id} className="ronda-occurrence-card">
-                                        <div className="ronda-occurrence-head">
-                                          <strong>{occurrence.motivo}</strong>
-                                          <span className={`ronda-correction-pill is-${occurrence.correction_status}`}>
-                                            {correctionStatusLabel(occurrence.correction_status)}
-                                          </span>
-                                        </div>
-                                        <div className="ronda-occurrence-meta">
-                                          {zoneType === "PUL" && occurrence.nivel ? <span>{`Nível: ${occurrence.nivel}`}</span> : null}
-                                          <span>{`Endereço: ${occurrence.endereco}`}</span>
-                                          {zoneType === "PUL" && occurrence.coluna != null ? <span>{`Coluna: ${occurrence.coluna}`}</span> : null}
-                                          <span>{`Registro: ${formatDateTime(occurrence.created_at)}`}</span>
-                                        </div>
-                                        <p>{occurrence.observacao}</p>
-                                        <div className="ronda-occurrence-footer">
-                                          <small>
-                                            {occurrence.correction_updated_at
-                                              ? `Último check: ${correctionStatusLabel(occurrence.correction_status)} por ${occurrence.correction_updated_nome ?? "Usuário"} em ${formatDateTime(occurrence.correction_updated_at)}`
-                                              : "Aguardando check de correção."}
-                                          </small>
-                                          <button
-                                            type="button"
-                                            className="btn btn-muted"
-                                            onClick={() => void handleToggleCorrection(occurrence.occurrence_id, occurrence.correction_status)}
-                                            disabled={!isOnline || updatingOccurrenceId === occurrence.occurrence_id}
-                                          >
-                                            {updatingOccurrenceId === occurrence.occurrence_id
-                                              ? "Salvando..."
-                                              : occurrence.correction_status === "corrigido"
-                                                ? "Marcar não corrigido"
-                                                : "Marcar corrigido"}
-                                          </button>
-                                          {isAdmin ? (
-                                            <button
-                                              type="button"
-                                              className="btn btn-danger"
-                                              onClick={() => handleDeleteOccurrence(occurrence.occurrence_id)}
-                                              disabled={!isOnline || auditBusy}
-                                            >
-                                              Excluir
-                                            </button>
+                                      <article
+                                        key={occurrence.occurrence_id}
+                                        className={`ronda-hist-card is-${occurrence.correction_status}`}
+                                      >
+                                        <div className="ronda-hist-card-accent" aria-hidden="true" />
+                                        <div className="ronda-hist-card-body">
+
+                                          {/* Motivo + status */}
+                                          <div className="ronda-hist-card-header">
+                                            <span className="ronda-hist-card-motivo">{occurrence.motivo}</span>
+                                            <div className="ronda-hist-card-badges">
+                                              <span className={`ronda-hist-count-pill is-${occurrence.correction_status}`}>
+                                                {correctionStatusLabel(occurrence.correction_status)}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          {/* Chips de localização */}
+                                          <div className="ronda-hist-chips">
+                                            <span className="ronda-hist-chip ronda-hist-chip-loc">{occurrence.endereco}</span>
+                                            {zoneType === "PUL" && occurrence.nivel ? (
+                                              <span className="ronda-hist-chip">{`Nível ${occurrence.nivel}`}</span>
+                                            ) : null}
+                                            {zoneType === "PUL" && occurrence.coluna != null ? (
+                                              <span className="ronda-hist-chip">{`Col. ${occurrence.coluna}`}</span>
+                                            ) : null}
+                                            <span className="ronda-hist-chip">{formatDateTime(occurrence.created_at)}</span>
+                                          </div>
+
+                                          {/* Observação */}
+                                          {occurrence.observacao ? (
+                                            <p className="ronda-hist-card-obs">{occurrence.observacao}</p>
                                           ) : null}
+
+                                          {/* Rodapé: check info + ações */}
+                                          <div className="ronda-hist-card-footer">
+                                            <span className="ronda-hist-check-info">
+                                              {occurrence.correction_updated_at
+                                                ? `${correctionStatusLabel(occurrence.correction_status)} por ${occurrence.correction_updated_nome ?? "Usuário"} · ${formatDateTime(occurrence.correction_updated_at)}`
+                                                : "Aguardando check de correção"}
+                                            </span>
+                                            <div className="ronda-hist-card-actions">
+                                              <button
+                                                type="button"
+                                                className={`ronda-hist-action-btn ${occurrence.correction_status === "corrigido" ? "is-undo" : "is-check"}`}
+                                                onClick={() => void handleToggleCorrection(occurrence.occurrence_id, occurrence.correction_status)}
+                                                disabled={!isOnline || updatingOccurrenceId === occurrence.occurrence_id}
+                                              >
+                                                {updatingOccurrenceId === occurrence.occurrence_id
+                                                  ? "Salvando…"
+                                                  : occurrence.correction_status === "corrigido"
+                                                    ? "Desfazer"
+                                                    : "Marcar corrigido"}
+                                              </button>
+                                              {isAdmin ? (
+                                                <button
+                                                  type="button"
+                                                  className="ronda-hist-action-btn is-delete"
+                                                  onClick={() => handleDeleteOccurrence(occurrence.occurrence_id)}
+                                                  disabled={!isOnline || auditBusy}
+                                                >
+                                                  Excluir
+                                                </button>
+                                              ) : null}
+                                            </div>
+                                          </div>
+
                                         </div>
                                       </article>
                                     ))}
                                   </div>
                                 )}
+
                               </article>
                             ))}
                           </div>
@@ -2187,12 +2258,12 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                   Adicionar ocorrência
                 </button>
 
-                {/* Barra de ação — salvar */}
+                {/* Barra de ação — finalizar */}
                 <div className="ronda-composer-footer">
                   <button
                     type="button"
                     className="ronda-composer-save-btn"
-                    onClick={() => void handleSaveOccurrences()}
+                    onClick={handleFinalizeAudit}
                     disabled={auditBusy}
                   >
                     {auditBusy ? (
@@ -2203,7 +2274,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                     ) : (
                       <>
                         {checkIcon()}
-                        Salvar auditoria
+                        Finalizar Auditoria
                       </>
                     )}
                   </button>
