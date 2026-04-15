@@ -417,3 +417,19 @@ export async function setRondaQualidadeOccurrenceCorrection(params: {
     correction_updated_nome: parseNullableString(first.correction_updated_nome)
   };
 }
+
+export async function deleteRondaQualidadeOccurrence(params: {
+  occurrenceId: string;
+}): Promise<{ success: boolean; message: string }> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_ronda_quality_occurrence_delete", {
+    p_occurrence_id: params.occurrenceId
+  });
+
+  if (error) throw new Error(toErrorMessage(error));
+  return {
+    success: true,
+    message: "Ocorrência excluída com sucesso."
+  };
+}

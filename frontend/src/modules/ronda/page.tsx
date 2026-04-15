@@ -11,7 +11,8 @@ import {
   fetchRondaQualidadeZoneDetail,
   fetchRondaQualidadeZoneList,
   setRondaQualidadeOccurrenceCorrection,
-  submitRondaQualidadeAudit
+  submitRondaQualidadeAudit,
+  deleteRondaQualidadeOccurrence
 } from "./sync";
 import {
   RONDA_QUALIDADE_MOTIVOS_PUL,
@@ -499,7 +500,10 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   const [confirmState, setConfirmState] = useState<RondaConfirmState | null>(null);
   const [activeAuditSession, setActiveAuditSession] = useState<RondaActiveAuditSession | null>(null);
   const [clockNow, setClockNow] = useState(() => Date.now());
+  const [deletingOccurrenceId, setDeletingOccurrenceId] = useState<string | null>(null);
   const confirmActionRef = useRef<(() => void | Promise<void>) | null>(null);
+
+  const isAdmin = useMemo(() => profile.role === "admin", [profile.role]);
 
   const selectedMonthRef = selectedMonthStart;
   const selectedMonthLabel = useMemo(() => formatMonthLabel(selectedMonthStart), [selectedMonthStart]);
@@ -1290,6 +1294,35 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
     }
   }, [historyOpen, isOnline, loadDetail, loadHistory, selectedZone]);
 
+  const handleDeleteOccurrence = useCallback((occurrenceId: string) => {
+    if (!isOnline || !isAdmin) return;
+    openConfirmDialog(
+      {
+        title: "Excluir ocorrência",
+        message: "Tem certeza que deseja excluir esta ocorrência? Esta ação não pode ser desfeita.",
+        confirmLabel: "Excluir",
+        confirmTone: "danger"
+      },
+      async () => {
+        setAuditBusy(true);
+        setErrorMessage(null);
+        setStatusMessage(null);
+        try {
+          await deleteRondaQualidadeOccurrence({ occurrenceId });
+          setConfirmState(null);
+          confirmActionRef.current = null;
+          if (selectedZone) await loadDetail(selectedZone);
+          if (historyOpen) await loadHistory();
+          setStatusMessage("Ocorrência excluída com sucesso.");
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : "Falha ao excluir a ocorrência.");
+        } finally {
+          setAuditBusy(false);
+        }
+      }
+    );
+  }, [confirmActionRef, historyOpen, isAdmin, isOnline, loadDetail, loadHistory, openConfirmDialog, selectedZone]);
+
   const currentZoneSummary = detail ?? (selectedZone ? zoneRows.find((row) => row.zona === selectedZone) ?? null : null);
   const closeAddressPicker = useCallback(() => {
     setAddressPickerIndex(null);
@@ -1820,6 +1853,16 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                                 ? "Marcar não corrigido"
                                                 : "Marcar corrigido"}
                                           </button>
+                                          {isAdmin ? (
+                                            <button
+                                              type="button"
+                                              className="btn btn-danger"
+                                              onClick={() => handleDeleteOccurrence(occurrence.occurrence_id)}
+                                              disabled={!isOnline || auditBusy}
+                                            >
+                                              Excluir
+                                            </button>
+                                          ) : null}
                                         </div>
                                       </article>
                                     ))}
@@ -2234,6 +2277,16 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                 ? "Marcar não corrigido"
                                 : "Marcar corrigido"}
                           </button>
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              onClick={() => handleDeleteOccurrence(row.occurrence_id)}
+                              disabled={!isOnline || auditBusy}
+                            >
+                              Excluir
+                            </button>
+                          ) : null}
                         </div>
                       </article>
                     ))}

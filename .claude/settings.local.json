@@ -3,7 +3,11 @@
     "allow": [
       "Bash(grep -n \"database connection is closing\\\\|IDBDatabase.*close\" \"c:/PROJETOS/AUDITORIA/frontend/src\"/**/*.ts \"c:/PROJETOS/AUDITORIA/frontend/src\"/**/*.tsx)",
       "Bash(npx tsc:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(sort -t_ -k1,1 -V)",
+      "Bash(./../.venv/Scripts/python.exe -m app.cli.app --help)",
+      "Bash(python -m app.cli.app --help)",
+      "Bash(python -c \"from app.sync_service import SyncService; print\\('ok'\\)\")"
     ]
   }
 }
