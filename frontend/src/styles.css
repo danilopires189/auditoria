@@ -16630,36 +16630,33 @@ small {
 }
 
 .ronda-active-audit-card {
-  flex: 1 1 240px;
-  min-width: 220px;
-  padding: 12px 14px;
-  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 12px;
   border: 1px solid rgba(22, 132, 86, 0.2);
   background: linear-gradient(145deg, #f4fff8, #ffffff);
-  display: grid;
-  gap: 4px;
+  min-width: 0;
 }
 
 .ronda-active-audit-card strong {
   font-family: "Sora", sans-serif;
   color: #0f6b47;
-  font-size: 0.94rem;
-}
-
-.ronda-active-audit-card span,
-.ronda-active-audit-card small {
-  color: #466050;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .ronda-active-audit-card span {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 500;
   color: #688072;
-}
-
-.ronda-active-audit-card small {
-  font-size: 0.78rem;
-  color: #7b9084;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ronda-column-audit-panel {
@@ -17221,28 +17218,39 @@ small {
     display: none;
   }
 
-  /* Botão voltar visível apenas no mobile */
+  /* Botão voltar — proeminente no mobile */
   .ronda-back-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    height: 44px;
-    padding: 0 16px 0 10px;
-    border: 1px solid rgba(18, 56, 115, 0.16);
+    gap: 8px;
+    height: 48px;
+    padding: 0 20px 0 14px;
+    border: 1.5px solid rgba(18, 56, 115, 0.22);
     border-radius: 999px;
-    background: rgba(243, 247, 252, 0.98);
-    color: #20477b;
+    background: linear-gradient(145deg, #ffffff, #eef4ff);
+    color: #163f87;
     font: inherit;
-    font-size: 0.9rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 700;
     cursor: pointer;
     align-self: start;
-    transition: background 160ms ease, border-color 160ms ease;
+    box-shadow: 0 2px 10px rgba(18, 56, 115, 0.1);
+    transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 140ms ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ronda-back-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
   }
 
   .ronda-back-btn:active {
-    background: rgba(220, 232, 248, 0.98);
-    border-color: rgba(18, 56, 115, 0.28);
+    background: linear-gradient(145deg, #dce8f8, #cfe0f7);
+    border-color: rgba(18, 56, 115, 0.36);
+    transform: scale(0.97);
+    box-shadow: 0 1px 4px rgba(18, 56, 115, 0.12);
   }
 
   /* Bottom sheet nos modais */
@@ -17377,8 +17385,8 @@ small {
 }
 
 .ronda-hist-select {
-  appearance: none;
   -webkit-appearance: none;
+  appearance: none;
   border: 1px solid rgba(18, 56, 115, 0.15);
   border-radius: 12px;
   background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23556b8d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
@@ -17553,6 +17561,7 @@ small {
   border: 2.5px solid rgba(18, 56, 115, 0.15);
   border-top-color: #123873;
   animation: ronda-spin 700ms linear infinite;
+  will-change: transform;
   flex-shrink: 0;
 }
 

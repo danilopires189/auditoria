@@ -1547,20 +1547,22 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                               <button type="button" className="ronda-zone-card-trigger" onClick={() => selectZone(row.zona)}>
                                 <span className="ronda-zone-name">{row.zona}</span>
                               </button>
-                              <RondaStartButton
-                                active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
-                                auditedInMonth={row.audited_in_month}
-                                onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, row.audited_in_month)}
-                                disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
-                                ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
-                                  ? "Auditoria em andamento"
-                                  : auditActionLabel(row.audited_in_month)}
-                                title={readOnlyCorrectionMode
-                                  ? "Meses anteriores ficam apenas para consulta e correção."
-                                  : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
-                                  ? "Esta auditoria já está em andamento."
-                                  : auditActionLabel(row.audited_in_month)}
-                              />
+                              {row.zone_type !== "PUL" ? (
+                                <RondaStartButton
+                                  active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                  auditedInMonth={row.audited_in_month}
+                                  onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, row.audited_in_month)}
+                                  disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                  ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                    ? "Auditoria em andamento"
+                                    : auditActionLabel(row.audited_in_month)}
+                                  title={readOnlyCorrectionMode
+                                    ? "Meses anteriores ficam apenas para consulta e correção."
+                                    : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                    ? "Esta auditoria já está em andamento."
+                                    : auditActionLabel(row.audited_in_month)}
+                                />
+                              ) : null}
                             </div>
                             <div className="ronda-zone-card-info">
                               <span className="ronda-zone-metric">{zoneCardMetricLabel(row)}</span>
@@ -1591,20 +1593,22 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                               <button type="button" className="ronda-zone-card-trigger" onClick={() => selectZone(row.zona)}>
                                 <span className="ronda-zone-name">{row.zona}</span>
                               </button>
-                              <RondaStartButton
-                                active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
-                                auditedInMonth={true}
-                                onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, true)}
-                                disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
-                                ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
-                                  ? "Auditoria em andamento"
-                                  : auditActionLabel(true)}
-                                title={readOnlyCorrectionMode
-                                  ? "Meses anteriores ficam apenas para consulta e correção."
-                                  : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
-                                    ? "Esta auditoria já está em andamento."
+                              {row.zone_type !== "PUL" ? (
+                                <RondaStartButton
+                                  active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                  auditedInMonth={true}
+                                  onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, true)}
+                                  disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                  ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                    ? "Auditoria em andamento"
                                     : auditActionLabel(true)}
-                              />
+                                  title={readOnlyCorrectionMode
+                                    ? "Meses anteriores ficam apenas para consulta e correção."
+                                    : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                      ? "Esta auditoria já está em andamento."
+                                      : auditActionLabel(true)}
+                                />
+                              ) : null}
                             </div>
                             <div className="ronda-zone-card-info">
                               <span className="ronda-zone-metric">{zoneCardMetricLabel(row)}</span>
@@ -1642,76 +1646,65 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                         <div>
                           <div className="ronda-title-row">
                             <h3>{selectedZone}</h3>
-                            {zoneType === "SEP" || (zoneType === "PUL" && selectedColumnStat) ? (
+                            {zoneType === "SEP" ? (
                               <RondaStartButton
                                 active={activeAuditMatchesSelection}
-                                auditedInMonth={zoneType === "SEP"
-                                  ? currentZoneSummary.audited_in_month
-                                  : selectedColumnStat?.audited_in_month ?? false}
+                                auditedInMonth={currentZoneSummary.audited_in_month}
                                 onClick={() => startAuditSession(
-                                  zoneType === "SEP"
-                                    ? { zoneType: "SEP", zona: selectedZone, coluna: null }
-                                    : { zoneType: "PUL", zona: selectedZone, coluna: selectedColumnStat?.coluna ?? null },
-                                  zoneType === "SEP"
-                                    ? currentZoneSummary.audited_in_month
-                                    : selectedColumnStat?.audited_in_month ?? false
+                                  { zoneType: "SEP", zona: selectedZone, coluna: null },
+                                  currentZoneSummary.audited_in_month
                                 )}
                                 disabled={!isOnline || readOnlyCorrectionMode || activeAuditMatchesSelection}
-                                ariaLabel={activeAuditMatchesSelection
-                                  ? "Auditoria em andamento"
-                                  : auditActionLabel(zoneType === "SEP"
-                                    ? currentZoneSummary.audited_in_month
-                                    : selectedColumnStat?.audited_in_month ?? false)}
+                                ariaLabel={activeAuditMatchesSelection ? "Auditoria em andamento" : auditActionLabel(currentZoneSummary.audited_in_month)}
                                 title={readOnlyCorrectionMode
                                   ? "Meses anteriores ficam apenas para consulta e correção."
                                   : activeAuditMatchesSelection
                                     ? "Esta auditoria já está em andamento."
-                                    : auditActionLabel(zoneType === "SEP"
-                                      ? currentZoneSummary.audited_in_month
-                                      : selectedColumnStat?.audited_in_month ?? false)}
+                                    : auditActionLabel(currentZoneSummary.audited_in_month)}
                               />
                             ) : null}
                           </div>
                           <span>{zoneTypeLabel(zoneType)}</span>
                         </div>
-                        <div className="ronda-detail-actions">
-                          {activeAuditMatchesSelection && activeAuditSession ? (
-                            <div className="ronda-active-audit-card">
-                              <strong>Auditoria em andamento</strong>
-                              <span>{`Tempo: ${activeAuditElapsedLabel}`}</span>
-                              <small>{`Início: ${formatDateTime(activeAuditSession.startedAt)}`}</small>
-                            </div>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="btn btn-muted"
-                            onClick={openComposer}
-                            disabled={auditBusy || !isOnline || occurrenceActionDisabledReason != null}
-                            title={occurrenceActionDisabledReason}
-                          >
-                            <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
-                            Adicionar ocorrência
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => void handleSubmitNoOccurrence()}
-                            disabled={auditBusy || !isOnline || noOccurrenceDisabledReason != null}
-                            title={noOccurrenceDisabledReason}
-                          >
-                            <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
-                            Sem ocorrência
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={cancelActiveAudit}
-                            disabled={auditBusy || cancelAuditDisabledReason != null}
-                            title={cancelAuditDisabledReason}
-                          >
-                            Cancelar
-                          </button>
-                        </div>
+                        {zoneType === "SEP" ? (
+                          <div className="ronda-detail-actions">
+                            {activeAuditMatchesSelection && activeAuditSession ? (
+                              <div className="ronda-active-audit-card">
+                                <strong>Em andamento</strong>
+                                <span>{`${activeAuditElapsedLabel} · Início ${formatDateTime(activeAuditSession.startedAt)}`}</span>
+                              </div>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="btn btn-muted"
+                              onClick={openComposer}
+                              disabled={auditBusy || !isOnline || occurrenceActionDisabledReason != null}
+                              title={occurrenceActionDisabledReason}
+                            >
+                              <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
+                              Adicionar ocorrência
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              onClick={() => void handleSubmitNoOccurrence()}
+                              disabled={auditBusy || !isOnline || noOccurrenceDisabledReason != null}
+                              title={noOccurrenceDisabledReason}
+                            >
+                              <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
+                              Sem ocorrência
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              onClick={cancelActiveAudit}
+                              disabled={auditBusy || cancelAuditDisabledReason != null}
+                              title={cancelAuditDisabledReason}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="ronda-summary-grid">
@@ -1751,20 +1744,16 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                   .map((row) => (
                                   <article
                                     key={row.coluna}
-                                    className={`ronda-mini-card ronda-column-card${selectedPulColumn === row.coluna ? " is-active" : ""}`}
+                                    className={`ronda-zone-card ronda-column-card${selectedPulColumn === row.coluna ? " is-active" : ""}${row.audited_in_month ? " is-audited" : ""}`}
                                   >
-                                    <button
-                                      type="button"
-                                      className="ronda-column-card-trigger"
-                                      onClick={() => selectPulColumn(selectedPulColumn === row.coluna ? null : row.coluna)}
-                                    >
-                                      <strong>{`Coluna ${row.coluna}`}</strong>
-                                      <span>{formatCount(row.produtos_unicos, "produto", "produtos")}</span>
-                                      {row.audited_in_month ? <small>{formatPercent(row.percentual_conformidade)}</small> : null}
-                                      {row.last_started_at ? <small>{`Início: ${formatDateTime(row.last_started_at)}`}</small> : null}
-                                      {row.last_finished_at ? <small>{`Fim: ${formatDateTime(row.last_finished_at)}`}</small> : null}
-                                    </button>
-                                    <div className="ronda-zone-card-actions">
+                                    <div className="ronda-zone-card-main">
+                                      <button
+                                        type="button"
+                                        className="ronda-column-card-trigger ronda-zone-card-trigger"
+                                        onClick={() => selectPulColumn(selectedPulColumn === row.coluna ? null : row.coluna)}
+                                      >
+                                        <span className="ronda-zone-name">{`Coluna ${row.coluna}`}</span>
+                                      </button>
                                       <RondaStartButton
                                         active={sameAuditTarget(activeAuditSession, { zoneType: "PUL", zona: selectedZone, coluna: row.coluna })}
                                         auditedInMonth={row.audited_in_month}
@@ -1779,6 +1768,9 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                             ? "Esta auditoria já está em andamento."
                                             : auditActionLabel(row.audited_in_month)}
                                       />
+                                    </div>
+                                    <div className="ronda-zone-card-info">
+                                      <span className="ronda-zone-metric">{formatCount(row.produtos_unicos, "produto", "produtos")}</span>
                                       <span className={`ronda-zone-badge ${row.audited_in_month ? "is-audited" : "is-pending"}`}>
                                         {row.audited_in_month ? "Auditada" : "Pendente"}
                                       </span>
@@ -1800,44 +1792,43 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                                 </span>
                               </div>
                             </div>
-                            <div className="ronda-detail-actions">
-                              {activeAuditMatchesSelection && activeAuditSession ? (
+                            {activeAuditMatchesSelection && activeAuditSession ? (
+                              <div className="ronda-detail-actions">
                                 <div className="ronda-active-audit-card">
-                                  <strong>Auditoria em andamento</strong>
-                                  <span>{`Tempo: ${activeAuditElapsedLabel}`}</span>
-                                  <small>{`Início: ${formatDateTime(activeAuditSession.startedAt)}`}</small>
+                                  <strong>Em andamento</strong>
+                                  <span>{`${activeAuditElapsedLabel} · Início ${formatDateTime(activeAuditSession.startedAt)}`}</span>
                                 </div>
-                              ) : null}
-                              <button
-                                type="button"
-                                className="btn btn-muted"
-                                onClick={openComposer}
-                                disabled={auditBusy || !isOnline || occurrenceActionDisabledReason != null}
-                                title={occurrenceActionDisabledReason}
-                              >
-                                <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
-                                Adicionar ocorrência
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-primary"
-                                onClick={() => void handleSubmitNoOccurrence()}
-                                disabled={auditBusy || !isOnline || noOccurrenceDisabledReason != null}
-                                title={noOccurrenceDisabledReason}
-                              >
-                                <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
-                                Sem ocorrência
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-danger"
-                                onClick={cancelActiveAudit}
-                                disabled={auditBusy || cancelAuditDisabledReason != null}
-                                title={cancelAuditDisabledReason}
-                              >
-                                Cancelar
-                              </button>
-                            </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-muted"
+                                  onClick={openComposer}
+                                  disabled={auditBusy || !isOnline || occurrenceActionDisabledReason != null}
+                                  title={occurrenceActionDisabledReason}
+                                >
+                                  <span className="ronda-inline-icon" aria-hidden="true">{plusIcon()}</span>
+                                  Adicionar ocorrência
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  onClick={() => void handleSubmitNoOccurrence()}
+                                  disabled={auditBusy || !isOnline || noOccurrenceDisabledReason != null}
+                                  title={noOccurrenceDisabledReason}
+                                >
+                                  <span className="ronda-inline-icon" aria-hidden="true">{checkIcon()}</span>
+                                  Sem ocorrência
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-danger"
+                                  onClick={cancelActiveAudit}
+                                  disabled={auditBusy || cancelAuditDisabledReason != null}
+                                  title={cancelAuditDisabledReason}
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : null}
                           </section>
                         </div>
                       ) : null}
