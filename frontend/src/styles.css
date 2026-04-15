@@ -16144,6 +16144,8 @@ small {
   padding: 18px;
   display: grid;
   gap: 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .ronda-panel-head,
@@ -17337,15 +17339,40 @@ small {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .ronda-detail-actions > * {
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
   }
 
   .ronda-detail-actions .btn {
     justify-content: center;
+  }
+
+  /* Card "Em andamento": empilha em 2 linhas no mobile */
+  .ronda-active-audit-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    overflow: hidden;
+  }
+
+  .ronda-active-audit-card strong {
+    white-space: nowrap;
+  }
+
+  .ronda-active-audit-card span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 0.73rem;
+    line-height: 1.35;
+    word-break: break-word;
   }
 
   .ronda-zone-card-stats,
