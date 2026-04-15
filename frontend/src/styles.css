@@ -15871,11 +15871,35 @@ small {
 }
 
 .ronda-history-button,
+.ronda-detail-actions,
+.ronda-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid rgba(18, 56, 115, 0.08);
+  margin-top: 8px;
+}
+
 .ronda-detail-actions .btn,
 .ronda-sheet-actions .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  padding: 12px 20px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  border-radius: 14px;
+  transition: transform 150ms ease, box-shadow 180ms ease;
+}
+
+.ronda-detail-actions .btn:hover:not(:disabled),
+.ronda-sheet-actions .btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(9, 21, 39, 0.15);
+}
+
+.ronda-detail-actions .btn:active:not(:disabled),
+.ronda-sheet-actions .btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .ronda-sync-btn,
@@ -16107,16 +16131,28 @@ small {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 0 10px 0 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(18, 56, 115, 0.14);
-  background: rgba(243, 247, 252, 0.96);
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px 0 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 56, 115, 0.12);
+  background: linear-gradient(145deg, rgba(244, 248, 255, 0.7), rgba(240, 245, 252, 0.85));
+  box-shadow: 0 2px 8px rgba(9, 21, 39, 0.04);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.ronda-search-field:focus-within {
+  border-color: rgba(18, 56, 115, 0.28);
+  box-shadow: 0 0 0 3px rgba(18, 56, 115, 0.08), 0 4px 12px rgba(9, 21, 39, 0.06);
 }
 
 .ronda-search-icon {
   color: #56729d;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ronda-search-field input {
@@ -16127,17 +16163,48 @@ small {
   font: inherit;
   font-size: 16px;
   color: var(--text);
+  font-weight: 500;
+  padding: 14px 0;
+}
+
+.ronda-search-field input::placeholder {
+  color: #8b95aa;
+  font-weight: 400;
 }
 
 .ronda-search-clear,
 .ronda-close-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border: 0;
   border-radius: 12px;
-  background: rgba(18, 56, 115, 0.08);
+  background: linear-gradient(145deg, rgba(18, 56, 115, 0.08), rgba(18, 56, 115, 0.06));
   color: #20477b;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 180ms ease, transform 150ms ease, color 180ms ease;
+  flex-shrink: 0;
+}
+
+.ronda-search-clear:hover:not(:disabled),
+.ronda-search-clear:active:not(:disabled) {
+  background: linear-gradient(145deg, rgba(242, 63, 95, 0.12), rgba(242, 63, 95, 0.1));
+  color: #c0342f;
+  transform: scale(1.08);
+}
+
+.ronda-search-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ronda-search-clear svg,
+.ronda-close-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
 }
 
 .ronda-zone-section,
@@ -16572,13 +16639,60 @@ small {
   color: var(--muted);
 }
 
+.ronda-draft-card {
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 56, 115, 0.1);
+  background: linear-gradient(160deg, #ffffff, #f9fbfe);
+  box-shadow: 0 8px 16px rgba(9, 21, 39, 0.05);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.ronda-draft-card:hover {
+  border-color: rgba(18, 56, 115, 0.18);
+  box-shadow: 0 12px 24px rgba(9, 21, 39, 0.08);
+}
+
+.ronda-draft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ronda-draft-head strong {
+  font-family: "Sora", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #123873;
+}
+
+.ronda-draft-head .btn {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 .ronda-session-card,
 .ronda-occurrence-card,
-.ronda-history-row,
-.ronda-draft-card {
-  padding: 14px;
+.ronda-history-row {
+  padding: 16px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 56, 115, 0.1);
+  background: linear-gradient(160deg, #ffffff, #f9fbfe);
+  box-shadow: 0 8px 16px rgba(9, 21, 39, 0.05);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.ronda-session-card:hover,
+.ronda-occurrence-card:hover,
+.ronda-history-row:hover {
+  border-color: rgba(18, 56, 115, 0.18);
+  box-shadow: 0 12px 24px rgba(9, 21, 39, 0.08);
 }
 
 .ronda-occurrence-card p,
@@ -16595,39 +16709,75 @@ small {
   display: grid;
   place-items: center;
   padding:
-    calc(env(safe-area-inset-top, 0px) + 18px)
-    calc(env(safe-area-inset-right, 0px) + 18px)
-    calc(env(safe-area-inset-bottom, 0px) + 18px)
-    calc(env(safe-area-inset-left, 0px) + 18px);
-  background: rgba(9, 19, 34, 0.58);
-  backdrop-filter: blur(3px);
+    calc(env(safe-area-inset-top, 0px) + 20px)
+    calc(env(safe-area-inset-right, 0px) + 20px)
+    calc(env(safe-area-inset-bottom, 0px) + 20px)
+    calc(env(safe-area-inset-left, 0px) + 20px);
+  background: rgba(9, 19, 34, 0.65);
+  backdrop-filter: blur(6px);
+  animation: overlay-fade-in 200ms ease;
+}
+
+@keyframes overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .ronda-sheet {
-  width: min(100%, 760px);
-  max-height: min(88vh, 920px);
+  width: min(100%, 800px);
+  max-height: min(90vh, 960px);
   overflow: auto;
   overscroll-behavior: contain;
   box-sizing: border-box;
-  border-radius: 24px;
-  background: linear-gradient(160deg, #ffffff, #f5f8fd);
-  border: 1px solid rgba(18, 56, 115, 0.14);
-  box-shadow: 0 24px 54px rgba(7, 18, 33, 0.28);
-  padding: 20px;
+  border-radius: 28px;
+  background: linear-gradient(165deg, #ffffff, #f7fafd);
+  border: 1px solid rgba(18, 56, 115, 0.12);
+  box-shadow: 
+    0 32px 64px rgba(7, 18, 33, 0.3),
+    0 12px 24px rgba(7, 18, 33, 0.15);
+  padding: 24px;
   display: grid;
-  gap: 16px;
+  gap: 18px;
+  animation: sheet-slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sheet-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .ronda-sheet .field {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(244, 248, 255, 0.6), rgba(240, 245, 252, 0.8));
+  border: 1px solid rgba(18, 56, 115, 0.08);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.ronda-sheet .field:focus-within {
+  border-color: rgba(18, 56, 115, 0.25);
+  box-shadow: 0 0 0 3px rgba(18, 56, 115, 0.08);
 }
 
 .ronda-sheet .field span {
-  color: #273956;
-  font-size: 0.86rem;
+  color: #1e3a5f;
+  font-size: 0.84rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .ronda-sheet .field input,
@@ -16638,6 +16788,27 @@ small {
   max-width: 100%;
   box-sizing: border-box;
   font-size: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(18, 56, 115, 0.15);
+  background: #ffffff;
+  color: var(--text);
+  font-weight: 500;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.ronda-sheet .field input:focus,
+.ronda-sheet .field select:focus,
+.ronda-sheet .field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(22, 63, 135, 0.12);
+}
+
+.ronda-sheet .field input::placeholder,
+.ronda-sheet .field textarea::placeholder {
+  color: #8b95aa;
+  font-weight: 400;
 }
 
 .ronda-address-input-wrap input {
@@ -16661,24 +16832,51 @@ small {
 }
 
 .ronda-address-picker {
-  margin-top: 8px;
-  border: 1px solid rgba(18, 56, 115, 0.14);
-  border-radius: 16px;
-  background: linear-gradient(160deg, #ffffff, #f7faff);
-  box-shadow: 0 16px 28px rgba(9, 21, 39, 0.08);
+  margin-top: 10px;
+  border: 1px solid rgba(18, 56, 115, 0.12);
+  border-radius: 18px;
+  background: linear-gradient(165deg, #ffffff, #f8fbff);
+  box-shadow: 
+    0 20px 40px rgba(9, 21, 39, 0.12),
+    0 8px 16px rgba(9, 21, 39, 0.08);
   overflow: hidden;
+  animation: picker-fade-in 180ms ease;
+}
+
+@keyframes picker-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .ronda-address-picker-search {
   position: relative;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(18, 56, 115, 0.1);
-  background: rgba(244, 248, 255, 0.92);
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(18, 56, 115, 0.08);
+  background: linear-gradient(145deg, rgba(244, 248, 255, 0.95), rgba(240, 245, 252, 0.98));
 }
 
 .ronda-address-picker-search input {
-  padding-left: 34px;
-  padding-right: 34px;
+  padding-left: 38px;
+  padding-right: 38px;
+  height: 48px;
+  border-radius: 14px;
+  border: 1px solid rgba(18, 56, 115, 0.12);
+  background: #ffffff;
+  font-size: 15px;
+  font-weight: 500;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.ronda-address-picker-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(22, 63, 135, 0.1);
 }
 
 .ronda-address-picker-search-icon,
@@ -16686,49 +16884,81 @@ small {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   color: #5f7294;
+  transition: color 150ms ease;
 }
 
 .ronda-address-picker-search-icon {
-  left: 24px;
+  left: 26px;
   pointer-events: none;
 }
 
 .ronda-address-picker-close {
-  right: 24px;
+  right: 26px;
   border: 0;
-  background: transparent;
+  background: rgba(18, 56, 115, 0.06);
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.ronda-address-picker-close:hover {
+  background: rgba(242, 63, 95, 0.12);
+  color: #c0342f;
 }
 
 .ronda-address-picker-search-icon svg,
 .ronda-address-picker-close svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .ronda-address-picker-list {
-  max-height: 220px;
+  max-height: 240px;
   overflow: auto;
   display: grid;
+  gap: 2px;
+  padding: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(18, 56, 115, 0.2) transparent;
+}
+
+.ronda-address-picker-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ronda-address-picker-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ronda-address-picker-list::-webkit-scrollbar-thumb {
+  background: rgba(18, 56, 115, 0.2);
+  border-radius: 3px;
+}
+
+.ronda-address-picker-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(18, 56, 115, 0.35);
 }
 
 .ronda-address-picker-option {
   border: 0;
-  border-top: 1px solid rgba(18, 56, 115, 0.08);
+  border-radius: 12px;
   background: transparent;
-  padding: 12px 14px;
+  padding: 14px 16px;
   text-align: left;
   display: grid;
-  gap: 4px;
+  gap: 6px;
   color: inherit;
   cursor: pointer;
+  transition: background 150ms ease, transform 120ms ease;
 }
 
 .ronda-address-picker-option:first-child {
@@ -16736,22 +16966,33 @@ small {
 }
 
 .ronda-address-picker-option:hover {
-  background: rgba(18, 56, 115, 0.05);
+  background: linear-gradient(145deg, rgba(18, 56, 115, 0.06), rgba(18, 56, 115, 0.04));
+  transform: translateX(2px);
+}
+
+.ronda-address-picker-option:active {
+  transform: translateX(0) scale(0.99);
 }
 
 .ronda-address-picker-option strong {
   font-family: "Sora", sans-serif;
   color: #123873;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .ronda-address-picker-option span,
 .ronda-address-picker-empty {
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 
 .ronda-address-picker-empty {
-  padding: 14px;
+  padding: 18px;
+  text-align: center;
+  color: #6b7a94;
+  font-style: italic;
 }
 
 .ronda-sheet .field textarea {
@@ -16776,9 +17017,57 @@ small {
 .ronda-sheet-head {
   position: sticky;
   top: 0;
-  z-index: 1;
-  padding-bottom: 8px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(245, 248, 253, 0.98));
+  z-index: 10;
+  padding-bottom: 16px;
+  margin-bottom: 8px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.98));
+  border-bottom: 1px solid rgba(18, 56, 115, 0.08);
+  box-shadow: 0 4px 12px rgba(9, 21, 39, 0.04);
+}
+
+.ronda-sheet-head h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f1725;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.ronda-sheet-head span {
+  font-size: 0.88rem;
+  color: #6b7a94;
+  font-weight: 500;
+}
+
+.ronda-close-btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(242, 63, 95, 0.08), rgba(242, 63, 95, 0.06));
+  color: #c0342f;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 180ms ease, transform 150ms ease, color 180ms ease;
+  box-shadow: 0 2px 6px rgba(192, 52, 47, 0.12);
+}
+
+.ronda-close-btn:hover:not(:disabled) {
+  background: linear-gradient(145deg, rgba(242, 63, 95, 0.15), rgba(242, 63, 95, 0.12));
+  color: #a82a3d;
+  transform: scale(1.05);
+}
+
+.ronda-close-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.ronda-close-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2;
 }
 
 .ronda-history-filters {
