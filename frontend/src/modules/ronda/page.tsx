@@ -884,6 +884,23 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
   }, [historyOpen, loadHistory]);
 
   useEffect(() => {
+    const hasOpenSheet = composerOpen || historyOpen || confirmState != null;
+    if (!hasOpenSheet || typeof document === "undefined") return;
+
+    const { body } = document;
+    const previousOverflow = body.style.overflow;
+    const previousTouchAction = body.style.touchAction;
+
+    body.style.overflow = "hidden";
+    body.style.touchAction = "none";
+
+    return () => {
+      body.style.overflow = previousOverflow;
+      body.style.touchAction = previousTouchAction;
+    };
+  }, [composerOpen, confirmState, historyOpen]);
+
+  useEffect(() => {
     void loadAddressOptions();
   }, [loadAddressOptions]);
 

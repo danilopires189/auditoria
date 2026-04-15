@@ -16745,6 +16745,8 @@ small {
   background: rgba(9, 19, 34, 0.65);
   backdrop-filter: blur(6px);
   animation: overlay-fade-in 200ms ease;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 @keyframes overlay-fade-in {
@@ -16761,6 +16763,7 @@ small {
   max-height: min(90vh, 960px);
   overflow: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   box-sizing: border-box;
   border-radius: 28px;
