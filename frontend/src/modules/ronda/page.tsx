@@ -1461,30 +1461,28 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                             key={`${row.zone_type}:${row.zona}`}
                             className={`ronda-zone-card${selectedZone === row.zona ? " is-active" : ""}`}
                           >
-                            <div className="ronda-zone-card-top">
+                            <div className="ronda-zone-card-main">
                               <button type="button" className="ronda-zone-card-trigger" onClick={() => selectZone(row.zona)}>
-                                <div className="ronda-zone-card-title">
-                                  <strong>{row.zona}</strong>
-                                  <small>{zoneCardMetricLabel(row)}</small>
-                                </div>
+                                <span className="ronda-zone-name">{row.zona}</span>
                               </button>
-                              <div className="ronda-zone-card-actions">
-                                <RondaStartButton
-                                  active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
-                                  auditedInMonth={row.audited_in_month}
-                                  onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, row.audited_in_month)}
-                                  disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
-                                  ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
-                                    ? "Auditoria em andamento"
-                                    : auditActionLabel(row.audited_in_month)}
-                                  title={readOnlyCorrectionMode
-                                    ? "Meses anteriores ficam apenas para consulta e correção."
-                                    : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
-                                    ? "Esta auditoria já está em andamento."
-                                    : auditActionLabel(row.audited_in_month)}
-                                />
-                                <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
-                              </div>
+                              <RondaStartButton
+                                active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                auditedInMonth={row.audited_in_month}
+                                onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, row.audited_in_month)}
+                                disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                  ? "Auditoria em andamento"
+                                  : auditActionLabel(row.audited_in_month)}
+                                title={readOnlyCorrectionMode
+                                  ? "Meses anteriores ficam apenas para consulta e correção."
+                                  : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                  ? "Esta auditoria já está em andamento."
+                                  : auditActionLabel(row.audited_in_month)}
+                              />
+                            </div>
+                            <div className="ronda-zone-card-info">
+                              <span className="ronda-zone-metric">{zoneCardMetricLabel(row)}</span>
+                              <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                             </div>
                             {renderZoneCardDetails(row, selectedZone === row.zona)}
                           </article>
@@ -1507,30 +1505,28 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                             key={`${row.zone_type}:${row.zona}`}
                             className={`ronda-zone-card is-audited${selectedZone === row.zona ? " is-active" : ""}`}
                           >
-                            <div className="ronda-zone-card-top">
+                            <div className="ronda-zone-card-main">
                               <button type="button" className="ronda-zone-card-trigger" onClick={() => selectZone(row.zona)}>
-                                <div className="ronda-zone-card-title">
-                                  <strong>{row.zona}</strong>
-                                  <small>{zoneCardMetricLabel(row)}</small>
-                                </div>
+                                <span className="ronda-zone-name">{row.zona}</span>
                               </button>
-                              <div className="ronda-zone-card-actions">
-                                <RondaStartButton
-                                  active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
-                                  auditedInMonth={true}
-                                  onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, true)}
-                                  disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
-                                  ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
-                                    ? "Auditoria em andamento"
+                              <RondaStartButton
+                                active={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                auditedInMonth={true}
+                                onClick={() => startAuditSession({ zoneType: row.zone_type, zona: row.zona, coluna: null }, true)}
+                                disabled={!isOnline || readOnlyCorrectionMode || sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })}
+                                ariaLabel={sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                  ? "Auditoria em andamento"
+                                  : auditActionLabel(true)}
+                                title={readOnlyCorrectionMode
+                                  ? "Meses anteriores ficam apenas para consulta e correção."
+                                  : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
+                                    ? "Esta auditoria já está em andamento."
                                     : auditActionLabel(true)}
-                                  title={readOnlyCorrectionMode
-                                    ? "Meses anteriores ficam apenas para consulta e correção."
-                                    : sameAuditTarget(activeAuditSession, { zoneType: row.zone_type, zona: row.zona, coluna: null })
-                                      ? "Esta auditoria já está em andamento."
-                                      : auditActionLabel(true)}
-                                />
-                                <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
-                              </div>
+                              />
+                            </div>
+                            <div className="ronda-zone-card-info">
+                              <span className="ronda-zone-metric">{zoneCardMetricLabel(row)}</span>
+                              <span className={`ronda-zone-badge ${zoneCardBadgeClass(row)}`}>{zoneCardBadgeLabel(row)}</span>
                             </div>
                             {renderZoneCardDetails(row, selectedZone === row.zona)}
                           </article>

@@ -16171,9 +16171,9 @@ small {
 }
 
 .ronda-zone-card {
-  padding: 10px 12px;
+  padding: 10px 14px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
   text-align: left;
   color: inherit;
   cursor: pointer;
@@ -16192,22 +16192,34 @@ small {
   background: linear-gradient(160deg, #ffffff, #f3f8f6);
 }
 
-.ronda-zone-card-top,
-.ronda-zone-card-stats,
-.ronda-zone-card-details,
-.ronda-occurrence-meta,
-.ronda-occurrence-footer,
-.ronda-detail-actions,
-.ronda-sheet-actions {
+.ronda-zone-card-main {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.ronda-zone-card-top {
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.ronda-zone-name {
+  font-family: "Sora", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #123873;
+  line-height: 1.2;
+  display: block;
+}
+
+.ronda-zone-card-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.ronda-zone-metric {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .ronda-zone-card-trigger,
@@ -16315,44 +16327,34 @@ small {
 }
 
 
-.ronda-zone-card-title {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
+.ronda-zone-card-details {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(18, 56, 115, 0.08);
+  margin-top: 2px;
 }
 
-.ronda-zone-card-top strong,
-.ronda-session-head strong,
-.ronda-occurrence-head strong,
-.ronda-history-row-head strong,
-.ronda-draft-head strong {
-  font-family: "Sora", sans-serif;
-  color: #123873;
+.ronda-zone-card-details span {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 500;
 }
 
-.ronda-zone-card-top strong {
-  font-size: 0.98rem;
-  line-height: 1.15;
+.ronda-zone-card-details small {
+  font-size: 0.78rem;
+  color: var(--muted);
+  width: auto;
 }
 
 .ronda-zone-card-stats span,
-.ronda-zone-card-details span,
 .ronda-occurrence-meta span,
 .ronda-occurrence-footer small,
 .ronda-zone-card small {
   color: var(--muted);
   font-size: 0.9rem;
-}
-
-.ronda-zone-card-details {
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
-  padding-top: 2px;
-}
-
-.ronda-zone-card-details small {
-  width: 100%;
 }
 
 .ronda-zone-badge {
