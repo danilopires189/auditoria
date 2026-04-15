@@ -49,6 +49,7 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("ENDERECO_FORA_DA_COLUNA")) return "O endereço informado não pertence à coluna selecionada.";
   if (normalized.includes("CORRECTION_STATUS_INVALIDO")) return "Status de correção inválido.";
   if (normalized.includes("OCCURRENCE_ID_OBRIGATORIO") || normalized.includes("OCCURRENCE_NAO_ENCONTRADA")) return "Ocorrência não encontrada.";
+  if (normalized.includes("STATEMENT TIMEOUT")) return "A operação demorou mais que o esperado. Tente novamente; se persistir, sincronize a base antes de finalizar.";
   return raw;
 }
 
