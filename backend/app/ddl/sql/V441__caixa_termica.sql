@@ -242,15 +242,15 @@ begin
     end if;
 
     if exists (
-        select 1 from app.controle_caixa_termica
-        where cd = v_cd and upper(trim(codigo)) = v_codigo
+        select 1 from app.controle_caixa_termica c
+        where c.cd = v_cd and upper(trim(c.codigo)) = v_codigo
     ) then
         raise exception 'CAIXA_JA_CADASTRADA';
     end if;
 
     insert into app.controle_caixa_termica (cd, codigo, descricao, observacoes, status, created_by)
     values (v_cd, v_codigo, trim(p_descricao), nullif(trim(coalesce(p_observacoes, '')), ''), 'disponivel', v_uid)
-    returning id into v_new_id;
+    returning app.controle_caixa_termica.id into v_new_id;
 
     return query
     select c.id, c.cd, c.codigo, c.descricao, c.observacoes, c.status, c.created_at, c.created_by, c.updated_at
@@ -311,9 +311,9 @@ begin
         select cd_default from authz.profiles where user_id = v_uid limit 1
     ));
 
-    select status into v_status
-    from app.controle_caixa_termica
-    where id = p_caixa_id and cd = v_cd
+    select c.status into v_status
+    from app.controle_caixa_termica c
+    where c.id = p_caixa_id and c.cd = v_cd
     for update;
 
     if not found then raise exception 'CAIXA_NAO_ENCONTRADA'; end if;
@@ -394,9 +394,9 @@ begin
         select cd_default from authz.profiles where user_id = v_uid limit 1
     ));
 
-    select status into v_status
-    from app.controle_caixa_termica
-    where id = p_caixa_id and cd = v_cd
+    select c.status into v_status
+    from app.controle_caixa_termica c
+    where c.id = p_caixa_id and c.cd = v_cd
     for update;
 
     if not found then raise exception 'CAIXA_NAO_ENCONTRADA'; end if;
