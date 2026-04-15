@@ -1143,9 +1143,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   });
   const [feedView, setFeedView] = useState<FeedView>("pendentes");
   const [selectedZones, setSelectedZones] = useState<string[]>([]);
-  const [pendingAddressSortDirection, setPendingAddressSortDirection] = useState<PendingAddressSortDirection>("asc");
+  const [selectedNiveis, setSelectedNiveis] = useState<string[]>([]);
   const [showZoneFilterPopup, setShowZoneFilterPopup] = useState(false);
-  const [zoneSearch, setZoneSearch] = useState("");
+  const [showNivelFilterPopup, setShowNivelFilterPopup] = useState(false);
+  const [zoneFilterSearch, setZoneFilterSearch] = useState("");
+  const [nivelFilterSearch, setNivelFilterSearch] = useState("");
+  const [pendingAddressSortDirection, setPendingAddressSortDirection] = useState<PendingAddressSortDirection>("asc");
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -2859,6 +2862,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [activeAlocQueue]);
 
   const zoneFilterSet = useMemo(() => new Set(selectedZones), [selectedZones]);
+  const nivelFilterSet = useMemo(() => new Set(selectedNiveis), [selectedNiveis]);
   const effectivePendingAddressSortDirection = selectedZones.length > 0 ? pendingAddressSortDirection : "asc";
 
   const sortedPvpsAllRows = useMemo(
@@ -3031,6 +3035,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return pvpsFeedItemsAll
       .filter((item) => item.row.is_window_active)
       .filter((item) => !selectedZones.length || zoneFilterSet.has(item.zone))
+      .filter((item) => !selectedNiveis.length || (item.kind === "pul" && nivelFilterSet.has(item.nivel ?? "")))
       .sort((a, b) => {
         const byZone = a.zone.localeCompare(b.zone);
         if (byZone !== 0) return byZone;
@@ -3045,7 +3050,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (a.kind !== b.kind) return a.kind === "sep" ? -1 : 1;
         return a.feedKey.localeCompare(b.feedKey);
       });
-  }, [pvpsFeedItemsAll, selectedZones, zoneFilterSet, effectivePendingAddressSortDirection]);
+  }, [pvpsFeedItemsAll, selectedZones, zoneFilterSet, selectedNiveis, nivelFilterSet, effectivePendingAddressSortDirection]);
 
   const visibleAlocRows = useMemo(() => {
     const deduped = new Map<string, AlocacaoManifestRow>();
@@ -3055,6 +3060,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     return Array.from(deduped.values())
       .filter((row) => row.is_window_active)
       .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
+      .filter((row) => !selectedNiveis.length || nivelFilterSet.has(row.nivel ?? ""))
       .sort((a, b) => {
         const byZone = a.zona.localeCompare(b.zona);
         if (byZone !== 0) return byZone;
@@ -3066,7 +3072,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         if (byDate !== 0) return byDate;
         return a.coddv - b.coddv;
       });
-  }, [sortedAlocAllRows, selectedZones, zoneFilterSet, effectivePendingAddressSortDirection]);
+  }, [sortedAlocAllRows, selectedZones, zoneFilterSet, selectedNiveis, nivelFilterSet, effectivePendingAddressSortDirection]);
 
   const combinedPendingItems = useMemo<CombinedPendingItem[]>(() => {
     const combined: CombinedPendingItem[] = [
@@ -3152,29 +3158,32 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   }, [pvpsCompletedRows, pvpsRows, sepConcludedDayByKey, profile.user_id, profile.nome]);
 
   const filteredPvpsCompletedRows = useMemo(() => {
-    if (!selectedZones.length) return pvpsCompletedRowsForView;
-    return pvpsCompletedRowsForView.filter((row) => zoneFilterSet.has(row.zona));
-  }, [pvpsCompletedRowsForView, selectedZones, zoneFilterSet]);
+    return pvpsCompletedRowsForView
+      .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
+      .filter(() => selectedNiveis.length === 0);
+  }, [pvpsCompletedRowsForView, selectedZones, zoneFilterSet, selectedNiveis.length]);
 
   const filteredAlocCompletedRows = useMemo(() => {
-    if (!selectedZones.length) return alocCompletedRows;
-    return alocCompletedRows.filter((row) => zoneFilterSet.has(row.zona));
-  }, [alocCompletedRows, selectedZones, zoneFilterSet]);
+    return alocCompletedRows
+      .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
+      .filter((row) => !selectedNiveis.length || nivelFilterSet.has(row.nivel ?? ""));
+  }, [alocCompletedRows, selectedZones, zoneFilterSet, selectedNiveis, nivelFilterSet]);
 
   const startedPvpsCoddvs = useMemo(() => new Set(pvpsCompletedRows.map((row) => row.coddv)), [pvpsCompletedRows]);
   const startedAlocCoddvs = useMemo(() => new Set(alocCompletedRows.map((row) => row.coddv)), [alocCompletedRows]);
 
   const filteredPvpsPendingRows = useMemo(() => {
-    const activeRows = sortedPvpsAllRows.filter((row) => row.is_window_active && (hasMinPendingStock(row) || startedPvpsCoddvs.has(row.coddv)));
-    if (!selectedZones.length) return activeRows;
-    return activeRows.filter((row) => zoneFilterSet.has(row.zona));
+    return sortedPvpsAllRows
+      .filter((row) => row.is_window_active && (hasMinPendingStock(row) || startedPvpsCoddvs.has(row.coddv)))
+      .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona));
   }, [sortedPvpsAllRows, selectedZones, zoneFilterSet, startedPvpsCoddvs]);
 
   const filteredAlocPendingRows = useMemo(() => {
-    const activeRows = sortedAlocAllRows.filter((row) => row.is_window_active && (hasMinPendingStock(row) || startedAlocCoddvs.has(row.coddv)));
-    if (!selectedZones.length) return activeRows;
-    return activeRows.filter((row) => zoneFilterSet.has(row.zona));
-  }, [sortedAlocAllRows, selectedZones, zoneFilterSet, startedAlocCoddvs]);
+    return sortedAlocAllRows
+      .filter((row) => row.is_window_active && (hasMinPendingStock(row) || startedAlocCoddvs.has(row.coddv)))
+      .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona))
+      .filter((row) => !selectedNiveis.length || nivelFilterSet.has(row.nivel ?? ""));
+  }, [sortedAlocAllRows, selectedZones, zoneFilterSet, selectedNiveis, nivelFilterSet, startedAlocCoddvs]);
 
   const sortedPvpsCompletedRows = useMemo(
     () => [...filteredPvpsCompletedRows].sort((a, b) => {
@@ -3291,15 +3300,63 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     });
   }, [zones, selectedZones.length]);
 
-  const filteredZones = useMemo(() => {
-    const q = zoneSearch.trim().toLocaleLowerCase("pt-BR");
-    if (!q) return zones;
-    return zones.filter((zone) => zone.toLocaleLowerCase("pt-BR").includes(q));
-  }, [zones, zoneSearch]);
+  const niveis = useMemo(() => {
+    function sortNivel(a: string, b: string) {
+      if (a === "T" && b !== "T") return -1;
+      if (b === "T" && a !== "T") return 1;
+      const na = parseInt(a, 10);
+      const nb = parseInt(b, 10);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
+    }
+    const collect = (values: (string | null)[]) =>
+      values.filter((v): v is string => v !== null && v.trim() !== "");
+    if (feedView === "pendentes") {
+      const pvpsNiveis = collect(
+        pvpsFeedItemsAll
+          .filter((item) => item.row.is_window_active && item.kind === "pul")
+          .map((item) => item.kind === "pul" ? item.nivel : null)
+      );
+      if (tab === "pvps") {
+        return Array.from(new Set(pvpsNiveis)).sort(sortNivel);
+      }
+      if (tab === "ambos") {
+        return Array.from(new Set(collect(
+          [
+            ...pvpsNiveis,
+            ...sortedAlocAllRows.filter((row) => row.is_window_active).map((row) => row.nivel)
+          ]
+        ))).sort(sortNivel);
+      }
+      return Array.from(new Set(collect(
+        sortedAlocAllRows.filter((row) => row.is_window_active).map((row) => row.nivel)
+      ))).sort(sortNivel);
+    }
+    if (tab === "ambos") {
+      return Array.from(new Set(collect(
+        combinedCompletedItems.map((item) => item.module === "alocacao" ? item.row.nivel : null)
+      ))).sort(sortNivel);
+    }
+    return Array.from(new Set(collect(alocCompletedRows.map((row) => row.nivel)))).sort(sortNivel);
+  }, [feedView, tab, pvpsFeedItemsAll, sortedAlocAllRows, alocCompletedRows, combinedCompletedItems]);
+
+  useEffect(() => {
+    if (!selectedNiveis.length) return;
+    const allowed = new Set(niveis);
+    setSelectedNiveis((previous) => {
+      const next = previous.filter((n) => allowed.has(n));
+      if (next.length === previous.length) return previous;
+      return next;
+    });
+  }, [niveis, selectedNiveis.length]);
 
   const zoneScopeKey = useMemo(
-    () => selectedZones.slice().sort((a, b) => a.localeCompare(b)).join(","),
-    [selectedZones]
+    () => {
+      const zonePart = selectedZones.slice().sort((a, b) => a.localeCompare(b)).join(",");
+      const nivelPart = selectedNiveis.slice().sort((a, b) => a.localeCompare(b)).join(",");
+      return `${zonePart}|${nivelPart}`;
+    },
+    [selectedZones, selectedNiveis]
   );
   const showPendingZoneSortToggle = feedView === "pendentes" && selectedZones.length > 0;
   const visiblePendingSwipeRowIds = useMemo(() => {
@@ -4740,6 +4797,31 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     ));
   }
 
+  function toggleNivel(nivel: string): void {
+    setSelectedNiveis((previous) => (
+      previous.includes(nivel) ? previous.filter((n) => n !== nivel) : [...previous, nivel]
+    ));
+  }
+
+  const visibleZoneOptions = useMemo(() => {
+    const search = zoneFilterSearch.trim().toLocaleUpperCase("pt-BR");
+    if (!search) return zones;
+    return zones.filter((zone) => zone.toLocaleUpperCase("pt-BR").includes(search));
+  }, [zones, zoneFilterSearch]);
+
+  const visibleNivelOptions = useMemo(() => {
+    const search = nivelFilterSearch.trim().toLocaleUpperCase("pt-BR");
+    if (!search) return niveis;
+    return niveis.filter((nivel) => formatAndar(nivel).toLocaleUpperCase("pt-BR").includes(search));
+  }, [niveis, nivelFilterSearch]);
+
+  const zoneFilterSummary = selectedZones.length === 0
+    ? "Todas"
+    : `${selectedZones.length} selecionada${selectedZones.length === 1 ? "" : "s"}`;
+  const nivelFilterSummary = selectedNiveis.length === 0
+    ? "Todos"
+    : `${selectedNiveis.length} selecionado${selectedNiveis.length === 1 ? "" : "s"}`;
+
   return (
     <>
       <header className="module-topbar module-topbar-fixed">
@@ -4793,6 +4875,208 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         onClose={() => setShowPendingSyncModal(false)}
         onDiscardAll={pendingSyncRows.length > 0 ? () => void discardAllPendingSyncRows() : undefined}
       />
+
+      {showZoneFilterPopup && typeof document !== "undefined"
+        ? createPortal(
+          <div
+            className="confirm-overlay pvps-popup-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pvps-zone-filter-title"
+            onClick={() => setShowZoneFilterPopup(false)}
+          >
+            <div className="confirm-dialog pvps-zone-popup-card" onClick={(event) => event.stopPropagation()}>
+              <div className="pvps-zone-popup-header">
+                <div className="pvps-zone-popup-title-row">
+                  <div className="pvps-zone-popup-title">
+                    <span className="pvps-zone-popup-icon" aria-hidden="true">{filterIcon()}</span>
+                    <h3 id="pvps-zone-filter-title">Filtrar zona</h3>
+                  </div>
+                  {selectedZones.length > 0 ? (
+                    <span className="pvps-zone-popup-badge">{selectedZones.length} ativa{selectedZones.length === 1 ? "" : "s"}</span>
+                  ) : null}
+                </div>
+                <button
+                  className="btn btn-muted pvps-zone-close-btn"
+                  type="button"
+                  onClick={() => setShowZoneFilterPopup(false)}
+                  aria-label="Fechar filtro de zona"
+                >
+                  <span aria-hidden="true">{closeIcon()}</span>
+                </button>
+              </div>
+
+              <div className="pvps-zone-search-wrap">
+                <span className="pvps-zone-search-icon" aria-hidden="true">{searchIcon()}</span>
+                <input
+                  className="pvps-zone-search-input"
+                  value={zoneFilterSearch}
+                  onChange={(event) => setZoneFilterSearch(event.target.value)}
+                  placeholder="Buscar zona"
+                  autoFocus
+                />
+              </div>
+
+              <div className="pvps-zone-picker-actions">
+                <button
+                  type="button"
+                  className="btn btn-muted pvps-zone-action-btn"
+                  onClick={() => setSelectedZones([])}
+                  disabled={selectedZones.length === 0}
+                >
+                  <span className="pvps-zone-action-icon pvps-zone-action-clear" aria-hidden="true">{clearSelectionIcon()}</span>
+                  <span className="pvps-zone-action-label">Limpar</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-muted pvps-zone-action-btn"
+                  onClick={() => setSelectedZones(visibleZoneOptions)}
+                  disabled={visibleZoneOptions.length === 0}
+                >
+                  <span className="pvps-zone-action-icon pvps-zone-action-select" aria-hidden="true">{selectFilteredIcon()}</span>
+                  <span className="pvps-zone-action-label">Selecionar</span>
+                </button>
+              </div>
+
+              {selectedZones.length > 0 ? (
+                <div className="pvps-zone-selected-count">
+                  <strong>{selectedZones.length}</strong> de {zones.length} zonas no filtro
+                </div>
+              ) : null}
+
+              <div className="pvps-zone-list">
+                {visibleZoneOptions.length === 0 ? (
+                  <p>Nenhuma zona encontrada.</p>
+                ) : visibleZoneOptions.map((zone) => {
+                  const checked = selectedZones.includes(zone);
+                  return (
+                    <label key={zone} className={`pvps-zone-item${checked ? " is-checked" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleZone(zone)}
+                      />
+                      <span className="pvps-zone-item-label">{zone}</span>
+                      {checked ? <span className="pvps-zone-check-mark" aria-hidden="true">{doneIcon()}</span> : null}
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="pvps-zone-popup-footer">
+                <button
+                  type="button"
+                  className="btn btn-primary pvps-zone-footer-btn"
+                  onClick={() => setShowZoneFilterPopup(false)}
+                >
+                  Aplicar filtro
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        ) : null}
+
+      {showNivelFilterPopup && typeof document !== "undefined"
+        ? createPortal(
+          <div
+            className="confirm-overlay pvps-popup-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pvps-nivel-filter-title"
+            onClick={() => setShowNivelFilterPopup(false)}
+          >
+            <div className="confirm-dialog pvps-zone-popup-card pvps-level-popup-card" onClick={(event) => event.stopPropagation()}>
+              <div className="pvps-zone-popup-header">
+                <div className="pvps-zone-popup-title-row">
+                  <div className="pvps-zone-popup-title">
+                    <span className="pvps-zone-popup-icon pvps-level-popup-icon" aria-hidden="true">{floorLevelIcon()}</span>
+                    <h3 id="pvps-nivel-filter-title">Filtrar nível</h3>
+                  </div>
+                  {selectedNiveis.length > 0 ? (
+                    <span className="pvps-zone-popup-badge">{selectedNiveis.length} ativo{selectedNiveis.length === 1 ? "" : "s"}</span>
+                  ) : null}
+                </div>
+                <button
+                  className="btn btn-muted pvps-zone-close-btn"
+                  type="button"
+                  onClick={() => setShowNivelFilterPopup(false)}
+                  aria-label="Fechar filtro de nivel"
+                >
+                  <span aria-hidden="true">{closeIcon()}</span>
+                </button>
+              </div>
+
+              <div className="pvps-zone-search-wrap">
+                <span className="pvps-zone-search-icon" aria-hidden="true">{searchIcon()}</span>
+                <input
+                  className="pvps-zone-search-input"
+                  value={nivelFilterSearch}
+                  onChange={(event) => setNivelFilterSearch(event.target.value)}
+                  placeholder="Buscar nível"
+                  autoFocus
+                />
+              </div>
+
+              <div className="pvps-zone-picker-actions">
+                <button
+                  type="button"
+                  className="btn btn-muted pvps-zone-action-btn"
+                  onClick={() => setSelectedNiveis([])}
+                  disabled={selectedNiveis.length === 0}
+                >
+                  <span className="pvps-zone-action-icon pvps-zone-action-clear" aria-hidden="true">{clearSelectionIcon()}</span>
+                  <span className="pvps-zone-action-label">Limpar</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-muted pvps-zone-action-btn"
+                  onClick={() => setSelectedNiveis(visibleNivelOptions)}
+                  disabled={visibleNivelOptions.length === 0}
+                >
+                  <span className="pvps-zone-action-icon pvps-zone-action-select" aria-hidden="true">{selectFilteredIcon()}</span>
+                  <span className="pvps-zone-action-label">Selecionar</span>
+                </button>
+              </div>
+
+              {selectedNiveis.length > 0 ? (
+                <div className="pvps-zone-selected-count">
+                  <strong>{selectedNiveis.length}</strong> de {niveis.length} níveis no filtro
+                </div>
+              ) : null}
+
+              <div className="pvps-zone-list pvps-level-list">
+                {visibleNivelOptions.length === 0 ? (
+                  <p>Nenhum nível encontrado.</p>
+                ) : visibleNivelOptions.map((nivel) => {
+                  const checked = selectedNiveis.includes(nivel);
+                  return (
+                    <label key={nivel} className={`pvps-zone-item${checked ? " is-checked" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleNivel(nivel)}
+                      />
+                      <span className="pvps-zone-item-label">Andar {formatAndar(nivel)}</span>
+                      {checked ? <span className="pvps-zone-check-mark" aria-hidden="true">{doneIcon()}</span> : null}
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="pvps-zone-popup-footer">
+                <button
+                  type="button"
+                  className="btn btn-primary pvps-zone-footer-btn"
+                  onClick={() => setShowNivelFilterPopup(false)}
+                >
+                  Aplicar filtro
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        ) : null}
 
       <section className="modules-shell">
         <article className="module-screen surface-enter pvps-module-shell">
@@ -4915,17 +5199,46 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               </div>
             ) : null}
 
-            <div className="pvps-toolbar-group pvps-filter-row">
-              <small className="pvps-toolbar-label">Filtro</small>
-              <button
-                className={`btn btn-muted pvps-toolbar-btn${selectedZones.length > 0 || showZoneFilterPopup ? " is-active" : ""}`}
-                type="button"
-                onClick={() => setShowZoneFilterPopup(true)}
-              >
-                <span className="pvps-btn-icon" aria-hidden="true">{filterIcon()}</span>
-                <span>Filtrar zonas {selectedZones.length > 0 ? `(${selectedZones.length})` : "(todas)"}</span>
-              </button>
-            </div>
+            {zones.length > 0 || niveis.length > 0 ? (
+              <div className="pvps-filter-bar" aria-label="Filtros da lista">
+                {zones.length > 0 ? (
+                  <button
+                    type="button"
+                    className={`pvps-filter-trigger${selectedZones.length > 0 ? " is-active" : ""}`}
+                    onClick={() => {
+                      setZoneFilterSearch("");
+                      setShowZoneFilterPopup(true);
+                    }}
+                    aria-label="Filtrar por zona"
+                    aria-pressed={selectedZones.length > 0}
+                  >
+                    <span className="pvps-filter-trigger-icon" aria-hidden="true">{filterIcon()}</span>
+                    <span className="pvps-filter-trigger-text">
+                      <strong>Zona</strong>
+                      <small>{zoneFilterSummary}</small>
+                    </span>
+                  </button>
+                ) : null}
+                {niveis.length > 0 ? (
+                  <button
+                    type="button"
+                    className={`pvps-filter-trigger${selectedNiveis.length > 0 ? " is-active" : ""}`}
+                    onClick={() => {
+                      setNivelFilterSearch("");
+                      setShowNivelFilterPopup(true);
+                    }}
+                    aria-label="Filtrar por nivel"
+                    aria-pressed={selectedNiveis.length > 0}
+                  >
+                    <span className="pvps-filter-trigger-icon" aria-hidden="true">{floorLevelIcon()}</span>
+                    <span className="pvps-filter-trigger-text">
+                      <strong>Nível</strong>
+                      <small>{nivelFilterSummary}</small>
+                    </span>
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
 
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
@@ -6525,100 +6838,6 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           document.body
         ) : null}
 
-      {showZoneFilterPopup && typeof document !== "undefined"
-        ? createPortal(
-          <div
-            className="confirm-overlay pvps-popup-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pvps-zone-filter-title"
-            onClick={() => {
-              if (adminBusy) return;
-              setShowZoneFilterPopup(false);
-            }}
-          >
-            <div className="confirm-dialog pvps-zone-popup-card" onClick={(event) => event.stopPropagation()}>
-              <div className="pvps-zone-popup-header">
-                <div className="pvps-zone-popup-title-row">
-                  <div className="pvps-zone-popup-title">
-                    <span className="pvps-zone-popup-icon" aria-hidden="true">{filterIcon()}</span>
-                    <h3 id="pvps-zone-filter-title">Filtro de zonas</h3>
-                  </div>
-                  <span className="pvps-zone-popup-badge">{tab.toUpperCase()}</span>
-                </div>
-                <button
-                  className="btn btn-muted pvps-zone-close-btn"
-                  type="button"
-                  onClick={() => setShowZoneFilterPopup(false)}
-                  aria-label="Fechar filtro"
-                >
-                  <span aria-hidden="true">{closeIcon()}</span>
-                </button>
-              </div>
-
-              <div className="pvps-zone-search-wrap">
-                <span className="pvps-zone-search-icon" aria-hidden="true">{searchIcon()}</span>
-                <input
-                  className="pvps-zone-search-input"
-                  value={zoneSearch}
-                  onChange={(event) => setZoneSearch(event.target.value.toUpperCase())}
-                  placeholder="Buscar zona... ex.: A001"
-                  autoFocus
-                />
-              </div>
-
-              <div className="pvps-zone-picker-actions">
-                <button
-                  className="btn btn-muted pvps-zone-action-btn"
-                  type="button"
-                  onClick={() => setSelectedZones([])}
-                  title="Limpar seleção"
-                  aria-label="Limpar seleção"
-                >
-                  <span className="pvps-zone-action-icon pvps-zone-action-clear" aria-hidden="true">{clearSelectionIcon()}</span>
-                  <span className="pvps-zone-action-label">Limpar</span>
-                </button>
-                <button
-                  className="btn btn-muted pvps-zone-action-btn"
-                  type="button"
-                  onClick={() => setSelectedZones(filteredZones)}
-                  title="Selecionar todas"
-                  aria-label="Selecionar todas"
-                >
-                  <span className="pvps-zone-action-icon pvps-zone-action-select" aria-hidden="true">{selectFilteredIcon()}</span>
-                  <span className="pvps-zone-action-label">Selecionar todas</span>
-                </button>
-              </div>
-
-              {selectedZones.length > 0 ? (
-                <div className="pvps-zone-selected-count">
-                  <strong>{selectedZones.length}</strong> de <strong>{zones.length}</strong> zonas selecionadas
-                </div>
-              ) : null}
-
-              <div className="pvps-zone-list">
-                {filteredZones.length === 0 ? <p>Sem zonas para este filtro.</p> : null}
-                {filteredZones.map((zone) => {
-                  const checked = selectedZones.includes(zone);
-                  return (
-                    <label key={zone} className={`pvps-zone-item${checked ? " is-checked" : ""}`}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleZone(zone)} />
-                      <span className="pvps-zone-item-label">{zone}</span>
-                      {checked ? <span className="pvps-zone-check-mark" aria-hidden="true">{doneIcon()}</span> : null}
-                    </label>
-                  );
-                })}
-              </div>
-
-              <div className="pvps-zone-popup-footer">
-                <button className="btn btn-primary pvps-zone-footer-btn" type="button" onClick={() => setShowZoneFilterPopup(false)}>
-                  Aplicar filtro{selectedZones.length > 0 ? ` (${selectedZones.length})` : ""}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        ) : null}
 
     </>
   );

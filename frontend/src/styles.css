@@ -9720,6 +9720,24 @@ small {
   justify-content: center;
 }
 
+.pvps-level-popup-card {
+  width: min(440px, calc(100vw - 14px));
+}
+
+.pvps-level-popup-icon {
+  background: linear-gradient(135deg, #15705b, #1f9f7a);
+  box-shadow: 0 2px 6px rgba(21, 112, 91, 0.24);
+}
+
+.pvps-level-popup-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pvps-level-list {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
 /* Mobile overrides for zone popup */
 @media (max-width: 980px) {
   .pvps-zone-popup-icon {
@@ -9751,6 +9769,83 @@ small {
     min-height: 54px;
     font-size: 1.02rem;
   }
+}
+
+/* ─── Compact List Filters ─────────────────────────── */
+.pvps-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+.pvps-filter-trigger {
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid #d8e4f2;
+  background: linear-gradient(145deg, #f8fbff, #eef4fc);
+  color: #243f67;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 140ms ease;
+  text-align: left;
+}
+
+.pvps-filter-trigger:active {
+  transform: scale(0.98);
+}
+
+.pvps-filter-trigger.is-active {
+  border-color: #8db0df;
+  background: linear-gradient(145deg, #eef5ff, #dfeafb);
+  box-shadow: 0 3px 10px rgba(46, 99, 188, 0.14);
+}
+
+.pvps-filter-trigger-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #2e63bc;
+  border: 1px solid rgba(46, 99, 188, 0.14);
+}
+
+.pvps-filter-trigger-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pvps-filter-trigger-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.pvps-filter-trigger-text strong {
+  font-family: "Sora", sans-serif;
+  font-size: 0.82rem;
+  color: #18355f;
+}
+
+.pvps-filter-trigger-text small {
+  color: #587091;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .busca-produto-shell {
