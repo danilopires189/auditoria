@@ -19116,6 +19116,26 @@ small {
   white-space: normal;
 }
 
+.conservadora-actions-row {
+  align-items: stretch;
+}
+
+.conservadora-actions-row.is-admin {
+  grid-template-columns: minmax(360px, 2.4fr) repeat(3, minmax(170px, 1fr));
+}
+
+.conservadora-actions-row.is-user {
+  grid-template-columns: minmax(360px, 2.8fr) repeat(2, minmax(180px, 1fr));
+}
+
+.conservadora-search-wrap {
+  min-width: 0;
+}
+
+.conservadora-actions-row .btn {
+  white-space: nowrap;
+}
+
 /* History timeline */
 .caixa-historico-timeline {
   display: flex;
@@ -19498,7 +19518,9 @@ small {
 
   .conservadora-filters,
   .conservadora-manage-grid,
-  .conservadora-inline-form {
+  .conservadora-inline-form,
+  .conservadora-actions-row.is-admin,
+  .conservadora-actions-row.is-user {
     grid-template-columns: 1fr;
   }
 

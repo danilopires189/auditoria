@@ -304,8 +304,8 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
         {!isOnline && <div className="alert error">Este módulo depende da base online para calcular os embarques agregados e os status documentais.</div>}
         {!currentCd && <div className="alert error">Nenhum CD padrão foi encontrado para o seu perfil.</div>}
 
-        <div className="termo-actions-row">
-          <div className="caixa-input-scan-wrap" style={{ flex: "1 1 260px" }}>
+        <div className={`termo-actions-row conservadora-actions-row ${canManage ? "is-admin" : "is-user"}`}>
+          <div className="caixa-input-scan-wrap conservadora-search-wrap">
             <input
               type="search"
               className="caixa-search-input"
@@ -316,8 +316,8 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
             />
           </div>
           <button type="button" className="btn btn-muted" onClick={() => { setHistoryOffset(0); setHistoryOpen(true); }} disabled={!currentCd || !isOnline}>📋 Histórico</button>
-          {canManage && <button type="button" className="btn btn-muted" onClick={() => setManageOpen(true)} disabled={!currentCd || !isOnline}>🧾 Transportadoras</button>}
-          <button type="button" className="btn btn-primary" onClick={() => setRefreshNonce((value) => value + 1)} disabled={!currentCd || !isOnline || loading}>{loading ? "Atualizando..." : "Atualizar"}</button>
+          {canManage && <button type="button" className="btn btn-muted" onClick={() => setManageOpen(true)} disabled={!currentCd || !isOnline}>🚚 Transportadoras</button>}
+          <button type="button" className="btn btn-muted" onClick={() => setRefreshNonce((value) => value + 1)} disabled={!currentCd || !isOnline || loading}>{loading ? "🔄 Atualizando..." : "🔄 Atualizar"}</button>
         </div>
         {loading && rows.length === 0 ? <p className="caixa-sem-itens">Carregando embarques...</p> : (
           <>
