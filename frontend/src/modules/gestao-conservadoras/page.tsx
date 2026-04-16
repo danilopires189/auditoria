@@ -57,8 +57,8 @@ function statusDescription(row: ConservadoraShipmentCard): string {
   if (row.status === "documentacao_recebida" && row.document_confirmed_at) {
     return `Confirmado em ${formatDateTimeBrasilia(row.document_confirmed_at)}.`;
   }
-  if (row.status === "documentacao_em_atraso") return "Já existe embarque posterior da mesma placa e o documento passou do prazo de 5 dias.";
-  if (row.status === "aguardando_documento") return "Já existe embarque posterior da mesma placa e o documento ainda está no prazo.";
+  if (row.status === "documentacao_em_atraso") return "Já existe embarque posterior da mesma placa com pedido maior e o documento passou do prazo de 5 dias.";
+  if (row.status === "aguardando_documento") return "Já existe embarque posterior da mesma placa com pedido maior e o documento ainda está no prazo.";
   return "Ainda não existe embarque posterior para esta placa.";
 }
 
@@ -485,7 +485,7 @@ function ConservadoraCard({ row, isExpanded, isBusy, onToggleExpanded, onConfirm
             <span>Data do embarque: <strong>{formatDateTimeBrasilia(row.dt_lib ?? row.event_at)}</strong></span>
             <span>Transportadora: <strong>{transportadoraLabel(row)}</strong></span>
             <span>Responsável: <strong>{row.responsavel_nome ?? "Não informado"}</strong>{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
-            {row.next_embarque_at && <span>Próximo embarque da placa: <strong>{formatDateTimeBrasilia(row.next_embarque_at)}</strong></span>}
+            {row.next_embarque_at && <span>Próximo embarque da placa com pedido maior: <strong>{formatDateTimeBrasilia(row.next_embarque_at)}</strong></span>}
             {row.document_confirmed_at && <span>Documento confirmado: <strong>{formatDateTimeBrasilia(row.document_confirmed_at)}</strong>{row.document_confirmed_nome ? ` | ${row.document_confirmed_nome}` : ""}</span>}
           </div>
           <p className="caixa-card-obs">{statusDescription(row)}</p>
