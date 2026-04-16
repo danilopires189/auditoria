@@ -66,7 +66,7 @@ function toDisplayName(nome: string): string {
 function statusLabel(status: ConservadoraStatus): string {
   switch (status) {
     case "aguardando_documento": return "🟡 Aguardando Doc.";
-    case "documentacao_em_atraso": return "🔴 Documentação em Atraso";
+    case "documentacao_em_atraso": return "🔴 Doc. em Atraso";
     case "documentacao_recebida": return "✅ Doc. Recebida";
     default: return "🚚 Em Trânsito";
   }
