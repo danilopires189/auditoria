@@ -42,6 +42,11 @@ function formatPedidoSemDv(value: string | number | null | undefined): string {
   return compact.length > 1 ? compact.slice(0, -1) : compact;
 }
 
+function formatDateOnlyFromDateTime(value: string | null | undefined): string {
+  const formatted = formatDateTimeBrasilia(value);
+  return formatted === "-" ? formatted : formatted.split(",")[0]?.trim() ?? "-";
+}
+
 function toDisplayName(nome: string): string {
   const compact = nome.trim().replace(/\s+/g, " ");
   if (!compact) return "Usuário";
@@ -351,7 +356,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
                   <span className="caixa-historico-meta">Pedido: {formatPedidoSemDv(row.seq_ped)}</span>
                   <span className="caixa-historico-meta">Placa: {row.placa}</span>
                   <span className="caixa-historico-meta">Embarque: {formatDateTimeBrasilia(row.dt_lib ?? row.event_at)}</span>
-                  {row.dt_ped && <span className="caixa-historico-meta">Data do pedido: {formatDateTimeBrasilia(row.dt_ped)}</span>}
+                  {row.dt_ped && <span className="caixa-historico-meta">Data do pedido: {formatDateOnlyFromDateTime(row.dt_ped)}</span>}
                   <span className="caixa-historico-meta">Transportadora: {transportadoraLabel(row)}</span>
                   <span className="caixa-historico-meta">Responsável: {row.responsavel_nome ?? "Não informado"}{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
                   {row.document_confirmed_at && <span className="caixa-historico-meta">Documento confirmado em {formatDateTimeBrasilia(row.document_confirmed_at)}{row.document_confirmed_nome ? ` por ${row.document_confirmed_nome}` : ""}</span>}
@@ -494,11 +499,11 @@ function ConservadoraCard({ row, isExpanded, isBusy, onToggleExpanded, onConfirm
         <div className="caixa-card-details">
           <div className="caixa-card-meta-grid">
             <span>Pedido: <strong>{pedidoDisplay}</strong></span>
-            <span>Data do pedido: <strong>{formatDateTimeBrasilia(row.dt_ped)}</strong></span>
+            <span>Data do pedido: <strong>{formatDateOnlyFromDateTime(row.dt_ped)}</strong></span>
             <span>Data do embarque: <strong>{formatDateTimeBrasilia(row.dt_lib ?? row.event_at)}</strong></span>
             <span>Transportadora: <strong>{transportadoraLabel(row)}</strong></span>
             <span>Responsável: <strong>{row.responsavel_nome ?? "Não informado"}</strong>{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
-            {row.next_embarque_at && <span>Próximo embarque da placa com pedido maior: <strong>{formatDateTimeBrasilia(row.next_embarque_at)}</strong></span>}
+            {row.next_embarque_at && <span>Embarque seguinte em: <strong>{formatDateTimeBrasilia(row.next_embarque_at)}</strong></span>}
             {row.document_confirmed_at && <span>Documento confirmado: <strong>{formatDateTimeBrasilia(row.document_confirmed_at)}</strong>{row.document_confirmed_nome ? ` | ${row.document_confirmed_nome}` : ""}</span>}
           </div>
           <p className="caixa-card-obs">{statusDescription(row)}</p>
