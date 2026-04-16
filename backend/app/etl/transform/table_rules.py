@@ -5,6 +5,12 @@ from typing import Any
 import pandas as pd
 
 
+def _coerce_date_series_dayfirst(series: pd.Series) -> tuple[pd.Series, int]:
+    parsed = pd.to_datetime(series, errors="coerce", dayfirst=True).dt.date
+    converted_count = int((series.notna() & parsed.notna()).sum())
+    return parsed, converted_count
+
+
 def _relocalize_utc_series_to_brasilia(series: pd.Series) -> tuple[pd.Series, int]:
     non_null_count = int(series.notna().sum())
     if non_null_count == 0:
@@ -120,19 +126,42 @@ def _prepare_db_avulso_compat_columns(
     frame: pd.DataFrame,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     work = frame.copy()
+    parsed_data_mov = 0
+    parsed_dt_mov = 0
+
+    if "data_mov" in work.columns:
+        work["data_mov"], parsed_data_mov = _coerce_date_series_dayfirst(work["data_mov"])
 
     if "dt_mov" not in work.columns and "data_mov" in work.columns:
         work["dt_mov"] = work["data_mov"]
-        return work, {"populated_dt_mov_from_data_mov": int(work["data_mov"].notna().sum())}
+        populated = int(work["data_mov"].notna().sum())
+        return work, {
+            "populated_dt_mov_from_data_mov": populated,
+            "parsed_data_mov": parsed_data_mov,
+            "parsed_dt_mov": populated,
+        }
 
     if "dt_mov" in work.columns and "data_mov" in work.columns:
+        work["dt_mov"], parsed_dt_mov = _coerce_date_series_dayfirst(work["dt_mov"])
         fill_mask = work["dt_mov"].isna() & work["data_mov"].notna()
         populated = int(fill_mask.sum())
         if populated > 0:
             work.loc[fill_mask, "dt_mov"] = work.loc[fill_mask, "data_mov"]
-        return work, {"populated_dt_mov_from_data_mov": populated}
+            parsed_dt_mov += populated
+        return work, {
+            "populated_dt_mov_from_data_mov": populated,
+            "parsed_data_mov": parsed_data_mov,
+            "parsed_dt_mov": parsed_dt_mov,
+        }
 
-    return work, {"populated_dt_mov_from_data_mov": 0}
+    if "dt_mov" in work.columns:
+        work["dt_mov"], parsed_dt_mov = _coerce_date_series_dayfirst(work["dt_mov"])
+
+    return work, {
+        "populated_dt_mov_from_data_mov": 0,
+        "parsed_data_mov": parsed_data_mov,
+        "parsed_dt_mov": parsed_dt_mov,
+    }
 
 
 def apply_table_specific_rules(

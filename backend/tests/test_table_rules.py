@@ -30,6 +30,22 @@ class TableRulesTests(unittest.TestCase):
             pd.Timestamp("2026-04-08").date(),
         ])
 
+    def test_db_avulso_parses_string_dates_with_dayfirst(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {"cd": 8, "id_mov": "1", "nr_volume": "A", "data_mov": "15-04-2026"},
+                {"cd": 8, "id_mov": "2", "nr_volume": "B", "dt_mov": "14-04-2026", "data_mov": "15-04-2026"},
+            ]
+        )
+
+        filtered, stats = apply_table_specific_rules("db_avulso", frame)
+
+        self.assertEqual(stats["populated_dt_mov_from_data_mov"], 1)
+        self.assertEqual(filtered["dt_mov"].tolist(), [
+            pd.Timestamp("2026-04-15").date(),
+            pd.Timestamp("2026-04-14").date(),
+        ])
+
     def test_db_usuario_drops_empty_cd_when_same_mat_has_cd(self) -> None:
         frame = pd.DataFrame(
             [

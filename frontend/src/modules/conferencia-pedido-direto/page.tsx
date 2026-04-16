@@ -5,7 +5,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent
 } from "react";
 import type { IScannerControls } from "@zxing/browser";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
@@ -13,6 +13,7 @@ import { formatCountLabel } from "../../shared/inflection";
 import { shouldUseQueuedMutationFlow } from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
+import { resolvePedidoDiretoLinkOriginFromWindow } from "../../shared/pedido-direto-link-origin";
 import {
   getDbBarrasByBarcode,
   getDbBarrasMeta,
@@ -25,6 +26,11 @@ import {
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
+import {
+  buildPedidoDiretoLabelData,
+  PEDIDO_DIRETO_LABEL_PRINT_CSS,
+  PedidoDiretoLabelSheet
+} from "./label-preview";
 import {
   buildPedidoDiretoVolumeKey,
   cleanupExpiredPedidoDiretoVolumes,
@@ -67,6 +73,7 @@ import type {
   CdOption,
   PedidoDiretoDivergenciaTipo,
   PedidoDiretoItemRow,
+  PedidoDiretoLinkOrigin,
   PedidoDiretoLocalItem,
   PedidoDiretoLocalVolume,
   PedidoDiretoManifestItemRow,
@@ -237,7 +244,13 @@ function createLocalVolumeFromRemote(
   items: PedidoDiretoItemRow[]
 ): PedidoDiretoLocalVolume {
   const confDate = volume.conf_date || todayIsoBrasilia();
-  const localKey = buildPedidoDiretoVolumeKey(profile.user_id, volume.cd, confDate, volume.id_vol);
+  const localKey = buildPedidoDiretoVolumeKey(
+    profile.user_id,
+    volume.cd,
+    confDate,
+    volume.id_vol,
+    volume.origem_link
+  );
   const localItems: PedidoDiretoLocalItem[] = items.map((item) => ({
     coddv: item.coddv,
     barras: item.barras ?? null,
@@ -253,8 +266,10 @@ function createLocalVolumeFromRemote(
     conf_date: confDate,
     cd: volume.cd,
     id_vol: volume.id_vol,
+    origem_link: volume.origem_link,
     caixa: volume.caixa,
     pedido: volume.pedido,
+    sq: volume.sq,
     filial: volume.filial,
     filial_nome: volume.filial_nome,
     rota: volume.rota,
@@ -282,12 +297,13 @@ function createLocalVolumeFromManifest(
   profile: PedidoDiretoModuleProfile,
   cd: number,
   idEtiqueta: string,
-  manifestItems: PedidoDiretoManifestItemRow[]
+  manifestItems: PedidoDiretoManifestItemRow[],
+  origemLink: PedidoDiretoLinkOrigin
 ): PedidoDiretoLocalVolume {
   const nowIso = new Date().toISOString();
   const confDate = todayIsoBrasilia();
   const first = manifestItems[0];
-  const localKey = buildPedidoDiretoVolumeKey(profile.user_id, cd, confDate, idEtiqueta);
+  const localKey = buildPedidoDiretoVolumeKey(profile.user_id, cd, confDate, idEtiqueta, origemLink);
   const items: PedidoDiretoLocalItem[] = manifestItems.map((row) => ({
     coddv: row.coddv,
     barras: null,
@@ -303,8 +319,10 @@ function createLocalVolumeFromManifest(
     conf_date: confDate,
     cd,
     id_vol: idEtiqueta,
+    origem_link: origemLink,
     caixa: first?.caixa ?? null,
     pedido: first?.pedido ?? null,
+    sq: first?.sq ?? null,
     filial: first?.filial ?? null,
     filial_nome: first?.filial_nome ?? null,
     rota: first?.rota ?? null,
@@ -586,9 +604,9 @@ function formatDivergenciaLabel(value: string | null | undefined): string {
 }
 
 function buildConferenceReportKey(
-  value: Pick<PedidoDiretoReportRow, "conf_date" | "cd" | "id_vol">
+  value: Pick<PedidoDiretoReportRow, "conf_date" | "cd" | "id_vol" | "origem_link">
 ): string {
-  return `${value.conf_date}|${value.cd}|${value.id_vol}`;
+  return `${value.conf_date}|${value.cd}|${value.id_vol}|${value.origem_link}`;
 }
 
 function isBrowserDesktop(): boolean {
@@ -605,6 +623,17 @@ function searchIcon() {
   );
 }
 
+function labelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 7.5A2.5 2.5 0 0 1 7.5 5h8.2c.53 0 1.04.21 1.41.59l1.3 1.29c.38.38.59.88.59 1.42v8.2A2.5 2.5 0 0 1 16.5 19h-9A2.5 2.5 0 0 1 5 16.5z" />
+      <path d="M9 9h6" />
+      <path d="M9 12h6" />
+      <path d="M9 15h3.5" />
+    </svg>
+  );
+}
+
 export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: ConferenciaPedidoDiretoPageProps) {
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
@@ -612,6 +641,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
   const etiquetaRef = useRef<HTMLInputElement | null>(null);
   const barrasRef = useRef<HTMLInputElement | null>(null);
+  const labelPreviewRef = useRef<HTMLDivElement | null>(null);
   const scannerInputStateRef = useRef<Record<ScannerInputTarget, ScannerInputState>>({
     etiqueta: createScannerInputState(),
     barras: createScannerInputState()
@@ -679,6 +709,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [finalizeMotivo, setFinalizeMotivo] = useState("");
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [showLabelModal, setShowLabelModal] = useState(false);
+  const [labelVolumeCountInput, setLabelVolumeCountInput] = useState("1");
+  const [labelPreviewVolumeCount, setLabelPreviewVolumeCount] = useState(1);
+  const [labelError, setLabelError] = useState<string | null>(null);
 
   const [busyManifest, setBusyManifest] = useState(false);
   const [busyOpenVolume, setBusyOpenVolume] = useState(false);
@@ -690,6 +724,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
   const isGlobalAdmin = useMemo(() => profile.role === "admin" && profile.cd_default == null, [profile]);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
+  const currentLinkOrigin = useMemo(() => resolvePedidoDiretoLinkOriginFromWindow(), []);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
   const canSeeReportTools = isDesktop && profile.role === "admin";
   const currentCdLabel = useMemo(() => {
@@ -721,6 +756,19 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     && activeVolume.started_by === profile.user_id
   );
   const hasOpenConference = Boolean(activeVolume && activeVolume.status === "em_conferencia" && !activeVolume.is_read_only);
+  const labelPreviewData = useMemo(() => {
+    if (!activeVolume) return [];
+    return buildPedidoDiretoLabelData({
+      cd: activeVolume.cd,
+      loja_numero: activeVolume.filial,
+      loja_nome: activeVolume.filial_nome,
+      pedido: activeVolume.pedido,
+      sq: activeVolume.sq,
+      rota: activeVolume.rota,
+      matricula: activeVolume.started_mat || profile.mat || null,
+      volume_total: labelPreviewVolumeCount
+    });
+  }, [activeVolume, labelPreviewVolumeCount, profile.mat]);
 
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
@@ -795,9 +843,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     return {
       dtIni: reportDtIni,
       dtFim: reportDtFim,
-      cd: currentCd
+      cd: currentCd,
+      origem_link: currentLinkOrigin
     };
-  }, [currentCd, reportDtFim, reportDtIni]);
+  }, [currentCd, currentLinkOrigin, reportDtFim, reportDtIni]);
 
   const runReportSearch = useCallback(async () => {
     if (!canSeeReportTools) return;
@@ -868,6 +917,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         conf_date: string;
         cd: number;
         id_vol: string;
+        origem_link: PedidoDiretoLinkOrigin;
         caixa: string | null;
         pedido: number | null;
         filial: number | null;
@@ -904,6 +954,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           conf_date: row.conf_date,
           cd: row.cd,
           id_vol: row.id_vol,
+          origem_link: row.origem_link,
           caixa: row.caixa,
           pedido: row.pedido,
           filial: row.filial,
@@ -1183,16 +1234,16 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   }, []);
 
   const refreshPendingState = useCallback(async () => {
-    const pending = await getPendingSummary(profile.user_id);
+    const pending = await getPendingSummary(profile.user_id, currentLinkOrigin);
     setPendingCount(pending.pending_count);
     setPendingErrors(pending.errors_count);
-  }, [profile.user_id]);
+  }, [currentLinkOrigin, profile.user_id]);
 
   const loadPendingSyncRows = useCallback(async () => {
-    const rows = await listPendingLocalVolumes(profile.user_id);
+    const rows = await listPendingLocalVolumes(profile.user_id, currentLinkOrigin);
     setPendingSyncRows(rows);
     return rows;
-  }, [profile.user_id]);
+  }, [currentLinkOrigin, profile.user_id]);
 
   const openPendingSyncModal = useCallback(async () => {
     const rows = await loadPendingSyncRows();
@@ -1302,10 +1353,16 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       setErrorMessage(null);
     }
     try {
-      const result = await syncPendingPedidoDiretoVolumes(profile.user_id);
+      const result = await syncPendingPedidoDiretoVolumes(profile.user_id, currentLinkOrigin);
       await refreshPendingState();
       if (activeVolume) {
-        const refreshed = await getLocalVolume(profile.user_id, activeVolume.cd, activeVolume.conf_date, activeVolume.id_vol);
+        const refreshed = await getLocalVolume(
+          profile.user_id,
+          activeVolume.cd,
+          activeVolume.conf_date,
+          activeVolume.id_vol,
+          activeVolume.origem_link
+        );
         if (refreshed) {
           setActiveVolume(refreshed);
         } else {
@@ -1330,7 +1387,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     } finally {
       setBusySync(false);
     }
-  }, [activeVolume, busySync, isOnline, profile.user_id, refreshPendingState]);
+  }, [activeVolume, busySync, currentLinkOrigin, isOnline, profile.user_id, refreshPendingState]);
 
   const prepareOfflineManifest = useCallback(async (forceRefresh: boolean, background = false) => {
     if (currentCd == null) throw new Error("Selecione um CD antes de trabalhar offline.");
@@ -1355,8 +1412,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         if (localBarrasMeta.row_count <= 0) {
           throw new Error("Sem base local de barras. Conecte-se e ative o modo offline para sincronizar.");
         }
-        const localRoutes = await getRouteOverviewLocal(profile.user_id, currentCd);
-        setRouteRows(localRoutes);
+        const scopedLocalRoutes = await getRouteOverviewLocal(profile.user_id, currentCd, currentLinkOrigin);
+        setRouteRows(scopedLocalRoutes);
         setManifestReady(true);
         setManifestInfo(
           buildManifestInfoLine({
@@ -1376,7 +1433,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       let termoRowCount = remoteMeta.row_count;
 
       if (shouldDownload) {
-        const bundle = await fetchManifestBundle(currentCd, (progress) => {
+        const bundle = await fetchManifestBundle(currentCd, currentLinkOrigin, (progress) => {
           if (progress.step === "items") {
             if (progress.total > 0) {
               setProgressMessage(
@@ -1394,7 +1451,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
         const routesForSave = bundle.routes.length > 0
           ? bundle.routes
-          : await getRouteOverviewLocal(profile.user_id, currentCd);
+          : await getRouteOverviewLocal(profile.user_id, currentCd, currentLinkOrigin);
 
         await saveManifestSnapshot({
           user_id: profile.user_id,
@@ -1402,18 +1459,19 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           meta: bundle.meta,
           items: bundle.items,
           barras: [],
-          routes: routesForSave
+          routes: routesForSave,
+          route_origem_link: currentLinkOrigin
         });
 
         setRouteRows(routesForSave);
         termoRowCount = bundle.meta.row_count;
       } else {
         try {
-          const routes = await fetchRouteOverview(currentCd);
-          await saveRouteOverviewLocal(profile.user_id, currentCd, routes);
+          const routes = await fetchRouteOverview(currentCd, currentLinkOrigin);
+          await saveRouteOverviewLocal(profile.user_id, currentCd, routes, currentLinkOrigin);
           setRouteRows(routes);
         } catch {
-          const fallbackRoutes = await getRouteOverviewLocal(profile.user_id, currentCd);
+          const fallbackRoutes = await getRouteOverviewLocal(profile.user_id, currentCd, currentLinkOrigin);
           setRouteRows(fallbackRoutes);
         }
       }
@@ -1455,7 +1513,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       setBusyManifest(false);
       setProgressMessage(null);
     }
-  }, [currentCd, isOnline, profile.user_id]);
+  }, [currentCd, currentLinkOrigin, isOnline, profile.user_id]);
 
   const applyVolumeUpdate = useCallback(async (nextVolume: PedidoDiretoLocalVolume, focusInput = true) => {
     await saveLocalVolume(nextVolume);
@@ -1467,7 +1525,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const resumeRemoteActiveVolume = useCallback(async (silent = false): Promise<PedidoDiretoLocalVolume | null> => {
     if (preferOfflineMode || !isOnline) return null;
 
-    const remoteActive = await fetchActiveVolume();
+    const remoteActive = await fetchActiveVolume(currentLinkOrigin);
     if (!remoteActive || remoteActive.status !== "em_conferencia") return null;
 
     if (isGlobalAdmin && cdAtivo !== remoteActive.cd) {
@@ -1485,7 +1543,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     }
 
     return localVolume;
-  }, [cdAtivo, isGlobalAdmin, isOnline, profile]);
+  }, [cdAtivo, currentLinkOrigin, isGlobalAdmin, isOnline, profile]);
 
   const openVolumeFromEtiqueta = useCallback(async (rawEtiqueta: string) => {
     const etiqueta = normalizeIdVol(rawEtiqueta);
@@ -1526,7 +1584,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           }
         }
 
-        const existingToday = await getLocalVolume(profile.user_id, currentCd, today, etiqueta);
+        const existingToday = await getLocalVolume(profile.user_id, currentCd, today, etiqueta, currentLinkOrigin);
         if (existingToday) {
           if (existingToday.status !== "em_conferencia" || existingToday.is_read_only) {
             showDialog({
@@ -1555,7 +1613,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         }
 
         if (isOnline) {
-          const remoteVolume = await openVolume(etiqueta, currentCd);
+          const remoteVolume = await openVolume(etiqueta, currentCd, currentLinkOrigin);
           const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
           const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
           await saveLocalVolume(localVolume);
@@ -1580,7 +1638,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           return;
         }
 
-        const offlineVolume = createLocalVolumeFromManifest(profile, currentCd, etiqueta, manifestItems);
+        const offlineVolume = createLocalVolumeFromManifest(profile, currentCd, etiqueta, manifestItems, currentLinkOrigin);
         await saveLocalVolume(offlineVolume);
         setActiveVolume(offlineVolume);
         etiquetaFinal = offlineVolume.id_vol;
@@ -1593,7 +1651,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         return;
       }
 
-      const remoteVolume = await openVolume(etiqueta, currentCd);
+      const remoteVolume = await openVolume(etiqueta, currentCd, currentLinkOrigin);
       const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
       const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
       await saveLocalVolume(localVolume);
@@ -1644,6 +1702,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     clearDismissedReadOnlyVolume,
     closeDialog,
     currentCd,
+    currentLinkOrigin,
     focusBarras,
     hasOpenConference,
     isOnline,
@@ -1721,6 +1780,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     setShowFinalizeModal(false);
     setFinalizeMotivo("");
     setFinalizeError(null);
+    setShowLabelModal(false);
+    setLabelError(null);
     setExpandedCoddv(null);
     setEditingCoddv(null);
     setEditQtdInput("0");
@@ -1731,6 +1792,70 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       etiquetaRef.current?.focus();
     });
   }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
+
+  const applyLabelPreview = useCallback(() => {
+    const nextCount = parsePositiveInteger(labelVolumeCountInput, 1);
+    setLabelPreviewVolumeCount(nextCount);
+    setLabelVolumeCountInput(String(nextCount));
+    setLabelError(null);
+  }, [labelVolumeCountInput]);
+
+  const openLabelModal = useCallback(() => {
+    if (!activeVolume) return;
+    const defaultCount = parsePositiveInteger(multiploInput, 1);
+    setLabelVolumeCountInput(String(defaultCount));
+    setLabelPreviewVolumeCount(defaultCount);
+    setLabelError(null);
+    setShowLabelModal(true);
+  }, [activeVolume, multiploInput]);
+
+  const closeLabelModal = useCallback(() => {
+    setShowLabelModal(false);
+    setLabelError(null);
+  }, []);
+
+  const printLabelPreview = useCallback(() => {
+    if (!activeVolume) return;
+    const nextCount = parsePositiveInteger(labelVolumeCountInput, 1);
+    flushSync(() => {
+      setLabelPreviewVolumeCount(nextCount);
+      setLabelVolumeCountInput(String(nextCount));
+      setLabelError(null);
+    });
+
+    const previewHtml = labelPreviewRef.current?.innerHTML.trim() ?? "";
+    if (!previewHtml) {
+      setLabelError("Gere a prévia da etiqueta antes de imprimir.");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=980,height=720");
+    if (!printWindow) {
+      setLabelError("Não foi possível abrir a janela de impressão.");
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Etiquetas Pedido Direto</title>
+    <style>${PEDIDO_DIRETO_LABEL_PRINT_CSS}</style>
+  </head>
+  <body>
+    ${previewHtml}
+    <script>
+      window.addEventListener('load', function () {
+        window.print();
+      });
+    </script>
+  </body>
+</html>`);
+    printWindow.document.close();
+    setLabelError(null);
+  }, [activeVolume, labelVolumeCountInput]);
 
   const discardPendingSyncRow = useCallback(async (row: PedidoDiretoLocalVolume) => {
     setBusyPendingDiscard(true);
@@ -1749,7 +1874,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const discardAllPendingSyncRows = useCallback(async () => {
     setBusyPendingDiscard(true);
     try {
-      const rows = await listPendingLocalVolumes(profile.user_id);
+      const rows = await listPendingLocalVolumes(profile.user_id, currentLinkOrigin);
       for (const row of rows) {
         await removeLocalVolume(row.local_key);
       }
@@ -1761,7 +1886,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     } finally {
       setBusyPendingDiscard(false);
     }
-  }, [activeVolume, clearConferenceScreen, profile.user_id, refreshPendingState]);
+  }, [activeVolume, clearConferenceScreen, currentLinkOrigin, profile.user_id, refreshPendingState]);
 
   const handleClosedConferenceError = useCallback(async (rawMessage: string): Promise<boolean> => {
     if (!rawMessage.includes("CONFERENCIA_NAO_ENCONTRADA_OU_FINALIZADA")) {
@@ -1769,7 +1894,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     }
     if (isOnline && activeVolume) {
       try {
-        const remoteVolume = await openVolume(activeVolume.id_vol, activeVolume.cd);
+        const remoteVolume = await openVolume(activeVolume.id_vol, activeVolume.cd, activeVolume.origem_link);
         const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
         const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
         await saveLocalVolume(localVolume);
@@ -2115,7 +2240,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         setStatusMessage("Conferência finalizada localmente. Você já pode iniciar outro PedidoSeq.");
       } else {
         const remoteConfId = activeVolume.remote_conf_id
-          ?? (await openVolume(activeVolume.id_vol, activeVolume.cd)).conf_id;
+          ?? (await openVolume(activeVolume.id_vol, activeVolume.cd, activeVolume.origem_link)).conf_id;
         await syncSnapshot(
           remoteConfId,
           activeVolume.items.map((item) => ({
@@ -2157,20 +2282,20 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       return;
     }
     if (!isOnline) {
-      const local = await getRouteOverviewLocal(profile.user_id, currentCd);
+      const local = await getRouteOverviewLocal(profile.user_id, currentCd, currentLinkOrigin);
       setRouteRows(local);
       return;
     }
 
     try {
-      const rows = await fetchRouteOverview(currentCd);
+      const rows = await fetchRouteOverview(currentCd, currentLinkOrigin);
       setRouteRows(rows);
-      await saveRouteOverviewLocal(profile.user_id, currentCd, rows);
+      await saveRouteOverviewLocal(profile.user_id, currentCd, rows, currentLinkOrigin);
     } catch {
-      const fallback = await getRouteOverviewLocal(profile.user_id, currentCd);
+      const fallback = await getRouteOverviewLocal(profile.user_id, currentCd, currentLinkOrigin);
       setRouteRows(fallback);
     }
-  }, [currentCd, isOnline, profile.user_id]);
+  }, [currentCd, currentLinkOrigin, isOnline, profile.user_id]);
 
   const openRoutesModal = useCallback(async () => {
     setRouteSearchInput("");
@@ -2206,9 +2331,9 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
     setRouteRows(nextRows);
     if (currentCd === volume.cd) {
-      await saveRouteOverviewLocal(profile.user_id, volume.cd, nextRows);
+      await saveRouteOverviewLocal(profile.user_id, volume.cd, nextRows, currentLinkOrigin);
     }
-  }, [currentCd, profile.user_id, routeRows]);
+  }, [currentCd, currentLinkOrigin, profile.user_id, routeRows]);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 980px)");
@@ -2344,8 +2469,8 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     const loadLocalContext = async () => {
       const [localMeta, localRoutes, volumes, barrasMeta] = await Promise.all([
         getManifestMetaLocal(profile.user_id, currentCd),
-        getRouteOverviewLocal(profile.user_id, currentCd),
-        listUserLocalVolumes(profile.user_id),
+        getRouteOverviewLocal(profile.user_id, currentCd, currentLinkOrigin),
+        listUserLocalVolumes(profile.user_id, currentLinkOrigin),
         getDbBarrasMeta()
       ]);
       if (cancelled) return;
@@ -2412,7 +2537,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     return () => {
       cancelled = true;
     };
-  }, [currentCd, isDismissedReadOnlyVolume, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
+  }, [currentCd, currentLinkOrigin, isDismissedReadOnlyVolume, isGlobalAdmin, isOnline, profile.user_id, resumeRemoteActiveVolume]);
 
   useEffect(() => {
     void refreshPendingState();
@@ -3023,6 +3148,19 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               Relatório
             </button>
           ) : null}
+
+          {isDesktop && activeVolume ? (
+            <button
+              type="button"
+              className="btn btn-muted termo-report-toggle termo-label-topbar-btn"
+              onClick={openLabelModal}
+              disabled={busyCancel || busyFinalize}
+              title="Gerar etiqueta"
+            >
+              <span className="termo-report-toggle-icon" aria-hidden="true">{labelIcon()}</span>
+              Etiqueta
+            </button>
+          ) : null}
         </div>
 
         {showReportPanel && canSeeReportTools ? (
@@ -3220,16 +3358,18 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                 {canEditActiveVolume || activeVolume.is_read_only ? (
                   <div className="termo-volume-actions">
                     {activeVolume.is_read_only ? (
-                      <button
-                        className="btn btn-muted termo-close-btn"
-                        type="button"
-                        onClick={clearConferenceScreen}
-                        disabled={busyCancel || busyFinalize}
-                        title="Fechar visualização"
-                      >
-                        <span aria-hidden="true">{closeIcon()}</span>
-                        Fechar
-                      </button>
+                      <>
+                        <button
+                          className="btn btn-muted termo-close-btn"
+                          type="button"
+                          onClick={clearConferenceScreen}
+                          disabled={busyCancel || busyFinalize}
+                          title="Fechar visualização"
+                        >
+                          <span aria-hidden="true">{closeIcon()}</span>
+                          Fechar
+                        </button>
+                      </>
                     ) : (
                       <>
                         <button
@@ -3757,6 +3897,53 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                   <button className="btn btn-primary" type="button" onClick={() => void handleFinalizeVolume()} disabled={busyFinalize}>
                     {busyFinalize ? "Finalizando..." : "Confirmar finalização"}
                   </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {showLabelModal && activeVolume && typeof document !== "undefined"
+        ? createPortal(
+            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="termo-label-title" onClick={closeLabelModal}>
+              <div className="confirm-dialog termo-label-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="termo-label-title">Gerar etiqueta</h3>
+                <div className="termo-label-summary">
+                  <strong>PedidoSeq {activeVolume.id_vol}</strong>
+                  <p>CD: {activeVolume.cd} | Filial: {activeVolume.filial_nome ?? "-"}{activeVolume.filial != null ? ` (${activeVolume.filial})` : ""}</p>
+                  <p>Pedido: {activeVolume.pedido ?? "-"} | Seq: {activeVolume.sq ?? "-"}</p>
+                  <p>Rota: {activeVolume.rota ?? "SEM ROTA"} | Matrícula: {activeVolume.started_mat || profile.mat || "-"}</p>
+                </div>
+
+                <label className="caixa-modal-field">
+                  Quantidade de fracionamento
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={labelVolumeCountInput}
+                    onChange={(event) => setLabelVolumeCountInput(event.target.value.replace(/\D+/g, ""))}
+                    placeholder="Informe a quantidade"
+                  />
+                </label>
+
+                {labelError ? <div className="alert error">{labelError}</div> : null}
+
+                <div className="confirm-actions termo-label-top-actions">
+                  <button className="btn btn-muted" type="button" onClick={closeLabelModal}>
+                    Fechar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={applyLabelPreview}>
+                    Gerar prévia
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={printLabelPreview}>
+                    Imprimir
+                  </button>
+                </div>
+
+                <div className="termo-label-preview-shell" ref={labelPreviewRef}>
+                  <PedidoDiretoLabelSheet labels={labelPreviewData} />
                 </div>
               </div>
             </div>,

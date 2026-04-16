@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import type {
+  ConservadoraDocumentResult,
   ConservadoraHistoryFilters,
   ConservadoraRouteBinding,
   ConservadoraShipmentCard,
@@ -31,6 +32,12 @@ function parseStatus(value: unknown): ConservadoraStatus {
   return "em_transito";
 }
 
+function parseDocumentResult(value: unknown): ConservadoraDocumentResult | null {
+  if (value === "aprovada") return "aprovada";
+  if (value === "reprovada") return "reprovada";
+  return null;
+}
+
 function toErrorMessage(error: unknown): string {
   const rawMessage = (() => {
     if (error instanceof Error) return error.message;
@@ -59,6 +66,9 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("CD_SEM_ACESSO")) return "Você não possui acesso ao CD informado.";
   if (normalized.includes("EMBARQUE_OBRIGATORIO")) return "Selecione um embarque para confirmar o documento.";
   if (normalized.includes("EMBARQUE_NAO_ENCONTRADO")) return "Embarque não encontrado.";
+  if (normalized.includes("RESULTADO_DOCUMENTO_OBRIGATORIO")) return "Selecione se o doc. foi aprovado ou reprovado.";
+  if (normalized.includes("RESULTADO_DOCUMENTO_INVALIDO")) return "Resultado do doc. inválido.";
+  if (normalized.includes("OCORRENCIA_OBRIGATORIA_REPROVACAO")) return "Informe a ocorrência quando o doc. for reprovado.";
   if (/column reference .*embarque_key.*ambiguous/i.test(normalized)) {
     return "A confirmação do documento encontrou uma inconsistência temporária no servidor. Atualize a página e tente novamente.";
   }
@@ -92,6 +102,8 @@ function mapShipment(raw: Record<string, unknown>): ConservadoraShipmentCard {
     document_confirmed_at: parseNullableString(raw.document_confirmed_at),
     document_confirmed_mat: parseNullableString(raw.document_confirmed_mat),
     document_confirmed_nome: parseNullableString(raw.document_confirmed_nome),
+    document_resultado: parseDocumentResult(raw.document_resultado),
+    document_ocorrencia: parseNullableString(raw.document_ocorrencia),
     next_embarque_at: parseNullableString(raw.next_embarque_at),
     status: parseStatus(raw.status)
   };
@@ -157,12 +169,16 @@ export async function fetchConservadoraHistory(
 export async function confirmConservadoraDocumento(params: {
   cd: number;
   embarqueKey: string;
-}): Promise<{ embarque_key: string; confirmed_at: string | null }> {
+  resultado: ConservadoraDocumentResult;
+  ocorrencia?: string | null;
+}): Promise<{ embarque_key: string; confirmed_at: string | null; document_resultado: ConservadoraDocumentResult | null; document_ocorrencia: string | null }> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const { data, error } = await supabase.rpc("rpc_conservadora_confirmar_documento", {
     p_cd: params.cd,
-    p_embarque_key: params.embarqueKey
+    p_embarque_key: params.embarqueKey,
+    p_resultado: params.resultado,
+    p_ocorrencia: params.ocorrencia ?? null
   });
   if (error) throw new Error(toErrorMessage(error));
 
@@ -171,7 +187,9 @@ export async function confirmConservadoraDocumento(params: {
 
   return {
     embarque_key: parseString(first.embarque_key),
-    confirmed_at: parseNullableString(first.confirmed_at)
+    confirmed_at: parseNullableString(first.confirmed_at),
+    document_resultado: parseDocumentResult(first.document_resultado),
+    document_ocorrencia: parseNullableString(first.document_ocorrencia)
   };
 }
 

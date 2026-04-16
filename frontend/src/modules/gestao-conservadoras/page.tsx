@@ -15,6 +15,7 @@ import {
   vincularConservadoraRota
 } from "./sync";
 import type {
+  ConservadoraDocumentResult,
   ConservadoraModuleProfile,
   ConservadoraRouteBinding,
   ConservadoraShipmentCard,
@@ -86,6 +87,12 @@ function transportadoraLabel(row: ConservadoraShipmentCard): string {
   return row.transportadora_ativa ? row.transportadora_nome : `${row.transportadora_nome} (inativa)`;
 }
 
+function documentResultLabel(result: ConservadoraDocumentResult | null): string {
+  if (result === "reprovada") return "Doc. Reprovada";
+  if (result === "aprovada") return "Doc. Aprovada";
+  return "Doc. Recebida";
+}
+
 function statusSearchTerms(status: ConservadoraStatus): string[] {
   switch (status) {
     case "documentacao_em_atraso":
@@ -132,6 +139,8 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
   const [actionBusyKey, setActionBusyKey] = useState<string | null>(null);
   const [confirmDialogRow, setConfirmDialogRow] = useState<ConservadoraShipmentCard | null>(null);
   const [confirmDialogError, setConfirmDialogError] = useState<string | null>(null);
+  const [confirmDecision, setConfirmDecision] = useState<ConservadoraDocumentResult>("aprovada");
+  const [confirmOccurrence, setConfirmOccurrence] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<ConservadoraShipmentCard[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -265,19 +274,28 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
     setErrorMessage(null);
     setConfirmDialogError(null);
     try {
-      await confirmConservadoraDocumento({ cd: currentCd, embarqueKey: row.embarque_key });
-      showSuccess(`Doc. confirmado para o pedido ${formatPedidoSemDv(row.seq_ped)}.`);
+      await confirmConservadoraDocumento({
+        cd: currentCd,
+        embarqueKey: row.embarque_key,
+        resultado: confirmDecision,
+        ocorrencia: confirmDecision === "reprovada" ? confirmOccurrence.trim() : null
+      });
+      showSuccess(`${documentResultLabel(confirmDecision)} para o pedido ${formatPedidoSemDv(row.seq_ped)}.`);
       setConfirmDialogRow(null);
+      setConfirmDecision("aprovada");
+      setConfirmOccurrence("");
       setRefreshNonce((value) => value + 1);
     } catch (error) {
       setConfirmDialogError(error instanceof Error ? error.message : "Erro ao confirmar o doc.");
     } finally {
       setActionBusyKey(null);
     }
-  }, [currentCd, isOnline, showSuccess]);
+  }, [confirmDecision, confirmOccurrence, currentCd, isOnline, showSuccess]);
 
   const handleOpenConfirmDialog = useCallback((row: ConservadoraShipmentCard) => {
     setConfirmDialogError(null);
+    setConfirmDecision(row.document_resultado ?? "aprovada");
+    setConfirmOccurrence(row.document_ocorrencia ?? "");
     setConfirmDialogRow(row);
   }, []);
 
@@ -430,6 +448,41 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
                 </div>
               )}
             </div>
+            <div className="conservadora-confirm-decision">
+              <strong className="conservadora-confirm-decision-title">Resultado do Doc.</strong>
+              <div className="conservadora-confirm-choice-grid">
+                <button
+                  type="button"
+                  className={`conservadora-choice-btn ${confirmDecision === "aprovada" ? "is-active is-approved" : ""}`}
+                  onClick={() => setConfirmDecision("aprovada")}
+                  disabled={actionBusyKey === confirmDialogRow.embarque_key}
+                >
+                  ✅ Doc. Aprovada
+                </button>
+                <button
+                  type="button"
+                  className={`conservadora-choice-btn ${confirmDecision === "reprovada" ? "is-active is-reproved" : ""}`}
+                  onClick={() => setConfirmDecision("reprovada")}
+                  disabled={actionBusyKey === confirmDialogRow.embarque_key}
+                >
+                  ❌ Doc. Reprovada
+                </button>
+              </div>
+            </div>
+            {confirmDecision === "reprovada" && (
+              <div className="caixa-modal-field">
+                <label htmlFor="conservadora-ocorrencia">Ocorrência</label>
+                <textarea
+                  id="conservadora-ocorrencia"
+                  value={confirmOccurrence}
+                  onChange={(event) => setConfirmOccurrence(event.target.value)}
+                  placeholder="Descreva a ocorrência da reprovação..."
+                  rows={3}
+                  disabled={actionBusyKey === confirmDialogRow.embarque_key}
+                  style={{ resize: "vertical" }}
+                />
+              </div>
+            )}
             {confirmDialogRow.status === "documentacao_em_atraso" ? (
               <div className="alert warning">Este doc. está fora do prazo e será marcado como recebido agora.</div>
             ) : (
@@ -438,7 +491,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
             {confirmDialogError && <div className="alert error">{confirmDialogError}</div>}
             <div className="confirm-actions">
               <button type="button" className="btn btn-muted" onClick={() => setConfirmDialogRow(null)} disabled={actionBusyKey === confirmDialogRow.embarque_key}>Cancelar</button>
-              <button type="button" className="btn btn-primary" onClick={() => void handleConfirmDocumento(confirmDialogRow)} disabled={actionBusyKey === confirmDialogRow.embarque_key}>
+              <button type="button" className="btn btn-primary" onClick={() => void handleConfirmDocumento(confirmDialogRow)} disabled={actionBusyKey === confirmDialogRow.embarque_key || (confirmDecision === "reprovada" && !confirmOccurrence.trim())}>
                 {actionBusyKey === confirmDialogRow.embarque_key ? "Confirmando..." : "Confirmar Recebimento"}
               </button>
             </div>
@@ -477,7 +530,8 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
                   {row.dt_ped && <span className="caixa-historico-meta">Data do pedido: {formatDateOnlyFromDateTime(row.dt_ped)}</span>}
                   <span className="caixa-historico-meta">Transportadora: {transportadoraLabel(row)}</span>
                   <span className="caixa-historico-meta">Responsável: {row.responsavel_nome ?? "Não informado"}{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
-                  {row.document_confirmed_at && <span className="caixa-historico-meta">Doc. confirmado em {formatDateTimeBrasilia(row.document_confirmed_at)}{row.document_confirmed_nome ? ` por ${row.document_confirmed_nome}` : ""}</span>}
+                  {row.document_confirmed_at && <span className="caixa-historico-meta">{documentResultLabel(row.document_resultado)} em {formatDateTimeBrasilia(row.document_confirmed_at)}{row.document_confirmed_nome ? ` por ${row.document_confirmed_nome}` : ""}</span>}
+                  {row.document_ocorrencia && <span className="caixa-historico-obs">Ocorrência: {row.document_ocorrencia}</span>}
                 </div>
               ))}
             </div>
@@ -621,7 +675,8 @@ function ConservadoraCard({ row, isExpanded, isBusy, onToggleExpanded, onConfirm
             <span>Transportadora: <strong>{transportadoraLabel(row)}</strong></span>
             <span>Responsável: <strong>{row.responsavel_nome ?? "Não informado"}</strong>{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
             {row.next_embarque_at && <span>Embarque seguinte em: <strong>{formatDateTimeBrasilia(row.next_embarque_at)}</strong></span>}
-            {row.document_confirmed_at && <span>Doc. confirmado: <strong>{formatDateTimeBrasilia(row.document_confirmed_at)}</strong>{row.document_confirmed_nome ? ` | ${row.document_confirmed_nome}` : ""}</span>}
+            {row.document_confirmed_at && <span>{documentResultLabel(row.document_resultado)}: <strong>{formatDateTimeBrasilia(row.document_confirmed_at)}</strong>{row.document_confirmed_nome ? ` | ${row.document_confirmed_nome}` : ""}</span>}
+            {row.document_ocorrencia && <span>Ocorrência: <strong>{row.document_ocorrencia}</strong></span>}
           </div>
           <p className="caixa-card-obs">{statusDescription(row)}</p>
           <div className="caixa-card-actions">

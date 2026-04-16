@@ -10,7 +10,7 @@ echo 🎯 Este script vai forçar a criação das tabelas DB_BLITZ
 echo.
 
 echo ✅ Aplicando migrations necessárias...
-sync_backend_cli.exe bootstrap
+call sync_backend_cli_runner.bat bootstrap
 if errorlevel 1 (
     echo ❌ ERRO: Falha ao aplicar migrations do DB_BLITZ
     echo.
@@ -19,7 +19,7 @@ if errorlevel 1 (
 )
 
 echo ✅ Executando sincronização completa...
-sync_backend_cli.exe sync
+call sync_backend_cli_runner.bat sync
 if errorlevel 1 (
     echo ❌ ERRO: Falha na sincronização
     echo.

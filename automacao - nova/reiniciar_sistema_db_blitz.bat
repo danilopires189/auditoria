@@ -19,7 +19,7 @@ timeout /t 5 /nobreak >nul
 
 echo.
 echo ✅ Executando sincronização completa (vai incluir DB_BLITZ automaticamente)...
-sync_backend_cli.exe sync
+call sync_backend_cli_runner.bat sync
 
 echo.
 echo ✅ Processo concluído!

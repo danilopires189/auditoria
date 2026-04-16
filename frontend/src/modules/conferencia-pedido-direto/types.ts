@@ -2,6 +2,8 @@ export type PedidoDiretoConfStatus = "em_conferencia" | "finalizado_ok" | "final
 
 export type PedidoDiretoDivergenciaTipo = "falta" | "sobra" | "correto";
 
+export type PedidoDiretoLinkOrigin = "prevencaocd" | "logisticacd";
+
 export interface PedidoDiretoModuleProfile {
   user_id: string;
   nome: string;
@@ -29,6 +31,7 @@ export interface PedidoDiretoManifestItemRow {
   id_vol: string;
   caixa: string | null;
   pedido: number | null;
+  sq: number | null;
   filial: number | null;
   filial_nome: string | null;
   rota: string | null;
@@ -77,6 +80,7 @@ export interface PedidoDiretoReportFilters {
   dtIni: string;
   dtFim: string;
   cd: number;
+  origem_link: PedidoDiretoLinkOrigin;
 }
 
 export interface PedidoDiretoReportCount {
@@ -88,6 +92,7 @@ export interface PedidoDiretoReportRow {
   conf_date: string;
   cd: number;
   id_vol: string;
+  origem_link: PedidoDiretoLinkOrigin;
   caixa: string | null;
   pedido: number | null;
   filial: number | null;
@@ -119,8 +124,10 @@ export interface PedidoDiretoVolumeRow {
   conf_date: string;
   cd: number;
   id_vol: string;
+  origem_link: PedidoDiretoLinkOrigin;
   caixa: string | null;
   pedido: number | null;
+  sq: number | null;
   filial: number | null;
   filial_nome: string | null;
   rota: string | null;
@@ -150,8 +157,10 @@ export interface PedidoDiretoLocalVolume {
   conf_date: string;
   cd: number;
   id_vol: string;
+  origem_link: PedidoDiretoLinkOrigin;
   caixa: string | null;
   pedido: number | null;
+  sq: number | null;
   filial: number | null;
   filial_nome: string | null;
   rota: string | null;

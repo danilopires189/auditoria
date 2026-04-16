@@ -44,7 +44,7 @@ echo.
 echo 🚀 EXECUTANDO SINCRONIZAÇÃO...
 echo.
 
-sync_backend_cli.exe sync --table db_end
+call sync_backend_cli_runner.bat sync --table db_end
 
 if errorlevel 1 (
     echo ❌ ERRO na sincronização

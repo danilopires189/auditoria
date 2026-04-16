@@ -6,22 +6,22 @@ echo ==========================================
 echo   SINCRONIZAÇÃO SEM DB_BLITZ
 echo ==========================================
 echo.
-echo ℹ️  O sistema ainda não reconhece as tabelas DB_BLITZ
-echo    Isso é normal - o executável precisa ser atualizado
+echo ℹ️  Esta rotina agora usa o backend mais atual disponível
+echo    priorizando o código-fonte do projeto quando existir.
 echo.
-echo ✅ Executando sincronização das outras tabelas...
-sync_backend_cli.exe sync
+echo ✅ Executando sincronização...
+call sync_backend_cli_runner.bat sync
 
 echo.
 echo 📋 PRÓXIMOS PASSOS:
 echo.
-echo 1. As configurações do DB_BLITZ já estão no config.yml ✅
-echo 2. O arquivo DB_BLITZ.xlsx existe na pasta data ✅  
-echo 3. O sistema precisa ser recompilado para reconhecer as novas tabelas
+echo 1. Verifique o resultado da sincronização nos logs
+echo 2. Se houver mudança de schema, rode o bootstrap antes
+echo 3. A planilha e a tabela precisam apontar para a mesma configuração local
 echo.
 echo 💡 SOLUÇÕES:
-echo • Aguarde a próxima atualização do sistema
-echo • OU reinicie completamente o computador
-echo • OU entre em contato com o desenvolvedor
+echo • Use AUTOMACAO_INTELIGENTE.bat para o fluxo completo
+echo • Use bootstrap quando houver migrations novas
+echo • Consulte logs\\app.log em caso de falha
 echo.
 pause

@@ -1156,6 +1156,178 @@ small {
   min-width: 108px;
 }
 
+.termo-label-dialog {
+  width: min(100%, 980px);
+  max-width: min(calc(100vw - 24px), 980px);
+}
+
+.termo-label-summary {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(18, 41, 73, 0.12);
+  background: rgba(245, 248, 255, 0.92);
+}
+
+.termo-label-summary strong,
+.termo-label-summary p {
+  margin: 0;
+}
+
+.termo-label-summary p {
+  font-size: 0.92rem;
+  color: #44516a;
+}
+
+.termo-label-top-actions {
+  margin-top: 0;
+}
+
+.termo-label-preview-shell {
+  max-height: min(58vh, 640px);
+  overflow: auto;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(18, 41, 73, 0.1);
+  background:
+    radial-gradient(circle at top left, rgba(118, 171, 255, 0.18), transparent 36%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+}
+
+.pedido-direto-label-sheet {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.pedido-direto-label-card {
+  width: min(100%, 156mm);
+  min-height: 68mm;
+  border: 1px solid #111827;
+  border-radius: 4mm;
+  background: #fff;
+  padding: 3mm;
+  display: grid;
+  gap: 2mm;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.pedido-direto-label-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #cad5e7;
+  border-radius: 3mm;
+  background: #f5f8ff;
+  padding: 1.5mm 2mm;
+}
+
+.pedido-direto-label-title {
+  color: #0f172a;
+  font-size: 14pt;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.pedido-direto-label-brand {
+  border: 1px solid #bfd0eb;
+  border-radius: 999px;
+  padding: 0.6mm 2mm;
+  color: #0f3d8c;
+  background: #fff;
+  font-size: 9pt;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pedido-direto-label-main {
+  display: grid;
+  grid-template-columns: 1fr 34mm;
+  gap: 3mm;
+  align-items: start;
+}
+
+.pedido-direto-label-info {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1mm 2mm;
+  color: #0f172a;
+  font-size: 11pt;
+}
+
+.pedido-direto-label-info dt,
+.pedido-direto-label-info dd {
+  margin: 0;
+}
+
+.pedido-direto-label-info dt {
+  font-weight: 800;
+}
+
+.pedido-direto-label-volume {
+  border: 1px solid #111827;
+  border-radius: 3mm;
+  background: #eef4ff;
+  padding: 2mm;
+  display: grid;
+  gap: 1mm;
+  text-align: center;
+}
+
+.pedido-direto-label-volume-title {
+  font-size: 10pt;
+  font-weight: 800;
+}
+
+.pedido-direto-label-volume-main {
+  font-size: 22pt;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.pedido-direto-label-volume-note {
+  font-size: 9pt;
+  font-weight: 700;
+}
+
+.pedido-direto-label-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6mm;
+  color: #0f172a;
+  font-size: 9pt;
+}
+
+.pedido-direto-label-meta strong {
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .termo-label-dialog {
+    width: min(100%, 100vw - 24px);
+  }
+
+  .termo-label-top-actions {
+    flex-wrap: wrap;
+  }
+
+  .termo-label-top-actions .btn {
+    flex: 1 1 160px;
+  }
+
+  .pedido-direto-label-card {
+    width: 100%;
+    min-height: auto;
+  }
+
+  .pedido-direto-label-main {
+    grid-template-columns: 1fr;
+  }
+}
+
 .global-cd-picker {
   display: grid;
   gap: 6px;
@@ -19387,6 +19559,49 @@ small {
   word-break: break-word;
 }
 
+.conservadora-confirm-decision {
+  display: grid;
+  gap: 10px;
+}
+
+.conservadora-confirm-decision-title {
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #5f6f89;
+}
+
+.conservadora-confirm-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.conservadora-choice-btn {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1.5px solid #d3deee;
+  background: #fff;
+  color: #163152;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 10px 12px;
+}
+
+.conservadora-choice-btn.is-active.is-approved {
+  border-color: #7bd7a8;
+  background: #effdf4;
+  color: #166534;
+}
+
+.conservadora-choice-btn.is-active.is-reproved {
+  border-color: #f4a4a4;
+  background: #fff1f1;
+  color: #b42318;
+}
+
 .caixa-historico-tipo {
   font-family: "Sora", sans-serif;
   font-size: 0.85rem;
@@ -19655,6 +19870,10 @@ small {
   }
 
   .conservadora-confirm-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .conservadora-confirm-choice-grid {
     grid-template-columns: 1fr;
   }
 

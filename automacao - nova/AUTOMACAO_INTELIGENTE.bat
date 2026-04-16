@@ -111,38 +111,28 @@ echo ✅ Sistema estabilizado
 echo.
 echo PASSO 6: CONEXAO SUPABASE
 echo.
-echo Verificando se sync_backend_cli.exe existe...
-if not exist sync_backend_cli.exe (
-    echo ❌ ERRO CRÍTICO: sync_backend_cli.exe não encontrado!
+echo Verificando se o runner de sincronização existe...
+if not exist sync_backend_cli_runner.bat (
+    echo ❌ ERRO CRÍTICO: sync_backend_cli_runner.bat não encontrado!
     echo Verifique se o arquivo está na pasta correta.
     pause
     goto FIM
 )
-echo ✅ Executável encontrado, testando conexão...
-sync_backend_cli.exe healthcheck 2>&1
+echo ✅ Runner encontrado, testando conexão...
+call sync_backend_cli_runner.bat healthcheck 2>&1
 if errorlevel 1 (
     echo ❌ ERRO: Sem conexão com Supabase
-    echo Tentando configuração alternativa...
-    
-    copy .env .env.backup >nul
-    echo SUPABASE_DB_HOST=aws-1-sa-east-1.pooler.supabase.com> .env
-    echo SUPABASE_DB_PORT=5432>> .env
-    echo SUPABASE_DB_NAME=postgres>> .env
-    echo SUPABASE_DB_USER=postgres.gpgqklqhomsaomdnccvu>> .env
-    echo SUPABASE_DB_PASSWORD=gxz9gTQbNsn9vb6F>> .env
-    
-    sync_backend_cli.exe healthcheck 2>&1
+    echo Aguardando 10 segundos e tentando novamente...
+    timeout /t 10 /nobreak >nul
+    call sync_backend_cli_runner.bat healthcheck 2>&1
     if errorlevel 1 (
         echo ❌ ERRO: Conexão falhou
-        copy .env.backup .env >nul
-        del .env.backup >nul
         echo.
         echo ⚠️ Não foi possível conectar ao Supabase.
         pause
         goto FIM
     ) else (
-        echo ✅ CONEXÃO OK com configuração alternativa
-        del .env.backup >nul
+        echo ✅ CONEXÃO OK na segunda tentativa
     )
 ) else (
     echo ✅ CONEXÃO SUPABASE PERFEITA
@@ -152,7 +142,7 @@ echo.
 echo PASSO 7: PREPARO DO BACKEND
 echo.
 echo Aplicando migrations antes da sincronização...
-sync_backend_cli.exe bootstrap 2>&1
+call sync_backend_cli_runner.bat bootstrap 2>&1
 if errorlevel 1 (
     echo ❌ ERRO: Falha ao aplicar migrations
     set "SYNC_STATUS=BOOTSTRAP_FALHOU"
@@ -167,11 +157,11 @@ echo PASSO 8: SINCRONIZACAO OTIMIZADA
 echo.
 echo Sincronizando dados obtidos com monitoramento inteligente...
 echo 📤 Iniciando sincronização... Este processo pode demorar alguns minutos.
-sync_backend_cli.exe sync 2>&1
+call sync_backend_cli_runner.bat sync 2>&1
 if errorlevel 1 (
     echo ⚠️  Primeira tentativa teve problemas
     echo 🔄 Tentando sincronizar novamente...
-    sync_backend_cli.exe sync 2>&1
+    call sync_backend_cli_runner.bat sync 2>&1
     if errorlevel 1 (
         echo ❌ ERRO: Segunda tentativa falhou
         set "SYNC_STATUS=FALHOU"
@@ -189,7 +179,7 @@ if errorlevel 1 (
 echo.
 echo PASSO 9: VERIFICACAO FINAL
 echo.
-sync_backend_cli.exe healthcheck
+call sync_backend_cli_runner.bat healthcheck
 if errorlevel 1 (
     echo ⚠️  Verificação final teve problemas
 ) else (

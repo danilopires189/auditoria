@@ -4,6 +4,8 @@ export type ConservadoraStatus =
   | "documentacao_em_atraso"
   | "documentacao_recebida";
 
+export type ConservadoraDocumentResult = "aprovada" | "reprovada";
+
 export interface ConservadoraModuleProfile {
   user_id: string;
   nome: string;
@@ -31,6 +33,8 @@ export interface ConservadoraShipmentCard {
   document_confirmed_at: string | null;
   document_confirmed_mat: string | null;
   document_confirmed_nome: string | null;
+  document_resultado: ConservadoraDocumentResult | null;
+  document_ocorrencia: string | null;
   next_embarque_at: string | null;
   status: ConservadoraStatus;
 }

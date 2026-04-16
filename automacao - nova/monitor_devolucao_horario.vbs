@@ -58,7 +58,7 @@ Do While True
                 
                 ' Sincronizar apenas DB_DEVOLUCAO no Supabase
                 WScript.Echo "Sincronizando DB_DEVOLUCAO no Supabase..."
-                resultado = objShell.Run("sync_backend_cli.exe sync --table db_devolucao", 0, True)
+                resultado = objShell.Run("cmd /c """ & scriptPath & "\sync_backend_cli_runner.bat"" sync --table db_devolucao", 0, True)
                 
                 If resultado = 0 Then
                     WScript.Echo "✅ DB_DEVOLUCAO sincronizado com sucesso!"

@@ -1,4 +1,5 @@
 import type {
+  PedidoDiretoLinkOrigin,
   PedidoDiretoLocalVolume,
   PedidoDiretoManifestBarrasRow,
   PedidoDiretoManifestItemRow,
@@ -7,6 +8,10 @@ import type {
   PedidoDiretoPreferences,
   PedidoDiretoRouteOverviewRow
 } from "./types";
+import {
+  DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN,
+  normalizePedidoDiretoLinkOrigin
+} from "../../shared/pedido-direto-link-origin";
 
 const DB_NAME = "auditoria-pedido-direto-v1";
 const DB_VERSION = 1;
@@ -54,6 +59,7 @@ interface RouteOverviewStoreRow {
   key: string;
   user_id: string;
   cd: number;
+  origem_link: PedidoDiretoLinkOrigin;
   rows: PedidoDiretoRouteOverviewRow[];
   updated_at: string;
 }
@@ -111,8 +117,8 @@ function manifestMetaKey(userId: string, cd: number): string {
   return `manifest_meta:${userId}:${cd}`;
 }
 
-function routeOverviewKey(userId: string, cd: number): string {
-  return `route_overview:${userId}:${cd}`;
+function routeOverviewKey(userId: string, cd: number, origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): string {
+  return `route_overview:${userId}:${cd}:${normalizePedidoDiretoLinkOrigin(origemLink)}`;
 }
 
 function manifestItemKey(userId: string, cd: number, idEtiqueta: string, coddv: number): string {
@@ -123,8 +129,22 @@ function manifestBarrasKey(userId: string, cd: number, barras: string): string {
   return `manifest_barras:${userId}:${cd}:${barras}`;
 }
 
-export function buildPedidoDiretoVolumeKey(userId: string, cd: number, confDate: string, idEtiqueta: string): string {
-  return `volume:${userId}:${cd}:${confDate}:${idEtiqueta}`;
+export function buildPedidoDiretoVolumeKey(
+  userId: string,
+  cd: number,
+  confDate: string,
+  idEtiqueta: string,
+  origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
+): string {
+  return `volume:${userId}:${normalizePedidoDiretoLinkOrigin(origemLink)}:${cd}:${confDate}:${idEtiqueta}`;
+}
+
+function normalizeStoredVolume(row: PedidoDiretoLocalVolume): PedidoDiretoLocalVolume {
+  return {
+    ...row,
+    sq: typeof row.sq === "number" && Number.isFinite(row.sq) ? Math.trunc(row.sq) : null,
+    origem_link: normalizePedidoDiretoLinkOrigin(row.origem_link)
+  };
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -283,6 +303,7 @@ export async function saveManifestSnapshot(params: {
   items: PedidoDiretoManifestItemRow[];
   barras: PedidoDiretoManifestBarrasRow[];
   routes: PedidoDiretoRouteOverviewRow[];
+  route_origem_link: PedidoDiretoLinkOrigin;
 }): Promise<void> {
   await clearByUserCd(STORE_MANIFEST_ITEMS, INDEX_ITEMS_BY_USER_CD, params.user_id, params.cd);
   await clearByUserCd(STORE_MANIFEST_BARRAS, INDEX_BARRAS_BY_USER_CD, params.user_id, params.cd);
@@ -304,6 +325,7 @@ export async function saveManifestSnapshot(params: {
         id_vol: idEtiqueta,
         caixa: row.caixa ?? null,
         pedido: row.pedido ?? null,
+        sq: row.sq ?? null,
         filial: row.filial ?? null,
         filial_nome: row.filial_nome ?? null,
         rota: row.rota ?? null,
@@ -363,9 +385,10 @@ export async function saveManifestSnapshot(params: {
     metaStore.put(metaPayload);
 
     const routePayload: RouteOverviewStoreRow = {
-      key: routeOverviewKey(params.user_id, params.cd),
+      key: routeOverviewKey(params.user_id, params.cd, params.route_origem_link),
       user_id: params.user_id,
       cd: params.cd,
+      origem_link: normalizePedidoDiretoLinkOrigin(params.route_origem_link),
       rows: params.routes,
       updated_at: nowIso
     };
@@ -395,6 +418,7 @@ export async function getManifestItemsByEtiqueta(
       id_vol: row.id_vol,
       caixa: row.caixa,
       pedido: row.pedido,
+      sq: row.sq ?? null,
       filial: row.filial,
       filial_nome: row.filial_nome,
       rota: row.rota,
@@ -422,6 +446,7 @@ export async function listManifestItemsByCd(
       id_vol: row.id_vol,
       caixa: row.caixa,
       pedido: row.pedido,
+      sq: row.sq ?? null,
       filial: row.filial,
       filial_nome: row.filial_nome,
       rota: row.rota,
@@ -458,11 +483,15 @@ export async function findManifestBarras(
   };
 }
 
-export async function getRouteOverviewLocal(userId: string, cd: number): Promise<PedidoDiretoRouteOverviewRow[]> {
+export async function getRouteOverviewLocal(
+  userId: string,
+  cd: number,
+  origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
+): Promise<PedidoDiretoRouteOverviewRow[]> {
   const db = await getDb();
   const transaction = db.transaction(STORE_ROUTE_OVERVIEW, "readonly");
   const store = transaction.objectStore(STORE_ROUTE_OVERVIEW);
-  const raw = await requestToPromise(store.get(routeOverviewKey(userId, cd)));
+  const raw = await requestToPromise(store.get(routeOverviewKey(userId, cd, origemLink)));
   await transactionDone(transaction);
   const rows = (raw as RouteOverviewStoreRow | undefined)?.rows;
   return Array.isArray(rows) ? rows : [];
@@ -471,15 +500,17 @@ export async function getRouteOverviewLocal(userId: string, cd: number): Promise
 export async function saveRouteOverviewLocal(
   userId: string,
   cd: number,
-  rows: PedidoDiretoRouteOverviewRow[]
+  rows: PedidoDiretoRouteOverviewRow[],
+  origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
 ): Promise<void> {
   const db = await getDb();
   const transaction = db.transaction(STORE_ROUTE_OVERVIEW, "readwrite");
   const store = transaction.objectStore(STORE_ROUTE_OVERVIEW);
   const payload: RouteOverviewStoreRow = {
-    key: routeOverviewKey(userId, cd),
+    key: routeOverviewKey(userId, cd, origemLink),
     user_id: userId,
     cd,
+    origem_link: normalizePedidoDiretoLinkOrigin(origemLink),
     rows,
     updated_at: new Date().toISOString()
   };
@@ -491,7 +522,7 @@ export async function saveLocalVolume(volume: PedidoDiretoLocalVolume): Promise<
   const db = await getDb();
   const transaction = db.transaction(STORE_VOLUMES, "readwrite");
   const store = transaction.objectStore(STORE_VOLUMES);
-  store.put(volume);
+  store.put(normalizeStoredVolume(volume));
   await transactionDone(transaction);
 }
 
@@ -509,21 +540,23 @@ export async function getLocalVolume(
   userId: string,
   cd: number,
   confDate: string,
-  idEtiqueta: string
+  idEtiqueta: string,
+  origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
 ): Promise<PedidoDiretoLocalVolume | null> {
   const db = await getDb();
   const transaction = db.transaction(STORE_VOLUMES, "readonly");
   const store = transaction.objectStore(STORE_VOLUMES);
-  const key = buildPedidoDiretoVolumeKey(userId, cd, confDate, idEtiqueta.trim());
+  const key = buildPedidoDiretoVolumeKey(userId, cd, confDate, idEtiqueta.trim(), origemLink);
   const raw = await requestToPromise(store.get(key));
   await transactionDone(transaction);
-  return (raw as PedidoDiretoLocalVolume | undefined) ?? null;
+  return raw ? normalizeStoredVolume(raw as PedidoDiretoLocalVolume) : null;
 }
 
 export async function getLatestLocalVolumeByEtiqueta(
   userId: string,
   cd: number,
-  idEtiqueta: string
+  idEtiqueta: string,
+  origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
 ): Promise<PedidoDiretoLocalVolume | null> {
   const etiqueta = idEtiqueta.trim();
   if (!etiqueta) return null;
@@ -534,26 +567,42 @@ export async function getLatestLocalVolumeByEtiqueta(
     index.getAll(IDBKeyRange.only([userId, cd, etiqueta]))
   )) as PedidoDiretoLocalVolume[];
   await transactionDone(transaction);
-  if (!rows.length) return null;
-  return sortVolumes(rows)[0];
+  const filtered = rows
+    .map((row) => normalizeStoredVolume(row))
+    .filter((row) => row.origem_link === normalizePedidoDiretoLinkOrigin(origemLink));
+  if (!filtered.length) return null;
+  return sortVolumes(filtered)[0];
 }
 
-export async function listUserLocalVolumes(userId: string): Promise<PedidoDiretoLocalVolume[]> {
+export async function listUserLocalVolumes(
+  userId: string,
+  origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
+): Promise<PedidoDiretoLocalVolume[]> {
   const db = await getDb();
   const transaction = db.transaction(STORE_VOLUMES, "readonly");
   const index = transaction.objectStore(STORE_VOLUMES).index(INDEX_VOLUMES_BY_USER);
   const rows = (await requestToPromise(index.getAll(IDBKeyRange.only(userId)))) as PedidoDiretoLocalVolume[];
   await transactionDone(transaction);
-  return sortVolumes(rows);
+  return sortVolumes(
+    rows
+      .map((row) => normalizeStoredVolume(row))
+      .filter((row) => row.origem_link === normalizePedidoDiretoLinkOrigin(origemLink))
+  );
 }
 
-export async function listPendingLocalVolumes(userId: string): Promise<PedidoDiretoLocalVolume[]> {
-  const rows = await listUserLocalVolumes(userId);
+export async function listPendingLocalVolumes(
+  userId: string,
+  origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
+): Promise<PedidoDiretoLocalVolume[]> {
+  const rows = await listUserLocalVolumes(userId, origemLink);
   return rows.filter((row) => row.pending_snapshot || row.pending_finalize || row.pending_cancel || Boolean(row.sync_error));
 }
 
-export async function getPendingSummary(userId: string): Promise<PedidoDiretoPendingSummary> {
-  const rows = await listPendingLocalVolumes(userId);
+export async function getPendingSummary(
+  userId: string,
+  origemLink = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
+): Promise<PedidoDiretoPendingSummary> {
+  const rows = await listPendingLocalVolumes(userId, origemLink);
   return {
     pending_count: rows.length,
     errors_count: rows.filter((row) => Boolean(row.sync_error)).length

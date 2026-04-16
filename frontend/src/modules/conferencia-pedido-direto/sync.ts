@@ -1,8 +1,10 @@
 import { supabase } from "../../lib/supabase";
+import { normalizePedidoDiretoLinkOrigin } from "../../shared/pedido-direto-link-origin";
 import { saveLocalVolume, listPendingLocalVolumes, removeLocalVolume } from "./storage";
 import type {
   CdOption,
   PedidoDiretoItemRow,
+  PedidoDiretoLinkOrigin,
   PedidoDiretoLocalVolume,
   PedidoDiretoManifestBarrasRow,
   PedidoDiretoManifestItemRow,
@@ -112,6 +114,7 @@ function mapManifestItem(raw: Record<string, unknown>): PedidoDiretoManifestItem
     id_vol: String(raw.id_vol ?? "").trim(),
     caixa: parseNullableString(raw.caixa),
     pedido: parseIntegerOrNull(raw.pedido),
+    sq: parseIntegerOrNull(raw.sq),
     filial: parseIntegerOrNull(raw.filial),
     filial_nome: parseNullableString(raw.filial_nome),
     rota: parseNullableString(raw.rota),
@@ -169,8 +172,10 @@ function mapVolume(raw: Record<string, unknown>): PedidoDiretoVolumeRow {
     conf_date: String(raw.conf_date ?? ""),
     cd: parseInteger(raw.cd),
     id_vol: String(raw.id_vol ?? ""),
+    origem_link: normalizePedidoDiretoLinkOrigin(parseNullableString(raw.origem_link)),
     caixa: parseNullableString(raw.caixa),
     pedido: parseIntegerOrNull(raw.pedido),
+    sq: parseIntegerOrNull(raw.sq),
     filial: parseIntegerOrNull(raw.filial),
     filial_nome: parseNullableString(raw.filial_nome),
     rota: parseNullableString(raw.rota),
@@ -224,6 +229,7 @@ function mapReportRow(raw: Record<string, unknown>): PedidoDiretoReportRow {
     conf_date: String(raw.conf_date ?? ""),
     cd: parseInteger(raw.cd),
     id_vol: String(raw.id_vol ?? "").trim(),
+    origem_link: normalizePedidoDiretoLinkOrigin(parseNullableString(raw.origem_link)),
     caixa: parseNullableString(raw.caixa),
     pedido: parseIntegerOrNull(raw.pedido),
     filial: parseIntegerOrNull(raw.filial),
@@ -317,10 +323,14 @@ export async function fetchManifestBarrasPage(
     .filter((row) => row.barras && row.coddv > 0);
 }
 
-export async function fetchRouteOverview(cd: number): Promise<PedidoDiretoRouteOverviewRow[]> {
+export async function fetchRouteOverview(
+  cd: number,
+  origemLink: PedidoDiretoLinkOrigin
+): Promise<PedidoDiretoRouteOverviewRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_pedido_direto_route_overview", {
-    p_cd: cd
+    p_cd: cd,
+    p_origem_link: origemLink
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -329,6 +339,7 @@ export async function fetchRouteOverview(cd: number): Promise<PedidoDiretoRouteO
 
 export async function fetchManifestBundle(
   cd: number,
+  origemLink: PedidoDiretoLinkOrigin,
   onProgress?: (progress: { step: "items" | "barras" | "routes"; rows: number; total: number; percent: number }) => void,
   options?: { includeBarras?: boolean }
 ): Promise<{
@@ -407,7 +418,7 @@ export async function fetchManifestBundle(
 
   let routes: PedidoDiretoRouteOverviewRow[] = [];
   try {
-    routes = await fetchRouteOverview(cd);
+    routes = await fetchRouteOverview(cd, origemLink);
   } catch {
     routes = [];
   }
@@ -426,11 +437,16 @@ export async function fetchManifestBundle(
   };
 }
 
-export async function openVolume(idVol: string, cd: number): Promise<PedidoDiretoVolumeRow> {
+export async function openVolume(
+  idVol: string,
+  cd: number,
+  origemLink: PedidoDiretoLinkOrigin
+): Promise<PedidoDiretoVolumeRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_pedido_direto_open_volume", {
     p_id_vol: normalizeIdVol(idVol),
-    p_cd: cd
+    p_cd: cd,
+    p_origem_link: origemLink
   });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
@@ -438,9 +454,11 @@ export async function openVolume(idVol: string, cd: number): Promise<PedidoDiret
   return mapVolume(first);
 }
 
-export async function fetchActiveVolume(): Promise<PedidoDiretoVolumeRow | null> {
+export async function fetchActiveVolume(origemLink: PedidoDiretoLinkOrigin): Promise<PedidoDiretoVolumeRow | null> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_pedido_direto_get_active_volume");
+  const { data, error } = await supabase.rpc("rpc_conf_pedido_direto_get_active_volume", {
+    p_origem_link: origemLink
+  });
   if (error) throw new Error(toErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) return null;
@@ -555,12 +573,15 @@ export async function cancelVolume(confId: string): Promise<boolean> {
   return first?.cancelled === true;
 }
 
-export async function syncPendingPedidoDiretoVolumes(userId: string): Promise<{
+export async function syncPendingPedidoDiretoVolumes(
+  userId: string,
+  origemLink?: PedidoDiretoLinkOrigin
+): Promise<{
   processed: number;
   synced: number;
   failed: number;
 }> {
-  const pending = await listPendingLocalVolumes(userId);
+  const pending = await listPendingLocalVolumes(userId, origemLink);
   let synced = 0;
   let failed = 0;
 
@@ -589,10 +610,11 @@ export async function syncPendingPedidoDiretoVolumes(userId: string): Promise<{
       let remoteConfId = row.remote_conf_id;
 
       if (!remoteConfId) {
-        const remoteOpen = await openVolume(row.id_vol, row.cd);
+        const remoteOpen = await openVolume(row.id_vol, row.cd, row.origem_link);
         remoteConfId = remoteOpen.conf_id;
         row.remote_conf_id = remoteConfId;
         row.conf_date = remoteOpen.conf_date || row.conf_date;
+        row.sq = remoteOpen.sq;
         row.status = remoteOpen.status;
         row.is_read_only = remoteOpen.is_read_only;
         row.sync_error = null;
@@ -662,7 +684,8 @@ export async function countPedidoDiretoReportRows(
   const { data, error } = await supabase.rpc("rpc_conf_pedido_direto_report_count", {
     p_dt_ini: filters.dtIni,
     p_dt_fim: filters.dtFim,
-    p_cd: filters.cd
+    p_cd: filters.cd,
+    p_origem_link: filters.origem_link
   });
 
   if (error) throw new Error(toErrorMessage(error));
@@ -682,6 +705,7 @@ export async function fetchPedidoDiretoReportRows(
     p_dt_ini: filters.dtIni,
     p_dt_fim: filters.dtFim,
     p_cd: filters.cd,
+    p_origem_link: filters.origem_link,
     p_offset: Math.max(offset, 0),
     p_limit: Math.max(1, limit)
   });

@@ -20,7 +20,7 @@ timeout /t 5 /nobreak >nul
 
 echo.
 echo ✅ Aplicando migrations necessárias...
-sync_backend_cli.exe bootstrap
+call sync_backend_cli_runner.bat bootstrap
 if errorlevel 1 (
     echo ❌ ERRO: Falha ao aplicar migrations do DB_BLITZ
     echo.
@@ -30,7 +30,7 @@ if errorlevel 1 (
 
 echo.
 echo ✅ Executando sincronização apenas das tabelas DB_BLITZ...
-sync_backend_cli.exe sync --table db_conf_blitz
+call sync_backend_cli_runner.bat sync --table db_conf_blitz
 if errorlevel 1 (
     echo ❌ ERRO: Falha ao sincronizar db_conf_blitz
     echo.
@@ -38,7 +38,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
-sync_backend_cli.exe sync --table db_div_blitz
+call sync_backend_cli_runner.bat sync --table db_div_blitz
 if errorlevel 1 (
     echo ❌ ERRO: Falha ao sincronizar db_div_blitz
     echo.
