@@ -19146,6 +19146,17 @@ small {
   white-space: nowrap;
 }
 
+.conservadora-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.conservadora-action-icon {
+  display: inline-flex;
+}
+
 /* History timeline */
 .caixa-historico-timeline {
   display: flex;
@@ -19598,6 +19609,10 @@ small {
   .conservadora-search-wrap {
     grid-column: 1 / -1;
     width: 100%;
+  }
+
+  .conservadora-action-icon {
+    display: none;
   }
 
   .conservadora-action-history,

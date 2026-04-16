@@ -369,9 +369,15 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
               disabled={!currentCd || !isOnline}
             />
           </div>
-          <button type="button" className="btn btn-muted conservadora-action-btn conservadora-action-history" onClick={() => { setHistoryOffset(0); setHistoryOpen(true); }} disabled={!currentCd || !isOnline}>📋 Histórico</button>
+          <button type="button" className="btn btn-muted conservadora-action-btn conservadora-action-history" onClick={() => { setHistoryOffset(0); setHistoryOpen(true); }} disabled={!currentCd || !isOnline}>
+            <span className="conservadora-action-icon" aria-hidden="true">📋</span>
+            <span>Histórico</span>
+          </button>
           {canManage && <button type="button" className="btn btn-muted conservadora-action-btn conservadora-action-manage" onClick={() => setManageOpen(true)} disabled={!currentCd || !isOnline}>🚚 Transportadoras</button>}
-          <button type="button" className="btn btn-muted conservadora-action-btn conservadora-action-refresh" onClick={() => setRefreshNonce((value) => value + 1)} disabled={!currentCd || !isOnline || loading}>{loading ? "🔄 Atualizando..." : "🔄 Atualizar"}</button>
+          <button type="button" className="btn btn-muted conservadora-action-btn conservadora-action-refresh" onClick={() => setRefreshNonce((value) => value + 1)} disabled={!currentCd || !isOnline || loading}>
+            <span className="conservadora-action-icon" aria-hidden="true">🔄</span>
+            <span>{loading ? "Atualizando..." : "Atualizar"}</span>
+          </button>
         </div>
         {loading && rows.length === 0 ? <p className="caixa-sem-itens">Carregando embarques...</p> : (
           <>
