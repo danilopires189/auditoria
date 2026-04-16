@@ -215,16 +215,23 @@ body {
     padding: 0;
   }
   .pedido-direto-label-sheet {
-    gap: 0;
+    display: block;
   }
   .pedido-direto-label-card {
+    display: grid;
+    width: var(--pd-label-width);
+    min-height: var(--pd-label-height);
     margin: 0;
     border-radius: 0;
     box-shadow: none;
     page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .pedido-direto-label-card:last-child {
     page-break-after: auto;
+    break-after: auto;
   }
 }
 `;

@@ -641,6 +641,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const scannerTorchModeRef = useRef<"none" | "controls" | "track">("none");
   const etiquetaRef = useRef<HTMLInputElement | null>(null);
   const barrasRef = useRef<HTMLInputElement | null>(null);
+  const labelCountInputRef = useRef<HTMLInputElement | null>(null);
   const labelPreviewRef = useRef<HTMLDivElement | null>(null);
   const scannerInputStateRef = useRef<Record<ScannerInputTarget, ScannerInputState>>({
     etiqueta: createScannerInputState(),
@@ -711,7 +712,6 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelVolumeCountInput, setLabelVolumeCountInput] = useState("1");
-  const [labelPreviewVolumeCount, setLabelPreviewVolumeCount] = useState(1);
   const [labelError, setLabelError] = useState<string | null>(null);
 
   const [busyManifest, setBusyManifest] = useState(false);
@@ -756,6 +756,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     && activeVolume.started_by === profile.user_id
   );
   const hasOpenConference = Boolean(activeVolume && activeVolume.status === "em_conferencia" && !activeVolume.is_read_only);
+  const labelPreviewVolumeCount = useMemo(() => parsePositiveInteger(labelVolumeCountInput, 1), [labelVolumeCountInput]);
   const labelPreviewData = useMemo(() => {
     if (!activeVolume) return [];
     return buildPedidoDiretoLabelData({
@@ -1793,18 +1794,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     });
   }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
 
-  const applyLabelPreview = useCallback(() => {
-    const nextCount = parsePositiveInteger(labelVolumeCountInput, 1);
-    setLabelPreviewVolumeCount(nextCount);
-    setLabelVolumeCountInput(String(nextCount));
-    setLabelError(null);
-  }, [labelVolumeCountInput]);
-
   const openLabelModal = useCallback(() => {
     if (!activeVolume) return;
     const defaultCount = parsePositiveInteger(multiploInput, 1);
     setLabelVolumeCountInput(String(defaultCount));
-    setLabelPreviewVolumeCount(defaultCount);
     setLabelError(null);
     setShowLabelModal(true);
   }, [activeVolume, multiploInput]);
@@ -1814,29 +1807,59 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     setLabelError(null);
   }, []);
 
+  const adjustLabelVolumeCount = useCallback((delta: number) => {
+    setLabelVolumeCountInput((current) => {
+      const nextValue = Math.max(1, parsePositiveInteger(current, 1) + delta);
+      return String(nextValue);
+    });
+    setLabelError(null);
+  }, []);
+
   const printLabelPreview = useCallback(() => {
     if (!activeVolume) return;
     const nextCount = parsePositiveInteger(labelVolumeCountInput, 1);
-    flushSync(() => {
-      setLabelPreviewVolumeCount(nextCount);
-      setLabelVolumeCountInput(String(nextCount));
-      setLabelError(null);
-    });
+    setLabelVolumeCountInput(String(nextCount));
 
     const previewHtml = labelPreviewRef.current?.innerHTML.trim() ?? "";
     if (!previewHtml) {
-      setLabelError("Gere a prévia da etiqueta antes de imprimir.");
+      setLabelError("Nao foi possivel montar a previa da etiqueta.");
       return;
     }
 
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=980,height=720");
-    if (!printWindow) {
-      setLabelError("Não foi possível abrir a janela de impressão.");
+    if (typeof document === "undefined") {
+      setLabelError("Impressao indisponivel neste dispositivo.");
       return;
     }
 
-    printWindow.document.open();
-    printWindow.document.write(`<!doctype html>
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.tabIndex = -1;
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      window.setTimeout(() => {
+        iframe.remove();
+      }, 300);
+    };
+
+    const printDocument = iframe.contentDocument;
+    const printWindow = iframe.contentWindow;
+    if (!printDocument || !printWindow) {
+      cleanup();
+      setLabelError("Nao foi possivel preparar a impressao da etiqueta.");
+      return;
+    }
+
+    printDocument.open();
+    printDocument.write(`<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
@@ -1846,15 +1869,21 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   </head>
   <body>
     ${previewHtml}
-    <script>
-      window.addEventListener('load', function () {
-        window.print();
-      });
-    </script>
   </body>
 </html>`);
-    printWindow.document.close();
-    setLabelError(null);
+    printDocument.close();
+
+    window.setTimeout(() => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+        setLabelError(null);
+      } catch {
+        setLabelError("Nao foi possivel iniciar a impressao da etiqueta.");
+      } finally {
+        cleanup();
+      }
+    }, 180);
   }, [activeVolume, labelVolumeCountInput]);
 
   const discardPendingSyncRow = useCallback(async (row: PedidoDiretoLocalVolume) => {
@@ -2342,6 +2371,23 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
   }, []);
+
+  useEffect(() => {
+    if (!showLabelModal) return;
+    window.requestAnimationFrame(() => {
+      labelCountInputRef.current?.focus();
+      labelCountInputRef.current?.select();
+    });
+  }, [showLabelModal]);
+
+  useEffect(() => {
+    if (!showLabelModal || typeof document === "undefined") return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showLabelModal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3916,26 +3962,45 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                   <p>Rota: {activeVolume.rota ?? "SEM ROTA"} | Matrícula: {activeVolume.started_mat || profile.mat || "-"}</p>
                 </div>
 
-                <label className="caixa-modal-field">
-                  Quantidade de fracionamento
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={labelVolumeCountInput}
-                    onChange={(event) => setLabelVolumeCountInput(event.target.value.replace(/\D+/g, ""))}
-                    placeholder="Informe a quantidade"
-                  />
-                </label>
-
                 {labelError ? <div className="alert error">{labelError}</div> : null}
 
                 <div className="confirm-actions termo-label-top-actions">
+                  <label className="termo-label-qty-field">
+                    <span>Qtd. frac.</span>
+                    <div className="termo-label-qty-control">
+                      <button
+                        className="btn btn-muted termo-label-qty-btn"
+                        type="button"
+                        onClick={() => adjustLabelVolumeCount(-1)}
+                        aria-label="Diminuir quantidade de fracionamento"
+                      >
+                        -
+                      </button>
+                      <input
+                        ref={labelCountInputRef}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={labelVolumeCountInput}
+                        onChange={(event) => {
+                          setLabelVolumeCountInput(event.target.value.replace(/\D+/g, ""));
+                          setLabelError(null);
+                        }}
+                        placeholder="1"
+                        aria-label="Quantidade de fracionamento"
+                      />
+                      <button
+                        className="btn btn-muted termo-label-qty-btn"
+                        type="button"
+                        onClick={() => adjustLabelVolumeCount(1)}
+                        aria-label="Aumentar quantidade de fracionamento"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </label>
                   <button className="btn btn-muted" type="button" onClick={closeLabelModal}>
                     Fechar
-                  </button>
-                  <button className="btn btn-primary" type="button" onClick={applyLabelPreview}>
-                    Gerar prévia
                   </button>
                   <button className="btn btn-primary" type="button" onClick={printLabelPreview}>
                     Imprimir

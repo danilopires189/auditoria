@@ -1182,6 +1182,53 @@ small {
 
 .termo-label-top-actions {
   margin-top: 0;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.termo-label-qty-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.termo-label-qty-field span {
+  color: #44516a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.termo-label-qty-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.termo-label-qty-control input {
+  width: 72px;
+  min-width: 72px;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(18, 41, 73, 0.14);
+  background: #ffffff;
+  color: #122949;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 0 10px;
+}
+
+.termo-label-qty-btn {
+  min-width: 42px;
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+  font-size: 1.15rem;
+  font-weight: 900;
 }
 
 .termo-label-preview-shell {
@@ -1311,7 +1358,20 @@ small {
   }
 
   .termo-label-top-actions {
-    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .termo-label-qty-field {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .termo-label-qty-control {
+    width: 100%;
+  }
+
+  .termo-label-qty-control input {
+    flex: 0 0 72px;
   }
 
   .termo-label-top-actions .btn {
