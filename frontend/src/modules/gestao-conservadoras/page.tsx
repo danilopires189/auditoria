@@ -65,7 +65,7 @@ function toDisplayName(nome: string): string {
 
 function statusLabel(status: ConservadoraStatus): string {
   switch (status) {
-    case "aguardando_documento": return "🟡 Aguardando Documento";
+    case "aguardando_documento": return "🟡 Aguardando Doc.";
     case "documentacao_em_atraso": return "🔴 Documentação em Atraso";
     case "documentacao_recebida": return "✅ Doc. Recebida";
     default: return "🚚 Em Trânsito";
@@ -76,8 +76,8 @@ function statusDescription(row: ConservadoraShipmentCard): string {
   if (row.status === "documentacao_recebida" && row.document_confirmed_at) {
     return `Confirmado em ${formatDateTimeBrasilia(row.document_confirmed_at)}.`;
   }
-  if (row.status === "documentacao_em_atraso") return "Já existe embarque posterior da mesma placa com pedido maior e o documento passou do prazo de 5 dias.";
-  if (row.status === "aguardando_documento") return "Já existe embarque posterior da mesma placa com pedido maior e o documento ainda está no prazo.";
+  if (row.status === "documentacao_em_atraso") return "Já existe embarque posterior da mesma placa com pedido maior e o doc. passou do prazo de 5 dias.";
+  if (row.status === "aguardando_documento") return "Já existe embarque posterior da mesma placa com pedido maior e o doc. ainda está no prazo.";
   return "Ainda não existe embarque posterior para esta placa.";
 }
 
@@ -89,11 +89,11 @@ function transportadoraLabel(row: ConservadoraShipmentCard): string {
 function statusSearchTerms(status: ConservadoraStatus): string[] {
   switch (status) {
     case "documentacao_em_atraso":
-      return ["documentacao em atraso", "documentacao", "atraso", "em atraso", "pendente"];
+      return ["documentacao em atraso", "documentacao", "doc em atraso", "doc", "atraso", "em atraso", "pendente"];
     case "aguardando_documento":
-      return ["aguardando documento", "aguardando", "documento", "pendente"];
+      return ["aguardando documento", "aguardando doc", "aguardando", "documento", "doc", "pendente"];
     case "documentacao_recebida":
-      return ["documentacao recebida", "recebida", "recebido", "confirmada", "confirmado"];
+      return ["documentacao recebida", "doc recebida", "doc recebido", "recebida", "recebido", "confirmada", "confirmado"];
     default:
       return ["em transito", "transito", "transitando"];
   }
@@ -266,11 +266,11 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
     setConfirmDialogError(null);
     try {
       await confirmConservadoraDocumento({ cd: currentCd, embarqueKey: row.embarque_key });
-      showSuccess(`Documento confirmado para o pedido ${formatPedidoSemDv(row.seq_ped)}.`);
+      showSuccess(`Doc. confirmado para o pedido ${formatPedidoSemDv(row.seq_ped)}.`);
       setConfirmDialogRow(null);
       setRefreshNonce((value) => value + 1);
     } catch (error) {
-      setConfirmDialogError(error instanceof Error ? error.message : "Erro ao confirmar o documento.");
+      setConfirmDialogError(error instanceof Error ? error.message : "Erro ao confirmar o doc.");
     } finally {
       setActionBusyKey(null);
     }
@@ -376,7 +376,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
         {loading && rows.length === 0 ? <p className="caixa-sem-itens">Carregando embarques...</p> : (
           <>
             <ConservadoraSection title="🔴 Documentação em Atraso" count={groupedRows.atraso.length} emptyMessage="Nenhum embarque com documentação em atraso." rows={groupedRows.atraso} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
-            <ConservadoraSection title="🟡 Aguardando Documento" count={groupedRows.aguardando.length} emptyMessage="Nenhum embarque aguardando documento." rows={groupedRows.aguardando} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
+            <ConservadoraSection title="🟡 Aguardando Doc." count={groupedRows.aguardando.length} emptyMessage="Nenhum embarque aguardando doc." rows={groupedRows.aguardando} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
             <ConservadoraSection title="🚚 Em Trânsito" count={groupedRows.emTransito.length} emptyMessage="Nenhum embarque em trânsito." rows={groupedRows.emTransito} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
             <ConservadoraSection title="✅ Documentação Recebida" count={groupedRows.recebida.length} emptyMessage="Nenhum embarque com documentação recebida." rows={groupedRows.recebida} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
           </>
@@ -386,7 +386,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
       {confirmDialogRow && typeof document !== "undefined" && createPortal(
         <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="conservadora-confirm-title" onClick={() => { if (actionBusyKey !== confirmDialogRow.embarque_key) setConfirmDialogRow(null); }}>
           <div className="confirm-dialog surface-enter conservadora-confirm-dialog" onClick={(event) => event.stopPropagation()}>
-            <h3 id="conservadora-confirm-title">Confirmar Recebimento do Documento</h3>
+            <h3 id="conservadora-confirm-title">Confirmar Recebimento do Doc.</h3>
             <p>Confira os dados do embarque antes de concluir a confirmação documental.</p>
             <div className="conservadora-confirm-summary">
               <span className={`caixa-card-status ${confirmDialogRow.status}`}>{statusLabel(confirmDialogRow.status)}</span>
@@ -425,7 +425,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
               )}
             </div>
             {confirmDialogRow.status === "documentacao_em_atraso" ? (
-              <div className="alert warning">Este documento está fora do prazo e será marcado como recebido agora.</div>
+              <div className="alert warning">Este doc. está fora do prazo e será marcado como recebido agora.</div>
             ) : (
               <div className="alert success">Ao confirmar, este embarque passa para documentação recebida.</div>
             )}
@@ -450,7 +450,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
               <select value={historyStatus} onChange={(event) => { setHistoryStatus(event.target.value as ConservadoraStatus | ""); setHistoryOffset(0); }}>
                 <option value="">Todos os status</option>
                 <option value="em_transito">Em trânsito</option>
-                <option value="aguardando_documento">Aguardando documento</option>
+                <option value="aguardando_documento">Aguardando doc.</option>
                 <option value="documentacao_em_atraso">Documentação em atraso</option>
                 <option value="documentacao_recebida">Documentação recebida</option>
               </select>
@@ -471,7 +471,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
                   {row.dt_ped && <span className="caixa-historico-meta">Data do pedido: {formatDateOnlyFromDateTime(row.dt_ped)}</span>}
                   <span className="caixa-historico-meta">Transportadora: {transportadoraLabel(row)}</span>
                   <span className="caixa-historico-meta">Responsável: {row.responsavel_nome ?? "Não informado"}{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
-                  {row.document_confirmed_at && <span className="caixa-historico-meta">Documento confirmado em {formatDateTimeBrasilia(row.document_confirmed_at)}{row.document_confirmed_nome ? ` por ${row.document_confirmed_nome}` : ""}</span>}
+                  {row.document_confirmed_at && <span className="caixa-historico-meta">Doc. confirmado em {formatDateTimeBrasilia(row.document_confirmed_at)}{row.document_confirmed_nome ? ` por ${row.document_confirmed_nome}` : ""}</span>}
                 </div>
               ))}
             </div>
@@ -615,14 +615,14 @@ function ConservadoraCard({ row, isExpanded, isBusy, onToggleExpanded, onConfirm
             <span>Transportadora: <strong>{transportadoraLabel(row)}</strong></span>
             <span>Responsável: <strong>{row.responsavel_nome ?? "Não informado"}</strong>{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
             {row.next_embarque_at && <span>Embarque seguinte em: <strong>{formatDateTimeBrasilia(row.next_embarque_at)}</strong></span>}
-            {row.document_confirmed_at && <span>Documento confirmado: <strong>{formatDateTimeBrasilia(row.document_confirmed_at)}</strong>{row.document_confirmed_nome ? ` | ${row.document_confirmed_nome}` : ""}</span>}
+            {row.document_confirmed_at && <span>Doc. confirmado: <strong>{formatDateTimeBrasilia(row.document_confirmed_at)}</strong>{row.document_confirmed_nome ? ` | ${row.document_confirmed_nome}` : ""}</span>}
           </div>
           <p className="caixa-card-obs">{statusDescription(row)}</p>
           <div className="caixa-card-actions">
             {canConfirm ? (
-              <button type="button" className="btn btn-primary" onClick={onConfirmDocumento} disabled={isBusy}>{isBusy ? "Confirmando..." : "Confirmar Recebimento do Documento"}</button>
+              <button type="button" className="btn btn-primary" onClick={onConfirmDocumento} disabled={isBusy}>{isBusy ? "Confirmando..." : "Confirmar Recebimento do Doc."}</button>
             ) : (
-              <button type="button" className="btn btn-muted" disabled>{row.status === "documentacao_recebida" ? "Documento já confirmado" : "Aguardando novo embarque da placa"}</button>
+              <button type="button" className="btn btn-muted" disabled>{row.status === "documentacao_recebida" ? "Doc. já confirmado" : "Aguardando novo embarque da placa"}</button>
             )}
           </div>
         </div>

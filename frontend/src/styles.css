@@ -19130,6 +19130,16 @@ small {
 
 .conservadora-search-wrap {
   min-width: 0;
+  width: 100%;
+}
+
+.conservadora-search-wrap.caixa-input-scan-wrap {
+  display: block;
+}
+
+.conservadora-search-wrap.caixa-input-scan-wrap input {
+  width: 100%;
+  border-radius: 10px !important;
 }
 
 .conservadora-actions-row .btn {
@@ -19587,6 +19597,7 @@ small {
 
   .conservadora-search-wrap {
     grid-column: 1 / -1;
+    width: 100%;
   }
 
   .conservadora-action-history,
