@@ -19157,6 +19157,12 @@ small {
   display: inline-flex;
 }
 
+@media (max-width: 768px) {
+  .conservadora-action-icon {
+    display: none;
+  }
+}
+
 /* History timeline */
 .caixa-historico-timeline {
   display: flex;
