@@ -4595,6 +4595,9 @@ small {
 }
 
 .module-available-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 0 auto;
   white-space: nowrap;
   padding: 3px 9px;
@@ -18786,7 +18789,9 @@ small {
   font-weight: 700;
   color: var(--text);
   letter-spacing: 0.02em;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.22;
 }
 
 .caixa-card-status {
@@ -18839,7 +18844,9 @@ small {
   font-size: 0.88rem;
   color: var(--text);
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.3;
 }
 
 .caixa-card-meta {
@@ -19135,10 +19142,37 @@ small {
 }
 
 .conservadora-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.conservadora-card-meta-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d9e4f2;
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+  min-width: 0;
+}
+
+.conservadora-card-meta-item strong {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #5f6f89;
+}
+
+.conservadora-card-meta-item span {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .conservadora-history-dialog {
@@ -19431,18 +19465,26 @@ small {
   .caixa-card-header {
     align-items: flex-start;
     gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .caixa-card-title-block {
+    flex: 1 1 100%;
   }
 
   .caixa-card-status {
     min-height: 24px;
     padding: 0 8px;
     font-size: 0.66rem;
+    white-space: normal;
+    text-align: center;
   }
 
   .caixa-card-expand-btn {
     min-height: 28px;
     padding: 0 8px;
     font-size: 0.72rem;
+    margin-left: auto;
   }
 
   .caixa-card-actions {
@@ -19465,6 +19507,11 @@ small {
   .conservadora-route-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .conservadora-card-meta {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .conservadora-route-actions select {

@@ -111,6 +111,12 @@ function formatOptionalDate(value: string | null): string | null {
   return value ? formatDateOnlyPtBR(value) : null;
 }
 
+function formatPedidoSemDv(value: string | number | null | undefined): string {
+  const compact = String(value ?? "").trim();
+  if (!compact) return "-";
+  return compact.length > 1 ? compact.slice(0, -1) : compact;
+}
+
 function scannerQrIcon() {
   return <ModuleIcon name="qr" />;
 }
@@ -1236,7 +1242,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                         {c.tipo === "expedicao" ? "🚚 Expedição" : "✅ Recebimento"}
                       </span>
                       <span className="caixa-feed-item-time">{formatDateTimeBrasilia(c.data_hr)}</span>
-                      {c.pedido && <span className="caixa-feed-item-order">Pedido {c.pedido}</span>}
+                      {c.pedido && <span className="caixa-feed-item-order">Pedido {formatPedidoSemDv(c.pedido)}</span>}
                     </div>
                   ))}
                 </div>
@@ -1491,7 +1497,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
               {!etiquetaLookupBusy && expedicaoDraft.rota && (
                 <span className="caixa-etiqueta-meta">
                   Rota {expedicaoDraft.rota}
-                  {expedicaoDraft.pedido && ` | Pedido ${expedicaoDraft.pedido}`}
+                  {expedicaoDraft.pedido && ` | Pedido ${formatPedidoSemDv(expedicaoDraft.pedido)}`}
                   {expedicaoDraft.dataPedido && ` | ${formatDateOnlyPtBR(expedicaoDraft.dataPedido)}`}
                   {expedicaoDraft.filialNome && ` | ${expedicaoDraft.filialNome}`}
                 </span>
@@ -1830,7 +1836,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                   )}
                   {(mov.pedido || mov.data_pedido) && (
                     <span className="caixa-historico-meta">
-                      Pedido: {mov.pedido ?? "—"}
+                      Pedido: {formatPedidoSemDv(mov.pedido)}
                       {mov.data_pedido && ` | ${formatDateOnlyPtBR(mov.data_pedido)}`}
                     </span>
                   )}
@@ -1933,6 +1939,7 @@ function CaixaCard({
     : "pending";
   const statusLabel = box.status === "disponivel" ? "✅ Disponível" : "🚚 Em Trânsito";
   const dataPedido = formatOptionalDate(box.last_mov_data_pedido);
+  const pedidoDisplay = formatPedidoSemDv(box.last_mov_pedido);
 
   return (
     <div className="caixa-card">
@@ -1983,7 +1990,7 @@ function CaixaCard({
               </span>
             )}
             {(box.last_mov_pedido || dataPedido) && (
-              <span>Pedido: <strong>{box.last_mov_pedido ?? "-"}</strong>{dataPedido && ` | ${dataPedido}`}</span>
+              <span>Pedido: <strong>{pedidoDisplay}</strong>{dataPedido && ` | ${dataPedido}`}</span>
             )}
           </div>
 

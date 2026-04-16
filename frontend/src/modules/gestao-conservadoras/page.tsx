@@ -36,6 +36,12 @@ function cdDisplayLabel(cd: number | null, cdNome: string | null): string {
   return cd == null ? "CD não definido" : `CD ${String(cd).padStart(2, "0")}`;
 }
 
+function formatPedidoSemDv(value: string | number | null | undefined): string {
+  const compact = String(value ?? "").trim();
+  if (!compact) return "-";
+  return compact.length > 1 ? compact.slice(0, -1) : compact;
+}
+
 function toDisplayName(nome: string): string {
   const compact = nome.trim().replace(/\s+/g, " ");
   if (!compact) return "Usuário";
@@ -207,7 +213,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
     setErrorMessage(null);
     try {
       await confirmConservadoraDocumento({ cd: currentCd, embarqueKey: row.embarque_key });
-      showSuccess(`Documento confirmado para o pedido ${row.seq_ped}.`);
+      showSuccess(`Documento confirmado para o pedido ${formatPedidoSemDv(row.seq_ped)}.`);
       setRefreshNonce((value) => value + 1);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Erro ao confirmar o documento.");
@@ -342,7 +348,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
                 <div key={row.embarque_key} className={`caixa-historico-item conservadora-history-item ${row.status}`}>
                   <span className="caixa-historico-tipo">{statusLabel(row.status)}</span>
                   <span className="caixa-historico-meta">Rota: {row.rota}</span>
-                  <span className="caixa-historico-meta">Pedido: {row.seq_ped}</span>
+                  <span className="caixa-historico-meta">Pedido: {formatPedidoSemDv(row.seq_ped)}</span>
                   <span className="caixa-historico-meta">Placa: {row.placa}</span>
                   <span className="caixa-historico-meta">Embarque: {formatDateTimeBrasilia(row.dt_lib ?? row.event_at)}</span>
                   {row.dt_ped && <span className="caixa-historico-meta">Data do pedido: {formatDateTimeBrasilia(row.dt_ped)}</span>}
@@ -463,24 +469,31 @@ interface ConservadoraCardProps {
 
 function ConservadoraCard({ row, isExpanded, isBusy, onToggleExpanded, onConfirmDocumento }: ConservadoraCardProps) {
   const canConfirm = row.status === "aguardando_documento" || row.status === "documentacao_em_atraso";
+  const pedidoDisplay = formatPedidoSemDv(row.seq_ped);
   return (
     <div className="caixa-card">
       <div className="caixa-card-header">
         <div className="caixa-card-title-block">
           <span className="caixa-card-codigo">{row.rota}</span>
-          <p className="caixa-card-descricao">Pedido {row.seq_ped}</p>
+          <p className="caixa-card-descricao">Pedido {pedidoDisplay}</p>
         </div>
         <span className={`caixa-card-status ${row.status}`}>{statusLabel(row.status)}</span>
         <button type="button" className="caixa-card-expand-btn" onClick={onToggleExpanded} aria-expanded={isExpanded} title={isExpanded ? "Ocultar detalhes" : "Ver detalhes"}>{isExpanded ? "Ocultar" : "Detalhes"}</button>
       </div>
       <div className="caixa-card-meta conservadora-card-meta">
-        <span><strong>Rota:</strong> {row.rota}</span>
-        <span><strong>Pedido:</strong> {row.seq_ped}</span>
-        <span><strong>Placa:</strong> {row.placa}</span>
+        <span className="conservadora-card-meta-item">
+          <strong>Pedido</strong>
+          <span>{pedidoDisplay}</span>
+        </span>
+        <span className="conservadora-card-meta-item">
+          <strong>Placa</strong>
+          <span>{row.placa}</span>
+        </span>
       </div>
       {isExpanded && (
         <div className="caixa-card-details">
           <div className="caixa-card-meta-grid">
+            <span>Pedido: <strong>{pedidoDisplay}</strong></span>
             <span>Data do pedido: <strong>{formatDateTimeBrasilia(row.dt_ped)}</strong></span>
             <span>Data do embarque: <strong>{formatDateTimeBrasilia(row.dt_lib ?? row.event_at)}</strong></span>
             <span>Transportadora: <strong>{transportadoraLabel(row)}</strong></span>
