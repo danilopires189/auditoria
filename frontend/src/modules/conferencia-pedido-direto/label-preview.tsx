@@ -1,7 +1,9 @@
 import { formatDateTimeBrasilia } from "../../shared/brasilia-datetime";
+import pmImage from "../../../assets/pm.png";
 
 export interface PedidoDiretoLabelData {
   cd: number;
+  cd_nome: string | null;
   loja_numero: number | null;
   loja_nome: string | null;
   pedido: number | null;
@@ -73,6 +75,7 @@ function formatGeneratedAt(value: string): string {
 
 export function buildPedidoDiretoLabelData(params: {
   cd: number;
+  cd_nome: string | null;
   loja_numero: number | null;
   loja_nome: string | null;
   pedido: number | null;
@@ -87,6 +90,7 @@ export function buildPedidoDiretoLabelData(params: {
 
   return Array.from({ length: total }, (_, index) => ({
     cd: Math.max(0, Math.trunc(params.cd)),
+    cd_nome: params.cd_nome,
     loja_numero: params.loja_numero,
     loja_nome: params.loja_nome,
     pedido: params.pedido,
@@ -148,13 +152,17 @@ body {
   letter-spacing: 0.02em;
 }
 .pedido-direto-label-brand {
-  border: 1px solid #bfd0eb;
-  border-radius: 999px;
-  padding: 0.6mm 2mm;
-  color: #0f3d8c;
-  background: #ffffff;
-  font-size: 9pt;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 27.2mm;
+  min-height: 11.2mm;
+}
+.pedido-direto-label-brand img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
 }
 .pedido-direto-label-main {
   display: grid;
@@ -245,8 +253,10 @@ export function PedidoDiretoLabelSheet({ labels }: { labels: PedidoDiretoLabelDa
           className="pedido-direto-label-card"
         >
           <header className="pedido-direto-label-header">
-            <div className="pedido-direto-label-title">PEDIDO DIRETO CD {label.cd}</div>
-            <div className="pedido-direto-label-brand">Pague Menos</div>
+            <div className="pedido-direto-label-title">PEDIDO DIRETO</div>
+            <div className="pedido-direto-label-brand">
+              <img src={pmImage} alt="Pague Menos" />
+            </div>
           </header>
 
           <div className="pedido-direto-label-main">
@@ -275,7 +285,7 @@ export function PedidoDiretoLabelSheet({ labels }: { labels: PedidoDiretoLabelDa
           </div>
 
           <footer className="pedido-direto-label-meta">
-            <span>CD: <strong>{label.cd}</strong></span>
+            <span>CD: <strong>{label.cd_nome || `CD ${label.cd}`}</strong></span>
             {label.matricula ? <span>MATRÍCULA: <strong>{label.matricula}</strong></span> : null}
             <span>SEPARADO EM: <strong>{formatGeneratedAt(label.generated_at)}</strong></span>
           </footer>

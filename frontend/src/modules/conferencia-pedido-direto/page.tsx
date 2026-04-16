@@ -178,6 +178,11 @@ function fixedCdFromProfile(profile: PedidoDiretoModuleProfile): number | null {
   return parseCdFromLabel(profile.cd_nome);
 }
 
+function normalizeCdDisplayName(value: string | null | undefined): string | null {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
+}
+
 function parsePositiveInteger(value: string, fallback = 1): number {
   const parsed = Number.parseInt(value.replace(/\D/g, ""), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
@@ -727,11 +732,21 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const currentLinkOrigin = useMemo(() => resolvePedidoDiretoLinkOriginFromWindow(), []);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
   const canSeeReportTools = isDesktop && profile.role === "admin";
+  const profileCdLabel = useMemo(() => normalizeCdDisplayName(profile.cd_nome), [profile.cd_nome]);
   const currentCdLabel = useMemo(() => {
     if (currentCd == null) return "CD não definido";
     const option = cdOptions.find((item) => item.cd === currentCd);
-    return option?.cd_nome || `CD ${String(currentCd).padStart(2, "0")}`;
-  }, [cdOptions, currentCd]);
+    if (option?.cd_nome) return option.cd_nome;
+    if (fixedCd === currentCd && profileCdLabel) return profileCdLabel;
+    return `CD ${String(currentCd).padStart(2, "0")}`;
+  }, [cdOptions, currentCd, fixedCd, profileCdLabel]);
+  const activeVolumeCdLabel = useMemo(() => {
+    if (!activeVolume) return currentCdLabel;
+    const option = cdOptions.find((item) => item.cd === activeVolume.cd);
+    if (option?.cd_nome) return option.cd_nome;
+    if (fixedCd === activeVolume.cd && profileCdLabel) return profileCdLabel;
+    return `CD ${String(activeVolume.cd).padStart(2, "0")}`;
+  }, [activeVolume, cdOptions, currentCdLabel, fixedCd, profileCdLabel]);
   const dismissedReadOnlyStorageKey = useMemo(() => `conf-pedido-direto-dismissed-read-only:${profile.user_id}`, [profile.user_id]);
   const buildReadOnlyVolumeSignature = useCallback((volume: PedidoDiretoLocalVolume) => JSON.stringify({
     cd: volume.cd,
@@ -761,6 +776,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     if (!activeVolume) return [];
     return buildPedidoDiretoLabelData({
       cd: activeVolume.cd,
+      cd_nome: activeVolumeCdLabel,
       loja_numero: activeVolume.filial,
       loja_nome: activeVolume.filial_nome,
       pedido: activeVolume.pedido,
@@ -769,7 +785,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       matricula: activeVolume.started_mat || profile.mat || null,
       volume_total: labelPreviewVolumeCount
     });
-  }, [activeVolume, labelPreviewVolumeCount, profile.mat]);
+  }, [activeVolume, activeVolumeCdLabel, labelPreviewVolumeCount, profile.mat]);
   const isLabelPreviewScrollable = labelPreviewData.length > 1;
 
   const cameraSupported = useMemo(() => {

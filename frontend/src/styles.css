@@ -1282,17 +1282,25 @@ small {
   font-size: 14pt;
   font-weight: 800;
   letter-spacing: 0.02em;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .pedido-direto-label-brand {
-  border: 1px solid #bfd0eb;
-  border-radius: 999px;
-  padding: 0.6mm 2mm;
-  color: #0f3d8c;
-  background: #fff;
-  font-size: 9pt;
-  font-weight: 700;
-  white-space: nowrap;
+  flex: 0 0 auto;
+  width: 27.2mm;
+  height: 11.2mm;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pedido-direto-label-brand img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
 }
 
 .pedido-direto-label-main {
