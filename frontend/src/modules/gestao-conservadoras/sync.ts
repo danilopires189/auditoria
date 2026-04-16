@@ -59,6 +59,9 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("CD_SEM_ACESSO")) return "Você não possui acesso ao CD informado.";
   if (normalized.includes("EMBARQUE_OBRIGATORIO")) return "Selecione um embarque para confirmar o documento.";
   if (normalized.includes("EMBARQUE_NAO_ENCONTRADO")) return "Embarque não encontrado.";
+  if (/column reference .*embarque_key.*ambiguous/i.test(normalized)) {
+    return "A confirmação do documento encontrou uma inconsistência temporária no servidor. Atualize a página e tente novamente.";
+  }
   if (normalized.includes("PERIODO_INVALIDO")) return "A data final não pode ser menor que a data inicial.";
   if (normalized.includes("TRANSPORTADORA_NOME_OBRIGATORIO")) return "Informe o nome da transportadora.";
   if (normalized.includes("TRANSPORTADORA_OBRIGATORIA")) return "Selecione uma transportadora.";

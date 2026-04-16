@@ -90,6 +90,8 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
   const [actionBusyKey, setActionBusyKey] = useState<string | null>(null);
+  const [confirmDialogRow, setConfirmDialogRow] = useState<ConservadoraShipmentCard | null>(null);
+  const [confirmDialogError, setConfirmDialogError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<ConservadoraShipmentCard[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -216,16 +218,23 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
     if (!currentCd || !isOnline) return;
     setActionBusyKey(row.embarque_key);
     setErrorMessage(null);
+    setConfirmDialogError(null);
     try {
       await confirmConservadoraDocumento({ cd: currentCd, embarqueKey: row.embarque_key });
       showSuccess(`Documento confirmado para o pedido ${formatPedidoSemDv(row.seq_ped)}.`);
+      setConfirmDialogRow(null);
       setRefreshNonce((value) => value + 1);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Erro ao confirmar o documento.");
+      setConfirmDialogError(error instanceof Error ? error.message : "Erro ao confirmar o documento.");
     } finally {
       setActionBusyKey(null);
     }
   }, [currentCd, isOnline, showSuccess]);
+
+  const handleOpenConfirmDialog = useCallback((row: ConservadoraShipmentCard) => {
+    setConfirmDialogError(null);
+    setConfirmDialogRow(row);
+  }, []);
 
   const handleSalvarTransportadora = useCallback(async () => {
     if (!currentCd || !isOnline || !novaTransportadora.trim()) return;
@@ -321,13 +330,71 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
         </div>
         {loading && rows.length === 0 ? <p className="caixa-sem-itens">Carregando embarques...</p> : (
           <>
-            <ConservadoraSection title="🔴 Documentação em Atraso" count={groupedRows.atraso.length} emptyMessage="Nenhum embarque com documentação em atraso." rows={groupedRows.atraso} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleConfirmDocumento} />
-            <ConservadoraSection title="🟡 Aguardando Documento" count={groupedRows.aguardando.length} emptyMessage="Nenhum embarque aguardando documento." rows={groupedRows.aguardando} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleConfirmDocumento} />
-            <ConservadoraSection title="🚚 Em Trânsito" count={groupedRows.emTransito.length} emptyMessage="Nenhum embarque em trânsito." rows={groupedRows.emTransito} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleConfirmDocumento} />
-            <ConservadoraSection title="✅ Documentação Recebida" count={groupedRows.recebida.length} emptyMessage="Nenhum embarque com documentação recebida." rows={groupedRows.recebida} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleConfirmDocumento} />
+            <ConservadoraSection title="🔴 Documentação em Atraso" count={groupedRows.atraso.length} emptyMessage="Nenhum embarque com documentação em atraso." rows={groupedRows.atraso} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
+            <ConservadoraSection title="🟡 Aguardando Documento" count={groupedRows.aguardando.length} emptyMessage="Nenhum embarque aguardando documento." rows={groupedRows.aguardando} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
+            <ConservadoraSection title="🚚 Em Trânsito" count={groupedRows.emTransito.length} emptyMessage="Nenhum embarque em trânsito." rows={groupedRows.emTransito} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
+            <ConservadoraSection title="✅ Documentação Recebida" count={groupedRows.recebida.length} emptyMessage="Nenhum embarque com documentação recebida." rows={groupedRows.recebida} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
           </>
         )}
       </section>
+
+      {confirmDialogRow && typeof document !== "undefined" && createPortal(
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="conservadora-confirm-title" onClick={() => { if (actionBusyKey !== confirmDialogRow.embarque_key) setConfirmDialogRow(null); }}>
+          <div className="confirm-dialog surface-enter conservadora-confirm-dialog" onClick={(event) => event.stopPropagation()}>
+            <h3 id="conservadora-confirm-title">Confirmar Recebimento do Documento</h3>
+            <p>Confira os dados do embarque antes de concluir a confirmação documental.</p>
+            <div className="conservadora-confirm-summary">
+              <span className={`caixa-card-status ${confirmDialogRow.status}`}>{statusLabel(confirmDialogRow.status)}</span>
+              <strong className="conservadora-confirm-route">{confirmDialogRow.rota}</strong>
+            </div>
+            <div className="conservadora-confirm-grid">
+              <div className="conservadora-confirm-item">
+                <strong>Pedido</strong>
+                <span>{formatPedidoSemDv(confirmDialogRow.seq_ped)}</span>
+              </div>
+              <div className="conservadora-confirm-item">
+                <strong>Placa</strong>
+                <span>{confirmDialogRow.placa}</span>
+              </div>
+              <div className="conservadora-confirm-item">
+                <strong>Data do pedido</strong>
+                <span>{formatDateOnlyFromDateTime(confirmDialogRow.dt_ped)}</span>
+              </div>
+              <div className="conservadora-confirm-item">
+                <strong>Data do embarque</strong>
+                <span>{formatDateTimeBrasilia(confirmDialogRow.dt_lib ?? confirmDialogRow.event_at)}</span>
+              </div>
+              <div className="conservadora-confirm-item">
+                <strong>Transportadora</strong>
+                <span>{transportadoraLabel(confirmDialogRow)}</span>
+              </div>
+              <div className="conservadora-confirm-item">
+                <strong>Responsável</strong>
+                <span>{confirmDialogRow.responsavel_nome ?? "Não informado"}{confirmDialogRow.responsavel_mat ? ` (${confirmDialogRow.responsavel_mat})` : ""}</span>
+              </div>
+              {confirmDialogRow.next_embarque_at && (
+                <div className="conservadora-confirm-item conservadora-confirm-item-full">
+                  <strong>Próximo embarque da placa</strong>
+                  <span>{formatDateTimeBrasilia(confirmDialogRow.next_embarque_at)}</span>
+                </div>
+              )}
+            </div>
+            {confirmDialogRow.status === "documentacao_em_atraso" ? (
+              <div className="alert warning">Este documento está fora do prazo e será marcado como recebido agora.</div>
+            ) : (
+              <div className="alert success">Ao confirmar, este embarque passa para documentação recebida.</div>
+            )}
+            {confirmDialogError && <div className="alert error">{confirmDialogError}</div>}
+            <div className="confirm-actions">
+              <button type="button" className="btn btn-muted" onClick={() => setConfirmDialogRow(null)} disabled={actionBusyKey === confirmDialogRow.embarque_key}>Cancelar</button>
+              <button type="button" className="btn btn-primary" onClick={() => void handleConfirmDocumento(confirmDialogRow)} disabled={actionBusyKey === confirmDialogRow.embarque_key}>
+                {actionBusyKey === confirmDialogRow.embarque_key ? "Confirmando..." : "Confirmar Recebimento"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {historyOpen && typeof document !== "undefined" && createPortal(
         <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="conservadora-history-title" onClick={() => setHistoryOpen(false)}>

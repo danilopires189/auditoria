@@ -19302,6 +19302,64 @@ small {
   background: #f0fdf4;
 }
 
+.conservadora-confirm-dialog {
+  width: min(100%, 540px);
+  max-width: min(calc(100vw - 24px), 540px);
+}
+
+.conservadora-confirm-summary {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #d9e4f2;
+  background: linear-gradient(180deg, #f9fbff 0%, #f3f7ff 100%);
+}
+
+.conservadora-confirm-route {
+  font-family: "Sora", sans-serif;
+  font-size: 0.95rem;
+  color: #122949;
+  line-height: 1.28;
+}
+
+.conservadora-confirm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.conservadora-confirm-item {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid #d9e4f2;
+  background: #fff;
+  min-width: 0;
+}
+
+.conservadora-confirm-item-full {
+  grid-column: 1 / -1;
+}
+
+.conservadora-confirm-item strong {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #5f6f89;
+}
+
+.conservadora-confirm-item span {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #132742;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 .caixa-historico-tipo {
   font-family: "Sora", sans-serif;
   font-size: 0.85rem;
@@ -19532,8 +19590,24 @@ small {
   }
 
   .conservadora-card-meta {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .conservadora-card-meta-item {
+    padding: 8px 10px;
+  }
+
+  .conservadora-card-meta-item strong {
+    font-size: 0.68rem;
+  }
+
+  .conservadora-card-meta-item span {
+    font-size: 0.84rem;
+  }
+
+  .conservadora-confirm-grid {
+    grid-template-columns: 1fr;
   }
 
   .conservadora-route-actions select {
