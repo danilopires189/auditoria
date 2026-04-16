@@ -1760,8 +1760,22 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
                         <div className="ronda-pul-grid">
                           <section className="ronda-stat-block">
                             <div className="ronda-stat-block-head">
-                              <h4>Produtos por coluna</h4>
-                              <span>{formatCount(detail?.total_colunas ?? currentZoneSummary.total_colunas, "coluna", "colunas")}</span>
+                              <div>
+                                <h4>Produtos por coluna</h4>
+                                <span>{formatCount(detail?.total_colunas ?? currentZoneSummary.total_colunas, "coluna", "colunas")}</span>
+                              </div>
+                              {selectedPulColumn != null ? (
+                                <button
+                                  type="button"
+                                  className="ronda-column-return-btn"
+                                  onClick={() => selectPulColumn(null)}
+                                  aria-label="Voltar para a lista de colunas"
+                                  title="Voltar para a lista de colunas"
+                                >
+                                  <span className="ronda-inline-icon" aria-hidden="true">{chevronLeftIcon()}</span>
+                                  <span>Colunas</span>
+                                </button>
+                              ) : null}
                             </div>
                             {detail?.column_stats.length ? (
                               <div className="ronda-mini-card-grid">

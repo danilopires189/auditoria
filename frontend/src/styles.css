@@ -16759,6 +16759,39 @@ small {
   gap: 6px;
 }
 
+.ronda-column-return-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px 0 12px;
+  border: 1px solid rgba(18, 56, 115, 0.18);
+  border-radius: 999px;
+  background: linear-gradient(145deg, #ffffff, #eef4ff);
+  color: #163f87;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 140ms ease;
+}
+
+.ronda-column-return-btn:hover:not(:disabled) {
+  border-color: rgba(18, 56, 115, 0.3);
+  box-shadow: 0 10px 18px rgba(18, 56, 115, 0.12);
+  transform: translateY(-1px);
+}
+
+.ronda-column-return-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.ronda-column-return-btn .ronda-inline-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.4;
+}
+
 .ronda-active-audit-card {
   display: flex;
   align-items: center;
@@ -17292,6 +17325,10 @@ small {
     display: flex;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .ronda-column-return-btn {
+    width: fit-content;
   }
 
   .ronda-type-grid {
