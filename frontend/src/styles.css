@@ -18822,11 +18822,15 @@ small {
 }
 
 .caixa-card-actions {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-top: 10px;
-  flex-wrap: wrap;
+}
+
+.caixa-card-actions .btn {
+  width: 100%;
+  min-width: 0;
 }
 
 .caixa-card-sync-dot {
@@ -19039,11 +19043,14 @@ small {
 .caixa-termica-shell .termo-actions-row {
   min-width: 0;
   max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .caixa-termica-shell .termo-actions-row .btn {
   min-width: 0;
-  flex: 1 1 190px;
+  width: 100%;
   white-space: normal;
 }
 
@@ -19267,6 +19274,15 @@ small {
     min-height: 28px;
     padding: 0 8px;
     font-size: 0.72rem;
+  }
+
+  .caixa-card-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .caixa-card-actions .btn {
+    padding-inline: 8px;
+    font-size: 0.8rem;
   }
 }
 

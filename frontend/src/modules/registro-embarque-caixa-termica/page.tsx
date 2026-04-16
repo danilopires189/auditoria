@@ -2001,10 +2001,10 @@ function CaixaCard({
             {canAdminEdit && (
               <>
                 <button type="button" className="btn btn-muted" onClick={onEdit}>
-                  Editar
+                  ✏️ Editar
                 </button>
                 <button type="button" className="btn btn-muted" onClick={onDelete}>
-                  Excluir
+                  🗑️ Excluir
                 </button>
               </>
             )}
