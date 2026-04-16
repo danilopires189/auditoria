@@ -23,6 +23,7 @@ import {
   fetchAndCacheCaixaTermicaBoxes,
   fetchCaixaTermicaFeedDiario,
   fetchCaixaTermicaHistorico,
+  lookupCaixaTermicaByCodigo as lookupRemoteCaixaTermicaByCodigo,
   rpcDeleteCaixaTermica,
   rpcExpedirCaixaTermica,
   rpcInsertCaixaTermica,
@@ -208,6 +209,8 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerTarget, setScannerTarget] = useState<"search" | "register" | "expedicao">("search");
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [scanActionBox, setScanActionBox] = useState<CaixaTermicaBox | null>(null);
+  const [scanActionBusy, setScanActionBusy] = useState(false);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
 
@@ -477,6 +480,33 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     });
   }, []);
 
+  async function handleScannedSearchCode(rawText: string) {
+    if (!currentCd) return;
+    const codigo = rawText.trim().toUpperCase();
+    if (!codigo) return;
+
+    setSearchInput(codigo);
+    setScanActionBusy(true);
+    setOfflineErrorMessage(null);
+
+    try {
+      const loaded = boxes.find((box) => box.codigo.toUpperCase() === codigo);
+      const local = loaded ?? await getCaixaTermicaBoxByCodigo(profile.user_id, currentCd, codigo);
+      const box = local ?? await lookupRemoteCaixaTermicaByCodigo(profile.user_id, currentCd, codigo, isOnline);
+
+      if (!box) {
+        setOfflineErrorMessage(`Caixa ${codigo} não encontrada neste CD.`);
+        return;
+      }
+
+      setScanActionBox(box);
+    } catch (err) {
+      setOfflineErrorMessage(err instanceof Error ? err.message : "Erro ao buscar caixa bipada.");
+    } finally {
+      setScanActionBusy(false);
+    }
+  }
+
   // ── Camera scanner lifecycle ──
   useEffect(() => {
     if (!scannerOpen) return undefined;
@@ -534,8 +564,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     } else if (scannerTarget === "expedicao") {
       handleEtiquetaVolumeChange(text);
     } else {
-      setSearchInput(text.toUpperCase());
-      triggerQuickSync();
+      void handleScannedSearchCode(text);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scannerTarget]);
@@ -563,9 +592,22 @@ export default function RegistroEmbarqueCaixaTermicaPage({
 
     if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
       state.timerId = window.setTimeout(() => {
+        const submitted = value.trim().toUpperCase();
         state.timerId = null;
         state.burstChars = 0;
-        triggerQuickSync();
+        if (
+          submitted &&
+          (
+            submitted !== state.lastSubmittedValue ||
+            Date.now() - state.lastSubmittedAt > 1200
+          )
+        ) {
+          state.lastSubmittedValue = submitted;
+          state.lastSubmittedAt = Date.now();
+          void handleScannedSearchCode(submitted);
+        } else {
+          triggerQuickSync();
+        }
       }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
     }
   }, [triggerQuickSync]);
@@ -611,6 +653,17 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     setRecebimentoError(null);
     setRecebimentoOpen(true);
   }, []);
+
+  const confirmScanAction = useCallback(() => {
+    if (!scanActionBox) return;
+    const box = scanActionBox;
+    setScanActionBox(null);
+    if (box.status === "disponivel") {
+      openExpedicao(box);
+      return;
+    }
+    openRecebimento(box);
+  }, [openExpedicao, openRecebimento, scanActionBox]);
 
   // ── Open history ──
   const openHistorico = useCallback(async (box: CaixaTermicaBox) => {
@@ -975,6 +1028,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
         )}
         {offlineErrorMessage ? <div className="alert error">{offlineErrorMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {scanActionBusy ? <div className="alert success">Buscando caixa bipada...</div> : null}
         {offlineReady ? (
           <div className="alert success">
             Modo offline ativo: rotas, cadastros e situações das caixas serão usados do cache local.
@@ -1188,6 +1242,53 @@ export default function RegistroEmbarqueCaixaTermicaPage({
           </div>
         )}
       </section>
+
+      {/* ══════════════════════════════════════════
+          MODAL: SCANNED SEARCH ACTION
+         ══════════════════════════════════════════ */}
+      {scanActionBox && typeof document !== "undefined" && createPortal(
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="scan-action-modal-title"
+          onClick={() => setScanActionBox(null)}
+        >
+          <div
+            className="confirm-dialog surface-enter"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="scan-action-modal-title">
+              {scanActionBox.status === "disponivel" ? "Expedir caixa?" : "Receber caixa?"}
+            </h3>
+            <p>
+              Caixa: <strong>{scanActionBox.codigo}</strong> — {scanActionBox.descricao}
+            </p>
+            <p>
+              {scanActionBox.status === "disponivel"
+                ? "Esta caixa está disponível. Deseja abrir a expedição agora?"
+                : "Esta caixa está em trânsito. Deseja abrir o recebimento agora?"}
+            </p>
+            <div className="confirm-actions">
+              <button
+                className="btn btn-muted"
+                type="button"
+                onClick={() => setScanActionBox(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={confirmScanAction}
+              >
+                {scanActionBox.status === "disponivel" ? "🚚 Expedir" : "✅ Receber"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* ══════════════════════════════════════════
           MODAL: REGISTER NEW BOX
