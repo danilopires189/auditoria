@@ -1202,7 +1202,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
               >
                 ← Voltar
               </button>
-              <h2 style={{ margin: 0, fontSize: "1rem", fontFamily: "Sora, sans-serif", fontWeight: 700 }}>
+              <h2 className="caixa-feed-title">
                 Feed do Dia — {formatDateOnlyPtBR(todayIsoBrasilia())}
               </h2>
             </div>
@@ -1216,24 +1216,27 @@ export default function RegistroEmbarqueCaixaTermicaPage({
 
             {feedRows.map((row, idx) => (
               <div key={`feed-${idx}`} className="caixa-feed-group">
-                <p className="caixa-feed-group-title">
-                  {row.rota ?? "Sem rota"}
-                  {row.filial_nome && ` — ${row.filial_nome}`}
-                  {!row.filial_nome && row.filial && ` — Filial ${row.filial}`}
-                </p>
+                <div className="caixa-feed-group-head">
+                  <span className="caixa-feed-route-icon" aria-hidden="true">🧭</span>
+                  <p className="caixa-feed-group-title">
+                    {row.rota ?? "Sem rota"}
+                    {row.filial_nome && <span>{row.filial_nome}</span>}
+                    {!row.filial_nome && row.filial && <span>Filial {row.filial}</span>}
+                  </p>
+                </div>
                 <div className="caixa-feed-stats">
-                  <span className="caixa-feed-stat">{row.expedicoes} expediç{row.expedicoes !== 1 ? "ões" : "ão"}</span>
-                  <span className="caixa-feed-stat">{row.recebimentos} recebimento{row.recebimentos !== 1 ? "s" : ""}</span>
+                  <span className="caixa-feed-stat expedicao">🚚 {row.expedicoes} expediç{row.expedicoes !== 1 ? "ões" : "ão"}</span>
+                  <span className="caixa-feed-stat recebimento">✅ {row.recebimentos} recebimento{row.recebimentos !== 1 ? "s" : ""}</span>
                 </div>
                 <div className="caixa-feed-items">
                   {row.caixas.map((c, ci) => (
                     <div key={ci} className="caixa-feed-item">
                       <span className="caixa-feed-item-codigo">{c.codigo}</span>
-                      <span>{c.tipo === "expedicao" ? "Expedição" : "Recebimento"}</span>
-                      <span className="caixa-feed-item-time">
-                        {formatDateTimeBrasilia(c.data_hr)}
+                      <span className={`caixa-feed-item-type ${c.tipo}`}>
+                        {c.tipo === "expedicao" ? "🚚 Expedição" : "✅ Recebimento"}
                       </span>
-                      {c.pedido && <span className="caixa-feed-item-time">Pedido {c.pedido}</span>}
+                      <span className="caixa-feed-item-time">{formatDateTimeBrasilia(c.data_hr)}</span>
+                      {c.pedido && <span className="caixa-feed-item-order">Pedido {c.pedido}</span>}
                     </div>
                   ))}
                 </div>
