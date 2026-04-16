@@ -5,7 +5,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent
 } from "react";
 import type { IScannerControls } from "@zxing/browser";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
