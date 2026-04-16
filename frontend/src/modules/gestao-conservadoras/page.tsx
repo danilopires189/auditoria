@@ -47,6 +47,14 @@ function formatDateOnlyFromDateTime(value: string | null | undefined): string {
   return formatted === "-" ? formatted : formatted.split(",")[0]?.trim() ?? "-";
 }
 
+function normalizeSearchValue(value: string | null | undefined): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
+}
+
 function toDisplayName(nome: string): string {
   const compact = nome.trim().replace(/\s+/g, " ");
   if (!compact) return "Usuário";
@@ -76,6 +84,38 @@ function statusDescription(row: ConservadoraShipmentCard): string {
 function transportadoraLabel(row: ConservadoraShipmentCard): string {
   if (!row.transportadora_nome) return "Não vinculada";
   return row.transportadora_ativa ? row.transportadora_nome : `${row.transportadora_nome} (inativa)`;
+}
+
+function statusSearchTerms(status: ConservadoraStatus): string[] {
+  switch (status) {
+    case "documentacao_em_atraso":
+      return ["documentacao em atraso", "documentacao", "atraso", "em atraso", "pendente"];
+    case "aguardando_documento":
+      return ["aguardando documento", "aguardando", "documento", "pendente"];
+    case "documentacao_recebida":
+      return ["documentacao recebida", "recebida", "recebido", "confirmada", "confirmado"];
+    default:
+      return ["em transito", "transito", "transitando"];
+  }
+}
+
+function shipmentMatchesSearch(row: ConservadoraShipmentCard, search: string): boolean {
+  const normalizedSearch = normalizeSearchValue(search);
+  if (!normalizedSearch) return true;
+
+  const statusTerms = statusSearchTerms(row.status).join(" ");
+  const haystack = [
+    row.rota,
+    row.placa,
+    row.seq_ped,
+    formatPedidoSemDv(row.seq_ped),
+    row.transportadora_nome,
+    row.responsavel_nome,
+    row.responsavel_mat,
+    statusTerms
+  ].map((item) => normalizeSearchValue(item)).join(" ");
+
+  return haystack.includes(normalizedSearch);
 }
 
 export default function GestaoConservadorasPage({ isOnline, profile }: GestaoConservadorasPageProps) {
@@ -136,13 +176,13 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
     setLoading(true);
     setErrorMessage(null);
     try {
-      setRows(await fetchConservadoraCards({ cd: currentCd, search: deferredSearch || null }));
+      setRows(await fetchConservadoraCards({ cd: currentCd, search: null }));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Erro ao carregar embarques.");
     } finally {
       setLoading(false);
     }
-  }, [currentCd, deferredSearch, isOnline]);
+  }, [currentCd, isOnline]);
 
   useEffect(() => {
     void loadCards();
@@ -197,12 +237,17 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
     return () => { cancelled = true; };
   }, [currentCd, deferredRouteSearch, isOnline, manageOpen, routesReloadNonce]);
 
+  const filteredRows = useMemo(
+    () => rows.filter((row) => shipmentMatchesSearch(row, deferredSearch)),
+    [deferredSearch, rows]
+  );
+
   const groupedRows = useMemo(() => ({
-    atraso: rows.filter((row) => row.status === "documentacao_em_atraso"),
-    aguardando: rows.filter((row) => row.status === "aguardando_documento"),
-    emTransito: rows.filter((row) => row.status === "em_transito"),
-    recebida: rows.filter((row) => row.status === "documentacao_recebida")
-  }), [rows]);
+    atraso: filteredRows.filter((row) => row.status === "documentacao_em_atraso"),
+    aguardando: filteredRows.filter((row) => row.status === "aguardando_documento"),
+    emTransito: filteredRows.filter((row) => row.status === "em_transito"),
+    recebida: filteredRows.filter((row) => row.status === "documentacao_recebida")
+  }), [filteredRows]);
 
   const activeTransportadoras = useMemo(() => transportadoras.filter((item) => item.ativo), [transportadoras]);
 
@@ -318,15 +363,15 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
             <input
               type="search"
               className="caixa-search-input"
-              placeholder="Buscar por rota, pedido, placa, transportadora ou responsável..."
+              placeholder="Buscar por rota, pedido, placa, transportadora, responsável ou situação..."
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               disabled={!currentCd || !isOnline}
             />
           </div>
-          <button type="button" className="btn btn-muted" onClick={() => { setHistoryOffset(0); setHistoryOpen(true); }} disabled={!currentCd || !isOnline}>📋 Histórico</button>
-          {canManage && <button type="button" className="btn btn-muted" onClick={() => setManageOpen(true)} disabled={!currentCd || !isOnline}>🚚 Transportadoras</button>}
-          <button type="button" className="btn btn-muted" onClick={() => setRefreshNonce((value) => value + 1)} disabled={!currentCd || !isOnline || loading}>{loading ? "🔄 Atualizando..." : "🔄 Atualizar"}</button>
+          <button type="button" className="btn btn-muted conservadora-action-btn conservadora-action-history" onClick={() => { setHistoryOffset(0); setHistoryOpen(true); }} disabled={!currentCd || !isOnline}>📋 Histórico</button>
+          {canManage && <button type="button" className="btn btn-muted conservadora-action-btn conservadora-action-manage" onClick={() => setManageOpen(true)} disabled={!currentCd || !isOnline}>🚚 Transportadoras</button>}
+          <button type="button" className="btn btn-muted conservadora-action-btn conservadora-action-refresh" onClick={() => setRefreshNonce((value) => value + 1)} disabled={!currentCd || !isOnline || loading}>{loading ? "🔄 Atualizando..." : "🔄 Atualizar"}</button>
         </div>
         {loading && rows.length === 0 ? <p className="caixa-sem-itens">Carregando embarques...</p> : (
           <>

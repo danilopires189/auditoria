@@ -19576,10 +19576,26 @@ small {
 
   .conservadora-filters,
   .conservadora-manage-grid,
-  .conservadora-inline-form,
+  .conservadora-inline-form {
+    grid-template-columns: 1fr;
+  }
+
   .conservadora-actions-row.is-admin,
   .conservadora-actions-row.is-user {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .conservadora-search-wrap {
+    grid-column: 1 / -1;
+  }
+
+  .conservadora-action-history,
+  .conservadora-action-refresh {
+    grid-column: span 1;
+  }
+
+  .conservadora-action-manage {
+    grid-column: 1 / -1;
   }
 
   .conservadora-route-actions,
