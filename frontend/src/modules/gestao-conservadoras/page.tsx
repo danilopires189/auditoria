@@ -480,7 +480,6 @@ function ConservadoraCard({ row, isExpanded, isBusy, onToggleExpanded, onConfirm
       <div className="caixa-card-header">
         <div className="caixa-card-title-block">
           <span className="caixa-card-codigo">{row.rota}</span>
-          <p className="caixa-card-descricao">Pedido {pedidoDisplay}</p>
         </div>
         <span className={`caixa-card-status ${row.status}`}>{statusLabel(row.status)}</span>
         <button type="button" className="caixa-card-expand-btn" onClick={onToggleExpanded} aria-expanded={isExpanded} title={isExpanded ? "Ocultar detalhes" : "Ver detalhes"}>{isExpanded ? "Ocultar" : "Detalhes"}</button>

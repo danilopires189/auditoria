@@ -19145,13 +19145,13 @@ small {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .conservadora-card-meta-item {
   display: grid;
-  gap: 4px;
-  padding: 10px 12px;
+  gap: 3px;
+  padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid #d9e4f2;
   background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
