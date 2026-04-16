@@ -1232,6 +1232,7 @@ small {
 }
 
 .termo-label-preview-shell {
+  height: min(58vh, 640px);
   overflow: hidden;
   padding: 12px;
   border-radius: 14px;
@@ -1243,7 +1244,6 @@ small {
 }
 
 .termo-label-preview-shell.is-scrollable {
-  height: min(58vh, 640px);
   overflow-y: auto;
   overflow-x: hidden;
 }
