@@ -107,6 +107,17 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M14.5 12.5l-5 4" />
         </svg>
       );
+    case "fridge":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="7" y="3" width="10" height="18" rx="2" />
+          <path d="M7 11h10" />
+          <path d="M10 7h0" />
+          <path d="M10 15h0" />
+          <path d="M9 21v-2" />
+          <path d="M15 21v-2" />
+        </svg>
+      );
     case "carton-meds":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">

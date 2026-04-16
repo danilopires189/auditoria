@@ -197,7 +197,7 @@ export default function HomePage({
               <div className="module-header-main">
                 <span className="module-title">{moduleDef.title}</span>
                 {AVAILABLE_MODULE_KEYS.has(moduleDef.key) ? (
-                  <span className="module-available-pill">✅ Disponível</span>
+                  <span className="module-available-pill">Disponível</span>
                 ) : moduleDef.key === "produtividade" ? (
                   <span className="module-test-pill">Em teste</span>
                 ) : null}

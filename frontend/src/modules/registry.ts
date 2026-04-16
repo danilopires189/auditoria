@@ -15,6 +15,7 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "controle-validade", path: "/modulos/controle-validade", title: "Controle de Validade", icon: "expiry", tone: "blue" },
   { key: "devolucao-mercadoria", path: "/modulos/devolucao-mercadoria", title: "Devolução de Mercadoria", icon: "return", tone: "red" },
   { key: "gestao-estoque", path: "/modulos/gestao-estoque", title: "Gestão de Estoque", icon: "audit", tone: "blue" },
+  { key: "gestao-conservadoras", path: "/modulos/gestao-conservadoras", title: "Gestão de Conservadoras Térmicas", icon: "fridge", tone: "teal" },
   { key: "indicadores", path: "/modulos/indicadores", title: "Indicadores", icon: "chart", tone: "blue" },
   { key: "zerados", path: "/modulos/zerados", title: "Inventário (zerados)", icon: "zero", tone: "red" },
   { key: "meta-mes", path: "/modulos/meta-mes", title: "Meta Mês", icon: "goal", tone: "amber" },

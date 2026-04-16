@@ -4596,9 +4596,6 @@ small {
 
 .module-available-pill {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   white-space: nowrap;
   padding: 3px 9px;
   border-radius: 999px;
@@ -18820,6 +18817,24 @@ small {
   border-color: #bfdbfe;
 }
 
+.caixa-card-status.aguardando_documento {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.caixa-card-status.documentacao_em_atraso {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+}
+
+.caixa-card-status.documentacao_recebida {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+
 .caixa-card-descricao {
   font-size: 0.88rem;
   color: var(--text);
@@ -19119,6 +19134,120 @@ small {
   background: #f0fdf8;
 }
 
+.conservadora-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 8px;
+}
+
+.conservadora-history-dialog {
+  max-width: 920px;
+  width: min(92vw, 920px);
+}
+
+.conservadora-manage-dialog {
+  max-width: 1080px;
+  width: min(94vw, 1080px);
+}
+
+.conservadora-filters {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 14px 0 16px;
+}
+
+.conservadora-manage-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 1.25fr);
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.conservadora-manage-section {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: #fbfcfe;
+}
+
+.conservadora-manage-section h4 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.conservadora-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.conservadora-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.conservadora-list-row,
+.conservadora-route-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: white;
+}
+
+.conservadora-list-row p,
+.conservadora-route-row p {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: #596579;
+}
+
+.conservadora-route-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.conservadora-route-actions select {
+  min-width: 220px;
+}
+
+.conservadora-empty {
+  font-size: 0.88rem;
+  color: #596579;
+  margin: 10px 0;
+}
+
+.conservadora-history-item.em_transito {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+
+.conservadora-history-item.aguardando_documento {
+  border-left-color: #d97706;
+  background: #fff7ed;
+}
+
+.conservadora-history-item.documentacao_em_atraso {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+
+.conservadora-history-item.documentacao_recebida {
+  border-left-color: #16a34a;
+  background: #f0fdf4;
+}
+
 .caixa-historico-tipo {
   font-family: "Sora", sans-serif;
   font-size: 0.85rem;
@@ -19323,6 +19452,24 @@ small {
   .caixa-card-actions .btn {
     padding-inline: 8px;
     font-size: 0.8rem;
+  }
+
+  .conservadora-filters,
+  .conservadora-manage-grid,
+  .conservadora-inline-form {
+    grid-template-columns: 1fr;
+  }
+
+  .conservadora-route-actions,
+  .conservadora-list-row,
+  .conservadora-route-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .conservadora-route-actions select {
+    min-width: 0;
+    width: 100%;
   }
 }
 

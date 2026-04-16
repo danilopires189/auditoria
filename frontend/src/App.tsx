@@ -30,6 +30,7 @@ import MetaMesPage from "./modules/meta-mes/page";
 import ProdutividadePage from "./modules/produtividade/page";
 import PvpsAlocacaoPage from "./modules/pvps-alocacao/page";
 import ControleAvariasPage from "./modules/controle-avarias/page";
+import GestaoConservadorasPage from "./modules/gestao-conservadoras/page";
 import RegistroEmbarquePage from "./modules/registro-embarque/page";
 import RegistroEmbarqueCaixaTermicaPage from "./modules/registro-embarque-caixa-termica/page";
 import RondaPage from "./modules/ronda/page";
@@ -49,6 +50,7 @@ import type { CheckListModuleProfile } from "./modules/check-list/types";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
 import type { GestaoEstoqueModuleProfile } from "./modules/gestao-estoque/types";
+import type { ConservadoraModuleProfile } from "./modules/gestao-conservadoras/types";
 import type { IndicadoresModuleProfile } from "./modules/indicadores/types";
 import type { MetaMesModuleProfile } from "./modules/meta-mes/types";
 import type { ValidarEnderecamentoModuleProfile } from "./modules/validar-enderecamento/types";
@@ -2280,6 +2282,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const conservadoraProfile = useMemo<ConservadoraModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const rondaQualidadeProfile = useMemo<RondaQualidadeModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2808,6 +2822,16 @@ export default function App() {
             element={
               caixaTermicaProfile ? (
                 <RegistroEmbarqueCaixaTermicaPage isOnline={isOnline} profile={caixaTermicaProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/gestao-conservadoras"
+            element={
+              conservadoraProfile ? (
+                <GestaoConservadorasPage isOnline={isOnline} profile={conservadoraProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )
