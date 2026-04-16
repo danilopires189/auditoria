@@ -770,6 +770,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       volume_total: labelPreviewVolumeCount
     });
   }, [activeVolume, labelPreviewVolumeCount, profile.mat]);
+  const isLabelPreviewScrollable = labelPreviewData.length > 1;
 
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
@@ -4007,7 +4008,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                   </button>
                 </div>
 
-                <div className="termo-label-preview-shell" ref={labelPreviewRef}>
+                <div className={`termo-label-preview-shell${isLabelPreviewScrollable ? " is-scrollable" : ""}`} ref={labelPreviewRef}>
                   <PedidoDiretoLabelSheet labels={labelPreviewData} />
                 </div>
               </div>

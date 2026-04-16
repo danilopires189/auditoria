@@ -1232,14 +1232,20 @@ small {
 }
 
 .termo-label-preview-shell {
-  max-height: min(58vh, 640px);
-  overflow: auto;
+  overflow: hidden;
   padding: 12px;
   border-radius: 14px;
   border: 1px solid rgba(18, 41, 73, 0.1);
+  scrollbar-gutter: stable;
   background:
     radial-gradient(circle at top left, rgba(118, 171, 255, 0.18), transparent 36%),
     linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+}
+
+.termo-label-preview-shell.is-scrollable {
+  height: min(58vh, 640px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .pedido-direto-label-sheet {
