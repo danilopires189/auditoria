@@ -6,7 +6,16 @@
 -- Step 1: Make transportadoras global
 -- Remove CD-specific constraint and add global unique constraint on nome_norm
 alter table app.conservadora_transportadoras drop constraint if exists uq_conservadora_transportadoras_cd_nome;
-alter table app.conservadora_transportadoras add constraint uq_conservadora_transportadoras_nome unique (nome_norm);
+
+-- Add global constraint if not exists
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint where conname = 'uq_conservadora_transportadoras_nome'
+    ) then
+        alter table app.conservadora_transportadoras add constraint uq_conservadora_transportadoras_nome unique (nome_norm);
+    end if;
+end $$;
 
 -- Remove CD index and add global index
 drop index if exists app.idx_conservadora_transportadoras_cd_ativo;

@@ -162,6 +162,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
   const [routeSelections, setRouteSelections] = useState<Record<string, string>>({});
   const [manageBusy, setManageBusy] = useState(false);
   const [routesReloadNonce, setRoutesReloadNonce] = useState(0);
+  const [manageTab, setManageTab] = useState<"transportadoras" | "rotas">("transportadoras");
   const deferredSearch = useDeferredValue(searchInput.trim());
   const deferredHistorySearch = useDeferredValue(historySearch.trim());
   const deferredRouteSearch = useDeferredValue(routeSearch.trim());
@@ -504,41 +505,121 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
       {historyOpen && typeof document !== "undefined" && createPortal(
         <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="conservadora-history-title" onClick={() => setHistoryOpen(false)}>
           <div className="confirm-dialog surface-enter conservadora-history-dialog" onClick={(event) => event.stopPropagation()}>
-            <h3 id="conservadora-history-title">Histórico de Embarques</h3>
-            <div className="conservadora-filters">
-              <input type="search" className="caixa-search-input" placeholder="Buscar por rota, pedido, placa, transportadora ou responsável..." value={historySearch} onChange={(event) => { setHistorySearch(event.target.value); setHistoryOffset(0); }} />
-              <select value={historyStatus} onChange={(event) => { setHistoryStatus(event.target.value as ConservadoraStatus | ""); setHistoryOffset(0); }}>
-                <option value="">Todos os status</option>
-                <option value="em_transito">Em trânsito</option>
-                <option value="aguardando_documento">Aguardando doc.</option>
-                <option value="documentacao_em_atraso">Documentação em atraso</option>
-                <option value="documentacao_recebida">Documentação recebida</option>
-              </select>
-              <input type="date" value={historyDtIni} onChange={(event) => { setHistoryDtIni(event.target.value); setHistoryOffset(0); }} />
-              <input type="date" value={historyDtFim} onChange={(event) => { setHistoryDtFim(event.target.value); setHistoryOffset(0); }} />
+            <div className="conservadora-history-header">
+              <div>
+                <h3 id="conservadora-history-title">📋 Histórico de Embarques</h3>
+                <p className="conservadora-history-subtitle">Consulte todos os embarques com filtros avançados</p>
+              </div>
+              <button type="button" className="conservadora-history-close-btn" onClick={() => setHistoryOpen(false)} title="Fechar">✕</button>
             </div>
-            {historyLoading && <p className="conservadora-empty">Carregando histórico...</p>}
+
+            <div className="conservadora-history-filters">
+              <div className="conservadora-history-filter-group">
+                <span className="conservadora-history-filter-icon">🔍</span>
+                <input type="search" className="conservadora-history-search-input" placeholder="Buscar por rota, pedido, placa..." value={historySearch} onChange={(event) => { setHistorySearch(event.target.value); setHistoryOffset(0); }} />
+              </div>
+              <div className="conservadora-history-filter-group">
+                <span className="conservadora-history-filter-icon">📊</span>
+                <select className="conservadora-history-select" value={historyStatus} onChange={(event) => { setHistoryStatus(event.target.value as ConservadoraStatus | ""); setHistoryOffset(0); }}>
+                  <option value="">Todos os status</option>
+                  <option value="em_transito">🚚 Em trânsito</option>
+                  <option value="aguardando_documento">🟡 Aguardando doc.</option>
+                  <option value="documentacao_em_atraso">🔴 Doc. em atraso</option>
+                  <option value="documentacao_recebida">✅ Doc. recebida</option>
+                </select>
+              </div>
+              <div className="conservadora-history-filter-group conservadora-history-date-group">
+                <span className="conservadora-history-filter-icon">📅</span>
+                <input type="date" className="conservadora-history-date-input" value={historyDtIni} onChange={(event) => { setHistoryDtIni(event.target.value); setHistoryOffset(0); }} title="Data inicial" />
+                <span className="conservadora-history-date-separator">até</span>
+                <input type="date" className="conservadora-history-date-input" value={historyDtFim} onChange={(event) => { setHistoryDtFim(event.target.value); setHistoryOffset(0); }} title="Data final" />
+              </div>
+            </div>
+
+            {historyLoading && (
+              <div className="conservadora-history-loading">
+                <span className="conservadora-history-loading-spinner">⏳</span>
+                <p>Carregando histórico...</p>
+              </div>
+            )}
             {historyError && <div className="alert error">{historyError}</div>}
-            {!historyLoading && !historyError && <p className="conservadora-empty">{historyRows.length ? `Mostrando ${historyRows.length} embarque(s) nesta página.` : "Nenhum embarque encontrado para os filtros informados."}</p>}
-            <div className="caixa-historico-timeline">
-              {historyRows.map((row) => (
-                <div key={row.embarque_key} className={`caixa-historico-item conservadora-history-item ${row.status}`}>
-                  <span className="caixa-historico-tipo">{statusLabel(row.status)}</span>
-                  <span className="caixa-historico-meta">Rota: {row.rota}</span>
-                  <span className="caixa-historico-meta">Pedido: {formatPedidoSemDv(row.seq_ped)}</span>
-                  <span className="caixa-historico-meta">Placa: {row.placa}</span>
-                  <span className="caixa-historico-meta">Embarque: {formatDateTimeBrasilia(row.dt_lib ?? row.event_at)}</span>
-                  {row.dt_ped && <span className="caixa-historico-meta">Data do pedido: {formatDateOnlyFromDateTime(row.dt_ped)}</span>}
-                  <span className="caixa-historico-meta">Transportadora: {transportadoraLabel(row)}</span>
-                  <span className="caixa-historico-meta">Responsável: {row.responsavel_nome ?? "Não informado"}{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
-                  {row.document_confirmed_at && <span className="caixa-historico-meta">{documentResultLabel(row.document_resultado)} em {formatDateTimeBrasilia(row.document_confirmed_at)}{row.document_confirmed_nome ? ` por ${row.document_confirmed_nome}` : ""}</span>}
-                  {row.document_ocorrencia && <span className="caixa-historico-obs">Ocorrência: {row.document_ocorrencia}</span>}
+            {!historyLoading && !historyError && historyRows.length === 0 && (
+              <div className="conservadora-history-empty">
+                <span className="conservadora-history-empty-icon">📭</span>
+                <p>Nenhum embarque encontrado</p>
+                <span>Ajuste os filtros para ver resultados</span>
+              </div>
+            )}
+
+            {!historyLoading && !historyError && historyRows.length > 0 && (
+              <>
+                <div className="conservadora-history-results-info">
+                  <span className="conservadora-history-results-count">{historyRows.length} embarque(s)</span>
+                  {historyOffset > 0 && <span className="conservadora-history-results-page">Página {Math.floor(historyOffset / HISTORY_PAGE_SIZE) + 1}</span>}
                 </div>
-              ))}
-            </div>
-            <div className="confirm-actions" style={{ marginTop: "16px" }}>
-              <button type="button" className="btn btn-muted" onClick={() => setHistoryOffset((value) => Math.max(value - HISTORY_PAGE_SIZE, 0))} disabled={historyLoading || historyOffset === 0}>Página anterior</button>
-              <button type="button" className="btn btn-muted" onClick={() => setHistoryOffset((value) => value + HISTORY_PAGE_SIZE)} disabled={historyLoading || !historyHasNext}>Próxima página</button>
+                <div className="conservadora-history-list">
+                  {historyRows.map((row) => (
+                    <div key={row.embarque_key} className={`conservadora-history-card ${row.status}`}>
+                      <div className="conservadora-history-card-header">
+                        <div className="conservadora-history-card-status">
+                          <span className={`conservadora-history-status-dot ${row.status}`} />
+                          <span className="conservadora-history-status-label">{statusLabel(row.status)}</span>
+                        </div>
+                        <span className="conservadora-history-card-route">{row.rota}</span>
+                      </div>
+                      <div className="conservadora-history-card-grid">
+                        <div className="conservadora-history-card-field">
+                          <span className="conservadora-history-field-label">Pedido</span>
+                          <span className="conservadora-history-field-value">{formatPedidoSemDv(row.seq_ped)}</span>
+                        </div>
+                        <div className="conservadora-history-card-field">
+                          <span className="conservadora-history-field-label">Placa</span>
+                          <span className="conservadora-history-field-value">{row.placa}</span>
+                        </div>
+                        <div className="conservadora-history-card-field">
+                          <span className="conservadora-history-field-label">Embarque</span>
+                          <span className="conservadora-history-field-value">{formatDateTimeBrasilia(row.dt_lib ?? row.event_at)}</span>
+                        </div>
+                        {row.dt_ped && (
+                          <div className="conservadora-history-card-field">
+                            <span className="conservadora-history-field-label">Data do pedido</span>
+                            <span className="conservadora-history-field-value">{formatDateOnlyFromDateTime(row.dt_ped)}</span>
+                          </div>
+                        )}
+                        <div className="conservadora-history-card-field">
+                          <span className="conservadora-history-field-label">Transportadora</span>
+                          <span className="conservadora-history-field-value">{transportadoraLabel(row)}</span>
+                        </div>
+                        <div className="conservadora-history-card-field">
+                          <span className="conservadora-history-field-label">Responsável</span>
+                          <span className="conservadora-history-field-value">{row.responsavel_nome ?? "Não informado"}{row.responsavel_mat ? ` (${row.responsavel_mat})` : ""}</span>
+                        </div>
+                      </div>
+                      {row.document_confirmed_at && (
+                        <div className="conservadora-history-card-footer">
+                          <span className="conservadora-history-doc-badge">{documentResultLabel(row.document_resultado)}</span>
+                          <span className="conservadora-history-doc-info">{formatDateTimeBrasilia(row.document_confirmed_at)}{row.document_confirmed_nome ? ` por ${row.document_confirmed_nome}` : ""}</span>
+                        </div>
+                      )}
+                      {row.document_ocorrencia && (
+                        <div className="conservadora-history-occurrence">
+                          <span className="conservadora-history-occurrence-label">⚠️ Ocorrência:</span>
+                          <span className="conservadora-history-occurrence-text">{row.document_ocorrencia}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="conservadora-history-footer">
+              <button type="button" className="btn btn-muted conservadora-history-page-btn" onClick={() => setHistoryOffset((value) => Math.max(value - HISTORY_PAGE_SIZE, 0))} disabled={historyLoading || historyOffset === 0}>
+                ← Anterior
+              </button>
+              <button type="button" className="btn btn-muted conservadora-history-page-btn" onClick={() => setHistoryOffset((value) => value + HISTORY_PAGE_SIZE)} disabled={historyLoading || !historyHasNext}>
+                Próxima →
+              </button>
               <button type="button" className="btn btn-primary" onClick={() => setHistoryOpen(false)}>Fechar</button>
             </div>
           </div>
@@ -549,57 +630,127 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
       {manageOpen && typeof document !== "undefined" && createPortal(
         <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="conservadora-manage-title" onClick={() => setManageOpen(false)}>
           <div className="confirm-dialog surface-enter conservadora-manage-dialog" onClick={(event) => event.stopPropagation()}>
-            <h3 id="conservadora-manage-title">Gerenciar Transportadoras</h3>
+            <div className="conservadora-manage-header">
+              <div>
+                <h3 id="conservadora-manage-title">🚚 Gerenciar Transportadoras</h3>
+                <p className="conservadora-manage-subtitle">Cadastre transportadoras e vincule às rotas de entrega</p>
+              </div>
+              <button type="button" className="conservadora-manage-close-btn" onClick={() => setManageOpen(false)} title="Fechar">✕</button>
+            </div>
             {manageError && <div className="alert error">{manageError}</div>}
             {manageLoading && <p className="conservadora-empty">Carregando dados de gerenciamento...</p>}
-            <div className="conservadora-manage-grid">
-              <section className="conservadora-manage-section">
-                <h4>Cadastro de transportadoras</h4>
-                <div className="conservadora-inline-form">
-                  <input type="text" placeholder="Nome da transportadora" value={novaTransportadora} onChange={(event) => setNovaTransportadora(event.target.value)} disabled={manageBusy} />
-                  <button type="button" className="btn btn-primary" onClick={() => void handleSalvarTransportadora()} disabled={manageBusy || !novaTransportadora.trim()}>Salvar</button>
+
+            <div className="conservadora-manage-tabs">
+              <button type="button" className={`conservadora-manage-tab ${manageTab === "transportadoras" ? "active" : ""}`} onClick={() => setManageTab("transportadoras")}>
+                <span className="conservadora-manage-tab-icon">🏢</span>
+                <span>Transportadoras</span>
+                <span className="conservadora-manage-tab-badge">{transportadoras.filter(t => t.ativo).length}</span>
+              </button>
+              <button type="button" className={`conservadora-manage-tab ${manageTab === "rotas" ? "active" : ""}`} onClick={() => setManageTab("rotas")}>
+                <span className="conservadora-manage-tab-icon">🗺️</span>
+                <span>Vínculo de Rotas</span>
+                <span className="conservadora-manage-tab-badge">{rotas.filter(r => r.transportadora_id).length}</span>
+              </button>
+            </div>
+
+            {!manageLoading && manageTab === "transportadoras" && (
+              <div className="conservadora-manage-panel">
+                <div className="conservadora-manage-add-form">
+                  <div className="conservadora-manage-input-group">
+                    <span className="conservadora-manage-input-icon">🏢</span>
+                    <input
+                      type="text"
+                      className="conservadora-manage-input"
+                      placeholder="Nome da transportadora..."
+                      value={novaTransportadora}
+                      onChange={(event) => setNovaTransportadora(event.target.value)}
+                      onKeyDown={(event) => { if (event.key === "Enter" && novaTransportadora.trim()) void handleSalvarTransportadora(); }}
+                      disabled={manageBusy}
+                    />
+                  </div>
+                  <button type="button" className="btn btn-primary conservadora-manage-add-btn" onClick={() => void handleSalvarTransportadora()} disabled={manageBusy || !novaTransportadora.trim()}>
+                    <span>＋</span> Adicionar
+                  </button>
                 </div>
-                <div className="conservadora-list">
+                <div className="conservadora-manage-list">
                   {transportadoras.map((item) => (
-                    <div key={item.id} className="conservadora-list-row">
-                      <div><strong>{item.nome}</strong><p>{item.ativo ? "Ativa" : "Inativa"}</p></div>
-                      <button type="button" className="btn btn-muted" onClick={() => void handleInativarTransportadora(item.id)} disabled={manageBusy || !item.ativo}>Inativar</button>
+                    <div key={item.id} className={`conservadora-manage-list-item ${item.ativo ? "is-active" : "is-inactive"}`}>
+                      <div className="conservadora-manage-list-item-info">
+                        <span className={`conservadora-manage-status-dot ${item.ativo ? "active" : "inactive"}`} />
+                        <div>
+                          <strong className="conservadora-manage-list-item-name">{item.nome}</strong>
+                          <span className="conservadora-manage-list-item-status">{item.ativo ? "Ativa" : "Inativa"}</span>
+                        </div>
+                      </div>
+                      {item.ativo && (
+                        <button type="button" className="conservadora-manage-inactivate-btn" onClick={() => void handleInativarTransportadora(item.id)} disabled={manageBusy}>
+                          Inativar
+                        </button>
+                      )}
                     </div>
                   ))}
-                  {!transportadoras.length && !manageLoading && <p className="conservadora-empty">Nenhuma transportadora cadastrada.</p>}
+                  {!transportadoras.length && !manageLoading && (
+                    <div className="conservadora-manage-empty">
+                      <span className="conservadora-manage-empty-icon">📦</span>
+                      <p>Nenhuma transportadora cadastrada</p>
+                      <span>Adicione a primeira transportadora acima</span>
+                    </div>
+                  )}
                 </div>
-              </section>
-              <section className="conservadora-manage-section">
-                <h4>Vínculo de rotas</h4>
-                <input type="search" placeholder="Buscar rota..." value={routeSearch} onChange={(event) => setRouteSearch(event.target.value)} disabled={manageBusy} />
-                <div className="conservadora-list">
+              </div>
+            )}
+
+            {!manageLoading && manageTab === "rotas" && (
+              <div className="conservadora-manage-panel">
+                <div className="conservadora-manage-search-wrap">
+                  <span className="conservadora-manage-search-icon">🔍</span>
+                  <input type="search" className="conservadora-manage-search-input" placeholder="Buscar rota..." value={routeSearch} onChange={(event) => setRouteSearch(event.target.value)} disabled={manageBusy} />
+                </div>
+                <div className="conservadora-manage-list">
                   {rotas.map((route) => {
                     const selectedId = routeSelections[route.rota_descricao] ?? route.transportadora_id ?? "";
                     const currentInactive = route.transportadora_id && !activeTransportadoras.some((item) => item.id === route.transportadora_id)
                       ? [{ id: route.transportadora_id, cd: currentCd ?? 0, nome: route.transportadora_nome ?? "Transportadora atual", ativo: false, created_at: null, updated_at: null }]
                       : [];
                     const selectOptions = [...activeTransportadoras, ...currentInactive];
+                    const hasVinculo = !!selectedId;
                     return (
-                      <div key={route.rota_descricao} className="conservadora-route-row">
-                        <div>
-                          <strong>{route.rota_descricao}</strong>
-                          <p>Atual: {route.transportadora_nome ? `${route.transportadora_nome}${route.transportadora_ativa ? "" : " (inativa)"}` : "Sem vínculo"}</p>
+                      <div key={route.rota_descricao} className={`conservadora-manage-route-item ${hasVinculo ? "is-linked" : "is-unlinked"}`}>
+                        <div className="conservadora-manage-route-info">
+                          <span className={`conservadora-manage-route-dot ${hasVinculo ? "linked" : "unlinked"}`} />
+                          <div>
+                            <strong className="conservadora-manage-route-name">{route.rota_descricao}</strong>
+                            <span className="conservadora-manage-route-status">
+                              {hasVinculo
+                                ? `🚚 ${route.transportadora_nome ?? "Vinculada"}`
+                                : "Sem vínculo"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="conservadora-route-actions">
-                          <select value={selectedId} onChange={(event) => setRouteSelections((current) => ({ ...current, [route.rota_descricao]: event.target.value }))} disabled={manageBusy}>
-                            <option value="">Selecionar transportadora</option>
+                        <div className="conservadora-manage-route-actions">
+                          <select value={selectedId} onChange={(event) => setRouteSelections((current) => ({ ...current, [route.rota_descricao]: event.target.value }))} disabled={manageBusy} className="conservadora-manage-select">
+                            <option value="">Selecionar...</option>
                             {selectOptions.map((item) => <option key={item.id} value={item.id}>{item.nome}{item.ativo ? "" : " (inativa)"}</option>)}
                           </select>
-                          <button type="button" className="btn btn-primary" onClick={() => void handleSalvarRota(route)} disabled={manageBusy || !selectedId || selectedId === (route.transportadora_id ?? "")}>Vincular</button>
+                          <button type="button" className="btn btn-primary conservadora-manage-link-btn" onClick={() => void handleSalvarRota(route)} disabled={manageBusy || !selectedId || selectedId === (route.transportadora_id ?? "")}>
+                            {route.transportadora_id ? "Atualizar" : "Vincular"}
+                          </button>
                         </div>
                       </div>
                     );
                   })}
-                  {!rotas.length && !manageLoading && <p className="conservadora-empty">Nenhuma rota encontrada para o filtro informado.</p>}
+                  {!rotas.length && !manageLoading && (
+                    <div className="conservadora-manage-empty">
+                      <span className="conservadora-manage-empty-icon">🗺️</span>
+                      <p>Nenhuma rota encontrada</p>
+                      <span>Ajuste o filtro de busca</span>
+                    </div>
+                  )}
                 </div>
-              </section>
-            </div>
-            <div className="confirm-actions" style={{ marginTop: "16px" }}>
+              </div>
+            )}
+
+            <div className="conservadora-manage-footer">
               <button type="button" className="btn btn-primary" onClick={() => setManageOpen(false)}>Fechar</button>
             </div>
           </div>

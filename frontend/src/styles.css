@@ -19533,88 +19533,872 @@ small {
 }
 
 .conservadora-history-dialog {
-  max-width: 920px;
-  width: min(92vw, 920px);
+  max-width: 860px;
+  width: min(94vw, 860px);
+  padding: 0;
+  overflow: hidden;
 }
 
-.conservadora-manage-dialog {
-  max-width: 1080px;
-  width: min(94vw, 1080px);
+/* History Header */
+.conservadora-history-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(135deg, #f8fbff 0%, #f0f4fa 100%);
 }
 
-.conservadora-filters {
-  display: grid;
-  grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(150px, 1fr));
-  gap: 12px;
-  margin: 14px 0 16px;
-}
-
-.conservadora-manage-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 1.25fr);
-  gap: 18px;
-  margin-top: 12px;
-}
-
-.conservadora-manage-section {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px;
-  background: #fbfcfe;
-}
-
-.conservadora-manage-section h4 {
-  margin: 0 0 12px;
-  font-size: 1rem;
+.conservadora-history-header h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
   color: var(--text);
 }
 
-.conservadora-inline-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  margin-bottom: 14px;
+.conservadora-history-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: #6b7a90;
 }
 
-.conservadora-list {
+.conservadora-history-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #8896a8;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.conservadora-history-close-btn:hover {
+  background: #e8f0fe;
+  color: var(--text);
+}
+
+/* History Filters */
+.conservadora-history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.conservadora-history-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 0 12px;
+  border: 1.5px solid #d9e4f2;
+  transition: border-color 0.2s ease;
+  flex: 1;
+  min-width: 200px;
+}
+
+.conservadora-history-filter-group:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.conservadora-history-filter-icon {
+  font-size: 0.95rem;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.conservadora-history-search-input {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 10px 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text);
+  outline: none;
+  min-width: 0;
+}
+
+.conservadora-history-search-input::placeholder {
+  color: #a0aec0;
+}
+
+.conservadora-history-select {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 10px 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.conservadora-history-date-group {
+  flex: 1.5;
+}
+
+.conservadora-history-date-input {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 10px 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.conservadora-history-date-separator {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #a0aec0;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+/* Loading */
+.conservadora-history-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #6b7a90;
+}
+
+.conservadora-history-loading-spinner {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  animation: conservadora-spin 1.5s linear infinite;
+}
+
+@keyframes conservadora-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.conservadora-history-loading p {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Empty state */
+.conservadora-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: #6b7a90;
+}
+
+.conservadora-history-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.conservadora-history-empty p {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.conservadora-history-empty span {
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Results info */
+.conservadora-history-results-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 28px;
+  border-bottom: 1px solid var(--line);
+  background: #f8fbff;
+}
+
+.conservadora-history-results-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.conservadora-history-results-page {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b7a90;
+  background: var(--line);
+  padding: 2px 10px;
+  border-radius: 99px;
+}
+
+/* History list */
+.conservadora-history-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 16px 28px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+/* History card */
+.conservadora-history-card {
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  overflow: hidden;
+  transition: all 0.15s ease;
+  min-height: 120px;
+}
+
+.conservadora-history-card > * {
+  display: block !important;
+}
+
+.conservadora-history-card-header {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #f8fbff 0%, #f0f4fa 100%);
+  border-bottom: 1px solid var(--line);
+}
+
+.conservadora-history-card-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.conservadora-history-card-field {
+  display: flex !important;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.conservadora-history-card-footer {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: #f0fdf4;
+  border-top: 1px solid #bbf7d0;
+}
+
+.conservadora-history-occurrence {
+  display: flex !important;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #fef2f2;
+  border-top: 1px solid #fecaca;
+}
+
+.conservadora-history-card:hover {
+  border-color: #c5d3e8;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.conservadora-history-card.documentacao_em_atraso {
+  border-left: 4px solid #ef4444;
+}
+
+.conservadora-history-card.aguardando_documento {
+  border-left: 4px solid #f59e0b;
+}
+
+.conservadora-history-card.documentacao_recebida {
+  border-left: 4px solid #22c55e;
+}
+
+.conservadora-history-card.em_transito {
+  border-left: 4px solid #3b82f6;
+}
+
+.conservadora-history-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #f8fbff 0%, #f0f4fa 100%);
+  border-bottom: 1px solid var(--line);
+}
+
+.conservadora-history-card-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.conservadora-history-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conservadora-history-status-dot.documentacao_em_atraso {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.conservadora-history-status-dot.aguardando_documento {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.conservadora-history-status-dot.documentacao_recebida {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+.conservadora-history-status-dot.em_transito {
+  background: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.conservadora-history-status-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.conservadora-history-card-route {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--accent);
+  background: #e8f0fe;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+/* Card grid */
+.conservadora-history-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.conservadora-history-card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.conservadora-history-field-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8896a8;
+}
+
+.conservadora-history-field-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+/* Card footer (doc confirmation) */
+.conservadora-history-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: #f0fdf4;
+  border-top: 1px solid #bbf7d0;
+}
+
+.conservadora-history-doc-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #16a34a;
+  background: #dcfce7;
+  padding: 3px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.conservadora-history-doc-info {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #166534;
+}
+
+/* Occurrence */
+.conservadora-history-occurrence {
+  display: flex;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #fef2f2;
+  border-top: 1px solid #fecaca;
+}
+
+.conservadora-history-occurrence-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #dc2626;
+  white-space: nowrap;
+}
+
+.conservadora-history-occurrence-text {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #991b1b;
+  line-height: 1.4;
+}
+
+/* History footer */
+.conservadora-history-footer {
+  padding: 16px 28px 24px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.conservadora-history-page-btn {
+  font-size: 0.85rem;
+  padding: 8px 16px;
+}
+
+/* History timeline (legacy) */
+.caixa-historico-timeline {
+  max-width: 720px;
+  width: min(94vw, 720px);
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Header */
+.conservadora-manage-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(135deg, #f8fbff 0%, #f0f4fa 100%);
+}
+
+.conservadora-manage-header h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.conservadora-manage-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: #6b7a90;
+}
+
+.conservadora-manage-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #8896a8;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.conservadora-manage-close-btn:hover {
+  background: #e8f0fe;
+  color: var(--text);
+}
+
+/* Tabs */
+.conservadora-manage-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 28px 0;
+  border-bottom: 2px solid var(--line);
+}
+
+.conservadora-manage-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b7a90;
+  transition: all 0.2s ease;
+  border-radius: 8px 8px 0 0;
+}
+
+.conservadora-manage-tab:hover {
+  color: var(--text);
+  background: #f0f4fa;
+}
+
+.conservadora-manage-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: #f8fbff;
+}
+
+.conservadora-manage-tab-icon {
+  font-size: 1.1rem;
+}
+
+.conservadora-manage-tab-badge {
+  background: var(--line);
+  border-radius: 99px;
+  padding: 1px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #6b7a90;
+  transition: all 0.2s ease;
+}
+
+.conservadora-manage-tab.active .conservadora-manage-tab-badge {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Panel */
+.conservadora-manage-panel {
+  padding: 20px 28px;
   max-height: 55vh;
   overflow-y: auto;
 }
 
-.conservadora-list-row,
-.conservadora-route-row {
+/* Add form */
+.conservadora-manage-add-form {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid var(--line);
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8fbff 0%, #f0f4fa 100%);
   border-radius: 12px;
-  padding: 12px 14px;
-  background: white;
+  border: 1px solid #d9e4f2;
 }
 
-.conservadora-list-row p,
-.conservadora-route-row p {
-  margin: 4px 0 0;
-  font-size: 0.82rem;
-  color: #596579;
-}
-
-.conservadora-route-actions {
+.conservadora-manage-input-group {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 10px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 0 14px;
+  border: 1.5px solid #d9e4f2;
+  transition: border-color 0.2s ease;
 }
 
-.conservadora-route-actions select {
-  min-width: 220px;
+.conservadora-manage-input-group:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.conservadora-empty {
-  font-size: 0.88rem;
+.conservadora-manage-input-icon {
+  font-size: 1.1rem;
+  opacity: 0.6;
+}
+
+.conservadora-manage-input {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 12px 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+  outline: none;
+}
+
+.conservadora-manage-input::placeholder {
+  color: #a0aec0;
+}
+
+.conservadora-manage-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 12px 20px;
+  font-weight: 700;
+  border-radius: 10px;
+}
+
+/* Search */
+.conservadora-manage-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 0 14px;
+  border: 1.5px solid #d9e4f2;
+  margin-bottom: 16px;
+  transition: border-color 0.2s ease;
+}
+
+.conservadora-manage-search-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.conservadora-manage-search-icon {
+  font-size: 1rem;
+  opacity: 0.5;
+}
+
+.conservadora-manage-search-input {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 12px 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+  outline: none;
+}
+
+/* List */
+.conservadora-manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Transportadora item */
+.conservadora-manage-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  transition: all 0.15s ease;
+}
+
+.conservadora-manage-list-item:hover {
+  border-color: #c5d3e8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.conservadora-manage-list-item.is-inactive {
+  opacity: 0.6;
+  background: #f8f9fa;
+}
+
+.conservadora-manage-list-item-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.conservadora-manage-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conservadora-manage-status-dot.active {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+.conservadora-manage-status-dot.inactive {
+  background: #d1d5db;
+}
+
+.conservadora-manage-list-item-name {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.conservadora-manage-list-item-status {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b7a90;
+}
+
+.conservadora-manage-inactivate-btn {
+  background: none;
+  border: 1.5px solid #ef4444;
+  color: #ef4444;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.conservadora-manage-inactivate-btn:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* Route item */
+.conservadora-manage-route-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  transition: all 0.15s ease;
+}
+
+.conservadora-manage-route-item:hover {
+  border-color: #c5d3e8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.conservadora-manage-route-item.is-linked {
+  border-left: 3px solid var(--accent);
+}
+
+.conservadora-manage-route-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.conservadora-manage-route-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conservadora-manage-route-dot.linked {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.conservadora-manage-route-dot.unlinked {
+  background: #d1d5db;
+}
+
+.conservadora-manage-route-name {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.conservadora-manage-route-status {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6b7a90;
+}
+
+.conservadora-manage-route-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.conservadora-manage-select {
+  border: 1.5px solid #d9e4f2;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  max-width: 200px;
+}
+
+.conservadora-manage-select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.conservadora-manage-link-btn {
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+/* Empty state */
+.conservadora-manage-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: #6b7a90;
+}
+
+.conservadora-manage-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.conservadora-manage-empty p {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.conservadora-manage-empty span {
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Footer */
+.conservadora-manage-footer {
+  padding: 16px 28px 24px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* History timeline */
+.caixa-historico-timeline {
   color: #596579;
   margin: 10px 0;
 }
@@ -19955,6 +20739,7 @@ small {
   }
 
   .conservadora-filters,
+  .conservadora-history-filters,
   .conservadora-manage-grid,
   .conservadora-inline-form {
     grid-template-columns: 1fr;
