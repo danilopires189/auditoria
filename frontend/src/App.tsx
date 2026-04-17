@@ -48,6 +48,7 @@ import type { AuditoriaCaixaModuleProfile } from "./modules/auditoria-caixa/type
 import { clearUserAuditoriaCaixaSessionCache } from "./modules/auditoria-caixa/storage";
 import type { CheckListModuleProfile } from "./modules/check-list/types";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
+import { fetchAtividadeExtraPendingEntries } from "./modules/atividade-extra/sync";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
 import type { GestaoEstoqueModuleProfile } from "./modules/gestao-estoque/types";
 import type { ConservadoraModuleProfile } from "./modules/gestao-conservadoras/types";
@@ -75,6 +76,7 @@ import type { ControleValidadeModuleProfile } from "./modules/controle-validade/
 import { clearUserControleValidadeCache } from "./modules/controle-validade/storage";
 import type { CaixaTermicaModuleProfile } from "./modules/registro-embarque-caixa-termica/types";
 import { clearUserCaixaTermicaSessionCache } from "./modules/registro-embarque-caixa-termica/storage";
+import { monthStartIsoBrasilia } from "./shared/brasilia-datetime";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
@@ -1233,6 +1235,7 @@ export default function App() {
   const [pendingGlobalCdSelection, setPendingGlobalCdSelection] = useState<number | null>(null);
   const [homeModulesViewMode, setHomeModulesViewMode] = useState<HomeModulesViewMode>("list");
   const [profileSyncRetryCount, setProfileSyncRetryCount] = useState(0);
+  const [atividadeExtraPendingApprovalsCount, setAtividadeExtraPendingApprovalsCount] = useState(0);
   const migratedHomeModulesViewRef = useRef<string | null>(null);
 
   const [registerMat, setRegisterMat] = useState("");
@@ -2318,6 +2321,41 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAtividadeExtraPendingApprovals() {
+      if (!isOnline || !atividadeExtraProfile || atividadeExtraProfile.role !== "admin") {
+        setAtividadeExtraPendingApprovalsCount(0);
+        return;
+      }
+
+      const activeCd = parseCdNumber(
+        atividadeExtraProfile.cd_nome ?? "",
+        typeof atividadeExtraProfile.cd_default === "number" ? atividadeExtraProfile.cd_default : null
+      );
+
+      if (activeCd == null) {
+        setAtividadeExtraPendingApprovalsCount(0);
+        return;
+      }
+
+      try {
+        const pendingEntries = await fetchAtividadeExtraPendingEntries(activeCd, monthStartIsoBrasilia());
+        if (cancelled) return;
+        setAtividadeExtraPendingApprovalsCount(pendingEntries.length);
+      } catch {
+        if (cancelled) return;
+        setAtividadeExtraPendingApprovalsCount(0);
+      }
+    }
+
+    void loadAtividadeExtraPendingApprovals();
+    return () => {
+      cancelled = true;
+    };
+  }, [atividadeExtraProfile, isOnline]);
+
   const buscaProdutoProfile = useMemo<BuscaProdutoModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2587,6 +2625,7 @@ export default function App() {
                   appHeading={authBranding.authCaption}
                   hiddenModuleKeys={authBranding.hiddenModuleKeys}
                   allowedModuleKeys={authBranding.allowedModuleKeys ?? null}
+                  atividadeExtraPendingApprovalsCount={atividadeExtraPendingApprovalsCount}
                   isOnline={isOnline}
                   onRequestLogout={openLogoutConfirm}
                   modulesViewMode={homeModulesViewMode}

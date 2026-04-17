@@ -4740,6 +4740,42 @@ small {
   text-align: center;
 }
 
+.module-title-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #7a4f14;
+  padding: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.module-title-pending-badge-icon {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+}
+
+.module-title-pending-badge-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.module-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
 .module-card::after {
   content: "";
   position: absolute;

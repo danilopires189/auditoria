@@ -38,6 +38,7 @@ interface HomePageProps {
   appHeading: string;
   hiddenModuleKeys?: DashboardModuleKey[];
   allowedModuleKeys?: DashboardModuleKey[] | null;
+  atividadeExtraPendingApprovalsCount?: number;
   isOnline: boolean;
   onRequestLogout: () => void;
   modulesViewMode: HomeModulesViewMode;
@@ -65,11 +66,21 @@ function ClearIcon() {
   );
 }
 
+function PendingApprovalIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
 export default function HomePage({
   displayContext,
   appHeading,
   hiddenModuleKeys = [],
   allowedModuleKeys = null,
+  atividadeExtraPendingApprovalsCount = 0,
   isOnline,
   onRequestLogout,
   modulesViewMode,
@@ -187,7 +198,10 @@ export default function HomePage({
           <p>Selecione um módulo para iniciar.</p>
         </div>
         <div className={`modules-grid ${modulesViewMode === "grid" ? "is-icon-view" : "is-list-view"}`}>
-          {sortedVisibleModules.map((moduleDef) => (
+          {sortedVisibleModules.map((moduleDef) => {
+            const showAtividadeExtraPendingBadge = moduleDef.key === "atividade-extra" && atividadeExtraPendingApprovalsCount > 0;
+
+            return (
             <Link
               key={moduleDef.key}
               to={moduleDef.path}
@@ -197,7 +211,20 @@ export default function HomePage({
                 <ModuleIcon name={moduleDef.icon} />
               </span>
               <div className="module-header-main">
-                <span className="module-title">{moduleDef.title}</span>
+                <span className="module-title">
+                  <span>{moduleDef.title}</span>
+                  {showAtividadeExtraPendingBadge ? (
+                    <span
+                      className="module-title-pending-badge"
+                      title="Atividades aguardando aprovação no mês atual"
+                    >
+                      <span className="module-title-pending-badge-icon" aria-hidden="true">
+                        <PendingApprovalIcon />
+                      </span>
+                      <strong>{atividadeExtraPendingApprovalsCount}</strong>
+                    </span>
+                  ) : null}
+                </span>
                 {AVAILABLE_MODULE_KEYS.has(moduleDef.key) ? (
                   <span className="module-available-pill">Disponível</span>
                 ) : moduleDef.key === "produtividade" ? (
@@ -205,7 +232,8 @@ export default function HomePage({
                 ) : null}
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
         {sortedVisibleModules.length === 0 ? (
           <p className="modules-empty-state">Nenhum módulo encontrado para essa busca.</p>
