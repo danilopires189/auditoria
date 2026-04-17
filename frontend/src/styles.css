@@ -19012,6 +19012,35 @@ small {
   gap: 6px;
 }
 
+.caixa-section-title-btn {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.15s ease;
+  margin-bottom: 10px;
+}
+
+.caixa-section-title-btn:hover {
+  background: #f0f4fa;
+}
+
+.caixa-section-title-btn .caixa-section-title {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.caixa-section-chevron {
+  font-size: 1rem;
+  color: #4b5671;
+  transition: transform 0.2s ease;
+}
+
 .caixa-section-count {
   background: var(--line);
   border-radius: 99px;

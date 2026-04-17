@@ -142,6 +142,7 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
   const [confirmDecision, setConfirmDecision] = useState<ConservadoraDocumentResult>("aprovada");
   const [confirmOccurrence, setConfirmOccurrence] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<"atraso" | "aguardando" | "emTransito" | "recebida" | null>(null);
   const [historyRows, setHistoryRows] = useState<ConservadoraShipmentCard[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -399,10 +400,10 @@ export default function GestaoConservadorasPage({ isOnline, profile }: GestaoCon
         </div>
         {loading && rows.length === 0 ? <p className="caixa-sem-itens">Carregando embarques...</p> : (
           <>
-            <ConservadoraSection title="🔴 Documentação em Atraso" count={groupedRows.atraso.length} emptyMessage="Nenhum embarque com documentação em atraso." rows={groupedRows.atraso} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
-            <ConservadoraSection title="🟡 Aguardando Documentação" count={groupedRows.aguardando.length} emptyMessage="Nenhum embarque aguardando doc." rows={groupedRows.aguardando} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
-            <ConservadoraSection title="🚚 Em Trânsito" count={groupedRows.emTransito.length} emptyMessage="Nenhum embarque em trânsito." rows={groupedRows.emTransito} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
-            <ConservadoraSection title="✅ Documentação Recebida" count={groupedRows.recebida.length} emptyMessage="Nenhum embarque com documentação recebida." rows={groupedRows.recebida} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} />
+            <ConservadoraSection title="🔴 Documentação em Atraso" count={groupedRows.atraso.length} emptyMessage="Nenhum embarque com documentação em atraso." rows={groupedRows.atraso} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} isExpanded={expandedSection === "atraso"} onToggleSection={() => setExpandedSection((prev) => prev === "atraso" ? null : "atraso")} />
+            <ConservadoraSection title="🟡 Aguardando Documentação" count={groupedRows.aguardando.length} emptyMessage="Nenhum embarque aguardando doc." rows={groupedRows.aguardando} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} isExpanded={expandedSection === "aguardando"} onToggleSection={() => setExpandedSection((prev) => prev === "aguardando" ? null : "aguardando")} />
+            <ConservadoraSection title="🚚 Em Trânsito" count={groupedRows.emTransito.length} emptyMessage="Nenhum embarque em trânsito." rows={groupedRows.emTransito} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} isExpanded={expandedSection === "emTransito"} onToggleSection={() => setExpandedSection((prev) => prev === "emTransito" ? null : "emTransito")} />
+            <ConservadoraSection title="✅ Documentação Recebida" count={groupedRows.recebida.length} emptyMessage="Nenhum embarque com documentação recebida." rows={groupedRows.recebida} expandedKeys={expandedKeys} actionBusyKey={actionBusyKey} onToggleExpanded={toggleExpanded} onConfirmDocumento={handleOpenConfirmDialog} isExpanded={expandedSection === "recebida"} onToggleSection={() => setExpandedSection((prev) => prev === "recebida" ? null : "recebida")} />
           </>
         )}
       </section>
@@ -618,19 +619,26 @@ interface ConservadoraSectionProps {
   actionBusyKey: string | null;
   onToggleExpanded: (embarqueKey: string) => void;
   onConfirmDocumento: (row: ConservadoraShipmentCard) => void;
+  isExpanded: boolean;
+  onToggleSection: () => void;
 }
 
 function ConservadoraSection(props: ConservadoraSectionProps) {
-  const { title, count, emptyMessage, rows, expandedKeys, actionBusyKey, onToggleExpanded, onConfirmDocumento } = props;
+  const { title, count, emptyMessage, rows, expandedKeys, actionBusyKey, onToggleExpanded, onConfirmDocumento, isExpanded, onToggleSection } = props;
   return (
     <div className="caixa-section">
-      <p className="caixa-section-title">{title}<span className="caixa-section-count">{count}</span></p>
-      {rows.length === 0 ? <p className="caixa-sem-itens">{emptyMessage}</p> : (
-        <div className="caixa-cards-list">
-          {rows.map((row) => (
-            <ConservadoraCard key={row.embarque_key} row={row} isExpanded={expandedKeys.has(row.embarque_key)} isBusy={actionBusyKey === row.embarque_key} onToggleExpanded={() => onToggleExpanded(row.embarque_key)} onConfirmDocumento={() => onConfirmDocumento(row)} />
-          ))}
-        </div>
+      <button type="button" className="caixa-section-title-btn" onClick={onToggleSection} aria-expanded={isExpanded}>
+        <span className="caixa-section-title">{title}<span className="caixa-section-count">{count}</span></span>
+        <span className="caixa-section-chevron" aria-hidden="true">{isExpanded ? "▾" : "▸"}</span>
+      </button>
+      {isExpanded && (
+        rows.length === 0 ? <p className="caixa-sem-itens">{emptyMessage}</p> : (
+          <div className="caixa-cards-list">
+            {rows.map((row) => (
+              <ConservadoraCard key={row.embarque_key} row={row} isExpanded={expandedKeys.has(row.embarque_key)} isBusy={actionBusyKey === row.embarque_key} onToggleExpanded={() => onToggleExpanded(row.embarque_key)} onConfirmDocumento={() => onConfirmDocumento(row)} />
+            ))}
+          </div>
+        )
       )}
     </div>
   );
