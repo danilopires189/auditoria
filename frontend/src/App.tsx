@@ -162,7 +162,7 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   "logisticacd.vercel.app": {
     appLabel: "Logística CDs",
     authCaption: "Logística CDs",
-    hiddenModuleKeys: ["atividade-extra", "produtividade"],
+    hiddenModuleKeys: ["atividade-extra", "produtividade", "meta-mes"],
     allowedIndicatorKeys: null,
     defaultRoute: null
   },
