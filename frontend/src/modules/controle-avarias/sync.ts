@@ -20,8 +20,8 @@ import type {
   DbBarrasCacheRow
 } from "./types";
 
-const DB_BARRAS_PAGE_SIZE = 1000;
-const DB_BARRAS_RETRY_PAGE_SIZE = 300;
+const DB_BARRAS_PAGE_SIZE = 400;
+const DB_BARRAS_RETRY_PAGE_SIZE = 100;
 
 type DbBarrasProgress = {
   mode: "full" | "delta";

@@ -312,6 +312,12 @@ function currentValidadeMonthValue(baseDate = new Date()): string {
   return `${String(baseDate.getMonth() + 1).padStart(2, "0")}/${String(baseDate.getFullYear()).slice(-2)}`;
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 function focusTextInput(input: HTMLInputElement | null) {
   if (!input) return;
   try {
@@ -738,16 +744,37 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     setProgressMessage("Iniciando preparação da base offline...");
 
     try {
-      await refreshDbBarrasCacheSmart((progress) => {
-        setProgressMessage(`db_barras: ${progress.rowsFetched} registros (${progress.percent}%)`);
-      }, { allowFullReconcile: true });
+      const runStepWithRetry = async (label: string, operation: () => Promise<void>) => {
+        try {
+          await operation();
+        } catch (firstError) {
+          setProgressMessage(`${label}: falhou na 1a tentativa, tentando novamente...`);
+          await wait(900);
+          try {
+            await operation();
+          } catch (secondError) {
+            const normalized = normalizeControleValidadeError(secondError ?? firstError);
+            throw new Error(`${label}: ${normalized}`);
+          }
+        }
+      };
 
-      await refreshDbEndCacheSmart(activeCd, (progress) => {
-        setProgressMessage(`db_end: ${progress.rowsFetched} registros (${progress.percent}%)`);
-      }, { allowFullReconcile: true });
+      await runStepWithRetry("db_barras", async () => {
+        await refreshDbBarrasCacheSmart((progress) => {
+          setProgressMessage(`db_barras: ${progress.rowsFetched} registros (${progress.percent}%)`);
+        }, { allowFullReconcile: true });
+      });
 
-      setProgressMessage("Atualizando snapshot de coletas e retiradas...");
-      await downloadOfflineSnapshot(profile.user_id, activeCd);
+      await runStepWithRetry("db_end", async () => {
+        await refreshDbEndCacheSmart(activeCd, (progress) => {
+          setProgressMessage(`db_end: ${progress.rowsFetched} registros (${progress.percent}%)`);
+        }, { allowFullReconcile: true });
+      });
+
+      await runStepWithRetry("snapshot offline", async () => {
+        setProgressMessage("Atualizando snapshot de coletas e retiradas...");
+        await downloadOfflineSnapshot(profile.user_id, activeCd);
+      });
       setOfflineSnapshotReady(true);
       await refreshOfflineMeta();
       await loadRows();

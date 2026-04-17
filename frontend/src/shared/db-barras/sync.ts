@@ -8,7 +8,8 @@ import {
 } from "./storage";
 import type { DbBarrasCacheRow, DbBarrasProgress } from "./types";
 
-const DB_BARRAS_PAGE_SIZE = 1000;
+const DB_BARRAS_PAGE_SIZE = 400;
+const DB_BARRAS_MIN_PAGE_SIZE = 100;
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -63,6 +64,46 @@ export async function fetchDbBarrasMetaRemote(): Promise<{ row_count: number; up
   };
 }
 
+async function fetchDbBarrasPageWithAdaptiveLimit(params: {
+  rpcName: "rpc_db_barras_page" | "rpc_db_barras_delta";
+  offset: number;
+  updatedAfter?: string;
+  limit?: number;
+}): Promise<{ page: unknown[]; usedLimit: number }> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  let limit = Math.max(Math.trunc(params.limit ?? DB_BARRAS_PAGE_SIZE), DB_BARRAS_MIN_PAGE_SIZE);
+  while (limit >= DB_BARRAS_MIN_PAGE_SIZE) {
+    const payload: Record<string, unknown> = {
+      p_offset: params.offset,
+      p_limit: limit
+    };
+    if (params.updatedAfter) {
+      payload.p_updated_after = params.updatedAfter;
+    }
+
+    const { data, error } = await supabase.rpc(params.rpcName, payload);
+    if (!error) {
+      return {
+        page: Array.isArray(data) ? data : [],
+        usedLimit: limit
+      };
+    }
+
+    if (!isStatementTimeout(error) || limit === DB_BARRAS_MIN_PAGE_SIZE) {
+      const action = params.rpcName === "rpc_db_barras_page" ? "carregar" : "atualizar";
+      throw new Error(`Falha ao ${action} base de barras: ${toErrorMessage(error)}`);
+    }
+
+    limit = Math.max(Math.trunc(limit / 2), DB_BARRAS_MIN_PAGE_SIZE);
+  }
+
+  return {
+    page: [],
+    usedLimit: DB_BARRAS_MIN_PAGE_SIZE
+  };
+}
+
 export async function fetchDbBarrasDeltaCount(updatedAfter: string): Promise<number> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_db_barras_delta_count", {
@@ -84,19 +125,17 @@ export async function refreshDbBarrasCache(
   const totalRows = Math.max(remoteMeta.row_count, 0);
   let offset = 0;
   let pages = 0;
+  let pageLimit = DB_BARRAS_PAGE_SIZE;
   const allRows: DbBarrasCacheRow[] = [];
 
   while (true) {
-    const { data, error } = await supabase.rpc("rpc_db_barras_page", {
-      p_offset: offset,
-      p_limit: DB_BARRAS_PAGE_SIZE
+    const result = await fetchDbBarrasPageWithAdaptiveLimit({
+      rpcName: "rpc_db_barras_page",
+      offset,
+      limit: pageLimit
     });
-
-    if (error) {
-      throw new Error(`Falha ao carregar base de barras: ${toErrorMessage(error)}`);
-    }
-
-    const page = Array.isArray(data) ? data : [];
+    const page = result.page;
+    pageLimit = result.usedLimit;
     if (page.length === 0) break;
 
     for (const item of page) {
@@ -126,7 +165,7 @@ export async function refreshDbBarrasCache(
       percent: toPercent(allRows.length, totalRows)
     });
 
-    if (page.length < DB_BARRAS_PAGE_SIZE) break;
+    if (page.length < pageLimit) break;
   }
 
   await replaceDbBarrasCache(allRows);
@@ -150,19 +189,17 @@ async function refreshDbBarrasCacheReconcile(
   const totalRows = Math.max(remoteMeta.row_count, 0);
   let offset = 0;
   let pages = 0;
+  let pageLimit = DB_BARRAS_PAGE_SIZE;
   const allRows: DbBarrasCacheRow[] = [];
 
   while (true) {
-    const { data, error } = await supabase.rpc("rpc_db_barras_page", {
-      p_offset: offset,
-      p_limit: DB_BARRAS_PAGE_SIZE
+    const result = await fetchDbBarrasPageWithAdaptiveLimit({
+      rpcName: "rpc_db_barras_page",
+      offset,
+      limit: pageLimit
     });
-
-    if (error) {
-      throw new Error(`Falha ao reconciliar base de barras: ${toErrorMessage(error)}`);
-    }
-
-    const page = Array.isArray(data) ? data : [];
+    const page = result.page;
+    pageLimit = result.usedLimit;
     if (page.length === 0) break;
 
     for (const item of page) {
@@ -192,7 +229,7 @@ async function refreshDbBarrasCacheReconcile(
       percent: toPercent(allRows.length, totalRows)
     });
 
-    if (page.length < DB_BARRAS_PAGE_SIZE) break;
+    if (page.length < pageLimit) break;
   }
 
   const reconciled = await reconcileDbBarrasCache(allRows, remoteMeta.updated_max ?? undefined);
@@ -265,17 +302,20 @@ export async function refreshDbBarrasCacheSmart(
   let deltaTotal: number | null = null;
   let offset = 0;
   let pages = 0;
+  let pageLimit = DB_BARRAS_PAGE_SIZE;
   const changedRows: DbBarrasCacheRow[] = [];
   let maxSeenUpdatedAt: string | null = null;
 
   while (true) {
-    const { data, error } = await supabase.rpc("rpc_db_barras_delta", {
-      p_updated_after: meta.last_sync_at,
-      p_offset: offset,
-      p_limit: DB_BARRAS_PAGE_SIZE
-    });
-
-    if (error) {
+    let pageResult: { page: unknown[]; usedLimit: number };
+    try {
+      pageResult = await fetchDbBarrasPageWithAdaptiveLimit({
+        rpcName: "rpc_db_barras_delta",
+        updatedAfter: meta.last_sync_at,
+        offset,
+        limit: pageLimit
+      });
+    } catch (error) {
       if (isStatementTimeout(error) && allowFullReconcile) {
         const reconciled = await refreshDbBarrasCacheReconcile(onProgress, remoteMeta);
         return {
@@ -300,10 +340,10 @@ export async function refreshDbBarrasCacheSmart(
           total: meta.row_count
         };
       }
-      throw new Error(`Falha ao atualizar base de barras: ${toErrorMessage(error)}`);
+      throw error;
     }
-
-    const page = Array.isArray(data) ? data : [];
+    const page = pageResult.page;
+    pageLimit = pageResult.usedLimit;
     if (page.length === 0) break;
 
     for (const item of page) {
@@ -340,7 +380,7 @@ export async function refreshDbBarrasCacheSmart(
       percent: deltaTotal == null ? 0 : toPercent(changedRows.length, deltaTotal)
     });
 
-    if (page.length < DB_BARRAS_PAGE_SIZE) break;
+    if (page.length < pageLimit) break;
   }
 
   if (changedRows.length > 0) {

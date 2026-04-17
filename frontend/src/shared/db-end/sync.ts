@@ -8,7 +8,8 @@ import {
 } from "./storage";
 import type { DbEndCacheRow, DbEndProgress } from "./types";
 
-const DB_END_PAGE_SIZE = 1000;
+const DB_END_PAGE_SIZE = 400;
+const DB_END_MIN_PAGE_SIZE = 100;
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -153,6 +154,48 @@ export async function fetchDbEndMetaRemote(cd: number): Promise<{ row_count: num
   };
 }
 
+async function fetchDbEndPageWithAdaptiveLimit(params: {
+  rpcName: "rpc_db_end_page" | "rpc_db_end_delta";
+  cd: number;
+  offset: number;
+  updatedAfter?: string;
+  limit?: number;
+}): Promise<{ page: unknown[]; usedLimit: number }> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  let limit = Math.max(Math.trunc(params.limit ?? DB_END_PAGE_SIZE), DB_END_MIN_PAGE_SIZE);
+  while (limit >= DB_END_MIN_PAGE_SIZE) {
+    const payload: Record<string, unknown> = {
+      p_cd: params.cd,
+      p_offset: params.offset,
+      p_limit: limit
+    };
+    if (params.updatedAfter) {
+      payload.p_updated_after = params.updatedAfter;
+    }
+
+    const { data, error } = await supabase.rpc(params.rpcName, payload);
+    if (!error) {
+      return {
+        page: Array.isArray(data) ? data : [],
+        usedLimit: limit
+      };
+    }
+
+    if (!isStatementTimeout(error) || limit === DB_END_MIN_PAGE_SIZE) {
+      const action = params.rpcName === "rpc_db_end_page" ? "carregar" : "atualizar";
+      throw new Error(`Falha ao ${action} base de endereços: ${toErrorMessage(error)}`);
+    }
+
+    limit = Math.max(Math.trunc(limit / 2), DB_END_MIN_PAGE_SIZE);
+  }
+
+  return {
+    page: [],
+    usedLimit: DB_END_MIN_PAGE_SIZE
+  };
+}
+
 export async function fetchDbEndDeltaCount(cd: number, updatedAfter: string): Promise<number> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_db_end_delta_count", {
@@ -178,20 +221,18 @@ export async function refreshDbEndCache(
   const totalRows = Math.max(remoteMeta.row_count, 0);
   let offset = 0;
   let pages = 0;
+  let pageLimit = DB_END_PAGE_SIZE;
   const allRows: DbEndCacheRow[] = [];
 
   while (true) {
-    const { data, error } = await supabase.rpc("rpc_db_end_page", {
-      p_cd: cd,
-      p_offset: offset,
-      p_limit: DB_END_PAGE_SIZE
+    const result = await fetchDbEndPageWithAdaptiveLimit({
+      rpcName: "rpc_db_end_page",
+      cd,
+      offset,
+      limit: pageLimit
     });
-
-    if (error) {
-      throw new Error(`Falha ao carregar base de endereços: ${toErrorMessage(error)}`);
-    }
-
-    const page = Array.isArray(data) ? data : [];
+    const page = result.page;
+    pageLimit = result.usedLimit;
     if (page.length === 0) break;
 
     for (const item of page) {
@@ -210,7 +251,7 @@ export async function refreshDbEndCache(
       percent: toPercent(allRows.length, totalRows)
     });
 
-    if (page.length < DB_END_PAGE_SIZE) break;
+    if (page.length < pageLimit) break;
   }
 
   const replaced = await replaceDbEndCache(cd, allRows);
@@ -240,20 +281,18 @@ async function refreshDbEndCacheReconcile(
   const totalRows = Math.max(remoteMeta.row_count, 0);
   let offset = 0;
   let pages = 0;
+  let pageLimit = DB_END_PAGE_SIZE;
   const allRows: DbEndCacheRow[] = [];
 
   while (true) {
-    const { data, error } = await supabase.rpc("rpc_db_end_page", {
-      p_cd: cd,
-      p_offset: offset,
-      p_limit: DB_END_PAGE_SIZE
+    const result = await fetchDbEndPageWithAdaptiveLimit({
+      rpcName: "rpc_db_end_page",
+      cd,
+      offset,
+      limit: pageLimit
     });
-
-    if (error) {
-      throw new Error(`Falha ao reconciliar base de endereços: ${toErrorMessage(error)}`);
-    }
-
-    const page = Array.isArray(data) ? data : [];
+    const page = result.page;
+    pageLimit = result.usedLimit;
     if (page.length === 0) break;
 
     for (const item of page) {
@@ -272,7 +311,7 @@ async function refreshDbEndCacheReconcile(
       percent: toPercent(allRows.length, totalRows)
     });
 
-    if (page.length < DB_END_PAGE_SIZE) break;
+    if (page.length < pageLimit) break;
   }
 
   const reconciled = await reconcileDbEndCache(cd, allRows, remoteMeta.updated_max ?? undefined);
@@ -359,18 +398,21 @@ export async function refreshDbEndCacheSmart(
 
   let offset = 0;
   let pages = 0;
+  let pageLimit = DB_END_PAGE_SIZE;
   const changedRows: DbEndCacheRow[] = [];
   let maxSeenUpdatedAt: string | null = null;
 
   while (true) {
-    const { data, error } = await supabase.rpc("rpc_db_end_delta", {
-      p_cd: cd,
-      p_updated_after: meta.last_sync_at,
-      p_offset: offset,
-      p_limit: DB_END_PAGE_SIZE
-    });
-
-    if (error) {
+    let pageResult: { page: unknown[]; usedLimit: number };
+    try {
+      pageResult = await fetchDbEndPageWithAdaptiveLimit({
+        rpcName: "rpc_db_end_delta",
+        cd,
+        updatedAfter: meta.last_sync_at,
+        offset,
+        limit: pageLimit
+      });
+    } catch (error) {
       if (isStatementTimeout(error) && allowFullReconcile) {
         const reconciled = await refreshDbEndCacheReconcile(cd, onProgress, remoteMeta);
         return {
@@ -381,10 +423,11 @@ export async function refreshDbEndCacheSmart(
         };
       }
 
-      throw new Error(`Falha ao atualizar base de endereços: ${toErrorMessage(error)}`);
+      throw error;
     }
 
-    const page = Array.isArray(data) ? data : [];
+    const page = pageResult.page;
+    pageLimit = pageResult.usedLimit;
     if (page.length === 0) break;
 
     for (const item of page) {
@@ -411,7 +454,7 @@ export async function refreshDbEndCacheSmart(
       percent: deltaTotal == null ? 0 : toPercent(changedRows.length, deltaTotal)
     });
 
-    if (page.length < DB_END_PAGE_SIZE) break;
+    if (page.length < pageLimit) break;
   }
 
   if (changedRows.length > 0) {
