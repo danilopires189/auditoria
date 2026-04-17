@@ -399,6 +399,7 @@ function pencilIcon() {
 export default function ControleValidadePage({ isOnline, profile }: ControleValidadePageProps) {
   const defaultMonthFilter = useMemo(() => currentValidadeMonthValue(), []);
   const barcodeRef = useRef<HTMLInputElement | null>(null);
+  const validadeRef = useRef<HTMLInputElement | null>(null);
   const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scannerTrackRef = useRef<MediaStreamTrack | null>(null);
@@ -408,6 +409,11 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     inputMode: barcodeInputMode,
     enableSoftKeyboard: enableBarcodeSoftKeyboard,
     disableSoftKeyboard: disableBarcodeSoftKeyboard
+  } = useOnDemandSoftKeyboard("numeric");
+  const {
+    inputMode: validadeInputMode,
+    enableSoftKeyboard: enableValidadeSoftKeyboard,
+    disableSoftKeyboard: disableValidadeSoftKeyboard
   } = useOnDemandSoftKeyboard("numeric");
 
   const activeCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
@@ -775,11 +781,20 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   }, [activeCd, isOnline, preferOfflineMode, profile.user_id, syncOfflineBase]);
 
   const focusBarcode = useCallback(() => {
+    disableValidadeSoftKeyboard();
     disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
       barcodeRef.current?.focus();
     });
-  }, [disableBarcodeSoftKeyboard]);
+  }, [disableBarcodeSoftKeyboard, disableValidadeSoftKeyboard]);
+
+  const focusValidade = useCallback(() => {
+    disableBarcodeSoftKeyboard();
+    enableValidadeSoftKeyboard();
+    window.requestAnimationFrame(() => {
+      validadeRef.current?.focus();
+    });
+  }, [disableBarcodeSoftKeyboard, enableValidadeSoftKeyboard]);
 
   const resolveScannerTrack = useCallback((): MediaStreamTrack | null => {
     const videoEl = scannerVideoRef.current;
@@ -921,7 +936,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       setSelectedEnderecoSep(result.enderecos_sep[0] ?? "");
       setStatusMessage(`Produto localizado: ${result.descricao}.`);
       setBarcodeValidationState("valid");
-      focusBarcode();
+      focusValidade();
     } catch (error) {
       setColetaLookup(null);
       setSelectedEnderecoSep("");
@@ -1074,6 +1089,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       setValidadeInput("");
       setColetaLookup(null);
       setSelectedEnderecoSep("");
+      focusBarcode();
       if (isOnline) {
         await flushQueue(false);
       } else {
@@ -1082,7 +1098,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     } catch (error) {
       setErrorMessage(normalizeControleValidadeError(error));
     }
-  }, [activeCd, coletaLookup, flushQueue, isOnline, loadRows, profile.user_id, refreshQueueStats, selectedEnderecoSep, validadeInput]);
+  }, [activeCd, coletaLookup, flushQueue, focusBarcode, isOnline, loadRows, profile.user_id, refreshQueueStats, selectedEnderecoSep, validadeInput]);
 
   const submitLinhaRetirada = useCallback(async (row: LinhaRetiradaRow) => {
     if (activeCd == null) return;
@@ -1921,7 +1937,6 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                               value={barcodeInput}
                               onChange={(event) => onBarcodeInputChange(event.target.value)}
                               onKeyDown={onBarcodeKeyDown}
-                              onFocus={enableBarcodeSoftKeyboard}
                               onPointerDown={enableBarcodeSoftKeyboard}
                               onBlur={disableBarcodeSoftKeyboard}
                               autoComplete="off"
@@ -1980,11 +1995,15 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                       <label>
                         Validade (MMAA)
                         <input
+                          ref={validadeRef}
                           type="text"
-                          inputMode="numeric"
+                          inputMode={validadeInputMode}
                           maxLength={4}
                           value={validadeInput}
                           onChange={(event) => setValidadeInput(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                          onFocus={enableValidadeSoftKeyboard}
+                          onPointerDown={enableValidadeSoftKeyboard}
+                          onBlur={disableValidadeSoftKeyboard}
                           placeholder="Ex.: 0426"
                           required
                         />

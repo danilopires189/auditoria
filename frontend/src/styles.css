@@ -10538,7 +10538,8 @@ small {
 }
 
 .controle-validade-subtabs {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   gap: 6px;
   padding: 4px;
@@ -10546,7 +10547,8 @@ small {
   border-radius: 14px;
   background: rgba(247, 250, 255, 0.96);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  width: fit-content;
+  width: min(100%, 440px);
+  max-width: 100%;
 }
 
 .controle-validade-status-tabs {
@@ -10610,9 +10612,11 @@ small {
   line-height: 1;
   padding: 10px 14px;
   min-height: 40px;
-  min-width: 168px;
+  min-width: 0;
+  width: 100%;
   cursor: pointer;
   transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0);
 }
 
 .controle-validade-subtab-btn.is-coleta.is-active {
@@ -10664,6 +10668,12 @@ small {
 
 .controle-validade-inline-field .input-icon-wrap {
   min-width: 0;
+}
+
+.controle-validade-mobile-search-wrap,
+.controle-validade-last-search-wrap {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .controle-validade-mobile-search-wrap input {
@@ -11160,6 +11170,17 @@ small {
   }
 
   .controle-validade-status-tabs {
+    width: 100%;
+  }
+
+  .controle-validade-subtabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .controle-validade-subtab-btn {
+    min-width: 0;
     width: 100%;
   }
 
