@@ -593,7 +593,7 @@ export default function ColetaMercadoriaPage({ isOnline, profile }: ColetaMercad
   const focusBarcode = useCallback(() => {
     disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
-      barcodeRef.current?.focus();
+      barcodeRef.current?.focus({ preventScroll: true });
     });
   }, [disableBarcodeSoftKeyboard]);
 

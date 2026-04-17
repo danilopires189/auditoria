@@ -1467,7 +1467,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
-      barrasRef.current?.focus();
+      barrasRef.current?.focus({ preventScroll: true });
     });
   }, [disableBarcodeSoftKeyboard]);
 
@@ -2242,7 +2242,7 @@ export default function ConferenciaDevolucaoMercadoriaPage({ isOnline, profile }
     setActiveVolume(null);
     setEtiquetaInput("");
     window.requestAnimationFrame(() => {
-      etiquetaRef.current?.focus();
+      etiquetaRef.current?.focus({ preventScroll: true });
     });
   }, [cancelItemEdit]);
 

@@ -586,7 +586,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
   const focusBarcode = useCallback(() => {
     disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
-      barcodeRef.current?.focus();
+      barcodeRef.current?.focus({ preventScroll: true });
     });
   }, [disableBarcodeSoftKeyboard]);
 

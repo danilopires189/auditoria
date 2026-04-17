@@ -217,7 +217,7 @@ function nextPdfY(doc: jsPDF, fallback: number): number {
   return typeof last === "number" && Number.isFinite(last) ? last + 14 : fallback;
 }
 
-function scrollChecklistTop(behavior: ScrollBehavior = "smooth"): void {
+function scrollChecklistTop(behavior: ScrollBehavior = "auto"): void {
   if (typeof window === "undefined") return;
   window.scrollTo({ top: 0, behavior });
 }

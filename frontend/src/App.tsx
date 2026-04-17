@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -1164,12 +1164,12 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return;
 
-    window.requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
   }, [location.pathname]);
 
   if (!supabase || supabaseInitError) {
@@ -2573,7 +2573,7 @@ export default function App() {
   if (session && displayContext) {
     return (
       <div
-        className={`app-shell surface-enter${isModuleRoute ? " app-shell-module" : ""}${activeModule?.key === "indicadores" ? " app-shell-module-indicadores" : ""}`}
+        className={`app-shell${isModuleRoute ? " app-shell-module" : ""}${activeModule?.key === "indicadores" ? " app-shell-module-indicadores" : ""}`}
       >
         <Routes>
           <Route

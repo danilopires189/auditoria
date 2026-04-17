@@ -947,7 +947,7 @@ export default function RondaQualidadePage({ isOnline, profile }: RondaQualidade
 
   useEffect(() => {
     if (drafts.length > 1 && lastDraftRef.current) {
-      lastDraftRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      lastDraftRef.current.scrollIntoView({ behavior: "auto", block: "nearest" });
     }
   }, [drafts.length]);
 

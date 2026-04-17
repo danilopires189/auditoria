@@ -1228,7 +1228,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
-      barrasRef.current?.focus();
+      barrasRef.current?.focus({ preventScroll: true });
     });
   }, [disableBarcodeSoftKeyboard]);
 
@@ -1778,7 +1778,7 @@ export default function ConferenciaTermoPage({ isOnline, profile }: ConferenciaT
     setActiveVolume(null);
     setEtiquetaInput("");
     window.requestAnimationFrame(() => {
-      etiquetaRef.current?.focus();
+      etiquetaRef.current?.focus({ preventScroll: true });
     });
   }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
 

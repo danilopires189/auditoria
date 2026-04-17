@@ -2081,7 +2081,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       setStatusMessage(`Conferência conjunta iniciada para ${normalizedLabels.length} Seq/NF da transportadora ${group.rota}.`);
       disableBarcodeSoftKeyboard();
       window.requestAnimationFrame(() => {
-        barrasRef.current?.focus();
+        barrasRef.current?.focus({ preventScroll: true });
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao iniciar conferência conjunta.";
@@ -2153,7 +2153,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
-      barrasRef.current?.focus();
+      barrasRef.current?.focus({ preventScroll: true });
     });
   }, [disableBarcodeSoftKeyboard]);
 
@@ -3761,7 +3761,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     setActiveVolume(null);
     setEtiquetaInput("");
     window.requestAnimationFrame(() => {
-      etiquetaRef.current?.focus();
+      etiquetaRef.current?.focus({ preventScroll: true });
     });
   }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
 

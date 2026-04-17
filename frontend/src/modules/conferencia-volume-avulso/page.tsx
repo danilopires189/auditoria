@@ -1231,7 +1231,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
   const focusBarras = useCallback(() => {
     disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
-      barrasRef.current?.focus();
+      barrasRef.current?.focus({ preventScroll: true });
     });
   }, [disableBarcodeSoftKeyboard]);
 
@@ -1870,7 +1870,7 @@ export default function ConferenciaVolumeAvulsoPage({ isOnline, profile }: Confe
     setActiveVolume(null);
     setEtiquetaInput("");
     window.requestAnimationFrame(() => {
-      etiquetaRef.current?.focus();
+      etiquetaRef.current?.focus({ preventScroll: true });
     });
   }, [activeVolume, clearDismissedReadOnlyVolume, dismissReadOnlyVolume]);
 

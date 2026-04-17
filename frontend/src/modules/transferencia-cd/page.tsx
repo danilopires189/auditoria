@@ -766,7 +766,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setActiveConference(null);
     setNfInput("");
     window.requestAnimationFrame(() => {
-      nfRef.current?.focus();
+      nfRef.current?.focus({ preventScroll: true });
     });
   }, [activeConference, clearDismissedReadOnlyConference, dismissReadOnlyConference]);
 

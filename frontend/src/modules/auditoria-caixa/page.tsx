@@ -827,7 +827,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const focusEtiqueta = useCallback(() => {
     disableEtiquetaSoftKeyboard();
     window.requestAnimationFrame(() => {
-      etiquetaRef.current?.focus();
+      etiquetaRef.current?.focus({ preventScroll: true });
     });
   }, [disableEtiquetaSoftKeyboard]);
 
@@ -1215,7 +1215,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       if (message === AUDITORIA_CAIXA_INVALID_KNAPP_MESSAGE) {
         setIdKnappInput("");
         window.requestAnimationFrame(() => {
-          knappInputRef.current?.focus();
+          knappInputRef.current?.focus({ preventScroll: true });
           knappInputRef.current?.select();
         });
       } else {
@@ -1691,7 +1691,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   useEffect(() => {
     if (!knappModalState) return;
     window.requestAnimationFrame(() => {
-      knappInputRef.current?.focus();
+      knappInputRef.current?.focus({ preventScroll: true });
       knappInputRef.current?.select();
     });
   }, [knappModalState]);

@@ -1,4 +1,4 @@
-import { type ChangeEvent, FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
@@ -791,7 +791,7 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     window.requestAnimationFrame(() => {
       const node = rowRefs.current.get(itemId);
       if (!node) return;
-      node.scrollIntoView({ behavior: "smooth", block: "center" });
+      node.scrollIntoView({ behavior: "auto", block: "center" });
       node.focus();
       pendingFocusItemIdRef.current = null;
     });
@@ -1624,16 +1624,11 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     setPendingBaixaReason("");
   }, [listViewMode, selectedDate]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return;
-    const scrollToTop = () => {
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      if (document.documentElement) document.documentElement.scrollTop = 0;
-      if (document.body) document.body.scrollTop = 0;
-    };
-    scrollToTop();
-    const frameId = window.requestAnimationFrame(scrollToTop);
-    return () => window.cancelAnimationFrame(frameId);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
   }, []);
 
   useEffect(() => {

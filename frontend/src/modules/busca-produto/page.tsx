@@ -224,7 +224,7 @@ export default function BuscaProdutoPage({ isOnline, profile }: BuscaProdutoPage
   const focusSearch = useCallback(() => {
     disableSearchSoftKeyboard();
     window.requestAnimationFrame(() => {
-      searchRef.current?.focus();
+      searchRef.current?.focus({ preventScroll: true });
     });
   }, [disableSearchSoftKeyboard]);
 

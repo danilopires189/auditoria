@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { Link } from "react-router-dom";
 import type { DashboardModule } from "./types";
 import { BackIcon, ModuleIcon } from "../ui/icons";
@@ -22,7 +22,7 @@ function toUserDisplayName(value: string): string {
 export default function ModulePageTemplate({ moduleDef, isOnline, userName }: ModulePageTemplateProps) {
   const displayUserName = toUserDisplayName(userName);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     window.scrollTo(0, 0);
   }, [moduleDef.key]);
