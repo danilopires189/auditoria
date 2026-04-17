@@ -312,6 +312,21 @@ function currentValidadeMonthValue(baseDate = new Date()): string {
   return `${String(baseDate.getMonth() + 1).padStart(2, "0")}/${String(baseDate.getFullYear()).slice(-2)}`;
 }
 
+function focusTextInput(input: HTMLInputElement | null) {
+  if (!input) return;
+  try {
+    input.focus({ preventScroll: true });
+  } catch {
+    input.focus();
+  }
+  try {
+    const caretPosition = input.value.length;
+    input.setSelectionRange(caretPosition, caretPosition);
+  } catch {
+    // Some mobile browsers do not allow selection updates for every input mode.
+  }
+}
+
 function isDateInCurrentMonth(value: string | null | undefined, baseDate = new Date()): boolean {
   const raw = String(value ?? "").trim();
   if (!raw) return false;
@@ -784,7 +799,12 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     disableValidadeSoftKeyboard();
     disableBarcodeSoftKeyboard();
     window.requestAnimationFrame(() => {
-      barcodeRef.current?.focus();
+      const input = barcodeRef.current;
+      focusTextInput(input);
+      if (document.activeElement === input) return;
+      window.setTimeout(() => {
+        focusTextInput(barcodeRef.current);
+      }, 60);
     });
   }, [disableBarcodeSoftKeyboard, disableValidadeSoftKeyboard]);
 
@@ -792,7 +812,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     disableBarcodeSoftKeyboard();
     enableValidadeSoftKeyboard();
     window.requestAnimationFrame(() => {
-      validadeRef.current?.focus();
+      focusTextInput(validadeRef.current);
     });
   }, [disableBarcodeSoftKeyboard, enableValidadeSoftKeyboard]);
 
@@ -1274,6 +1294,19 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     if (mainTab !== "linha" || linhaSubTab !== "coleta") return;
     focusBarcode();
   }, [focusBarcode, linhaSubTab, mainTab]);
+
+  useEffect(() => {
+    if (mainTab !== "linha" || linhaSubTab !== "coleta" || scannerOpen) return;
+    const refocusBarcode = () => {
+      focusBarcode();
+    };
+    window.addEventListener("focus", refocusBarcode);
+    document.addEventListener("visibilitychange", refocusBarcode);
+    return () => {
+      window.removeEventListener("focus", refocusBarcode);
+      document.removeEventListener("visibilitychange", refocusBarcode);
+    };
+  }, [focusBarcode, linhaSubTab, mainTab, scannerOpen]);
 
   useEffect(() => {
     return () => {
