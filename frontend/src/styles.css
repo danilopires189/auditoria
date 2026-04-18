@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap");
+﻿@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap");
 
 :root {
   --bg: #091625;
@@ -43,7 +43,7 @@ body {
   scrollbar-color: rgba(100, 140, 200, 0.35) transparent;
 }
 
-/* Webkit scrollbar — suave e discreto */
+/* Webkit scrollbar â€” suave e discreto */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -63,7 +63,7 @@ body {
   background: rgba(100, 140, 200, 0.55);
 }
 
-/* Contêineres internos com overflow também ficam suaves */
+/* ContÃªineres internos com overflow tambÃ©m ficam suaves */
 * {
   scroll-behavior: inherit;
 }
@@ -5992,9 +5992,9 @@ small {
   line-height: 1;
 }
 
-/* ═══════════════════════════════════════════════════════
-   IZ Zone Picker — Minimal Bottom Sheet
-   ═══════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   IZ Zone Picker â€” Minimal Bottom Sheet
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 @keyframes iz-sheet-up {
   from {
@@ -7587,7 +7587,7 @@ small {
   }
 }
 
-/* Editor/Conciliação: ocupar viewport inteira de forma estável em mobile e desktop */
+/* Editor/ConciliaÃ§Ã£o: ocupar viewport inteira de forma estÃ¡vel em mobile e desktop */
 .inventario-popup-overlay-editor {
   padding: 0;
 }
@@ -7635,9 +7635,9 @@ small {
   background: #fff;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   PVPS & Alocação — Modern Mobile-First Styles
-   ═══════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   PVPS & AlocaÃ§Ã£o â€” Modern Mobile-First Styles
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 /* Animations */
 @keyframes pvps-popup-fade-in {
@@ -7763,7 +7763,7 @@ small {
   color: #557095;
 }
 
-/* Toolbar Buttons — touch-friendly */
+/* Toolbar Buttons â€” touch-friendly */
 .pvps-toolbar-btn {
   display: inline-flex;
   align-items: center;
@@ -8576,7 +8576,7 @@ small {
   line-height: 1.25;
 }
 
-/* Occurrence Select — legacy wrap (kept for fallback) */
+/* Occurrence Select â€” legacy wrap (kept for fallback) */
 .pvps-occurrence-wrap {
   display: flex;
   align-items: center;
@@ -8608,7 +8608,7 @@ small {
   padding: 10px 12px;
 }
 
-/* Occurrence Select — minimal toggle version */
+/* Occurrence Select â€” minimal toggle version */
 @keyframes pvps-occ-reveal {
   from {
     opacity: 0;
@@ -8621,7 +8621,7 @@ small {
   }
 }
 
-/* ── Validity row: ⚠️ botão + input/badge na mesma linha ── */
+/* â”€â”€ Validity row: âš ï¸ botÃ£o + input/badge na mesma linha â”€â”€ */
 .pvps-validity-row {
   display: flex;
   align-items: center;
@@ -8630,7 +8630,7 @@ small {
   margin-top: 2px;
 }
 
-/* Botão ⚠️ dentro da linha de validade */
+/* BotÃ£o âš ï¸ dentro da linha de validade */
 .pvps-occurrence-toggle {
   all: unset;
   cursor: pointer;
@@ -8652,13 +8652,13 @@ small {
   transform: scale(0.88);
 }
 
-/* Estado aberto: destaque âmbar */
+/* Estado aberto: destaque Ã¢mbar */
 .pvps-occurrence-toggle.is-open {
   background: rgba(240, 185, 74, 0.18);
   outline: 1.5px solid #f0c84a;
 }
 
-/* Input de validade ao lado do botão */
+/* Input de validade ao lado do botÃ£o */
 .pvps-validity-row input {
   flex: 1 1 auto;
   min-width: 0;
@@ -8673,7 +8673,7 @@ small {
   padding: 9px 12px !important;
 }
 
-/* Badge que substitui o input quando ocorrência está ativa */
+/* Badge que substitui o input quando ocorrÃªncia estÃ¡ ativa */
 .pvps-occurrence-badge {
   flex: 1 1 auto;
   display: inline-flex;
@@ -8688,7 +8688,7 @@ small {
   border: 1.5px solid #f0b94a;
 }
 
-/* Select de ocorrência que aparece abaixo da linha (dentro do label) */
+/* Select de ocorrÃªncia que aparece abaixo da linha (dentro do label) */
 .pvps-occurrence-select-minimal {
   display: block;
   width: 100%;
@@ -8721,7 +8721,7 @@ small {
   font-weight: 600;
 }
 
-/* Legado — mantido para compatibilidade se aparecer em outro lugar */
+/* Legado â€” mantido para compatibilidade se aparecer em outro lugar */
 .pvps-occurrence-minimal {
   display: flex;
   align-items: center;
@@ -9283,7 +9283,7 @@ small {
   font-weight: 700;
 }
 
-/* Completed Pulmão group */
+/* Completed PulmÃ£o group */
 .pvps-pul-completed-group {
   margin-top: 0;
 }
@@ -9450,7 +9450,7 @@ small {
   color: var(--muted);
 }
 
-/* Pulmão Box */
+/* PulmÃ£o Box */
 .pvps-pul-box {
   margin-top: 0;
   border-top: 1px solid #e8eef7;
@@ -9542,7 +9542,7 @@ small {
   height: 48px;
 }
 
-/* ═══ Mobile-specific overrides (< 980px) ═══ */
+/* â•â•â• Mobile-specific overrides (< 980px) â•â•â• */
 @media (max-width: 980px) {
   .pvps-grid {
     grid-template-columns: 1fr;
@@ -9743,7 +9743,7 @@ small {
   }
 }
 
-/* ═══ Zone Filter Popup — Modern Design ═══ */
+/* â•â•â• Zone Filter Popup â€” Modern Design â•â•â• */
 
 .pvps-zone-popup-header {
   display: flex;
@@ -9929,7 +9929,7 @@ small {
   color: #1a3d72;
 }
 
-/* Zone Items — Modern */
+/* Zone Items â€” Modern */
 .pvps-zone-item {
   display: flex;
   align-items: center;
@@ -10062,7 +10062,7 @@ small {
   }
 }
 
-/* ─── Compact List Filters ─────────────────────────── */
+/* â”€â”€â”€ Compact List Filters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .pvps-filter-bar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -15677,608 +15677,6 @@ small {
   line-height: 1.45;
 }
 
-.checklist-page {
-  display: grid;
-  gap: 18px;
-}
-
-.checklist-form {
-  display: grid;
-  gap: 16px;
-}
-
-.checklist-hero,
-.checklist-panel {
-  border-radius: 8px;
-  border: 1px solid rgba(18, 56, 115, 0.12);
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 253, 0.98));
-  box-shadow: 0 16px 34px rgba(8, 22, 43, 0.08);
-}
-
-.checklist-hero {
-  padding: 20px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
-  gap: 18px;
-  align-items: end;
-}
-
-.checklist-head {
-  display: grid;
-  gap: 6px;
-}
-
-.checklist-head span {
-  width: fit-content;
-  min-height: 28px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #ecf3ff;
-  color: #20477b;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.checklist-head h2 {
-  color: #123873;
-  font-size: 1.35rem;
-}
-
-.checklist-head p {
-  margin: 0;
-  max-width: 58ch;
-  color: #445474;
-  font-size: 0.92rem;
-  line-height: 1.45;
-}
-
-.checklist-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.checklist-metric {
-  min-width: 0;
-  border-radius: 8px;
-  border: 1px solid rgba(18, 56, 115, 0.1);
-  background: #fff;
-  padding: 12px;
-  display: grid;
-  gap: 4px;
-}
-
-.checklist-selection-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-}
-
-.checklist-choice-card {
-  min-height: 176px;
-  width: 100%;
-  min-width: 0;
-  appearance: none;
-  border: 1px solid rgba(18, 56, 115, 0.14);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--text);
-  box-shadow: 0 12px 28px rgba(9, 21, 39, 0.06);
-  padding: 16px;
-  font: inherit;
-  display: grid;
-  gap: 10px;
-  align-content: start;
-  justify-items: start;
-  text-align: left;
-  white-space: normal;
-  cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.checklist-choice-card > * {
-  min-width: 0;
-}
-
-.checklist-choice-card:hover:not(:disabled) {
-  transform: translateY(-2px);
-  border-color: rgba(14, 159, 110, 0.34);
-  box-shadow: 0 16px 32px rgba(9, 21, 39, 0.09);
-}
-
-.checklist-choice-card:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.checklist-choice-card strong {
-  font-family: "Sora", sans-serif;
-  color: #123873;
-  line-height: 1.25;
-}
-
-.checklist-choice-card span {
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.checklist-choice-kicker,
-.checklist-choice-meta {
-  width: fit-content;
-  min-height: 28px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #ecf3ff;
-  color: #20477b;
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.checklist-choice-meta {
-  margin-top: auto;
-  background: #edf9f3;
-  color: #174f39;
-}
-
-.checklist-metric span,
-.checklist-panel-head span,
-.checklist-report-main span,
-.checklist-footnote span {
-  color: var(--muted);
-  font-size: 0.86rem;
-}
-
-.checklist-metric strong,
-.checklist-panel-head h3,
-.checklist-item-question strong,
-.checklist-report-main strong,
-.checklist-report-stats strong {
-  font-family: "Sora", sans-serif;
-  color: #123873;
-}
-
-.checklist-metric strong {
-  overflow-wrap: anywhere;
-}
-
-.checklist-panel {
-  padding: 18px;
-  display: grid;
-  gap: 14px;
-}
-
-.checklist-panel-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.checklist-panel-head > div {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.checklist-panel-head h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.checklist-fields-grid,
-.checklist-report-filters {
-  display: grid;
-  gap: 12px;
-}
-
-.checklist-fields-grid {
-  grid-template-columns: minmax(180px, 0.35fr) minmax(240px, 1fr);
-}
-
-.checklist-report-filters {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  align-items: end;
-}
-
-.checklist-report-filters input,
-.checklist-report-filters select {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.checklist-report-cd-filter {
-  min-width: 0;
-}
-
-@media (min-width: 981px) {
-  .checklist-report-filters {
-    grid-template-columns: minmax(118px, 0.6fr) minmax(118px, 0.6fr) minmax(170px, 1fr) minmax(78px, 0.38fr) minmax(136px, 0.78fr) minmax(136px, 0.78fr);
-  }
-
-  .checklist-report-cd-filter input {
-    padding-left: 10px;
-    padding-right: 10px;
-  }
-}
-
-.checklist-panel textarea {
-  width: 100%;
-  min-width: 0;
-  resize: vertical;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 11px 12px;
-  font: inherit;
-  font-size: 1rem;
-  background: #fff;
-  color: var(--text);
-}
-
-.checklist-panel textarea:focus {
-  outline: 2px solid rgba(22, 63, 135, 0.25);
-  border-color: var(--accent);
-}
-
-.checklist-item-list,
-.checklist-report-list {
-  display: grid;
-  gap: 10px;
-}
-
-.checklist-item-card,
-.checklist-report-row,
-.checklist-empty {
-  border-radius: 8px;
-  border: 1px solid rgba(18, 56, 115, 0.12);
-  background: #fff;
-  box-shadow: 0 10px 22px rgba(9, 21, 39, 0.05);
-}
-
-.checklist-item-card {
-  padding: 12px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.checklist-item-card.is-nok {
-  border-color: rgba(192, 52, 47, 0.28);
-  background: linear-gradient(145deg, #fff, #fff6f5);
-}
-
-.checklist-item-question {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-}
-
-.checklist-item-question > span {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  background: rgba(18, 56, 115, 0.08);
-  color: #20477b;
-  font-weight: 800;
-}
-
-.checklist-item-question strong {
-  line-height: 1.3;
-  font-size: 0.95rem;
-}
-
-.checklist-item-question > div {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.checklist-item-meta {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.checklist-answer-group {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(56px, 1fr));
-  gap: 6px;
-}
-
-.checklist-answer-btn {
-  min-height: 38px;
-  border: 1px solid rgba(18, 56, 115, 0.16);
-  border-radius: 8px;
-  background: #f4f7fb;
-  color: #1f3a62;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.checklist-answer-btn:hover:not(:disabled),
-.checklist-answer-btn.is-active {
-  border-color: rgba(14, 159, 110, 0.28);
-  background: #eaf8f2;
-  color: #0e7f58;
-}
-
-.checklist-answer-btn.is-nok-option.is-active {
-  border-color: rgba(192, 52, 47, 0.28);
-  background: #fdecec;
-  color: #b13047;
-}
-
-.checklist-answer-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.checklist-signature-box {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: flex-start;
-  border-radius: 8px;
-  border: 1px solid rgba(14, 159, 110, 0.22);
-  background: #edf9f3;
-  padding: 12px;
-  color: #174f39;
-}
-
-.checklist-signature-box input {
-  width: 22px;
-  height: 22px;
-  margin: 0;
-  padding: 0;
-}
-
-.checklist-signature-box span {
-  line-height: 1.35;
-}
-
-.checklist-submit-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.checklist-readonly-input {
-  background: #f4f7fb;
-  color: #445474;
-}
-
-.checklist-lookup-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.checklist-lookup-row span {
-  color: var(--muted);
-  font-size: 0.86rem;
-  line-height: 1.35;
-}
-
-.checklist-admin-panel {
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.99), rgba(255, 250, 240, 0.98));
-}
-
-.checklist-report-row {
-  padding: 12px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.checklist-report-main {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.checklist-report-main strong,
-.checklist-report-main span {
-  overflow-wrap: anywhere;
-}
-
-.checklist-report-stats {
-  min-width: 90px;
-  display: grid;
-  gap: 4px;
-  justify-items: end;
-}
-
-.checklist-report-stats span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(242, 63, 95, 0.1);
-  color: #b13047;
-  font-size: 0.82rem;
-  font-weight: 800;
-}
-
-.checklist-empty {
-  padding: 18px;
-  color: var(--muted);
-}
-
-.checklist-footnote {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: space-between;
-}
-
-.checklist-completion-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  background: rgba(8, 22, 43, 0.44);
-  display: grid;
-  place-items: center;
-  padding: 18px;
-}
-
-.checklist-completion-dialog {
-  width: min(100%, 420px);
-  border-radius: 8px;
-  border: 1px solid rgba(14, 159, 110, 0.24);
-  background: #fff;
-  box-shadow: 0 24px 60px rgba(8, 22, 43, 0.22);
-  padding: 20px;
-  display: grid;
-  gap: 14px;
-  justify-items: center;
-  text-align: center;
-}
-
-.checklist-confirmation-dialog {
-  border-color: rgba(204, 138, 16, 0.28);
-}
-
-.checklist-completion-icon {
-  width: 58px;
-  height: 58px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: #edf9f3;
-  color: #0e7f58;
-  font-size: 2rem;
-  font-weight: 900;
-}
-
-.checklist-confirmation-dialog .checklist-completion-icon {
-  background: #fff4dc;
-  color: #b06b05;
-}
-
-.checklist-completion-dialog h3 {
-  margin: 0;
-  color: #123873;
-  font-family: "Sora", sans-serif;
-}
-
-.checklist-completion-dialog p,
-.checklist-completion-dialog small {
-  margin: 0;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-.checklist-completion-metrics {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.checklist-completion-metrics span {
-  border-radius: 8px;
-  border: 1px solid rgba(18, 56, 115, 0.1);
-  background: #f4f7fb;
-  padding: 12px;
-  display: grid;
-  gap: 4px;
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.checklist-completion-metrics strong {
-  color: #123873;
-  font-family: "Sora", sans-serif;
-  font-size: 1.05rem;
-}
-
-.checklist-confirmation-warning {
-  color: #8a4f00;
-  font-weight: 700;
-}
-
-.checklist-confirmation-actions {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-@media (max-width: 980px) {
-  .checklist-admin-panel {
-    display: none;
-  }
-
-  .checklist-hero,
-  .checklist-item-card,
-  .checklist-report-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .checklist-fields-grid,
-  .checklist-report-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .checklist-report-stats {
-    justify-items: start;
-  }
-}
-
-@media (max-width: 620px) {
-  .checklist-hero,
-  .checklist-panel {
-    padding: 14px;
-    border-radius: 8px;
-  }
-
-  .checklist-metrics-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    display: grid;
-  }
-
-  .checklist-metrics-grid .checklist-metric:first-child {
-    grid-column: 1 / -1;
-  }
-
-  .checklist-fields-grid,
-  .checklist-report-filters,
-  .checklist-panel-head {
-    grid-template-columns: minmax(0, 1fr);
-    display: grid;
-  }
-
-  .checklist-item-question {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .checklist-answer-group {
-    width: 100%;
-  }
-
-  .checklist-submit-row .btn,
-  .checklist-report-row .btn,
-  .checklist-lookup-row .btn,
-  .checklist-confirmation-actions .btn {
-    width: 100%;
-  }
-
-  .checklist-confirmation-actions {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (min-width: 721px) {
   .ronda-page {
     place-items: start;
@@ -17689,12 +17087,12 @@ small {
     padding: 14px;
   }
 
-  /* Navegação mobile: ao selecionar zona, exibe só o painel de detalhe */
+  /* NavegaÃ§Ã£o mobile: ao selecionar zona, exibe sÃ³ o painel de detalhe */
   .ronda-layout.has-zone .ronda-zones-panel {
     display: none;
   }
 
-  /* Botão voltar — proeminente no mobile */
+  /* BotÃ£o voltar â€” proeminente no mobile */
   .ronda-back-btn {
     display: inline-flex;
     align-items: center;
@@ -17826,7 +17224,7 @@ small {
     align-items: stretch;
   }
 
-  /* Touch targets: 44px mínimo */
+  /* Touch targets: 44px mÃ­nimo */
   .ronda-search-clear,
   .ronda-close-btn {
     width: 44px;
@@ -17841,18 +17239,18 @@ small {
     min-height: 44px;
   }
 
-  /* Botões de detalhe — mais altos para dedo */
+  /* BotÃµes de detalhe â€” mais altos para dedo */
   .ronda-detail-actions .btn {
     height: 52px;
     font-size: 0.95rem;
   }
 }
 
-/* ══════════════════════════════════════════════════════
-   PAINEL DE HISTÓRICO — redesign moderno
-   ══════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   PAINEL DE HISTÃ“RICO â€” redesign moderno
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* ── Barra de filtros ── */
+/* â”€â”€ Barra de filtros â”€â”€ */
 .ronda-hist-toolbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -17961,7 +17359,7 @@ small {
   font-weight: 400;
 }
 
-/* Botão atualizar */
+/* BotÃ£o atualizar */
 .ronda-hist-refresh-btn {
   display: inline-flex;
   align-items: center;
@@ -18007,7 +17405,7 @@ small {
   cursor: not-allowed;
 }
 
-/* ── Barra de contagem ── */
+/* â”€â”€ Barra de contagem â”€â”€ */
 .ronda-hist-count-bar {
   display: flex;
   align-items: center;
@@ -18043,7 +17441,7 @@ small {
   color: #065f46;
 }
 
-/* ── Loading ── */
+/* â”€â”€ Loading â”€â”€ */
 .ronda-hist-loading {
   display: flex;
   align-items: center;
@@ -18070,7 +17468,7 @@ small {
   to { transform: rotate(360deg); }
 }
 
-/* ── Estado vazio ── */
+/* â”€â”€ Estado vazio â”€â”€ */
 .ronda-hist-empty {
   display: grid;
   place-items: center;
@@ -18099,13 +17497,13 @@ small {
   color: #8a9db8;
 }
 
-/* ── Lista ── */
+/* â”€â”€ Lista â”€â”€ */
 .ronda-hist-list {
   display: grid;
   gap: 10px;
 }
 
-/* ── Card de ocorrência ── */
+/* â”€â”€ Card de ocorrÃªncia â”€â”€ */
 .ronda-hist-card {
   display: grid;
   grid-template-columns: 4px minmax(0, 1fr);
@@ -18151,7 +17549,7 @@ small {
   min-width: 0;
 }
 
-/* Cabeçalho do card */
+/* CabeÃ§alho do card */
 .ronda-hist-card-header {
   display: flex;
   align-items: flex-start;
@@ -18203,7 +17601,7 @@ small {
   border: 1px solid #fbcfe8;
 }
 
-/* Chips de localização e meta */
+/* Chips de localizaÃ§Ã£o e meta */
 .ronda-hist-chips {
   display: flex;
   flex-wrap: wrap;
@@ -18229,7 +17627,7 @@ small {
   color: #1e3a5f;
 }
 
-/* Observação */
+/* ObservaÃ§Ã£o */
 .ronda-hist-card-obs {
   margin: 0;
   font-size: 0.88rem;
@@ -18242,7 +17640,7 @@ small {
   border-left: 2px solid rgba(18, 56, 115, 0.15);
 }
 
-/* Rodapé: check info + ações */
+/* RodapÃ©: check info + aÃ§Ãµes */
 .ronda-hist-card-footer {
   display: flex;
   align-items: center;
@@ -18267,7 +17665,7 @@ small {
   flex-shrink: 0;
 }
 
-/* Botões de ação */
+/* BotÃµes de aÃ§Ã£o */
 .ronda-hist-action-btn {
   display: inline-flex;
   align-items: center;
@@ -18301,7 +17699,7 @@ small {
   box-shadow: 0 3px 10px rgba(16, 185, 129, 0.2);
 }
 
-/* "Desfazer correção" */
+/* "Desfazer correÃ§Ã£o" */
 .ronda-hist-action-btn.is-undo {
   background: linear-gradient(145deg, rgba(18, 56, 115, 0.08), rgba(18, 56, 115, 0.06));
   border-color: rgba(18, 56, 115, 0.15);
@@ -18332,7 +17730,7 @@ small {
   transform: scale(0.97);
 }
 
-/* ── Responsividade ── */
+/* â”€â”€ Responsividade â”€â”€ */
 @media (max-width: 1080px) {
   .ronda-hist-toolbar {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -18389,7 +17787,7 @@ small {
     justify-content: flex-end;
   }
 
-  /* Touch target mínimo para botões de ação */
+  /* Touch target mÃ­nimo para botÃµes de aÃ§Ã£o */
   .ronda-hist-action-btn {
     height: 44px;
     padding: 0 16px;
@@ -18416,9 +17814,9 @@ small {
   }
 }
 
-/* ══════════════════════════════════════════════════════
-   TOUCH UX — Chrome mobile (sem delay, sem highlight)
-   ══════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   TOUCH UX â€” Chrome mobile (sem delay, sem highlight)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .ronda-zone-card-trigger,
 .ronda-column-card-trigger,
@@ -18440,16 +17838,16 @@ small {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ══════════════════════════════════════════════════════
-   COMPOSER — popup de registro de ocorrências
-   ══════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   COMPOSER â€” popup de registro de ocorrÃªncias
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* Sheet específica do composer — mais larga */
+/* Sheet especÃ­fica do composer â€” mais larga */
 .ronda-composer-sheet {
   width: min(100%, 680px);
 }
 
-/* ── Cabeçalho ── */
+/* â”€â”€ CabeÃ§alho â”€â”€ */
 .ronda-composer-head {
   display: flex;
   align-items: flex-start;
@@ -18496,7 +17894,7 @@ small {
   border: 1px solid #fbcfe8;
 }
 
-/* Título e subtítulo */
+/* TÃ­tulo e subtÃ­tulo */
 .ronda-composer-zone-title {
   margin: 0;
   font-family: "Sora", sans-serif;
@@ -18514,7 +17912,7 @@ small {
   font-weight: 500;
 }
 
-/* ── Filtro de nível por chips ── */
+/* â”€â”€ Filtro de nÃ­vel por chips â”€â”€ */
 .ronda-composer-level-filter {
   display: grid;
   gap: 8px;
@@ -18579,7 +17977,7 @@ small {
   transform: none;
 }
 
-/* ── Loading de endereços ── */
+/* â”€â”€ Loading de endereÃ§os â”€â”€ */
 .ronda-composer-loading {
   display: flex;
   align-items: center;
@@ -18593,9 +17991,9 @@ small {
   background: rgba(18, 56, 115, 0.03);
 }
 
-/* ── Draft cards ── */
+/* â”€â”€ Draft cards â”€â”€ */
 
-/* Cabeçalho do draft: número + label + botão remover */
+/* CabeÃ§alho do draft: nÃºmero + label + botÃ£o remover */
 .ronda-draft-head-left {
   display: flex;
   align-items: center;
@@ -18631,7 +18029,7 @@ small {
   white-space: nowrap;
 }
 
-/* Botão remover draft (ícone only) */
+/* BotÃ£o remover draft (Ã­cone only) */
 .ronda-draft-remove-btn {
   display: inline-flex;
   align-items: center;
@@ -18674,7 +18072,7 @@ small {
   gap: 10px;
 }
 
-/* ── Botão adicionar ocorrência ── */
+/* â”€â”€ BotÃ£o adicionar ocorrÃªncia â”€â”€ */
 .ronda-composer-add-btn {
   display: flex;
   align-items: center;
@@ -18715,7 +18113,7 @@ small {
   cursor: not-allowed;
 }
 
-/* ── Footer de ação ── */
+/* â”€â”€ Footer de aÃ§Ã£o â”€â”€ */
 .ronda-composer-footer {
   position: sticky;
   bottom: 0;
@@ -18773,7 +18171,7 @@ small {
   transform: none;
 }
 
-/* ── Responsividade ── */
+/* â”€â”€ Responsividade â”€â”€ */
 @media (max-width: 720px) {
   .ronda-composer-head {
     gap: 10px;
@@ -18783,7 +18181,7 @@ small {
     font-size: 1.1rem;
   }
 
-  /* Chips de nível: scroll horizontal em vez de wrap */
+  /* Chips de nÃ­vel: scroll horizontal em vez de wrap */
   .ronda-composer-level-chips {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -18809,7 +18207,7 @@ small {
     grid-template-columns: unset;
   }
 
-  /* Botão finalizar: proeminente + safe-area */
+  /* BotÃ£o finalizar: proeminente + safe-area */
   .ronda-composer-save-btn {
     height: 54px;
     font-size: 1rem;
@@ -18820,7 +18218,7 @@ small {
   }
 }
 
-/* ── Dispositivos estreitos (≤375px) ── */
+/* â”€â”€ Dispositivos estreitos (â‰¤375px) â”€â”€ */
 @media (max-width: 375px) {
   .ronda-zone-name {
     font-size: 0.95rem;
@@ -18844,16 +18242,16 @@ small {
   }
 }
 
-/* ══════════════════════════════════════════════════════
-   HISTÓRICO DO MÊS — sessões no painel de detalhe
-   ══════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   HISTÃ“RICO DO MÃŠS â€” sessÃµes no painel de detalhe
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .ronda-det-session-list {
   display: grid;
   gap: 12px;
 }
 
-/* Card de sessão */
+/* Card de sessÃ£o */
 .ronda-det-session {
   display: grid;
   gap: 14px;
@@ -18870,7 +18268,7 @@ small {
   box-shadow: 0 10px 24px rgba(9, 21, 39, 0.08);
 }
 
-/* Cabeçalho da sessão */
+/* CabeÃ§alho da sessÃ£o */
 .ronda-det-session-head {
   display: flex;
   align-items: flex-start;
@@ -18939,14 +18337,14 @@ small {
   padding: 4px 2px;
 }
 
-/* Lista de ocorrências dentro da sessão */
+/* Lista de ocorrÃªncias dentro da sessÃ£o */
 .ronda-det-occ-list {
   display: grid;
   gap: 8px;
 }
 
-/* As ocorrências reutilizam ronda-hist-card — apenas ajuste de sombra
-   para não duplicar visualmente dentro do card de sessão */
+/* As ocorrÃªncias reutilizam ronda-hist-card â€” apenas ajuste de sombra
+   para nÃ£o duplicar visualmente dentro do card de sessÃ£o */
 .ronda-det-occ-list .ronda-hist-card {
   box-shadow: 0 2px 8px rgba(9, 21, 39, 0.04);
 }
@@ -18955,7 +18353,7 @@ small {
   box-shadow: 0 6px 16px rgba(9, 21, 39, 0.08);
 }
 
-/* ── Responsividade ── */
+/* â”€â”€ Responsividade â”€â”€ */
 @media (max-width: 720px) {
   .ronda-det-session {
     padding: 14px;
@@ -18974,9 +18372,9 @@ small {
 }
 
 
-/* ════════════════════════════════════════════════════════════
-   Módulo: Controle de Caixa Térmica
-   ════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   MÃ³dulo: Controle de Caixa TÃ©rmica
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 .caixa-termica-shell {
   padding-bottom: 48px;

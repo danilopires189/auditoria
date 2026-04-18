@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
-import { createPortal } from "react-dom";
+import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -15,13 +14,22 @@ import {
   type CheckListModuleProfile,
   type ChecklistAnswer,
   type ChecklistAuditDetail,
-  type ChecklistAuditSummary,
   type ChecklistDefinition,
   type ChecklistEvaluatedUser,
-  type ChecklistItem,
   type ChecklistKey,
-  type ChecklistSectionKey
 } from "./types";
+import { calculateDraftResult, conformityStatus, formatMonthYearPtBR, formatPercent, formatPoints, riskLabel } from "./utils";
+import type { DraftResult } from "./utils";
+import "./checklist.css";
+
+import ChecklistSelector from "./components/ChecklistSelector";
+import ChecklistHero from "./components/ChecklistHero";
+import ChecklistSectionPanel from "./components/ChecklistSectionPanel";
+import AdminPanel from "./components/AdminPanel";
+import CompletionModal from "./components/CompletionModal";
+import type { CompletionPopup } from "./components/CompletionModal";
+import ConfirmationModal from "./components/ConfirmationModal";
+import type { ConfirmationPopup } from "./components/ConfirmationModal";
 
 interface CheckListPageProps {
   isOnline: boolean;
@@ -29,41 +37,8 @@ interface CheckListPageProps {
 }
 
 type AnswerDraft = Record<number, ChecklistAnswer | "">;
-type CompletionPopup = {
-  checklistTitle: string;
-  conformityPercent: number;
-  nonConformities: number;
-  scoringMode: ChecklistDefinition["scoring_mode"];
-  riskScorePercent: number | null;
-  riskLevel: string | null;
-  scorePoints: number | null;
-  scoreMaxPoints: number | null;
-  auditId: string;
-} | null;
-type ConfirmationPopup = {
-  checklistTitle: string;
-  scoringMode: ChecklistDefinition["scoring_mode"];
-  conformityPercent: number;
-  nonConformities: number;
-  riskScorePercent: number | null;
-  riskLevel: string | null;
-  scorePoints: number | null;
-  scoreMaxPoints: number | null;
-  criticalFail: boolean;
-  evaluatedLabel: string;
-} | null;
-type DraftResult = {
-  conformityPercent: number;
-  nonConformities: number;
-  riskScorePercent: number | null;
-  riskLevel: string | null;
-  scorePoints: number | null;
-  scoreMaxPoints: number | null;
-  criticalFail: boolean;
-};
 
 const MODULE_DEF = getModuleByKeyOrThrow("check-list");
-const ANSWER_OPTIONS: ChecklistAnswer[] = ["Sim", "Não", "N.A."];
 
 function emptyAnswers(definition: ChecklistDefinition | null): AnswerDraft {
   if (!definition) return {};
@@ -109,101 +84,7 @@ function resolveCdLabel(profile: CheckListModuleProfile, cd: number | null): str
   return "CD não definido";
 }
 
-function formatPercent(value: number): string {
-  return `${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}%`;
-}
-
-function formatPoints(value: number | null): string {
-  if (value == null) return "-";
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value);
-}
-
-function formatMonthYearPtBR(value: string): string {
-  const matched = /^(\d{4})-(\d{2})$/.exec(value);
-  return matched ? `${matched[2]}/${matched[1]}` : value;
-}
-
-function riskLabel(value: number): string {
-  if (value < 60) return "Alto";
-  if (value >= 60 && value <= 75) return "Médio";
-  if (value > 85) return "Baixo";
-  return "Acompanhamento";
-}
-
-function weightedRiskLevel(riskScore: number): string {
-  if (riskScore <= 20) return "CONTROLADO";
-  if (riskScore <= 40) return "ATENÇÃO";
-  if (riskScore <= 60) return "ALTO";
-  return "CRÍTICO";
-}
-
-function scoreRiskLevel(score: number, criticalFail: boolean): string {
-  if (criticalFail) return "ALTO";
-  if (score >= 90) return "BAIXO";
-  if (score >= 70) return "MÉDIO";
-  return "ALTO";
-}
-
-function calculateDraftResult(definition: ChecklistDefinition | null, answers: AnswerDraft): DraftResult {
-  if (!definition) {
-    return {
-      conformityPercent: 100,
-      nonConformities: 0,
-      riskScorePercent: null,
-      riskLevel: null,
-      scorePoints: null,
-      scoreMaxPoints: null,
-      criticalFail: false
-    };
-  }
-
-  const nonConformities = definition.items.filter((item) => answers[item.item_number] === "Não").length;
-  if (definition.scoring_mode === "risk_weighted") {
-    const applicable = definition.items.filter((item) => answers[item.item_number] !== "N.A.");
-    const maxRisk = applicable.reduce((total, item) => total + (item.item_weight ?? 0), 0);
-    const riskPoints = applicable.reduce((total, item) => total + (answers[item.item_number] === "Não" ? item.item_weight ?? 0 : 0), 0);
-    const riskScorePercent = maxRisk > 0 ? (riskPoints / maxRisk) * 100 : 0;
-    return {
-      conformityPercent: Math.max(0, 100 - riskScorePercent),
-      nonConformities,
-      riskScorePercent,
-      riskLevel: weightedRiskLevel(riskScorePercent),
-      scorePoints: null,
-      scoreMaxPoints: null,
-      criticalFail: false
-    };
-  }
-
-  if (definition.scoring_mode === "score_points") {
-    const applicable = definition.items.filter((item) => answers[item.item_number] !== "N.A.");
-    const scoreMaxPoints = applicable.reduce((total, item) => total + (item.max_points ?? 0), 0);
-    const scorePoints = applicable.reduce((total, item) => total + (answers[item.item_number] === "Sim" ? item.max_points ?? 0 : 0), 0);
-    const conformityPercent = scoreMaxPoints > 0 ? (scorePoints / scoreMaxPoints) * 100 : 100;
-    const criticalFail = applicable.some((item) => item.is_critical && answers[item.item_number] === "Não");
-    return {
-      conformityPercent,
-      nonConformities,
-      riskScorePercent: Math.max(0, 100 - conformityPercent),
-      riskLevel: scoreRiskLevel(conformityPercent, criticalFail),
-      scorePoints,
-      scoreMaxPoints,
-      criticalFail
-    };
-  }
-
-  const conformityPercent = definition.total_items > 0 ? (1 - (nonConformities / definition.total_items)) * 100 : 100;
-  return {
-    conformityPercent,
-    nonConformities,
-    riskScorePercent: null,
-    riskLevel: riskLabel(conformityPercent).toUpperCase(),
-    scorePoints: null,
-    scoreMaxPoints: null,
-    criticalFail: false
-  };
-}
-
-function sectionItems(definition: ChecklistDefinition, sectionKey: ChecklistSectionKey): ChecklistItem[] {
+function sectionItems(definition: ChecklistDefinition, sectionKey: string) {
   return definition.items.filter((item) => item.section_key === sectionKey);
 }
 
@@ -212,19 +93,14 @@ function countAnswered(definition: ChecklistDefinition | null, answers: AnswerDr
   return definition.items.filter((item) => answers[item.item_number]).length;
 }
 
-function nextPdfY(doc: jsPDF, fallback: number): number {
-  const last = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY;
-  return typeof last === "number" && Number.isFinite(last) ? last + 14 : fallback;
-}
-
 function scrollChecklistTop(behavior: ScrollBehavior = "auto"): void {
   if (typeof window === "undefined") return;
   window.scrollTo({ top: 0, behavior });
 }
 
-function renderChecklistModal(content: ReactNode): ReactNode {
-  if (typeof document === "undefined") return content;
-  return createPortal(content, document.body);
+function nextPdfY(doc: jsPDF, fallback: number): number {
+  const last = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY;
+  return typeof last === "number" && Number.isFinite(last) ? last + 14 : fallback;
 }
 
 async function imageUrlToDataUrl(url: string): Promise<string | null> {
@@ -296,9 +172,7 @@ async function buildPdf(detail: ChecklistAuditDetail): Promise<void> {
   const nonConforming = detail.answers.filter((answer) => answer.is_nonconformity);
   const logoDataUrl = await imageUrlToDataUrl(pmImage);
 
-  if (logoDataUrl) {
-    doc.addImage(logoDataUrl, "PNG", 40, 28, 42, 42);
-  }
+  if (logoDataUrl) doc.addImage(logoDataUrl, "PNG", 40, 28, 42, 42);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
@@ -433,8 +307,8 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
   const [busySubmit, setBusySubmit] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [confirmationPopup, setConfirmationPopup] = useState<ConfirmationPopup>(null);
-  const [completionPopup, setCompletionPopup] = useState<CompletionPopup>(null);
+  const [confirmationPopup, setConfirmationPopup] = useState<ConfirmationPopup | null>(null);
+  const [completionPopup, setCompletionPopup] = useState<CompletionPopup | null>(null);
 
   const [reportDtIni, setReportDtIni] = useState(todayIsoBrasilia());
   const [reportDtFim, setReportDtFim] = useState(todayIsoBrasilia());
@@ -442,7 +316,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
   const [reportAuditor, setReportAuditor] = useState("");
   const [reportEvaluated, setReportEvaluated] = useState("");
   const [reportChecklistKey, setReportChecklistKey] = useState<ChecklistKey | "">("");
-  const [reportRows, setReportRows] = useState<ChecklistAuditSummary[]>([]);
+  const [reportRows, setReportRows] = useState<import("./types").ChecklistAuditSummary[]>([]);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportExportingId, setReportExportingId] = useState<string | null>(null);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
@@ -451,15 +325,11 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
   const lookupSeqRef = useRef(0);
 
   const answeredCount = useMemo(() => countAnswered(selectedChecklist, answers), [answers, selectedChecklist]);
-  const draftResult = useMemo(() => calculateDraftResult(selectedChecklist, answers), [answers, selectedChecklist]);
+  const draftResult = useMemo((): DraftResult => calculateDraftResult(selectedChecklist, answers), [answers, selectedChecklist]);
   const nonConformities = draftResult.nonConformities;
-  const conformityPercent = draftResult.conformityPercent;
-  const isRiskChecklist = selectedChecklist ? selectedChecklist.scoring_mode !== "simple" : false;
   const monthLabel = useMemo(() => formatMonthYearPtBR(monthKeyBrasilia()), []);
 
-  useEffect(() => {
-    scrollChecklistTop("auto");
-  }, []);
+  useEffect(() => { scrollChecklistTop("auto"); }, []);
 
   const clearFormForDefinition = useCallback((definition: ChecklistDefinition | null) => {
     lookupSeqRef.current += 1;
@@ -498,49 +368,29 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
     lookupSeqRef.current += 1;
     const seq = lookupSeqRef.current;
 
-    if (!mat) {
-      setEvaluatedUser(null);
-      setEvaluatedLookupError("Informe a matrícula do colaborador avaliado.");
-      return null;
-    }
-    if (!isOnline) {
-      setEvaluatedLookupError("Busca do avaliado disponível apenas online.");
-      return null;
-    }
-    if (activeCd == null) {
-      setEvaluatedLookupError("CD não definido para este usuário.");
-      return null;
-    }
+    if (!mat) { setEvaluatedUser(null); setEvaluatedLookupError("Informe a matrícula do colaborador avaliado."); return null; }
+    if (!isOnline) { setEvaluatedLookupError("Busca do avaliado disponível apenas online."); return null; }
+    if (activeCd == null) { setEvaluatedLookupError("CD não definido para este usuário."); return null; }
 
     setEvaluatedLookupBusy(true);
     setEvaluatedLookupError(null);
     try {
       const user = await lookupChecklistEvaluatedUser({ cd: activeCd, mat });
-      if (seq === lookupSeqRef.current) {
-        setEvaluatedMat(user.mat);
-        setEvaluatedUser(user);
-      }
+      if (seq === lookupSeqRef.current) { setEvaluatedMat(user.mat); setEvaluatedUser(user); }
       return user;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao buscar matrícula no DB_USUARIO.";
-      if (seq === lookupSeqRef.current) {
-        setEvaluatedUser(null);
-        setEvaluatedLookupError(message);
-      }
+      if (seq === lookupSeqRef.current) { setEvaluatedUser(null); setEvaluatedLookupError(message); }
       return null;
     } finally {
-      if (seq === lookupSeqRef.current) {
-        setEvaluatedLookupBusy(false);
-      }
+      if (seq === lookupSeqRef.current) setEvaluatedLookupBusy(false);
     }
   }, [activeCd, evaluatedMat, isOnline]);
 
   useEffect(() => {
     const mat = normalizeMat(evaluatedMat);
     if (!selectedChecklist?.requires_evaluated_user || !mat || mat.length < 3 || !isOnline || activeCd == null) return undefined;
-    const timer = window.setTimeout(() => {
-      void lookupEvaluated(mat);
-    }, 500);
+    const timer = window.setTimeout(() => { void lookupEvaluated(mat); }, 500);
     return () => window.clearTimeout(timer);
   }, [activeCd, evaluatedMat, isOnline, lookupEvaluated, selectedChecklist]);
 
@@ -552,21 +402,12 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
     setEvaluatedLookupError(null);
   }, []);
 
-  const resetCurrentForm = useCallback(() => {
-    clearFormForDefinition(selectedChecklist);
-  }, [clearFormForDefinition, selectedChecklist]);
+  const resetCurrentForm = useCallback(() => { clearFormForDefinition(selectedChecklist); }, [clearFormForDefinition, selectedChecklist]);
 
-  const setChecklistError = useCallback((message: string) => {
-    setErrorMessage(message);
-    scrollChecklistTop();
-  }, []);
+  const setChecklistError = useCallback((message: string) => { setErrorMessage(message); scrollChecklistTop(); }, []);
 
   const executeFinalizeChecklist = useCallback(async () => {
-    if (!selectedChecklist) {
-      setChecklistError("Selecione um checklist para iniciar.");
-      return;
-    }
-
+    if (!selectedChecklist) { setChecklistError("Selecione um checklist para iniciar."); return; }
     setBusySubmit(true);
     try {
       const resolvedEvaluated = selectedChecklist.requires_evaluated_user ? evaluatedUser ?? await lookupEvaluated(evaluatedMat) : null;
@@ -574,7 +415,6 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
         setChecklistError("Localize uma matrícula válida no DB_USUARIO antes de finalizar.");
         return;
       }
-
       const result = await finalizeChecklistAudit({
         checklist_key: selectedChecklist.checklist_key,
         cd: activeCd,
@@ -615,49 +455,23 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
     } finally {
       setBusySubmit(false);
     }
-  }, [
-    activeCd,
-    answers,
-    clearFormForDefinition,
-    evaluatedMat,
-    evaluatedUser,
-    lookupEvaluated,
-    observations,
-    selectedChecklist,
-    setChecklistError,
-    signatureAccepted
-  ]);
+  }, [activeCd, answers, clearFormForDefinition, evaluatedMat, evaluatedUser, lookupEvaluated, observations, selectedChecklist, setChecklistError, signatureAccepted]);
 
   const submitChecklist = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedChecklist) {
-      setChecklistError("Selecione um checklist para iniciar.");
-      return;
-    }
-    if (!isOnline) {
-      setChecklistError("Checklist disponível apenas online nesta versão.");
-      return;
-    }
-    if (activeCd == null) {
-      setChecklistError("CD não definido para este usuário.");
-      return;
-    }
+    if (!selectedChecklist) { setChecklistError("Selecione um checklist para iniciar."); return; }
+    if (!isOnline) { setChecklistError("Checklist disponível apenas online nesta versão."); return; }
+    if (activeCd == null) { setChecklistError("CD não definido para este usuário."); return; }
     if (selectedChecklist.requires_evaluated_user && !evaluatedMat.trim()) {
-      setChecklistError("Informe a matrícula do colaborador avaliado.");
-      return;
+      setChecklistError("Informe a matrícula do colaborador avaliado."); return;
     }
     if (answeredCount !== selectedChecklist.total_items) {
-      setChecklistError(`Responda todos os ${selectedChecklist.total_items} itens antes de finalizar.`);
-      return;
+      setChecklistError(`Responda todos os ${selectedChecklist.total_items} itens antes de finalizar.`); return;
     }
     if (nonConformities > 0 && !observations.trim()) {
-      setChecklistError("Informe a observação geral quando houver não conformidade.");
-      return;
+      setChecklistError("Informe a observação geral quando houver não conformidade."); return;
     }
-    if (!signatureAccepted) {
-      setChecklistError("Confirme a assinatura eletrônica antes de finalizar.");
-      return;
-    }
+    if (!signatureAccepted) { setChecklistError("Confirme a assinatura eletrônica antes de finalizar."); return; }
     setErrorMessage(null);
     setConfirmationPopup({
       checklistTitle: selectedChecklist.title,
@@ -673,41 +487,18 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
         ? `${evaluatedUser?.nome ?? "Colaborador não validado"} | MAT ${normalizeMat(evaluatedMat) || "-"}`
         : currentCdLabel
     });
-  }, [
-    activeCd,
-    answeredCount,
-    currentCdLabel,
-    draftResult,
-    evaluatedMat,
-    evaluatedUser,
-    isOnline,
-    nonConformities,
-    selectedChecklist,
-    setChecklistError,
-    signatureAccepted
-  ]);
+  }, [activeCd, answeredCount, currentCdLabel, draftResult, evaluatedMat, evaluatedUser, isOnline, nonConformities, selectedChecklist, setChecklistError, signatureAccepted, observations]);
 
   const loadReportRows = useCallback(async () => {
     if (!canSeeAdmin) return;
-    if (!isOnline) {
-      setReportError("Consulta admin disponível apenas online.");
-      return;
-    }
+    if (!isOnline) { setReportError("Consulta admin disponível apenas online."); return; }
     const parsedCd = isGlobalAdmin && reportCd.trim() ? Number.parseInt(reportCd.trim(), 10) : null;
-    if (isGlobalAdmin && reportCd.trim() && !Number.isFinite(parsedCd)) {
-      setReportError("Informe um CD válido.");
-      return;
-    }
-    if (!isGlobalAdmin && activeCd == null) {
-      setReportError("CD não definido para este usuário.");
-      return;
-    }
-
+    if (isGlobalAdmin && reportCd.trim() && !Number.isFinite(parsedCd)) { setReportError("Informe um CD válido."); return; }
+    if (!isGlobalAdmin && activeCd == null) { setReportError("CD não definido para este usuário."); return; }
     setReportBusy(true);
     try {
       const rows = await fetchChecklistAdminList({
-        dt_ini: reportDtIni,
-        dt_fim: reportDtFim,
+        dt_ini: reportDtIni, dt_fim: reportDtFim,
         cd: isGlobalAdmin ? parsedCd : activeCd,
         auditor: reportAuditor.trim() || null,
         evaluated: reportEvaluated.trim() || null,
@@ -750,9 +541,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
       <header className="module-topbar module-topbar-fixed">
         <div className="module-topbar-line1">
           <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
-            <span className="module-back-icon" aria-hidden="true">
-              <BackIcon />
-            </span>
+            <span className="module-back-icon" aria-hidden="true"><BackIcon /></span>
             <span>Início</span>
           </Link>
           <div className="module-topbar-user-side">
@@ -763,9 +552,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
           </div>
         </div>
         <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
-          <span className="module-icon" aria-hidden="true">
-            <ModuleIcon name={MODULE_DEF.icon} />
-          </span>
+          <span className="module-icon" aria-hidden="true"><ModuleIcon name={MODULE_DEF.icon} /></span>
           <span className="module-title">{MODULE_DEF.title}</span>
         </div>
       </header>
@@ -774,94 +561,29 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
         <article className="module-screen surface-enter checklist-page">
           {!selectedChecklist ? (
             <>
-              <section className="checklist-hero">
-                <div className="checklist-head">
-                  <span>Check List</span>
-                  <h2>Escolha a auditoria</h2>
-                  <p>Selecione o checklist que será aplicado e preencha a auditoria com aceite eletrônico ao final.</p>
-                </div>
-                <div className="checklist-metrics-grid">
-                  <div className="checklist-metric">
-                    <span>CD</span>
-                    <strong>{currentCdLabel}</strong>
-                  </div>
-                  <div className="checklist-metric">
-                    <span>Mês</span>
-                    <strong>{monthLabel}</strong>
-                  </div>
-                </div>
-              </section>
-
               {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
-
-              <section className="checklist-selection-grid" aria-label="Checklists disponíveis">
-                {CHECKLIST_DEFINITIONS.map((definition) => (
-                  <button
-                    key={definition.checklist_key}
-                    type="button"
-                    className="checklist-choice-card"
-                    onClick={() => startChecklist(definition.checklist_key)}
-                    disabled={!isOnline}
-                  >
-                    <span className="checklist-choice-kicker">Versão {definition.version}</span>
-                    <strong>{definition.title}</strong>
-                    <span>{definition.description}</span>
-                    <span className="checklist-choice-meta">{definition.total_items} itens</span>
-                  </button>
-                ))}
-              </section>
+              <ChecklistSelector
+                definitions={CHECKLIST_DEFINITIONS}
+                onSelect={startChecklist}
+                isOnline={isOnline}
+                currentCdLabel={currentCdLabel}
+                monthLabel={monthLabel}
+              />
             </>
           ) : (
             <form className="checklist-form" onSubmit={submitChecklist}>
-              <section className="checklist-hero">
-                <div className="checklist-head">
-                  <span>{selectedChecklist.title}</span>
-                  <h2>Checklist de auditoria</h2>
-                  <p>
-                    {selectedChecklist.requires_evaluated_user
-                      ? `Preencha os ${selectedChecklist.total_items} itens, valide o avaliado pelo DB_USUARIO e finalize com aceite eletrônico.`
-                      : `Preencha os ${selectedChecklist.total_items} itens da auditoria por CD e finalize com aceite eletrônico.`}
-                  </p>
-                </div>
-                <div className="checklist-metrics-grid">
-                  <div className="checklist-metric">
-                    <span>CD</span>
-                    <strong>{currentCdLabel}</strong>
-                  </div>
-                  <div className="checklist-metric">
-                    <span>Mês</span>
-                    <strong>{monthLabel}</strong>
-                  </div>
-                  <div className="checklist-metric">
-                    <span>Progresso</span>
-                    <strong>{answeredCount}/{selectedChecklist.total_items}</strong>
-                  </div>
-                  <div className="checklist-metric">
-                    <span>{isRiskChecklist ? "Resultado" : "Conformidade"}</span>
-                    <strong>
-                      {selectedChecklist.scoring_mode === "risk_weighted"
-                        ? `${formatPercent(draftResult.riskScorePercent ?? 0)} risco`
-                        : selectedChecklist.scoring_mode === "score_points"
-                          ? `${formatPoints(draftResult.scorePoints)} / ${formatPoints(draftResult.scoreMaxPoints)}`
-                          : formatPercent(conformityPercent)}
-                    </strong>
-                  </div>
-                  {isRiskChecklist ? (
-                    <div className="checklist-metric">
-                      <span>Nível</span>
-                      <strong>{draftResult.riskLevel ?? "-"}</strong>
-                    </div>
-                  ) : null}
-                  <div className="checklist-metric">
-                    <span>NC</span>
-                    <strong>{nonConformities}</strong>
-                  </div>
-                </div>
-              </section>
+              <ChecklistHero
+                checklist={selectedChecklist}
+                draftResult={draftResult}
+                answeredCount={answeredCount}
+                currentCdLabel={currentCdLabel}
+                monthLabel={monthLabel}
+              />
 
               {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
               {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
+              {/* Dados da auditoria */}
               <section className="checklist-panel">
                 <div className="checklist-panel-head">
                   <div>
@@ -882,9 +604,7 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                           inputMode="numeric"
                           value={evaluatedMat}
                           onChange={(event) => handleEvaluatedMatChange(event.target.value)}
-                          onBlur={() => {
-                            if (evaluatedMat.trim()) void lookupEvaluated(evaluatedMat);
-                          }}
+                          onBlur={() => { if (evaluatedMat.trim()) void lookupEvaluated(evaluatedMat); }}
                           placeholder="Informe a matrícula"
                           disabled={busySubmit}
                         />
@@ -923,59 +643,33 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
                 )}
               </section>
 
+              {/* Seções de itens */}
               {selectedChecklist.sections.map((sectionKey) => {
                 const items = sectionItems(selectedChecklist, sectionKey);
                 const title = items[0]?.section_title ?? "";
-                const sectionAnswered = items.filter((item) => answers[item.item_number]).length;
                 return (
-                  <section key={sectionKey} className="checklist-panel">
-                    <div className="checklist-panel-head">
-                      <div>
-                        <h3>{title}</h3>
-                        <span>{`${sectionAnswered}/${items.length} itens respondidos`}</span>
-                      </div>
-                    </div>
-                    <div className="checklist-item-list">
-                      {items.map((item) => (
-                        <article key={item.item_number} className={`checklist-item-card${answers[item.item_number] === "Não" ? " is-nok" : ""}`}>
-                          <div className="checklist-item-question">
-                            <span>{String(item.item_number).padStart(2, "0")}</span>
-                            <div>
-                              <strong>{item.question}</strong>
-                              {isRiskChecklist ? (
-                                <small className="checklist-item-meta">
-                                  {selectedChecklist.scoring_mode === "risk_weighted"
-                                    ? `Peso ${formatPoints(item.item_weight ?? 0)}`
-                                    : `${item.criticality ?? "Controle"} | ${formatPoints(item.max_points ?? 0)} pts${item.is_critical ? " | crítico" : ""}`}
-                                </small>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="checklist-answer-group" role="group" aria-label={`Resposta do item ${item.item_number}`}>
-                            {ANSWER_OPTIONS.map((option) => (
-                              <button
-                                key={`${item.item_number}:${option}`}
-                                type="button"
-                                className={`checklist-answer-btn${answers[item.item_number] === option ? " is-active" : ""}${option === "Não" ? " is-nok-option" : ""}`}
-                                onClick={() => updateAnswer(item.item_number, option)}
-                                disabled={busySubmit}
-                              >
-                                {option}
-                              </button>
-                            ))}
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
+                  <ChecklistSectionPanel
+                    key={sectionKey}
+                    items={items}
+                    sectionTitle={title}
+                    answers={answers}
+                    onAnswer={updateAnswer}
+                    disabled={busySubmit}
+                    scoringMode={selectedChecklist.scoring_mode}
+                  />
                 );
               })}
 
+              {/* Observações e aceite */}
               <section className="checklist-panel">
                 <div className="checklist-panel-head">
                   <div>
                     <h3>Observações e aceite</h3>
-                    <span>{nonConformities > 0 ? `${nonConformities} não conformidade(s) exigem observação.` : "Sem não conformidades até agora."}</span>
+                    <span>
+                      {nonConformities > 0
+                        ? `${nonConformities} não conformidade(s) exigem observação.`
+                        : "Sem não conformidades até agora."}
+                    </span>
                   </div>
                 </div>
                 <label>
@@ -1012,208 +706,46 @@ export default function CheckListPage({ isOnline, profile }: CheckListPageProps)
           )}
 
           {canSeeAdmin ? (
-            <section className="checklist-panel checklist-admin-panel">
-              <div className="checklist-panel-head">
-                <div>
-                  <h3>Consulta admin</h3>
-                  <span>Consulte auditorias finalizadas e gere o PDF individual.</span>
-                </div>
-                <button type="button" className="btn btn-muted" onClick={() => void loadReportRows()} disabled={reportBusy || !isOnline}>
-                  {reportBusy ? "Buscando..." : "Buscar"}
-                </button>
-              </div>
-
-              <div className="checklist-report-filters">
-                <label>
-                  Data inicial
-                  <input type="date" value={reportDtIni} onChange={(event) => setReportDtIni(event.target.value)} />
-                </label>
-                <label>
-                  Data final
-                  <input type="date" value={reportDtFim} onChange={(event) => setReportDtFim(event.target.value)} />
-                </label>
-                <label>
-                  Checklist
-                  <select value={reportChecklistKey} onChange={(event) => setReportChecklistKey(event.target.value as ChecklistKey | "")}>
-                    <option value="">Todos</option>
-                    {CHECKLIST_DEFINITIONS.map((definition) => (
-                      <option key={definition.checklist_key} value={definition.checklist_key}>
-                        {definition.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {isGlobalAdmin ? (
-                  <label className="checklist-report-cd-filter">
-                    CD
-                    <input type="text" inputMode="numeric" value={reportCd} onChange={(event) => setReportCd(event.target.value.replace(/\D/g, ""))} placeholder="Todos" />
-                  </label>
-                ) : (
-                  <label className="checklist-report-cd-filter">
-                    CD
-                    <input type="text" value={currentCdLabel} readOnly className="checklist-readonly-input" />
-                  </label>
-                )}
-                <label>
-                  Auditor
-                  <input type="text" value={reportAuditor} onChange={(event) => setReportAuditor(event.target.value)} placeholder="Nome ou matrícula" />
-                </label>
-                <label>
-                  Avaliado
-                  <input type="text" value={reportEvaluated} onChange={(event) => setReportEvaluated(event.target.value)} placeholder="Nome ou matrícula" />
-                </label>
-              </div>
-
-              {reportError ? <div className="alert error">{reportError}</div> : null}
-              {reportMessage ? <div className="alert success">{reportMessage}</div> : null}
-
-              <div className="checklist-report-list">
-                {reportRows.length === 0 && !reportBusy ? (
-                  <div className="checklist-empty">Nenhuma auditoria carregada.</div>
-                ) : null}
-                {reportRows.map((row) => (
-                  <article key={row.audit_id} className="checklist-report-row">
-                    <div className="checklist-report-main">
-                      <strong>{row.checklist_title}</strong>
-                      <span>{row.scoring_mode === "simple" ? `${row.evaluated_nome} | MAT ${row.evaluated_mat}` : "Auditoria por CD"}</span>
-                      <span>{`Auditor: ${row.auditor_nome} | MAT ${row.auditor_mat}`}</span>
-                      <span>{`${formatDateTimeBrasilia(row.created_at, { includeSeconds: true })} | ${row.cd_nome || `CD ${String(row.cd).padStart(2, "0")}`}`}</span>
-                    </div>
-                    <div className="checklist-report-stats">
-                      <span>{row.scoring_mode === "simple" ? `${row.non_conformities} NC` : row.risk_level ?? "RISCO"}</span>
-                      <strong>{row.scoring_mode === "risk_weighted" ? `${formatPercent(row.risk_score_percent ?? 0)} risco` : formatPercent(row.conformity_percent)}</strong>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-muted"
-                      onClick={() => void exportPdf(row.audit_id)}
-                      disabled={reportExportingId === row.audit_id || !isOnline}
-                    >
-                      {reportExportingId === row.audit_id ? "Gerando..." : "Gerar PDF"}
-                    </button>
-                  </article>
-                ))}
-              </div>
-            </section>
+            <AdminPanel
+              isOnline={isOnline}
+              isGlobalAdmin={isGlobalAdmin}
+              currentCdLabel={currentCdLabel}
+              reportDtIni={reportDtIni}
+              reportDtFim={reportDtFim}
+              reportCd={reportCd}
+              reportAuditor={reportAuditor}
+              reportEvaluated={reportEvaluated}
+              reportChecklistKey={reportChecklistKey}
+              reportRows={reportRows}
+              reportBusy={reportBusy}
+              reportExportingId={reportExportingId}
+              reportMessage={reportMessage}
+              reportError={reportError}
+              onDtIniChange={setReportDtIni}
+              onDtFimChange={setReportDtFim}
+              onCdChange={setReportCd}
+              onAuditorChange={setReportAuditor}
+              onEvaluatedChange={setReportEvaluated}
+              onChecklistKeyChange={setReportChecklistKey}
+              onSearch={() => void loadReportRows()}
+              onExportPdf={(id) => void exportPdf(id)}
+            />
           ) : null}
 
-          {completionPopup ? renderChecklistModal(
-            <div className="checklist-completion-overlay" role="dialog" aria-modal="true" aria-labelledby="checklist-completion-title">
-              <div className="checklist-completion-dialog surface-enter">
-                <span className="checklist-completion-icon" aria-hidden="true">✓</span>
-                <div>
-                  <h3 id="checklist-completion-title">Checklist concluído</h3>
-                  <p>{completionPopup.checklistTitle}</p>
-                </div>
-                <div className="checklist-completion-metrics">
-                  {completionPopup.scoringMode === "risk_weighted" ? (
-                    <>
-                      <span>
-                        Risco
-                        <strong>{formatPercent(completionPopup.riskScorePercent ?? 0)}</strong>
-                      </span>
-                      <span>
-                        Nível
-                        <strong>{completionPopup.riskLevel ?? "-"}</strong>
-                      </span>
-                    </>
-                  ) : completionPopup.scoringMode === "score_points" ? (
-                    <>
-                      <span>
-                        Score
-                        <strong>{`${formatPoints(completionPopup.scorePoints)} / ${formatPoints(completionPopup.scoreMaxPoints)}`}</strong>
-                      </span>
-                      <span>
-                        Nível
-                        <strong>{completionPopup.riskLevel ?? "-"}</strong>
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span>
-                        Conformidade
-                        <strong>{formatPercent(completionPopup.conformityPercent)}</strong>
-                      </span>
-                      <span>
-                        Não conformidades
-                        <strong>{completionPopup.nonConformities}</strong>
-                      </span>
-                    </>
-                  )}
-                </div>
-                <small>{`ID da auditoria: ${completionPopup.auditId}`}</small>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setCompletionPopup(null);
-                    scrollChecklistTop();
-                  }}
-                >
-                  Voltar ao início
-                </button>
-              </div>
-            </div>
+          {completionPopup ? (
+            <CompletionModal
+              popup={completionPopup}
+              onClose={() => { setCompletionPopup(null); scrollChecklistTop(); }}
+            />
           ) : null}
 
-          {confirmationPopup ? renderChecklistModal(
-            <div className="checklist-completion-overlay" role="dialog" aria-modal="true" aria-labelledby="checklist-confirmation-title">
-              <div className="checklist-completion-dialog checklist-confirmation-dialog surface-enter">
-                <span className="checklist-completion-icon" aria-hidden="true">!</span>
-                <div>
-                  <h3 id="checklist-confirmation-title">Confirmar conclusão</h3>
-                  <p>{confirmationPopup.checklistTitle}</p>
-                </div>
-                <div className="checklist-completion-metrics">
-                  {confirmationPopup.scoringMode === "risk_weighted" ? (
-                    <>
-                      <span>
-                        Risco
-                        <strong>{formatPercent(confirmationPopup.riskScorePercent ?? 0)}</strong>
-                      </span>
-                      <span>
-                        Nível
-                        <strong>{confirmationPopup.riskLevel ?? "-"}</strong>
-                      </span>
-                    </>
-                  ) : confirmationPopup.scoringMode === "score_points" ? (
-                    <>
-                      <span>
-                        Score
-                        <strong>{`${formatPoints(confirmationPopup.scorePoints)} / ${formatPoints(confirmationPopup.scoreMaxPoints)}`}</strong>
-                      </span>
-                      <span>
-                        Nível
-                        <strong>{confirmationPopup.riskLevel ?? "-"}</strong>
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span>
-                        Conformidade
-                        <strong>{formatPercent(confirmationPopup.conformityPercent)}</strong>
-                      </span>
-                      <span>
-                        Não conformidades
-                        <strong>{confirmationPopup.nonConformities}</strong>
-                      </span>
-                    </>
-                  )}
-                </div>
-                <small>{`Escopo: ${confirmationPopup.evaluatedLabel}`}</small>
-                {confirmationPopup.criticalFail ? (
-                  <small className="checklist-confirmation-warning">Existem itens críticos reprovados. O risco será salvo como ALTO.</small>
-                ) : null}
-                <div className="checklist-confirmation-actions">
-                  <button type="button" className="btn btn-muted" onClick={() => setConfirmationPopup(null)} disabled={busySubmit}>
-                    Revisar respostas
-                  </button>
-                  <button type="button" className="btn btn-primary" onClick={() => void executeFinalizeChecklist()} disabled={busySubmit}>
-                    {busySubmit ? "Finalizando..." : "Confirmar e concluir"}
-                  </button>
-                </div>
-              </div>
-            </div>
+          {confirmationPopup ? (
+            <ConfirmationModal
+              popup={confirmationPopup}
+              onConfirm={() => void executeFinalizeChecklist()}
+              onCancel={() => setConfirmationPopup(null)}
+              busySubmit={busySubmit}
+            />
           ) : null}
 
           <div className="checklist-footnote">

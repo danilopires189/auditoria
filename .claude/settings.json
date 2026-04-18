@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command ' *)",
+      "Bash(powershell -Command \"\\(Get-Content 'c:\\\\PROJETOS\\\\AUDITORIA\\\\frontend\\\\src\\\\styles.css' | Select-String -Pattern '\\\\.checklist-'\\).Count\")"
+    ]
+  }
+}
