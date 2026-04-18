@@ -125,6 +125,7 @@ interface EntradaNotasRouteGroupView extends EntradaNotasRouteGroup {
 }
 
 type RouteBatchGroupSelectionSource = Pick<EntradaNotasRouteGroup, "rota" | "filiais">;
+type RouteBatchSelectionMap = Record<string, string[]>;
 
 type RouteContributorsState = {
   status: "loading" | "loaded" | "error";
@@ -430,6 +431,16 @@ function buildSeqNfLabelKey(seqEntrada: number | null | undefined, nf: number | 
   if (!Number.isFinite(seqEntrada) || !Number.isFinite(nf)) return null;
   if (seqEntrada <= 0 || nf <= 0) return null;
   return `${seqEntrada}/${nf}`;
+}
+
+function normalizeCombinedTransportadoraValue(value: string | null | undefined): string {
+  return value?.trim() || "SEM TRANSPORTADORA";
+}
+
+function buildCombinedTransportadoraLabel(transportadoras: string[]): string {
+  return transportadoras.length > 1
+    ? "Múltiplas transportadoras"
+    : transportadoras[0] ?? "SEM TRANSPORTADORA";
 }
 
 function formatCollaboratorName(value: {
@@ -760,6 +771,23 @@ function chevronIcon(open: boolean) {
   );
 }
 
+function startConferenceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 6v12l10-6z" />
+    </svg>
+  );
+}
+
+function resumeConferenceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 12a8 8 0 1 0 2.3-5.7" />
+      <path d="M4 4v4h4" />
+    </svg>
+  );
+}
+
 function normalizeRpcErrorMessage(value: string): string {
   if (value.startsWith("PRODUTO_JA_CONFERIDO|")) {
     return value.slice("PRODUTO_JA_CONFERIDO|".length);
@@ -1043,7 +1071,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
   const [routeSearchInput, setRouteSearchInput] = useState("");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [routeContributorsMap, setRouteContributorsMap] = useState<Record<string, RouteContributorsState>>({});
-  const [routeBatchSelectionByGroup, setRouteBatchSelectionByGroup] = useState<Record<string, string[]>>({});
+  const [routeBatchSelectionByGroup, setRouteBatchSelectionByGroup] = useState<RouteBatchSelectionMap>({});
   const [routeBatchQueue, setRouteBatchQueue] = useState<string[]>([]);
   const [showReportPanel, setShowReportPanel] = useState(false);
   const [reportDtIni, setReportDtIni] = useState("");
@@ -1117,6 +1145,30 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     if (!activeVolume) return [] as string[];
     return activeVolume.combined_seq_nf_labels ?? [];
   }, [activeVolume]);
+
+  const combinedTransportadoras = useMemo(() => {
+    if (!activeVolume) return [] as string[];
+    const explicit = (activeVolume.combined_seq_transportadoras ?? [])
+      .map((value) => normalizeCombinedTransportadoraValue(value))
+      .filter(Boolean);
+    if (explicit.length > 0) {
+      return [...new Set(explicit)].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }
+
+    const fallback = normalizeCombinedTransportadoraValue(
+      activeVolume.combined_seq_transportadora
+      ?? activeVolume.transportadora
+      ?? activeVolume.rota
+    );
+    return fallback ? [fallback] : [];
+  }, [activeVolume]);
+
+  const combinedTransportadoraLabel = useMemo(() => {
+    if (!activeVolume) return "SEM TRANSPORTADORA";
+    const explicit = activeVolume.combined_seq_group_label?.trim();
+    if (explicit) return explicit;
+    return buildCombinedTransportadoraLabel(combinedTransportadoras);
+  }, [activeVolume, combinedTransportadoras]);
 
   const combinedSeqConfIdByLabel = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1871,10 +1923,47 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     });
   }, [getRouteBatchSelectableLabels]);
 
-  const openCombinedRouteConference = useCallback(async (
-    group: RouteBatchGroupSelectionSource,
-    seqNfLabels: string[]
-  ) => {
+  const clearRouteBatchSelection = useCallback(() => {
+    setRouteBatchSelectionByGroup({});
+  }, []);
+
+  const routeBatchSelectableLabels = useMemo(() => {
+    const ordered: string[] = [];
+    const seen = new Set<string>();
+    for (const group of routeGroups) {
+      for (const label of getRouteBatchSelectableLabels(group)) {
+        if (seen.has(label)) continue;
+        seen.add(label);
+        ordered.push(label);
+      }
+    }
+    return ordered;
+  }, [getRouteBatchSelectableLabels, routeGroups]);
+
+  const routeBatchSelectedLabels = useMemo(() => {
+    const ordered: string[] = [];
+    const seen = new Set<string>();
+    for (const group of routeGroups) {
+      const selectable = new Set(getRouteBatchSelectableLabels(group));
+      const selected = routeBatchSelectionByGroup[group.rota] ?? [];
+      for (const label of selected) {
+        if (!selectable.has(label) || seen.has(label)) continue;
+        seen.add(label);
+        ordered.push(label);
+      }
+    }
+    return ordered;
+  }, [getRouteBatchSelectableLabels, routeBatchSelectionByGroup, routeGroups]);
+
+  const routeBatchSelectedTransportadoraCount = useMemo(() => (
+    routeGroups.reduce((count, group) => {
+      const selectable = new Set(getRouteBatchSelectableLabels(group));
+      const selected = (routeBatchSelectionByGroup[group.rota] ?? []).some((label) => selectable.has(label));
+      return count + (selected ? 1 : 0);
+    }, 0)
+  ), [getRouteBatchSelectableLabels, routeBatchSelectionByGroup, routeGroups]);
+
+  const openCombinedRouteConference = useCallback(async (seqNfLabels: string[]) => {
     if (currentCd == null) {
       setErrorMessage("CD não definido para esta conferência.");
       return;
@@ -2012,14 +2101,20 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         if (byDescricao !== 0) return byDescricao;
         return a.coddv - b.coddv;
       });
+      const transportadoras = [...new Set(
+        openedVolumes
+          .map((volume) => normalizeCombinedTransportadoraValue(volume.transportadora ?? volume.rota))
+          .filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b, "pt-BR"));
+      const groupLabel = buildCombinedTransportadoraLabel(transportadoras);
       const fornecedores = [...new Set(
-        group.filiais
-          .map((row) => row.filial_nome?.trim() || row.fornecedor?.trim() || "")
+        openedVolumes
+          .map((volume) => (volume.fornecedor ?? volume.filial_nome ?? "").trim())
           .filter(Boolean)
       )].sort((a, b) => a.localeCompare(b, "pt-BR"));
       const fornecedorLabel = fornecedores.join(", ");
       const confDate = todayIsoBrasilia();
-      const volumeId = `ROTA:${group.rota}`;
+      const volumeId = `LOTE:${normalizedLabels.join("|")}`;
       const localVolume: EntradaNotasLocalVolume = {
         local_key: buildEntradaNotasVolumeKey(profile.user_id, currentCd, confDate, volumeId),
         user_id: profile.user_id,
@@ -2028,14 +2123,14 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         conference_kind: "avulsa",
         seq_entrada: 0,
         nf: 0,
-        transportadora: group.rota,
+        transportadora: groupLabel,
         fornecedor: fornecedorLabel || "MÚLTIPLOS",
-        nr_volume: `ROTA ${group.rota}`,
+        nr_volume: `LOTE ${groupLabel}`,
         caixa: null,
         pedido: null,
         filial: null,
         filial_nome: fornecedorLabel || "MÚLTIPLOS",
-        rota: group.rota,
+        rota: groupLabel,
         remote_conf_id: null,
         status: "em_conferencia",
         falta_motivo: null,
@@ -2050,7 +2145,9 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
         avulsa_targets: [],
         avulsa_queue: [],
         combined_seq_nf_labels: normalizedLabels,
-        combined_seq_transportadora: group.rota,
+        combined_seq_transportadora: groupLabel,
+        combined_seq_transportadoras: transportadoras,
+        combined_seq_group_label: groupLabel,
         combined_seq_conf_ids: combinedSeqConfIds,
         combined_seq_allocations: allocations,
         contributors: [{
@@ -2078,7 +2175,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
       setPendingAvulsaScan(null);
       setPendingBarcodeOpenSelection(null);
       setShowRoutesModal(false);
-      setStatusMessage(`Conferência conjunta iniciada para ${normalizedLabels.length} Seq/NF da transportadora ${group.rota}.`);
+      setStatusMessage(
+        transportadoras.length > 1
+          ? `Conferência conjunta iniciada para ${normalizedLabels.length} Seq/NF em ${transportadoras.length} transportadoras.`
+          : `Conferência conjunta iniciada para ${normalizedLabels.length} Seq/NF da transportadora ${groupLabel}.`
+      );
       disableBarcodeSoftKeyboard();
       window.requestAnimationFrame(() => {
         barrasRef.current?.focus({ preventScroll: true });
@@ -2102,52 +2203,6 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     listManifestItemsByCd,
     openVolumeBatch,
     profile
-  ]);
-
-  const startRouteBatchByGroup = useCallback((group: RouteBatchGroupSelectionSource) => {
-    const selectable = getRouteBatchSelectableLabels(group);
-    const selected = routeBatchSelectionByGroup[group.rota] ?? [];
-    const selectedSet = new Set(selected);
-    const picked = selectable.filter((seqNfLabel) => selectedSet.has(seqNfLabel));
-
-    if (picked.length === 0) {
-      setErrorMessage("Selecione pelo menos uma Seq/NF válida para iniciar a conferência em lote.");
-      return;
-    }
-
-    if (hasOpenConference) {
-      setShowRoutesModal(false);
-      setErrorMessage("Existe uma conferência em andamento. Finalize a conferência atual para iniciar o lote.");
-      return;
-    }
-
-    if (picked.length === 1) {
-      setShowRoutesModal(false);
-      setErrorMessage(null);
-      setRouteBatchSelectionByGroup((current) => {
-        if (!(group.rota in current)) return current;
-        const next = { ...current };
-        delete next[group.rota];
-        return next;
-      });
-      void openVolumeFromEtiqueta(picked[0]);
-      return;
-    }
-
-    setErrorMessage(null);
-    setShowRoutesModal(false);
-    void openCombinedRouteConference(group, picked);
-    setRouteBatchSelectionByGroup((current) => {
-      if (!(group.rota in current)) return current;
-      const next = { ...current };
-      delete next[group.rota];
-      return next;
-    });
-  }, [
-    getRouteBatchSelectableLabels,
-    hasOpenConference,
-    openCombinedRouteConference,
-    routeBatchSelectionByGroup
   ]);
 
   const focusBarras = useCallback(() => {
@@ -2995,6 +3050,39 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
     showDialog,
     fetchSeqNfVolumeSnapshot,
     fetchSeqNfContributors
+  ]);
+
+  const startSelectedRouteBatch = useCallback(() => {
+    const picked = routeBatchSelectedLabels;
+    if (picked.length === 0) {
+      setErrorMessage("Selecione pelo menos uma Seq/NF válida para iniciar a conferência em lote.");
+      return;
+    }
+
+    if (hasOpenConference) {
+      setShowRoutesModal(false);
+      setErrorMessage("Existe uma conferência em andamento. Finalize a conferência atual para iniciar o lote.");
+      return;
+    }
+
+    if (picked.length === 1) {
+      setShowRoutesModal(false);
+      setErrorMessage(null);
+      clearRouteBatchSelection();
+      void openVolumeFromEtiqueta(picked[0]);
+      return;
+    }
+
+    setErrorMessage(null);
+    setShowRoutesModal(false);
+    clearRouteBatchSelection();
+    void openCombinedRouteConference(picked);
+  }, [
+    clearRouteBatchSelection,
+    hasOpenConference,
+    openCombinedRouteConference,
+    openVolumeFromEtiqueta,
+    routeBatchSelectedLabels
   ]);
 
   const openAvulsaVolumeWithRemoteState = useCallback(async (cd: number) => {
@@ -5977,11 +6065,11 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
               <div>
                 <h3>
                   {isCombinedRouteMode
-                    ? `Conferência conjunta ${activeVolume.combined_seq_transportadora ?? activeVolume.transportadora ?? activeVolume.rota ?? ""}`.trim()
+                    ? `Conferência conjunta ${combinedTransportadoraLabel}`.trim()
                     : `Conferência ${activeVolume.nr_volume}`}
                 </h3>
                 <p>
-                  Transportadora: {activeVolume.transportadora ?? activeVolume.rota ?? "SEM TRANSPORTADORA"}
+                  Transportadora: {isCombinedRouteMode ? combinedTransportadoraLabel : activeVolume.transportadora ?? activeVolume.rota ?? "SEM TRANSPORTADORA"}
                   {" | "}
                   Fornecedor: {activeVolume.fornecedor ?? activeVolume.filial_nome ?? "SEM FORNECEDOR"}
                   {" | "}
@@ -5998,9 +6086,16 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                   Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com divergência"}
                 </p>
                 {isCombinedRouteMode ? (
-                  <p className="entrada-notas-contributors">
-                    Seq/NF em conferência: {combinedSeqNfLabels.join(", ")}
-                  </p>
+                  <>
+                    {combinedTransportadoras.length > 1 ? (
+                      <p className="entrada-notas-contributors">
+                        Transportadoras no lote: {combinedTransportadoras.join(", ")}
+                      </p>
+                    ) : null}
+                    <p className="entrada-notas-contributors">
+                      Seq/NF em conferência: {combinedSeqNfLabels.join(", ")}
+                    </p>
+                  </>
                 ) : null}
                 {activeVolume.conference_kind !== "avulsa" && activeContributorsLabel ? (
                   <p className="entrada-notas-contributors">Colaboradores: {activeContributorsLabel}</p>
@@ -6597,6 +6692,41 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                     placeholder="Buscar transportadora, fornecedor, seq, nf ou status..."
                   />
                 </div>
+                <div className="termo-route-batch-actions entrada-notas-route-batch-summary">
+                  <p>
+                    Selecionadas para lote: {routeBatchSelectedLabels.length}/{routeBatchSelectableLabels.length}
+                    {routeBatchSelectedTransportadoraCount > 0
+                      ? ` | Transportadoras: ${routeBatchSelectedTransportadoraCount}`
+                      : ""}
+                  </p>
+                  {routeBatchSelectedLabels.length === 1 ? (
+                    <span className="termo-route-batch-note">
+                      Uma seleção abre a conferência simples; duas ou mais abrem a conferência conjunta.
+                    </span>
+                  ) : null}
+                  <div className="termo-route-batch-buttons">
+                    <button
+                      className="termo-route-icon-btn termo-route-icon-btn--muted"
+                      type="button"
+                      onClick={clearRouteBatchSelection}
+                      disabled={routeBatchSelectedLabels.length === 0}
+                      title="Limpar seleção"
+                      aria-label="Limpar seleção"
+                    >
+                      <span aria-hidden="true">{closeIcon()}</span>
+                    </button>
+                    <button
+                      className="termo-route-icon-btn termo-route-icon-btn--primary"
+                      type="button"
+                      onClick={startSelectedRouteBatch}
+                      disabled={routeBatchSelectedLabels.length === 0 || hasOpenConference}
+                      title={routeBatchSelectedLabels.length <= 1 ? "Abrir selecionada" : `Iniciar selecionadas (${routeBatchSelectedLabels.length})`}
+                      aria-label={routeBatchSelectedLabels.length <= 1 ? "Abrir selecionada" : `Iniciar selecionadas (${routeBatchSelectedLabels.length})`}
+                    >
+                      <span aria-hidden="true">{startConferenceIcon()}</span>
+                    </button>
+                  </div>
+                </div>
                 {filteredRouteGroups.length === 0 ? (
                   <p>Sem dados de transportadora/fornecedor disponíveis para este CD.</p>
                 ) : (
@@ -6610,7 +6740,7 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       const selectedBatchSet = new Set(selectedBatchSeqNf);
                       const selectedBatchCount = selectableBatchSeqNf.filter((label) => selectedBatchSet.has(label)).length;
                       const allBatchSelected = selectableBatchSeqNf.length > 0 && selectedBatchCount === selectableBatchSeqNf.length;
-                      const showBatchControls = selectableBatchSeqNf.length > 1;
+                      const partiallySelected = selectedBatchCount > 0 && !allBatchSelected;
                       const canToggle = !group.force_open;
                       const toggleRoute = () => {
                         if (!canToggle) return;
@@ -6618,70 +6748,66 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                       };
                       return (
                         <div key={routeKey} className={`termo-route-group${isOpen ? " is-open" : ""}`}>
-                          <div
-                            role="button"
-                            tabIndex={canToggle ? 0 : -1}
-                            className="termo-route-row-button"
-                            onPointerUp={(event) => {
-                              if (!canToggle) return;
-                              event.stopPropagation();
-                              toggleRoute();
-                            }}
-                            onKeyDown={(event) => {
-                              if (!canToggle) return;
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
+                          <div className="termo-route-select-row termo-route-select-row--group">
+                            <span className={`termo-route-selector-control${selectableBatchSeqNf.length === 0 ? " is-disabled" : ""}`}>
+                              <input
+                                type="checkbox"
+                                checked={allBatchSelected}
+                                disabled={selectableBatchSeqNf.length === 0}
+                                aria-label={`Selecionar transportadora ${group.rota} para o lote`}
+                                title={`Selecionar transportadora ${group.rota} para o lote`}
+                                ref={(element) => {
+                                  if (element) element.indeterminate = partiallySelected;
+                                }}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => setAllRouteBatchSelection(group, event.target.checked)}
+                              />
+                            </span>
+                            <div
+                              role="button"
+                              tabIndex={canToggle ? 0 : -1}
+                              className="termo-route-row-button"
+                              onPointerUp={(event) => {
+                                if (!canToggle) return;
+                                event.stopPropagation();
                                 toggleRoute();
-                              }
-                            }}
-                            aria-expanded={isOpen}
-                          >
-                            <span className="termo-route-main">
-                              <span className="termo-route-title">{group.rota}</span>
-                              <span className="termo-route-sub">
-                                Fornecedores: {group.lojas_conferidas}/{group.lojas_total} concluídos
-                                {" | "}
-                                Itens conferidos: {group.etiquetas_conferidas}/{group.etiquetas_total}
+                              }}
+                              onKeyDown={(event) => {
+                                if (!canToggle) return;
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  toggleRoute();
+                                }
+                              }}
+                              aria-expanded={isOpen}
+                            >
+                              <span className="termo-route-main">
+                                <span className="termo-route-title">{group.rota}</span>
+                                <span className="termo-route-sub">
+                                  Fornecedores: {group.lojas_conferidas}/{group.lojas_total} concluídos
+                                  {" | "}
+                                  Itens conferidos: {group.etiquetas_conferidas}/{group.etiquetas_total}
+                                </span>
+                                <span className="termo-route-sub">Status da transportadora: {routeStatusLabel(groupStatus)}</span>
+                                {selectedBatchCount > 0 ? (
+                                  <span className="termo-route-sub">
+                                    Selecionadas para lote: {selectedBatchCount}/{selectableBatchSeqNf.length} Seq/NF
+                                  </span>
+                                ) : null}
                               </span>
-                              <span className="termo-route-sub">Status da transportadora: {routeStatusLabel(groupStatus)}</span>
-                            </span>
-                            <span className="termo-route-metrics">
-                              <span>{group.lojas_conferidas}/{group.lojas_total}</span>
-                              <span className={`termo-divergencia ${routeStatusClass(groupStatus)}`}>
-                                {routeStatusLabel(groupStatus)}
+                              <span className="termo-route-metrics">
+                                <span>{group.lojas_conferidas}/{group.lojas_total}</span>
+                                <span className={`termo-divergencia ${routeStatusClass(groupStatus)}`}>
+                                  {routeStatusLabel(groupStatus)}
+                                </span>
+                                {canToggle ? (
+                                  <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
+                                ) : null}
                               </span>
-                              {canToggle ? (
-                                <span className="coleta-row-expand" aria-hidden="true">{chevronIcon(isOpen)}</span>
-                              ) : null}
-                            </span>
+                            </div>
                           </div>
                           {isOpen ? (
                             <div className="termo-route-stores">
-                              {showBatchControls ? (
-                                <div className="termo-route-batch-actions">
-                                  <p>
-                                    Selecionadas para lote: {selectedBatchCount}/{selectableBatchSeqNf.length}
-                                  </p>
-                                  <div className="termo-route-batch-buttons">
-                                    <button
-                                      className="btn btn-muted"
-                                      type="button"
-                                      onClick={() => setAllRouteBatchSelection(group, !allBatchSelected)}
-                                      disabled={selectableBatchSeqNf.length === 0}
-                                    >
-                                      {allBatchSelected ? "Desmarcar todas" : "Marcar todas"}
-                                    </button>
-                                    <button
-                                      className="btn btn-primary"
-                                      type="button"
-                                      onClick={() => startRouteBatchByGroup(group)}
-                                      disabled={selectedBatchCount === 0 || hasOpenConference}
-                                    >
-                                      {selectedBatchCount > 0 ? `Iniciar selecionadas (${selectedBatchCount})` : "Iniciar selecionadas"}
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : null}
                               {group.visible_filiais.map((row) => {
                                 const lojaStatus = normalizeStoreStatus(row.status);
                                 const colaboradorNome = row.colaborador_nome?.trim() || "";
@@ -6704,97 +6830,102 @@ export default function ConferenciaEntradaNotasPage({ isOnline, profile }: Confe
                                     : "";
                                 return (
                                   <div key={`${group.rota}-${row.seq_entrada}-${row.nf}-${row.filial ?? "na"}`} className="termo-route-store-row">
-                                    <div>
-                                      <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
-                                      <p>{seqLabel}</p>
-                                      <p>Itens conferidos: {row.conferidas}/{row.total_etiquetas}</p>
-                                      {row.produtos_multiplos_seq > 0 ? (
-                                        <p>Produtos repetidos em múltiplos Seq/NF: {row.produtos_multiplos_seq}</p>
-                                      ) : null}
-                                      <p>Status: {routeStatusLabel(lojaStatus)}</p>
-                                      <div className="termo-route-store-actions">
-                                        {showBatchControls ? (
-                                          <label className={`termo-route-store-check${batchSelectable ? "" : " is-disabled"}`}>
-                                            <input
-                                              type="checkbox"
-                                              checked={batchSelected}
-                                              disabled={!batchSelectable || !seqNfKey}
-                                              onChange={(event) => {
-                                                if (!seqNfKey) return;
-                                                toggleRouteBatchSelection(group.rota, seqNfKey, event.target.checked);
-                                              }}
-                                            />
-                                            <span>Selecionar no lote</span>
-                                          </label>
-                                        ) : null}
-                                        <button
-                                          className="btn btn-primary"
-                                          type="button"
-                                          onClick={() => {
-                                            setRouteBatchQueue((current) => (current.length > 0 ? [] : current));
-                                            setShowRoutesModal(false);
-                                            const seqNfLabel = `${row.seq_entrada ?? ""}/${row.nf ?? ""}`;
-                                            if (lojaStatus === "conferido_parcialmente" && currentCd != null) {
-                                              void (async () => {
-                                                try {
-                                                  const reopenPrompted = await promptPartialReopen(seqNfLabel, currentCd);
-                                                  if (!reopenPrompted) {
-                                                    await openVolumeFromEtiqueta(seqNfLabel);
-                                                  }
-                                                } catch (error) {
-                                                  const message = error instanceof Error
-                                                    ? error.message
-                                                    : "Falha ao retomar conferência parcial.";
-                                                  setErrorMessage(normalizeRpcErrorMessage(message));
-                                                }
-                                              })();
-                                              return;
-                                            }
-                                            void openVolumeFromEtiqueta(seqNfLabel);
-                                          }}
-                                        >
-                                          {lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
-                                        </button>
-                                      </div>
-                                      {lojaStatus === "em_andamento" && contributorNames ? (
-                                        <p>Em andamento por: {contributorNames}</p>
-                                      ) : null}
-                                      {lojaStatus === "conferido_parcialmente" && contributorNames ? (
-                                        <p>Conferido parcialmente por: {contributorNames}</p>
-                                      ) : null}
-                                      {lojaStatus === "concluido" && contributorNames ? (
-                                        <p>Concluído por: {contributorNames}</p>
-                                      ) : null}
-                                      {contributors.length > 1 ? (
-                                        <div className="entrada-notas-route-contributors">
-                                          {contributors.map((contributor) => (
-                                            <p key={`${seqNfKey ?? "seq"}:${contributor.user_id || contributor.mat || contributor.nome}`}>
-                                              {formatCollaboratorName({
-                                                nome: contributor.nome,
-                                                mat: contributor.mat
-                                              })}
-                                              {" | Última ação: "}
-                                              {formatDateTime(contributor.last_action_at)}
-                                            </p>
-                                          ))}
-                                        </div>
-                                      ) : null}
-                                      {contributorsState?.status === "loading" ? (
-                                        <p className="entrada-notas-route-contributors-loading">Carregando conferentes...</p>
-                                      ) : null}
-                                      {lojaStatus === "em_andamento" && row.status_at ? (
-                                        <p>Iniciado em: {formatDateTime(row.status_at)}</p>
-                                      ) : null}
-                                      {lojaStatus === "conferido_parcialmente" && row.status_at ? (
-                                        <p>Conferido parcialmente em: {formatDateTime(row.status_at)}</p>
-                                      ) : null}
-                                      {lojaStatus === "concluido" && row.status_at ? (
-                                        <p>Concluído em: {formatDateTime(row.status_at)}</p>
-                                      ) : null}
-                                    </div>
-                                    <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
-                                      {routeStatusLabel(lojaStatus)}
+                                    <span className={`termo-route-selector-control termo-route-selector-control--store${batchSelectable ? "" : " is-disabled"}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={batchSelected}
+                                        disabled={!batchSelectable || !seqNfKey}
+                                        aria-label={`Selecionar ${seqLabel} para o lote`}
+                                        title={`Selecionar ${seqLabel} para o lote`}
+                                        onChange={(event) => {
+                                          if (!seqNfKey) return;
+                                          toggleRouteBatchSelection(group.rota, seqNfKey, event.target.checked);
+                                        }}
+                                      />
                                     </span>
+                                    <div className="termo-route-store-main">
+                                      <div>
+                                        <strong>{row.filial_nome}{row.filial != null ? ` (${row.filial})` : ""}</strong>
+                                        <p>{seqLabel}</p>
+                                        <p>Itens conferidos: {row.conferidas}/{row.total_etiquetas}</p>
+                                        {row.produtos_multiplos_seq > 0 ? (
+                                          <p>Produtos repetidos em múltiplos Seq/NF: {row.produtos_multiplos_seq}</p>
+                                        ) : null}
+                                        <p>Status: {routeStatusLabel(lojaStatus)}</p>
+                                        <div className="termo-route-store-actions">
+                                          <button
+                                            className={`termo-route-icon-btn ${lojaStatus === "pendente" ? "termo-route-icon-btn--primary" : "termo-route-icon-btn--resume"}`}
+                                            type="button"
+                                            onClick={() => {
+                                              setRouteBatchQueue((current) => (current.length > 0 ? [] : current));
+                                              setShowRoutesModal(false);
+                                              const seqNfLabel = `${row.seq_entrada ?? ""}/${row.nf ?? ""}`;
+                                              if (lojaStatus === "conferido_parcialmente" && currentCd != null) {
+                                                void (async () => {
+                                                  try {
+                                                    const reopenPrompted = await promptPartialReopen(seqNfLabel, currentCd);
+                                                    if (!reopenPrompted) {
+                                                      await openVolumeFromEtiqueta(seqNfLabel);
+                                                    }
+                                                  } catch (error) {
+                                                    const message = error instanceof Error
+                                                      ? error.message
+                                                      : "Falha ao retomar conferência parcial.";
+                                                    setErrorMessage(normalizeRpcErrorMessage(message));
+                                                  }
+                                                })();
+                                                return;
+                                              }
+                                              void openVolumeFromEtiqueta(seqNfLabel);
+                                            }}
+                                            title={lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
+                                            aria-label={lojaStatus === "pendente" ? "Iniciar conferência" : "Retomar conferência"}
+                                          >
+                                            <span aria-hidden="true">
+                                              {lojaStatus === "pendente" ? startConferenceIcon() : resumeConferenceIcon()}
+                                            </span>
+                                          </button>
+                                        </div>
+                                        {lojaStatus === "em_andamento" && contributorNames ? (
+                                          <p>Em andamento por: {contributorNames}</p>
+                                        ) : null}
+                                        {lojaStatus === "conferido_parcialmente" && contributorNames ? (
+                                          <p>Conferido parcialmente por: {contributorNames}</p>
+                                        ) : null}
+                                        {lojaStatus === "concluido" && contributorNames ? (
+                                          <p>Concluído por: {contributorNames}</p>
+                                        ) : null}
+                                        {contributors.length > 1 ? (
+                                          <div className="entrada-notas-route-contributors">
+                                            {contributors.map((contributor) => (
+                                              <p key={`${seqNfKey ?? "seq"}:${contributor.user_id || contributor.mat || contributor.nome}`}>
+                                                {formatCollaboratorName({
+                                                  nome: contributor.nome,
+                                                  mat: contributor.mat
+                                                })}
+                                                {" | Última ação: "}
+                                                {formatDateTime(contributor.last_action_at)}
+                                              </p>
+                                            ))}
+                                          </div>
+                                        ) : null}
+                                        {contributorsState?.status === "loading" ? (
+                                          <p className="entrada-notas-route-contributors-loading">Carregando conferentes...</p>
+                                        ) : null}
+                                        {lojaStatus === "em_andamento" && row.status_at ? (
+                                          <p>Iniciado em: {formatDateTime(row.status_at)}</p>
+                                        ) : null}
+                                        {lojaStatus === "conferido_parcialmente" && row.status_at ? (
+                                          <p>Conferido parcialmente em: {formatDateTime(row.status_at)}</p>
+                                        ) : null}
+                                        {lojaStatus === "concluido" && row.status_at ? (
+                                          <p>Concluído em: {formatDateTime(row.status_at)}</p>
+                                        ) : null}
+                                      </div>
+                                      <span className={`termo-divergencia ${routeStatusClass(lojaStatus)}`}>
+                                        {routeStatusLabel(lojaStatus)}
+                                      </span>
+                                    </div>
                                   </div>
                                 );
                               })}

@@ -4219,6 +4219,45 @@ small {
   background: #f8fbff;
 }
 
+.termo-route-select-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 9px 10px;
+}
+
+.termo-route-select-row .termo-route-row-button {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.termo-route-select-row--group {
+  padding-bottom: 8px;
+}
+
+.termo-route-selector-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+}
+
+.termo-route-selector-control input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.termo-route-selector-control.is-disabled {
+  opacity: 0.6;
+}
+
+.termo-route-selector-control.is-disabled input {
+  cursor: not-allowed;
+}
+
 .termo-route-row-button {
   width: 100%;
   display: grid;
@@ -4465,13 +4504,85 @@ small {
   flex: 1 1 160px;
 }
 
+.termo-route-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 999px;
+  border: 1px solid #cad8ef;
+  background: #f4f8ff;
+  color: #254a86;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.termo-route-icon-btn:hover {
+  transform: translateY(-1px);
+}
+
+.termo-route-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.termo-route-icon-btn span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.termo-route-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.termo-route-icon-btn svg path,
+.termo-route-icon-btn svg circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.termo-route-icon-btn--primary {
+  border-color: #c8dbf7;
+  background: linear-gradient(130deg, var(--accent), #3b6ec6);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(27, 63, 124, 0.2);
+}
+
+.termo-route-icon-btn--resume {
+  border-color: #bfd8f2;
+  background: #ebf7ff;
+  color: #0f4b7d;
+}
+
+.termo-route-icon-btn--muted {
+  border-color: #cfd9ea;
+  background: #fff;
+  color: #4b5e81;
+}
+
 .termo-route-store-row {
   border: 1px solid #d6dfed;
   border-radius: 10px;
   background: #fff;
   padding: 8px 10px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.termo-route-store-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
 }
@@ -4524,35 +4635,14 @@ small {
   align-items: center;
 }
 
-.termo-route-store-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #c8d7ef;
-  border-radius: 999px;
-  background: #f4f8ff;
-  color: #244777;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-
-.termo-route-store-check input {
-  margin: 0;
-  width: 15px;
-  height: 15px;
-}
-
-.termo-route-store-check.is-disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .termo-route-batch-note {
   color: #84561a;
   font-size: 0.74rem;
   font-weight: 700;
+}
+
+.entrada-notas-route-batch-summary {
+  margin-top: 10px;
 }
 
 .entrada-notas-route-batch-queue {
