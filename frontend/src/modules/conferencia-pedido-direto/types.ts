@@ -73,6 +73,9 @@ export interface PedidoDiretoItemRow {
   qtd_falta: number;
   qtd_sobra: number;
   divergencia_tipo: PedidoDiretoDivergenciaTipo;
+  is_locked: boolean;
+  locked_mat: string | null;
+  locked_nome: string | null;
   updated_at: string;
 }
 
@@ -140,6 +143,7 @@ export interface PedidoDiretoVolumeRow {
   finalized_at: string | null;
   updated_at: string;
   is_read_only: boolean;
+  reopened_from_finalized: boolean;
 }
 
 export interface PedidoDiretoLocalItem {
@@ -148,6 +152,9 @@ export interface PedidoDiretoLocalItem {
   descricao: string;
   qtd_esperada: number;
   qtd_conferida: number;
+  is_locked: boolean;
+  locked_mat: string | null;
+  locked_nome: string | null;
   updated_at: string;
 }
 
@@ -174,6 +181,7 @@ export interface PedidoDiretoLocalVolume {
   finalized_at: string | null;
   updated_at: string;
   is_read_only: boolean;
+  reopened_from_finalized: boolean;
   items: PedidoDiretoLocalItem[];
   pending_snapshot: boolean;
   pending_finalize: boolean;
@@ -192,5 +200,21 @@ export interface PedidoDiretoPreferences {
 export interface PedidoDiretoPendingSummary {
   pending_count: number;
   errors_count: number;
+}
+
+export interface PedidoDiretoPartialReopenInfo {
+  conf_id: string;
+  conf_date: string;
+  cd: number;
+  id_vol: string;
+  origem_link: PedidoDiretoLinkOrigin;
+  status: PedidoDiretoConfStatus;
+  previous_started_by: string | null;
+  previous_started_mat: string | null;
+  previous_started_nome: string | null;
+  locked_items: number;
+  falta_items: number;
+  sobra_items: number;
+  can_reopen: boolean;
 }
 

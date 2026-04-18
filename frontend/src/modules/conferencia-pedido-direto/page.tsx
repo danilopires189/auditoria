@@ -35,6 +35,7 @@ import {
   buildPedidoDiretoVolumeKey,
   cleanupExpiredPedidoDiretoVolumes,
   getLocalVolume,
+  getLatestLocalVolumeByEtiqueta,
   getManifestItemsByEtiqueta,
   listManifestItemsByCd,
   getManifestMetaLocal,
@@ -54,6 +55,7 @@ import {
   countPedidoDiretoReportRows,
   fetchCdOptions,
   fetchActiveVolume,
+  fetchPartialReopenInfo,
   fetchManifestBundle,
   fetchManifestItemsPage,
   fetchManifestMeta,
@@ -64,6 +66,7 @@ import {
   normalizeBarcode,
   normalizeIdVol,
   openVolume,
+  reopenPartialConference,
   scanBarcode,
   setItemQtd,
   syncSnapshot,
@@ -77,6 +80,7 @@ import type {
   PedidoDiretoLocalItem,
   PedidoDiretoLocalVolume,
   PedidoDiretoManifestItemRow,
+  PedidoDiretoPartialReopenInfo,
   PedidoDiretoReportCount,
   PedidoDiretoReportFilters,
   PedidoDiretoReportRow,
@@ -121,6 +125,7 @@ type DialogState = {
   confirmLabel?: string;
   cancelLabel?: string;
   onConfirm?: () => void;
+  onCancel?: () => void;
 };
 
 const MODULE_DEF = getModuleByKeyOrThrow("conferencia-pedido-direto");
@@ -193,6 +198,22 @@ function formatDateTime(value: string | null): string {
   return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "-" });
 }
 
+function formatCollaboratorName(item: { nome?: string | null; mat?: string | null }): string {
+  const nome = item.nome?.trim() || "";
+  const mat = item.mat?.trim() || "";
+  if (nome && mat) return `${nome} (${mat})`;
+  if (nome) return nome;
+  if (mat) return `Matrícula ${mat}`;
+  return "outro colaborador";
+}
+
+function formatLockedItemOwner(item: Pick<PedidoDiretoLocalItem, "locked_nome" | "locked_mat">): string {
+  return formatCollaboratorName({
+    nome: item.locked_nome ?? null,
+    mat: item.locked_mat ?? null
+  });
+}
+
 function latestTimestamp(values: Array<string | null | undefined>): string | null {
   let bestIso: string | null = null;
   let bestTs = Number.NEGATIVE_INFINITY;
@@ -262,6 +283,9 @@ function createLocalVolumeFromRemote(
     descricao: item.descricao,
     qtd_esperada: item.qtd_esperada,
     qtd_conferida: item.qtd_conferida,
+    is_locked: item.is_locked === true,
+    locked_mat: item.locked_mat ?? null,
+    locked_nome: item.locked_nome ?? null,
     updated_at: item.updated_at
   }));
 
@@ -288,6 +312,7 @@ function createLocalVolumeFromRemote(
     finalized_at: volume.finalized_at,
     updated_at: volume.updated_at,
     is_read_only: volume.is_read_only,
+    reopened_from_finalized: volume.reopened_from_finalized,
     items: localItems.sort(itemSort),
     pending_snapshot: false,
     pending_finalize: false,
@@ -315,6 +340,9 @@ function createLocalVolumeFromManifest(
     descricao: row.descricao,
     qtd_esperada: row.qtd_esperada,
     qtd_conferida: 0,
+    is_locked: false,
+    locked_mat: null,
+    locked_nome: null,
     updated_at: nowIso
   }));
 
@@ -341,6 +369,7 @@ function createLocalVolumeFromManifest(
     finalized_at: null,
     updated_at: nowIso,
     is_read_only: false,
+    reopened_from_finalized: false,
     items: items.sort(itemSort),
     pending_snapshot: true,
     pending_finalize: false,
@@ -461,8 +490,15 @@ function normalizeRpcErrorMessage(value: string): string {
   if (value.includes("VOLUME_JA_CONFERIDO_OUTRO_USUARIO")) return "Volume já conferido por outro usuário.";
   if (value.includes("PRODUTO_FORA_DO_VOLUME")) return "Produto fora do volume em conferência.";
   if (value.includes("BARRAS_NAO_ENCONTRADA")) return "Código de barras inválido. Ele não existe na base db_barras.";
+  if (value.includes("ITEM_BLOQUEADO")) return "Item preservado da conferência anterior. Não é possível alterar.";
   if (value.includes("SOBRA_PENDENTE")) return "Existem sobras. Corrija antes de finalizar.";
   if (value.includes("FALTA_MOTIVO_OBRIGATORIO")) return "Informe o motivo da falta para finalizar.";
+  if (value.includes("CONFERENCIA_FINALIZADA_SEM_PENDENCIA")) {
+    return "Esta conferência não possui divergência pendente para reabrir.";
+  }
+  if (value.includes("CONFERENCIA_EM_USO")) {
+    return "Já existe uma conferência em andamento para este PedidoSeq.";
+  }
   if (value.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Entre novamente.";
   if (value.includes("APENAS_ADMIN")) return "";
   if (value.includes("CD_SEM_ACESSO")) return "Usuário sem acesso ao CD informado.";
@@ -834,6 +870,18 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       correto: groupedItems.correto.length
     };
   }, [activeVolume, groupedItems]);
+  const hasLockedItems = useMemo(() => (
+    Boolean(activeVolume?.items.some((item) => item.is_locked))
+  ), [activeVolume]);
+  const shouldProtectPartialResumeOnCancel = useMemo(() => (
+    Boolean(activeVolume && !activeVolume.is_read_only && activeVolume.reopened_from_finalized)
+  ), [activeVolume]);
+  const activeVolumeStatusLabel = useMemo(() => {
+    if (!activeVolume) return "-";
+    if (activeVolume.status === "em_conferencia") return "Em conferência";
+    if (divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0) return "Finalizado com divergência";
+    return "Finalizado sem divergência";
+  }, [activeVolume, divergenciaTotals.falta, divergenciaTotals.sobra]);
 
   const validateReportFilters = useCallback((): PedidoDiretoReportFilters | null => {
     if (!reportDtIni || !reportDtFim) {
@@ -1540,6 +1588,101 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     if (focusInput) focusBarras();
   }, [focusBarras, refreshPendingState]);
 
+  const openReadOnlyVolume = useCallback((volume: PedidoDiretoLocalVolume, message = "Volume aberto em modo leitura.") => {
+    setActiveVolume(volume);
+    setExpandedCoddv(null);
+    setEditingCoddv(null);
+    setEditQtdInput("0");
+    setStatusMessage(message);
+  }, []);
+
+  const reopenPartialVolume = useCallback(async (
+    etiqueta: string,
+    selectedCd: number,
+    origemLink: PedidoDiretoLinkOrigin,
+    successMessage: string
+  ) => {
+    const reopenedVolume = await reopenPartialConference(etiqueta, selectedCd, origemLink);
+    const reopenedItems = await fetchVolumeItems(reopenedVolume.conf_id);
+    const reopenedLocalVolume = createLocalVolumeFromRemote(profile, reopenedVolume, reopenedItems);
+    await saveLocalVolume(reopenedLocalVolume);
+    setActiveVolume(reopenedLocalVolume);
+    setEtiquetaInput(reopenedLocalVolume.id_vol);
+    setExpandedCoddv(null);
+    setEditingCoddv(null);
+    setEditQtdInput("0");
+    setStatusMessage(successMessage);
+    focusBarras();
+  }, [focusBarras, profile]);
+
+  const promptPartialReopen = useCallback(async (
+    volume: PedidoDiretoLocalVolume,
+    options?: { onOpenReadOnly?: () => void }
+  ): Promise<boolean> => {
+    let reopenInfo: PedidoDiretoPartialReopenInfo;
+
+    try {
+      reopenInfo = await fetchPartialReopenInfo(volume.id_vol, volume.cd, volume.origem_link);
+    } catch {
+      return false;
+    }
+
+    if (!reopenInfo.can_reopen) {
+      return false;
+    }
+
+    const previousCollaborator = formatCollaboratorName({
+      nome: reopenInfo.previous_started_nome,
+      mat: reopenInfo.previous_started_mat
+    });
+
+    showDialog({
+      title: "Conferência concluída com divergência",
+      message:
+        `A conferência mais recente do PedidoSeq ${volume.id_vol} foi concluída por ${previousCollaborator}.\n\n`
+        + `Itens preservados: ${reopenInfo.locked_items}\n`
+        + `Itens com falta: ${reopenInfo.falta_items}\n`
+        + `Itens com sobra: ${reopenInfo.sobra_items}\n\n`
+        + "Deseja abrir em somente leitura ou reabrir a conferência?",
+      confirmLabel: "Reabrir conferência",
+      cancelLabel: "Abrir leitura",
+      onCancel: () => {
+        closeDialog();
+        const openReadOnly = options?.onOpenReadOnly;
+        if (openReadOnly) {
+          openReadOnly();
+          return;
+        }
+        openReadOnlyVolume(volume);
+      },
+      onConfirm: () => {
+        void (async () => {
+          closeDialog();
+          setBusyOpenVolume(true);
+          setStatusMessage(null);
+          setErrorMessage(null);
+          try {
+            await reopenPartialVolume(
+              volume.id_vol,
+              volume.cd,
+              volume.origem_link,
+              "Conferência reaberta. Itens corretos da conferência anterior permanecem bloqueados."
+            );
+          } catch (reopenError) {
+            const reopenMessage = reopenError instanceof Error
+              ? reopenError.message
+              : "Falha ao reabrir conferência parcial.";
+            setErrorMessage(normalizeRpcErrorMessage(reopenMessage));
+          } finally {
+            setBusyOpenVolume(false);
+          }
+        })();
+      }
+    });
+
+    return true;
+  }, [closeDialog, openReadOnlyVolume, reopenPartialVolume, showDialog]);
+
   const resumeRemoteActiveVolume = useCallback(async (silent = false): Promise<PedidoDiretoLocalVolume | null> => {
     if (preferOfflineMode || !isOnline) return null;
 
@@ -1603,26 +1746,28 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
         }
 
         const existingToday = await getLocalVolume(profile.user_id, currentCd, today, etiqueta, currentLinkOrigin);
-        if (existingToday) {
-          if (existingToday.status !== "em_conferencia" || existingToday.is_read_only) {
+        const existingLatest = existingToday ?? await getLatestLocalVolumeByEtiqueta(
+          profile.user_id,
+          currentCd,
+          etiqueta,
+          currentLinkOrigin
+        );
+        if (existingLatest) {
+          if (existingLatest.status !== "em_conferencia" || existingLatest.is_read_only) {
             showDialog({
               title: "Volume com conferência existente",
               message: "Este volume já possui conferência registrada. Deseja abrir em modo leitura?",
               confirmLabel: "Abrir leitura",
               cancelLabel: "Cancelar",
               onConfirm: () => {
-                setActiveVolume(existingToday);
-                setExpandedCoddv(null);
-                setEditingCoddv(null);
-                setEditQtdInput("0");
-                setStatusMessage("Volume aberto em modo leitura.");
+                openReadOnlyVolume(existingLatest);
                 closeDialog();
               }
             });
             return;
           }
-          setActiveVolume(existingToday);
-          etiquetaFinal = existingToday.id_vol;
+          setActiveVolume(existingLatest);
+          etiquetaFinal = existingLatest.id_vol;
           setExpandedCoddv(null);
           setEditingCoddv(null);
           setEditQtdInput("0");
@@ -1635,14 +1780,31 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           const remoteItems = await fetchVolumeItems(remoteVolume.conf_id);
           const localVolume = createLocalVolumeFromRemote(profile, remoteVolume, remoteItems);
           await saveLocalVolume(localVolume);
-          setActiveVolume(localVolume);
           etiquetaFinal = localVolume.id_vol;
+          if (remoteVolume.is_read_only) {
+            const reopenPrompted = await promptPartialReopen(localVolume, {
+              onOpenReadOnly: () => openReadOnlyVolume(localVolume)
+            });
+            if (reopenPrompted) {
+              return;
+            }
+            showDialog({
+              title: "Volume com conferência existente",
+              message: "Este volume já possui conferência registrada. Deseja abrir em modo leitura?",
+              confirmLabel: "Abrir leitura",
+              cancelLabel: "Cancelar",
+              onConfirm: () => {
+                openReadOnlyVolume(localVolume);
+                closeDialog();
+              }
+            });
+            return;
+          }
+          setActiveVolume(localVolume);
           setStatusMessage(
-            remoteVolume.is_read_only
-              ? "Volume com conferência existente. Aberto em leitura."
-              : waitingOfflineBase
-                ? "Volume aberto online enquanto a base offline é sincronizada em segundo plano."
-                : "Volume aberto para conferência."
+            waitingOfflineBase
+              ? "Volume aberto online enquanto a base offline é sincronizada em segundo plano."
+              : "Volume aberto para conferência."
           );
           return;
         }
@@ -1676,13 +1838,19 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
       etiquetaFinal = localVolume.id_vol;
 
       if (remoteVolume.is_read_only) {
+        const reopenPrompted = await promptPartialReopen(localVolume, {
+          onOpenReadOnly: () => openReadOnlyVolume(localVolume)
+        });
+        if (reopenPrompted) {
+          return;
+        }
         showDialog({
           title: "Volume com conferência existente",
           message: "Este volume já possui conferência registrada. Deseja abrir em modo leitura?",
           confirmLabel: "Abrir leitura",
           cancelLabel: "Cancelar",
           onConfirm: () => {
-            setActiveVolume(localVolume);
+            openReadOnlyVolume(localVolume);
             closeDialog();
           }
         });
@@ -1728,13 +1896,19 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     manifestReady,
     preferOfflineMode,
     prepareOfflineManifest,
+    promptPartialReopen,
     profile,
     resumeRemoteActiveVolume,
-    showDialog
+    showDialog,
+    openReadOnlyVolume
   ]);
 
   const updateItemQtyLocal = useCallback(async (coddv: number, qtd: number, barras: string | null = null) => {
     if (!activeVolume) return;
+    const currentItem = activeVolume.items.find((item) => item.coddv === coddv);
+    if (currentItem?.is_locked) {
+      throw new Error("ITEM_BLOQUEADO");
+    }
     const nowIso = new Date().toISOString();
     const nextItems = activeVolume.items.map((item) => (
       item.coddv === coddv
@@ -2030,6 +2204,13 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           triggerScanErrorAlert("Produto fora do volume.");
           return;
         }
+        if (target.is_locked) {
+          setBarcodeValidationState("invalid");
+          const lockedMessage = "Item preservado da conferência anterior. Não é possível alterar.";
+          setErrorMessage(lockedMessage);
+          triggerScanErrorAlert(lockedMessage);
+          return;
+        }
         produtoRegistrado = target.descricao;
         barrasRegistrada = lookup.barras || barras;
         highlightedCoddv = target.coddv;
@@ -2051,6 +2232,9 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                 barras: updated.barras ?? barras,
                 qtd_conferida: updated.qtd_conferida,
                 qtd_esperada: updated.qtd_esperada,
+                is_locked: updated.is_locked === true,
+                locked_mat: updated.locked_mat ?? null,
+                locked_nome: updated.locked_nome ?? null,
                 updated_at: updated.updated_at
               }
             : item
@@ -2136,6 +2320,11 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   const handleSaveItemEdit = useCallback(async (coddv: number) => {
     if (!activeVolume) return;
     if (!canEditActiveVolume) return;
+    const item = activeVolume.items.find((row) => row.coddv === coddv);
+    if (item?.is_locked) {
+      setErrorMessage("Item preservado da conferência anterior. Não é possível alterar.");
+      return;
+    }
     const qtd = parsePositiveInteger(editQtdInput, 0);
 
     try {
@@ -2152,6 +2341,9 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                 barras: updated.barras ?? item.barras ?? null,
                 qtd_conferida: updated.qtd_conferida,
                 qtd_esperada: updated.qtd_esperada,
+                is_locked: updated.is_locked === true,
+                locked_mat: updated.locked_mat ?? null,
+                locked_nome: updated.locked_nome ?? null,
                 updated_at: updated.updated_at
               }
             : item
@@ -2189,6 +2381,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     if (!activeVolume || !canEditActiveVolume) return;
     const item = activeVolume.items.find((row) => row.coddv === coddv);
     if (!item) return;
+    if (item.is_locked) {
+      setErrorMessage("Item preservado da conferência anterior. Não é possível alterar.");
+      return;
+    }
     if (item.qtd_conferida <= 0) return;
 
     showDialog({
@@ -2208,12 +2404,15 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               const nextItems = activeVolume.items.map((row) => (
                 row.coddv === updated.coddv
                   ? {
-                      ...row,
-                      barras: updated.barras ?? row.barras ?? null,
-                      qtd_conferida: updated.qtd_conferida,
-                      qtd_esperada: updated.qtd_esperada,
-                      updated_at: updated.updated_at
-                    }
+                    ...row,
+                    barras: updated.barras ?? row.barras ?? null,
+                    qtd_conferida: updated.qtd_conferida,
+                    qtd_esperada: updated.qtd_esperada,
+                    is_locked: updated.is_locked === true,
+                    locked_mat: updated.locked_mat ?? null,
+                    locked_nome: updated.locked_nome ?? null,
+                    updated_at: updated.updated_at
+                  }
                   : row
               ));
               const nextVolume: PedidoDiretoLocalVolume = {
@@ -3049,11 +3248,15 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 
   const requestCancelConference = useCallback(() => {
     if (!activeVolume || !canEditActiveVolume) return;
+    const preserveAlreadyCountedData = shouldProtectPartialResumeOnCancel;
 
     showDialog({
       title: "Cancelar conferência",
-      message: `A conferência do PedidoSeq ${activeVolume.id_vol} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
-      confirmLabel: "Cancelar conferência",
+      message: preserveAlreadyCountedData
+        ? `A conferência do PedidoSeq ${activeVolume.id_vol} foi reaberta a partir de uma conferência concluída.\n\n`
+          + "Ao confirmar, esta retomada será encerrada mantendo os itens já preservados e o estado atual da conferência."
+        : `A conferência do PedidoSeq ${activeVolume.id_vol} será cancelada e todos os dados lançados serão perdidos. Deseja continuar?`,
+      confirmLabel: preserveAlreadyCountedData ? "Encerrar mantendo dados" : "Cancelar conferência",
       cancelLabel: "Voltar",
       onConfirm: () => {
         void (async () => {
@@ -3063,6 +3266,46 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
           setStatusMessage(null);
 
           try {
+            if (preserveAlreadyCountedData) {
+              const hasFalta = activeVolume.items.some((item) => item.qtd_conferida < item.qtd_esperada);
+              const preserveReason = hasFalta
+                ? (activeVolume.falta_motivo?.trim() || "Retomada cancelada mantendo os dados preservados.")
+                : null;
+
+              if (activeVolume.remote_conf_id && isOnline) {
+                await finalizeVolume(activeVolume.remote_conf_id, preserveReason);
+                await removeLocalVolume(activeVolume.local_key);
+                await refreshPendingState();
+                clearConferenceScreen();
+                setStatusMessage("Retomada encerrada. Os dados preservados foram mantidos.");
+                await syncRouteOverview();
+                return;
+              }
+
+              if (activeVolume.remote_conf_id && !isOnline) {
+                const nowIso = new Date().toISOString();
+                const nextStatus = hasFalta ? "finalizado_falta" : "finalizado_ok";
+                const nextVolume: PedidoDiretoLocalVolume = {
+                  ...activeVolume,
+                  status: nextStatus,
+                  falta_motivo: preserveReason,
+                  finalized_at: nowIso,
+                  is_read_only: true,
+                  pending_snapshot: true,
+                  pending_finalize: true,
+                  pending_finalize_reason: preserveReason,
+                  pending_cancel: false,
+                  sync_error: null,
+                  updated_at: nowIso
+                };
+                await saveLocalVolume(nextVolume);
+                await refreshPendingState();
+                clearConferenceScreen();
+                setStatusMessage("Retomada encerrada localmente. A finalização será sincronizada ao reconectar.");
+                return;
+              }
+            }
+
             if (activeVolume.remote_conf_id && isOnline) {
               await cancelVolume(activeVolume.remote_conf_id);
               await removeLocalVolume(activeVolume.local_key);
@@ -3117,6 +3360,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
     markStorePendingAfterCancel,
     refreshPendingState,
     showDialog,
+    shouldProtectPartialResumeOnCancel,
     syncRouteOverview,
     handleClosedConferenceError
   ]);
@@ -3411,7 +3655,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                   ) : null}
                 </p>
                 <p>
-                  Status: {activeVolume.status === "em_conferencia" ? "Em conferência" : activeVolume.status === "finalizado_ok" ? "Finalizado sem divergência" : "Finalizado com falta"}
+                  Status: {activeVolumeStatusLabel}
                 </p>
               </div>
               <div className="termo-volume-head-right">
@@ -3440,10 +3684,10 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                           type="button"
                           onClick={requestCancelConference}
                           disabled={busyCancel || busyFinalize}
-                          title="Cancelar conferência"
+                          title={shouldProtectPartialResumeOnCancel ? "Encerrar retomada mantendo dados" : "Cancelar conferência"}
                         >
                           <span aria-hidden="true">{closeIcon()}</span>
-                          {busyCancel ? "Cancelando..." : "Cancelar"}
+                          {busyCancel ? "Cancelando..." : shouldProtectPartialResumeOnCancel ? "Encerrar mantendo dados" : "Cancelar"}
                         </button>
                         {hasAnyItemInformed ? (
                           <button
@@ -3552,6 +3796,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               ) : (
                 groupedItems.falta.map(({ item, qtd_falta, qtd_sobra }) => {
                   const isLastAddedItem = activeLastAddedCoddv === item.coddv;
+                  const isItemLocked = item.is_locked === true;
                   return (
                   <article key={`falta-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
@@ -3577,7 +3822,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        {canEditActiveVolume ? (
+                        {isItemLocked ? (
+                          <p className="termo-inline-note">
+                            Item preservado da conferência anterior. Bloqueado por {formatLockedItemOwner(item)}.
+                          </p>
+                        ) : null}
+                        {canEditActiveVolume && !isItemLocked ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
                               <>
@@ -3625,6 +3875,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               ) : (
                 groupedItems.sobra.map(({ item, qtd_sobra }) => {
                   const isLastAddedItem = activeLastAddedCoddv === item.coddv;
+                  const isItemLocked = item.is_locked === true;
                   return (
                   <article key={`sobra-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
@@ -3650,7 +3901,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        {canEditActiveVolume ? (
+                        {isItemLocked ? (
+                          <p className="termo-inline-note">
+                            Item preservado da conferência anterior. Bloqueado por {formatLockedItemOwner(item)}.
+                          </p>
+                        ) : null}
+                        {canEditActiveVolume && !isItemLocked ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
                               <>
@@ -3697,6 +3953,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
               ) : (
                 groupedItems.correto.map(({ item }) => {
                   const isLastAddedItem = activeLastAddedCoddv === item.coddv;
+                  const isItemLocked = item.is_locked === true;
                   return (
                   <article key={`correto-${item.coddv}`} className={`termo-item-card${expandedCoddv === item.coddv ? " is-expanded" : ""}${isLastAddedItem ? " is-last-added" : ""}`}>
                     <button type="button" className="termo-item-line" onClick={() => setExpandedCoddv((current) => current === item.coddv ? null : item.coddv)}>
@@ -3722,7 +3979,12 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                     {expandedCoddv === item.coddv ? (
                       <div className="termo-item-detail">
                         <p>Última alteração: {formatDateTime(item.updated_at)}</p>
-                        {canEditActiveVolume ? (
+                        {isItemLocked ? (
+                          <p className="termo-inline-note">
+                            Item preservado da conferência anterior. Bloqueado por {formatLockedItemOwner(item)}.
+                          </p>
+                        ) : null}
+                        {canEditActiveVolume && !isItemLocked ? (
                           <div className="termo-item-actions">
                             {editingCoddv === item.coddv && item.qtd_conferida > 0 ? (
                               <>
@@ -3878,7 +4140,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                                         }}
                                         disabled={!idVolFromRoute}
                                       >
-                                        {lojaStatus === "pendente" ? "Iniciar conferência" : "Abrir leitura"}
+                                        {lojaStatus === "pendente" ? "Iniciar conferência" : "Abrir"}
                                       </button>
                                       {lojaStatus === "em_andamento" && colaboradorNome ? (
                                         <p>Em andamento por: {colaboradorNome}{colaboradorMat ? ` (${colaboradorMat})` : ""}</p>
@@ -4042,7 +4304,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
                 <div className="confirm-actions">
                   {dialogState.onConfirm ? (
                     <>
-                      <button className="btn btn-muted" type="button" onClick={closeDialog}>
+                      <button className="btn btn-muted" type="button" onClick={dialogState.onCancel ?? closeDialog}>
                         {dialogState.cancelLabel ?? "Cancelar"}
                       </button>
                       <button className="btn btn-primary" type="button" onClick={dialogState.onConfirm}>

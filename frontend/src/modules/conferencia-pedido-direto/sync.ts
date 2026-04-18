@@ -9,6 +9,7 @@ import type {
   PedidoDiretoManifestBarrasRow,
   PedidoDiretoManifestItemRow,
   PedidoDiretoManifestMeta,
+  PedidoDiretoPartialReopenInfo,
   PedidoDiretoReportCount,
   PedidoDiretoReportFilters,
   PedidoDiretoReportRow,
@@ -187,7 +188,8 @@ function mapVolume(raw: Record<string, unknown>): PedidoDiretoVolumeRow {
     started_at: String(raw.started_at ?? new Date().toISOString()),
     finalized_at: parseNullableString(raw.finalized_at),
     updated_at: String(raw.updated_at ?? new Date().toISOString()),
-    is_read_only: raw.is_read_only === true
+    is_read_only: raw.is_read_only === true,
+    reopened_from_finalized: raw.reopened_from_finalized === true
   };
 }
 
@@ -206,7 +208,33 @@ function mapItem(raw: Record<string, unknown>): PedidoDiretoItemRow {
     qtd_falta: parseInteger(raw.qtd_falta),
     qtd_sobra: parseInteger(raw.qtd_sobra),
     divergencia_tipo,
+    is_locked: raw.is_locked === true,
+    locked_mat: parseNullableString(raw.locked_mat),
+    locked_nome: parseNullableString(raw.locked_nome),
     updated_at: String(raw.updated_at ?? new Date().toISOString())
+  };
+}
+
+function mapPartialReopenInfo(raw: Record<string, unknown>): PedidoDiretoPartialReopenInfo {
+  const statusRaw = String(raw.status ?? "em_conferencia");
+  const status = statusRaw === "finalizado_ok" || statusRaw === "finalizado_falta"
+    ? statusRaw
+    : "em_conferencia";
+
+  return {
+    conf_id: String(raw.conf_id ?? ""),
+    conf_date: String(raw.conf_date ?? ""),
+    cd: parseInteger(raw.cd),
+    id_vol: String(raw.id_vol ?? "").trim(),
+    origem_link: normalizePedidoDiretoLinkOrigin(parseNullableString(raw.origem_link)),
+    status,
+    previous_started_by: parseNullableString(raw.previous_started_by),
+    previous_started_mat: parseNullableString(raw.previous_started_mat),
+    previous_started_nome: parseNullableString(raw.previous_started_nome),
+    locked_items: Math.max(parseInteger(raw.locked_items), 0),
+    falta_items: Math.max(parseInteger(raw.falta_items), 0),
+    sobra_items: Math.max(parseInteger(raw.sobra_items), 0),
+    can_reopen: raw.can_reopen === true
   };
 }
 
@@ -465,6 +493,40 @@ export async function fetchActiveVolume(origemLink: PedidoDiretoLinkOrigin): Pro
   return mapVolume(first);
 }
 
+export async function fetchPartialReopenInfo(
+  idVol: string,
+  cd: number,
+  origemLink: PedidoDiretoLinkOrigin
+): Promise<PedidoDiretoPartialReopenInfo> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_pedido_direto_get_partial_reopen_info", {
+    p_id_vol: normalizeIdVol(idVol),
+    p_cd: cd,
+    p_origem_link: origemLink
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao validar reabertura parcial.");
+  return mapPartialReopenInfo(first);
+}
+
+export async function reopenPartialConference(
+  idVol: string,
+  cd: number,
+  origemLink: PedidoDiretoLinkOrigin
+): Promise<PedidoDiretoVolumeRow> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_pedido_direto_reopen_partial_conference", {
+    p_id_vol: normalizeIdVol(idVol),
+    p_cd: cd,
+    p_origem_link: origemLink
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) throw new Error("Falha ao reabrir conferência parcial.");
+  return mapVolume(first);
+}
+
 export async function fetchVolumeItems(confId: string): Promise<PedidoDiretoItemRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data: v2Data, error: v2Error } = await supabase.rpc("rpc_conf_pedido_direto_get_items_v2", {
@@ -596,7 +658,7 @@ export async function syncPendingPedidoDiretoVolumes(
         continue;
       }
 
-      if (row.is_read_only) {
+      if (row.is_read_only && !row.pending_snapshot && !row.pending_finalize && !row.pending_cancel) {
         row.pending_snapshot = false;
         row.pending_finalize = false;
         row.pending_cancel = false;
@@ -617,6 +679,7 @@ export async function syncPendingPedidoDiretoVolumes(
         row.sq = remoteOpen.sq;
         row.status = remoteOpen.status;
         row.is_read_only = remoteOpen.is_read_only;
+        row.reopened_from_finalized = remoteOpen.reopened_from_finalized;
         row.sync_error = null;
       }
 
@@ -624,7 +687,7 @@ export async function syncPendingPedidoDiretoVolumes(
         throw new Error("Não foi possível resolver o volume remoto.");
       }
 
-      if (!row.is_read_only && row.pending_snapshot) {
+      if (row.pending_snapshot) {
         await syncSnapshot(
           remoteConfId,
           row.items.map((item) => ({
@@ -636,7 +699,7 @@ export async function syncPendingPedidoDiretoVolumes(
         row.pending_snapshot = false;
       }
 
-      if (!row.is_read_only && row.pending_finalize) {
+      if (row.pending_finalize) {
         const finalized = await finalizeVolume(remoteConfId, row.pending_finalize_reason);
         const status =
           finalized.status === "finalizado_ok" || finalized.status === "finalizado_falta"

@@ -143,7 +143,16 @@ function normalizeStoredVolume(row: PedidoDiretoLocalVolume): PedidoDiretoLocalV
   return {
     ...row,
     sq: typeof row.sq === "number" && Number.isFinite(row.sq) ? Math.trunc(row.sq) : null,
-    origem_link: normalizePedidoDiretoLinkOrigin(row.origem_link)
+    origem_link: normalizePedidoDiretoLinkOrigin(row.origem_link),
+    reopened_from_finalized: row.reopened_from_finalized === true,
+    items: Array.isArray(row.items)
+      ? row.items.map((item) => ({
+          ...item,
+          is_locked: item.is_locked === true,
+          locked_mat: item.locked_mat ?? null,
+          locked_nome: item.locked_nome ?? null
+        }))
+      : []
   };
 }
 
