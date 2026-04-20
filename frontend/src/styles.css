@@ -12946,6 +12946,22 @@ small {
     color: #4f647f;
   }
 
+  .gestao-estq-zone-value.is-positive {
+    color: #c73953;
+  }
+
+  .gestao-estq-zone-value.is-negative {
+    color: #1f78d1;
+  }
+
+  .gestao-estq-zone-value.is-entry {
+    color: #1f78d1;
+  }
+
+  .gestao-estq-zone-value.is-exit {
+    color: #c73953;
+  }
+
   .gestao-estq-zone-segment.is-entry {
     background: linear-gradient(180deg, rgba(31, 120, 209, 0.92), rgba(31, 120, 209, 0.68));
   }

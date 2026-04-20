@@ -461,6 +461,16 @@ function formatCompactCurrency(value: number): string {
   }).format(safe)}`;
 }
 
+function formatCompactSignedCurrency(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  const signal = safe > 0 ? "+" : safe < 0 ? "-" : "";
+  return `${signal}R$ ${new Intl.NumberFormat("pt-BR", {
+    notation: "compact",
+    minimumFractionDigits: Math.abs(safe) >= 1000 ? 1 : 0,
+    maximumFractionDigits: 1
+  }).format(Math.abs(safe))}`;
+}
+
 function ZoneValueChart({
   rows,
   movementFilter
@@ -484,12 +494,29 @@ function ZoneValueChart({
         {rows.map((row) => {
           const entradaHeight = (row.entrada_total / maxTotal) * 180;
           const saidaHeight = (row.saida_total / maxTotal) * 180;
+          const balanceTotal = row.saida_total - row.entrada_total;
+          const displayValue =
+            movementFilter === "entrada"
+              ? row.entrada_total
+              : movementFilter === "saida"
+                ? row.saida_total
+                : balanceTotal;
+          const displayValueClassName =
+            movementFilter === "entrada"
+              ? " is-entry"
+              : movementFilter === "saida"
+                ? " is-exit"
+                : displayValue > 0
+                  ? " is-positive"
+                  : displayValue < 0
+                    ? " is-negative"
+                    : "";
           const valueTitle =
             movementFilter === "entrada"
               ? `${row.zona}: Entrada ${formatCurrency(row.entrada_total)}`
               : movementFilter === "saida"
                 ? `${row.zona}: Saída ${formatCurrency(row.saida_total)}`
-                : `${row.zona}: Entrada ${formatCurrency(row.entrada_total)} · Saída ${formatCurrency(row.saida_total)} · Total ${formatCurrency(row.valor_total)}`;
+                : `${row.zona}: Entrada ${formatCurrency(row.entrada_total)} · Saída ${formatCurrency(row.saida_total)} · Saldo ${formatSignedCurrency(balanceTotal)}`;
           return (
             <div key={row.zona} className="indicadores-zone-column gestao-estq-zone-column">
               <div className="indicadores-zone-stack" title={valueTitle}>
@@ -501,7 +528,9 @@ function ZoneValueChart({
                 ) : null}
               </div>
               <strong>{row.zona}</strong>
-              <span className="gestao-estq-zone-value">{formatCompactCurrency(row.valor_total)}</span>
+              <span className={`gestao-estq-zone-value${displayValueClassName}`}>
+                {movementFilter === "todas" ? formatCompactSignedCurrency(displayValue) : formatCompactCurrency(displayValue)}
+              </span>
             </div>
           );
         })}
