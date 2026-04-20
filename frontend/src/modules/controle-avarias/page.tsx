@@ -70,7 +70,7 @@ const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const LOOKUP_CACHE_MAX_ENTRIES = 800;
-const ORIGEM_OPTIONS: ControleAvariasOrigem[] = ["Entrada", "Expedição", "Pulmão", "Separação"];
+const ORIGEM_OPTIONS: ControleAvariasOrigem[] = ["Blitz", "Entrada", "Expedição", "Pulmão", "Separação"];
 const CAUSA_OPTIONS = [
   "Armazenamento",
   "Caixa do fornecedor",

@@ -1,7 +1,7 @@
 export type ControleAvariasSyncStatus = "pending_insert" | "pending_update" | "pending_delete" | "synced" | "error";
 
 export type ControleAvariasMotivo = string;
-export type ControleAvariasOrigem = "Entrada" | "Expedição" | "Pulmão" | "Separação";
+export type ControleAvariasOrigem = "Blitz" | "Entrada" | "Expedição" | "Pulmão" | "Separação";
 export type ControleAvariasSituacao =
   | "Amassado"
   | "Furado"
