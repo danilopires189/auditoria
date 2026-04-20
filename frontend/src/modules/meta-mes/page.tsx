@@ -416,7 +416,6 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
     return [
       { label: "Meta do mês", value: formatHeaderMetricValue(summary.total_target, valueMode) },
       { label: "Meta por dia", value: summary.daily_target_value == null ? "-" : formatHeaderMetricValue(summary.daily_target_value, valueMode) },
-      { label: "Dias úteis no mês", value: String(summary.month_workdays) },
       { label: "Total do mês", value: formatHeaderMetricValue(summary.total_actual, valueMode) },
       {
         label: "% de atingimento",
@@ -431,7 +430,8 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
         projectionPercentLabel: projectionPercent != null ? formatPercent(projectionPercent) : undefined,
         projectionPercentTone: projectionPercent != null ? resolveProjectionPercentTone(projectionPercent) : undefined
       },
-      { label: "Dias atingidos", value: String(summary.days_hit), accent: summary.days_hit > 0 ? "success" : "neutral" }
+      { label: "Dias atingidos", value: String(summary.days_hit), accent: summary.days_hit > 0 ? "success" : "neutral" },
+      { label: "Dias úteis no mês", value: String(summary.month_workdays) }
     ];
   }, [summary, valueMode]);
 
