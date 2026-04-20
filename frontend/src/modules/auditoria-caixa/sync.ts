@@ -457,3 +457,27 @@ export async function fetchAuditoriaCaixaReportRows(
 
   return data.map((item) => mapRpcRowToReport(item as Record<string, unknown>));
 }
+
+export async function fetchAuditoriaCaixaReportRowsCursor(
+  filters: AuditoriaCaixaReportFilters,
+  options?: {
+    cursorDt?: string | null;
+    cursorId?: string | null;
+    limit?: number;
+  }
+): Promise<AuditoriaCaixaReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_aud_caixa_report_rows_cursor", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd,
+    p_cursor_dt: options?.cursorDt ?? null,
+    p_cursor_id: options?.cursorId ?? null,
+    p_limit: options?.limit ?? 1000
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((item) => mapRpcRowToReport(item as Record<string, unknown>));
+}

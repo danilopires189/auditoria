@@ -11,6 +11,7 @@ import { BackIcon, ModuleIcon } from "../../ui/icons";
 import {
   formatDateOnlyPtBR,
   formatDateTimeBrasilia,
+  monthStartIsoBrasilia,
   todayIsoBrasilia
 } from "../../shared/brasilia-datetime";
 import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
@@ -48,7 +49,7 @@ import {
 } from "./storage";
 import {
   countAuditoriaCaixaReportRows,
-  fetchAuditoriaCaixaReportRows,
+  fetchAuditoriaCaixaReportRowsCursor,
   fetchCdOptions,
   fetchTodaySharedAuditoriaCaixaRows,
   refreshDbRotasCache,
@@ -137,6 +138,24 @@ const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const TRANSIENT_MESSAGE_DURATION_MS = 5_000;
 const NOT_FOUND_CHIME_DURATION_MS = 420;
 const MIXED_VOLUME_OCCURRENCE: AuditoriaCaixaOccurrenceOption = "Volume misturado";
+const REPORT_EXPORT_BATCH_SIZE = 1000;
+const REPORT_EXPORT_HEADERS = [
+  "Data/Hora",
+  "CD",
+  "Etiqueta",
+  "Id knapp",
+  "Pedido",
+  "Data do pedido",
+  "Seq",
+  "Filial",
+  "Filial nome",
+  "UF",
+  "Rota",
+  "Volume",
+  "Ocorrência",
+  "Matrícula auditor",
+  "Nome auditor"
+] as const;
 const PENDING_SYNC_STATUSES = new Set<AuditoriaCaixaRow["sync_status"]>([
   "pending_insert",
   "pending_update",
@@ -206,6 +225,42 @@ function asStatusLabel(status: AuditoriaCaixaRow["sync_status"]): string {
   if (status === "pending_delete") return "Pendente exclusão";
   if (status === "error") return "Erro de sync";
   return "Sync";
+}
+
+function toAuditoriaCaixaReportSheetRow(row: {
+  data_hr: string;
+  cd: number;
+  etiqueta: string;
+  id_knapp: string | null;
+  pedido: number;
+  data_pedido: string | null;
+  dv: string | null;
+  filial: number;
+  filial_nome: string | null;
+  uf: string | null;
+  rota: string | null;
+  volume: string | null;
+  ocorrencia: string | null;
+  mat_aud: string;
+  nome_aud: string;
+}): (string | number)[] {
+  return [
+    formatDateTime(row.data_hr),
+    row.cd,
+    row.etiqueta,
+    row.id_knapp ?? "",
+    row.pedido,
+    formatDateOnlyPtBR(row.data_pedido),
+    row.dv ?? "",
+    row.filial,
+    row.filial_nome ?? "",
+    row.uf ?? "",
+    row.rota ?? "Sem rota",
+    row.volume ?? "",
+    row.ocorrencia ?? "",
+    row.mat_aud,
+    row.nome_aud
+  ];
 }
 
 function asStatusClass(status: AuditoriaCaixaRow["sync_status"]): string {
@@ -574,7 +629,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [showReport, setShowReport] = useState(false);
-  const [reportDtIni, setReportDtIni] = useState(todayIsoBrasilia());
+  const [reportDtIni, setReportDtIni] = useState(monthStartIsoBrasilia());
   const [reportDtFim, setReportDtFim] = useState(todayIsoBrasilia());
   const [reportCd, setReportCd] = useState<string>("");
   const [reportCount, setReportCount] = useState<number | null>(null);
@@ -621,6 +676,10 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
   const canSeeReportTools = isDesktop && profile.role === "admin";
+  const reportAllCdsLabel = useMemo(
+    () => (cdOptions.length === 2 ? "Ambos os CDs" : "Todos os CDs"),
+    [cdOptions.length]
+  );
   const offlineReady = !isDesktop && preferOfflineMode && dbRotasCount > 0;
   const canOperate = isOnline || offlineReady;
   const cameraSupported = useMemo(
@@ -1560,38 +1619,52 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
         dtFim: reportDtFim,
         cd: Number.isFinite(parsedCd) ? parsedCd : null
       };
+      const XLSX = await import("xlsx");
+      const worksheet = XLSX.utils.aoa_to_sheet([Array.from(REPORT_EXPORT_HEADERS)]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "AuditoriaCaixa");
 
-      const rows = await fetchAuditoriaCaixaReportRows(filters, 50000);
-      if (rows.length === 0) {
+      let processed = 0;
+      let cursorDt: string | null = null;
+      let cursorId: string | null = null;
+
+      setReportMessage(`Gerando Excel... 0/${reportCount}`);
+
+      while (true) {
+        const rows = await fetchAuditoriaCaixaReportRowsCursor(filters, {
+          cursorDt,
+          cursorId,
+          limit: REPORT_EXPORT_BATCH_SIZE
+        });
+
+        if (rows.length === 0) break;
+
+        XLSX.utils.sheet_add_aoa(
+          worksheet,
+          rows.map((row) => toAuditoriaCaixaReportSheetRow(row)),
+          { origin: -1 }
+        );
+
+        processed += rows.length;
+        setReportMessage(`Gerando Excel... ${processed}/${reportCount}`);
+
+        const lastRow = rows[rows.length - 1];
+        cursorDt = lastRow.data_hr || null;
+        cursorId = lastRow.id || null;
+
+        if (!cursorDt || !cursorId || rows.length < REPORT_EXPORT_BATCH_SIZE) {
+          break;
+        }
+      }
+
+      if (processed === 0) {
         setReportMessage("Nenhuma auditoria disponível para exportação.");
         return;
       }
 
-      const XLSX = await import("xlsx");
-      const exportRows = rows.map((row) => ({
-        "Data/Hora": formatDateTime(row.data_hr),
-        CD: row.cd,
-        Etiqueta: row.etiqueta,
-        "Id knapp": row.id_knapp ?? "",
-        Pedido: row.pedido,
-        "Data do pedido": formatDateOnlyPtBR(row.data_pedido),
-        Seq: row.dv ?? "",
-        Filial: row.filial,
-        "Filial nome": row.filial_nome ?? "",
-        UF: row.uf ?? "",
-        Rota: row.rota ?? "Sem rota",
-        Volume: row.volume ?? "",
-        Ocorrência: row.ocorrencia ?? "",
-        "Matrícula auditor": row.mat_aud,
-        "Nome auditor": row.nome_aud
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(exportRows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "AuditoriaCaixa");
       const suffix = filters.cd == null ? "todos-cds" : `cd-${filters.cd}`;
       XLSX.writeFile(workbook, `relatorio-auditoria-caixa-${reportDtIni}-${reportDtFim}-${suffix}.xlsx`, { compression: true });
-      setReportMessage(`Relatório gerado com sucesso (${rows.length} linhas).`);
+      setReportMessage(`Relatório gerado com sucesso (${processed} linhas).`);
     } catch (error) {
       setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório Excel.");
     } finally {
@@ -1695,9 +1768,9 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
   useEffect(() => {
     if (!showReport) return;
-    const baseCd = isGlobalAdmin ? currentCd : fixedCd;
+    const baseCd = currentCd ?? fixedCd;
     setReportCd(baseCd != null ? String(baseCd) : "");
-  }, [currentCd, fixedCd, isGlobalAdmin, showReport]);
+  }, [currentCd, fixedCd, showReport]);
 
   useEffect(() => {
     setActiveStoreContext(null);
@@ -2059,28 +2132,17 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
                 />
               </label>
 
-              {isGlobalAdmin ? (
-                <label>
-                  CD
-                  <select value={reportCd} onChange={(event) => setReportCd(event.target.value)}>
-                    <option value="">Todos CDs permitidos</option>
-                    {cdOptions.map((option) => (
-                      <option key={option.cd} value={option.cd}>
-                        {cdCodeLabel(option.cd)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <label>
-                  CD
-                  <input
-                    type="text"
-                    value={fixedCd != null ? `CD ${String(fixedCd).padStart(2, "0")}` : "CD não definido"}
-                    disabled
-                  />
-                </label>
-              )}
+              <label>
+                CD
+                <select value={reportCd} onChange={(event) => setReportCd(event.target.value)}>
+                  <option value="">{reportAllCdsLabel}</option>
+                  {cdOptions.map((option) => (
+                    <option key={option.cd} value={option.cd}>
+                      {cdCodeLabel(option.cd)}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <div className="coleta-report-actions">
