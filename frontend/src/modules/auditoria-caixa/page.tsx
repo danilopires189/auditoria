@@ -126,6 +126,7 @@ interface FeedRouteGroup {
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("auditoria-caixa");
+const FEED_VISIBLE_LIMIT = 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const QUICK_SYNC_THROTTLE_MS = 2500;
 const ROUTE_CACHE_REFRESH_COOLDOWN_MS = 45_000;
@@ -559,6 +560,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const [ocorrenciaInput, setOcorrenciaInput] = useState("");
   const [localRows, setLocalRows] = useState<AuditoriaCaixaRow[]>([]);
   const [sharedTodayRows, setSharedTodayRows] = useState<AuditoriaCaixaRow[]>([]);
+  const [sharedTodayTotalCount, setSharedTodayTotalCount] = useState(0);
   const [dbRotasCount, setDbRotasCount] = useState(0);
   const [dbRotasLastSyncAt, setDbRotasLastSyncAt] = useState<string | null>(null);
   const [busyRefresh, setBusyRefresh] = useState(false);
@@ -683,6 +685,11 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     () => visibleRows.filter((row) => matchesFeedSearch(row, feedSearchInput)),
     [feedSearchInput, visibleRows]
   );
+  const totalFeedCount = useMemo(
+    () => Math.max(sharedTodayTotalCount, visibleRows.length),
+    [sharedTodayTotalCount, visibleRows.length]
+  );
+  const displayedFeedCount = feedSearchInput.trim() ? filteredVisibleRows.length : visibleRows.length;
 
   const groupedFeed = useMemo<FeedRouteGroup[]>(() => {
     const routeMap = new Map<string, { rota: string; filiais: Map<string, FeedFilialGroup> }>();
@@ -815,10 +822,23 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   }, [pendingSyncRows, refreshLocalState]);
 
   const refreshSharedState = useCallback(async () => {
-    if (!isOnline || currentCd == null) return;
+    if (!isOnline || currentCd == null) {
+      setSharedTodayTotalCount(0);
+      return;
+    }
+    setSharedTodayTotalCount(0);
     try {
-      const rows = await fetchTodaySharedAuditoriaCaixaRows(currentCd);
+      const today = todayIsoBrasilia();
+      const [rows, total] = await Promise.all([
+        fetchTodaySharedAuditoriaCaixaRows(currentCd, FEED_VISIBLE_LIMIT),
+        countAuditoriaCaixaReportRows({
+          dtIni: today,
+          dtFim: today,
+          cd: currentCd
+        })
+      ]);
       setSharedTodayRows(rows);
+      setSharedTodayTotalCount(total);
     } catch {
       // Mantém o feed atual se a consulta falhar.
     }
@@ -2207,11 +2227,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
         <div className="coleta-list-head">
           <h3>Feed de hoje</h3>
-          <span>
-            {feedSearchInput.trim()
-              ? `${formatVolumeCountLabel(filteredVisibleRows.length)} de ${formatVolumeCountLabel(visibleRows.length)}`
-              : formatVolumeCountLabel(visibleRows.length)}
-          </span>
+          <span>{`Mostrando ${displayedFeedCount} de ${totalFeedCount} volumes`}</span>
         </div>
 
         <div className="input-icon-wrap aud-caixa-feed-search">

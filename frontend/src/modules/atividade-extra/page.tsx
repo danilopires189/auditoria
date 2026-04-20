@@ -758,9 +758,6 @@ export default function AtividadeExtraPage({ isOnline, profile }: AtividadeExtra
             <div className="module-screen-title-row">
               <div className="module-screen-title">
                 <h2>Detalhamento de atividades</h2>
-                <span className="module-status">
-                  {`CD ${activeCd ?? "-"} · mês ${selectedMonthLabel}`}
-                </span>
               </div>
               <div className="atividade-extra-actions-head">
                 <button

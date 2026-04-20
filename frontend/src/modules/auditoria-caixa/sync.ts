@@ -310,7 +310,7 @@ export async function refreshDbRotasCache(
   };
 }
 
-export async function fetchTodaySharedAuditoriaCaixaRows(cd: number, limit = 1200): Promise<AuditoriaCaixaRow[]> {
+export async function fetchTodaySharedAuditoriaCaixaRows(cd: number, limit = 1000): Promise<AuditoriaCaixaRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const { data, error } = await supabase.rpc("rpc_aud_caixa_today", {
