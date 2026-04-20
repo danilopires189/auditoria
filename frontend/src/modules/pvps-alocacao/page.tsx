@@ -349,7 +349,11 @@ function persistModuleTab(nextTab: ModuleTab): void {
 }
 
 function activePvpsRowsForPulHydration(rows: PvpsManifestRow[]): PvpsManifestRow[] {
-  return rows.filter((row) => row.is_window_active);
+  return rows.filter((row) => row.is_window_active || row.status === "pendente_pul");
+}
+
+function isVisiblePvpsPendingRow(row: Pick<PvpsManifestRow, "is_window_active" | "status">): boolean {
+  return row.is_window_active || row.status === "pendente_pul";
 }
 
 function keyOfPvps(row: { coddv: number; end_sep: string }): string {
@@ -3034,7 +3038,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const pvpsFeedItems = useMemo<PvpsFeedItem[]>(() => {
     return pvpsFeedItemsAll
-      .filter((item) => item.row.is_window_active)
+      .filter((item) => isVisiblePvpsPendingRow(item.row))
       .filter((item) => !selectedZones.length || zoneFilterSet.has(item.zone))
       .filter((item) => !selectedNiveis.length || (item.kind === "pul" && nivelFilterSet.has(item.nivel ?? "")))
       .sort((a, b) => {
@@ -3175,7 +3179,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
 
   const filteredPvpsPendingRows = useMemo(() => {
     return sortedPvpsAllRows
-      .filter((row) => row.is_window_active && (hasMinPendingStock(row) || startedPvpsCoddvs.has(row.coddv)))
+      .filter((row) => isVisiblePvpsPendingRow(row) && (hasMinPendingStock(row) || startedPvpsCoddvs.has(row.coddv) || row.status === "pendente_pul"))
       .filter((row) => !selectedZones.length || zoneFilterSet.has(row.zona));
   }, [sortedPvpsAllRows, selectedZones, zoneFilterSet, startedPvpsCoddvs]);
 
@@ -3250,7 +3254,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         return Array.from(
           new Set(
             pvpsFeedItemsAll
-              .filter((item) => item.row.is_window_active)
+              .filter((item) => isVisiblePvpsPendingRow(item.row))
               .map((item) => item.zone)
           )
         ).sort((a, b) => a.localeCompare(b));
@@ -3258,7 +3262,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       if (tab === "ambos") {
         return Array.from(new Set([
           ...pvpsFeedItemsAll
-            .filter((item) => item.row.is_window_active)
+            .filter((item) => isVisiblePvpsPendingRow(item.row))
             .map((item) => item.zone),
           ...sortedAlocAllRows
             .filter((row) => row.is_window_active)
@@ -3315,7 +3319,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     if (feedView === "pendentes") {
       const pvpsNiveis = collect(
         pvpsFeedItemsAll
-          .filter((item) => item.row.is_window_active && item.kind === "pul")
+          .filter((item) => isVisiblePvpsPendingRow(item.row) && item.kind === "pul")
           .map((item) => item.kind === "pul" ? item.nivel : null)
       );
       if (tab === "pvps") {

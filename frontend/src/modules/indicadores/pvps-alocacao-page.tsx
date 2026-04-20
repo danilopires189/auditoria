@@ -550,6 +550,8 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
       };
     }
 
+    const dayScopedErrors = loadingDetails ? (selectedDaySeries?.erros_total ?? 0) : dayDetails.length;
+
     return {
       enderecos_auditados: selectedDaySeries?.enderecos_auditados ?? 0,
       conformes_elegiveis: selectedDaySeries?.conformes_elegiveis ?? 0,
@@ -557,10 +559,10 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
       percentual_conformidade: selectedDaySeries?.percentual_conformidade ?? 0,
       percentual_erro: selectedDaySeries?.percentual_erro ?? 0,
       media_sku_dia: selectedDaySeries?.media_sku_dia ?? 0,
-      erros_total: selectedDaySeries?.erros_total ?? 0,
+      erros_total: dayScopedErrors,
       baseLabel: selectedDay ? `Base: ${formatDate(selectedDay)}` : `Base: mês ${selectedMonthLabel}`
     };
-  }, [selectedDay, selectedDaySeries, selectedMonthLabel, showingMonthDetails, summary]);
+  }, [dayDetails.length, loadingDetails, selectedDay, selectedDaySeries, selectedMonthLabel, showingMonthDetails, summary]);
 
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!activeMetrics) return [];
