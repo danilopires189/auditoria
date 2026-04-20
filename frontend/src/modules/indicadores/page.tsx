@@ -60,7 +60,7 @@ export default function IndicadoresPage({ isOnline, profile, allowedIndicatorKey
                 <img className="indicadores-screen-logo" src={pmImage} alt="PM" />
                 <div>
                   <h2>Selecione um indicador</h2>
-                  <span className="module-status">Primeiro painel disponível para o CD ativo.</span>
+                  <span className="module-status"></span>
                 </div>
               </div>
             </div>
