@@ -16,7 +16,7 @@ Mudança de `full_replace` para `upsert` nas seguintes tabelas:
 - `db_rotas`: só atualiza o que mudou
 - `db_termo`: só atualiza o que mudou
 - `db_estq_entr`: só atualiza o que mudou
-- `db_prod_blitz`: só atualiza o que mudou
+- `db_conf_blitz`: só atualiza o que mudou
 - `db_prod_vol`: só atualiza o que mudou
 - `db_end`: já estava otimizada
 

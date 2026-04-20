@@ -361,26 +361,6 @@ TABLE_SPECS: dict[str, TableSpec] = {
         },
         has_cd=True,
     ),
-    "db_prod_blitz": TableSpec(
-        name="db_prod_blitz",
-        business_columns=[
-            "cd",
-            "filial",
-            "nr_pedido",
-            "dt_conf",
-            "auditor",
-            "qtd_un",
-        ],
-        sql_types={
-            "cd": "integer",
-            "filial": "bigint",
-            "nr_pedido": "bigint",
-            "dt_conf": "timestamp",
-            "auditor": "text",
-            "qtd_un": "integer",
-        },
-        has_cd=True,
-    ),
     "db_prod_vol": TableSpec(
         name="db_prod_vol",
         business_columns=[

@@ -224,21 +224,6 @@ tables:
       endereco: "text"
       exclusao: "date"
 
-  db_prod_blitz:
-    file: "DB_PROD_BLITZ.xlsx"
-    sheet: "DB_PROD_BLITZ"
-    mode: "upsert"
-    unique_keys: ["cd", "filial", "nr_pedido", "dt_conf", "auditor"]
-    required_columns: ["cd", "filial", "nr_pedido", "dt_conf"]
-    refresh_before_load: false
-    types:
-      cd: "integer"
-      filial: "bigint"
-      nr_pedido: "bigint"
-      dt_conf: "timestamp"
-      auditor: "text"
-      qtd_un: "integer"
-
   db_prod_vol:
     file: "DB_PROD_VOL.xlsx"
     sheet: "DB_PROD_VOL"

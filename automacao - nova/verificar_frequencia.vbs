@@ -82,7 +82,7 @@ ElseIf InStr(UCase(strArquivo), "BD_END") > 0 Then
 ElseIf InStr(UCase(strArquivo), "DB_TERMO") > 0 Or _
        InStr(UCase(strArquivo), "DB_ATENDIMENTO") > 0 Or _
        InStr(UCase(strArquivo), "DB_PEDIDO_DIRETO") > 0 Or _
-       InStr(UCase(strArquivo), "DB_PROD_BLITZ") > 0 Or _
+       InStr(UCase(strArquivo), "DB_BLITZ") > 0 Or _
        InStr(UCase(strArquivo), "DB_ESTQ_ENTR") > 0 Then
     intIntervaloMinutos = 60    ' 1 hora
     strGrupo = "a_cada_1_hora"

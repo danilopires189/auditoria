@@ -19,7 +19,6 @@ arrArquivos = Array( _
     "BD_END.xlsx", _
     "DB_TERMO.xlsx", _
     "DB_PEDIDO_DIRETO.xlsx", _
-    "DB_PROD_BLITZ.xlsx", _
     "DB_ATENDIMENTO.xlsx", _
     "DB_ESTQ_ENTR.xlsx", _
     "DB_ENTRADA_NOTAS.xlsx", _
