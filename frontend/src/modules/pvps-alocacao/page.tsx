@@ -693,7 +693,7 @@ function pvpsAuditStatusRank(status: PdfAuditStatus): number {
   return 1;
 }
 
-function shouldReplacePvpsRepresentative(current: PdfPvpsAuditRow, candidate: PdfPvpsAuditRow): boolean {
+function shouldReplacePvpsRepresentative<T extends PdfPvpsAuditRow>(current: T, candidate: T): boolean {
   const currentRank = pvpsAuditStatusRank(current.sitAud);
   const candidateRank = pvpsAuditStatusRank(candidate.sitAud);
   if (candidateRank !== currentRank) return candidateRank > currentRank;
@@ -704,8 +704,8 @@ function shouldReplacePvpsRepresentative(current: PdfPvpsAuditRow, candidate: Pd
   return candidate.coddv < current.coddv;
 }
 
-function consolidatePvpsAuditRows(rows: PdfPvpsAuditRow[]): PdfPvpsAuditRow[] {
-  const grouped = new Map<string, PdfPvpsAuditRow>();
+function consolidatePvpsAuditRows<T extends PdfPvpsAuditRow>(rows: T[]): T[] {
+  const grouped = new Map<string, T>();
 
   rows.forEach((row, index) => {
     const dedupeKey = normalizePvpsPulKey(row.enderecoPulmao) ?? `__pvps_row__${index}`;
@@ -2495,14 +2495,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "HORA"
         ];
         const normalizedRows: Array<PdfPvpsAuditRow & {
-          cd: string;
           modulo: string;
-          descricao: string;
-          zona: string;
-          auditorNom: string;
-          auditorMat: string;
-          data: string;
-          hora: string;
+          situacaoEndereco: string;
+          dataValue: string;
+          horaValue: string;
         }> = [];
         for (const row of sourceRows) {
           const auditId = reportValue(row, "audit_id");
@@ -2522,6 +2518,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             normalizedRows.push({
               cd: reportValue(row, "cd"),
               modulo: reportValue(row, "modulo").toUpperCase(),
+              dataHora: dtHr,
               coddv: reportValue(row, "coddv"),
               descricao: reportValue(row, "descricao"),
               zona: reportValue(row, "zona"),
@@ -2534,10 +2531,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               ocorrenciaTipo: sepSituacao === "vazio" || sepSituacao === "obstruido"
                 ? sepSituacao
                 : null,
-              auditorNom: reportValue(row, "auditor_nome", "auditor_nom"),
-              auditorMat: reportValue(row, "auditor_mat"),
-              data,
-              hora,
+              auditor: reportValue(row, "auditor_nome", "auditor_nom"),
+              matricula: reportValue(row, "auditor_mat"),
+              dataValue: data,
+              horaValue: hora,
               sortKey: dtHr
             });
             continue;
@@ -2553,6 +2550,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             normalizedRows.push({
               cd: reportValue(row, "cd"),
               modulo: reportValue(row, "modulo").toUpperCase(),
+              dataHora: pulDtHr,
               coddv: reportValue(row, "coddv"),
               descricao: reportValue(row, "descricao"),
               zona: reportValue(row, "zona"),
@@ -2566,10 +2564,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 pulSituacao === "vazio" || pulSituacao === "obstruido"
                   ? pulSituacao
                   : (sepSituacao === "vazio" || sepSituacao === "obstruido" ? sepSituacao : null),
-              auditorNom: pulItem.auditor_nome ?? reportValue(row, "auditor_nome", "auditor_nom"),
-              auditorMat: pulItem.auditor_mat ?? reportValue(row, "auditor_mat"),
-              data: pulDtHr ? formatDate(pulDtHr) : "",
-              hora: pulDtHr ? formatTime(pulDtHr) : "",
+              auditor: pulItem.auditor_nome ?? reportValue(row, "auditor_nome", "auditor_nom"),
+              matricula: pulItem.auditor_mat ?? reportValue(row, "auditor_mat"),
+              dataValue: pulDtHr ? formatDate(pulDtHr) : "",
+              horaValue: pulDtHr ? formatTime(pulDtHr) : "",
               sortKey: pulDtHr
             });
           }
@@ -2587,10 +2585,10 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           row.validadeSeparacao,
           row.validadePulmao,
           row.sitAud,
-          row.auditorNom,
-          row.auditorMat,
-          row.data,
-          row.hora
+          row.auditor,
+          row.matricula,
+          row.dataValue,
+          row.horaValue
         ]);
         const worksheetPvps = XLSX.utils.aoa_to_sheet([headers, ...rowsAoA]);
         worksheetPvps["!cols"] = headers.map((header, columnIndex) => {
