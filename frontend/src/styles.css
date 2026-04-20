@@ -13714,7 +13714,7 @@ small {
 }
 
 .meta-mes-metrics-grid {
-  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .meta-mes-metric-card {
@@ -14193,6 +14193,10 @@ small {
 }
 
 @media (max-width: 1080px) {
+  .meta-mes-metrics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  }
+
   .meta-mes-plan-grid,
   .meta-mes-layout-grid {
     grid-template-columns: 1fr;

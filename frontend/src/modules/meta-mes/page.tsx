@@ -416,13 +416,13 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
     return [
       { label: "Meta do mês", value: formatHeaderMetricValue(summary.total_target, valueMode) },
       { label: "Meta por dia", value: summary.daily_target_value == null ? "-" : formatHeaderMetricValue(summary.daily_target_value, valueMode) },
-      { label: "Total do mês", value: formatHeaderMetricValue(summary.total_actual, valueMode) },
+      { label: "Média dia", value: formatHeaderMetricValue(summary.daily_average, valueMode) },
       {
         label: "% de atingimento",
         value: formatPercent(summary.achievement_percent),
         accent: summary.achievement_percent != null && summary.achievement_percent >= 100 ? "success" : "danger"
       },
-      { label: "Média dia", value: formatHeaderMetricValue(summary.daily_average, valueMode) },
+      { label: "Total do mês", value: formatHeaderMetricValue(summary.total_actual, valueMode) },
       {
         label: "Projeção mensal",
         value: formatHeaderMetricValue(summary.monthly_projection, valueMode),
