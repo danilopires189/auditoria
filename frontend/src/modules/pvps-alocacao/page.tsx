@@ -150,6 +150,7 @@ interface PdfAlocacaoDetailRow extends PdfBaseDetailRow {
 interface PdfPvpsAuditRow extends PdfPvpsDetailRow {
   sitAud: PdfAuditStatus;
   ocorrenciaTipo: PvpsEndSit | null;
+  sortKey: string;
 }
 
 interface PdfAlocacaoAuditRow extends PdfAlocacaoDetailRow {
@@ -677,6 +678,44 @@ function summarizePdfRows(rows: Array<{ sitAud: PdfAuditStatus; ocorrenciaTipo?:
     conformes,
     percentualConformidade
   };
+}
+
+function normalizePvpsPulKey(value: string): string | null {
+  const normalized = value.trim().toUpperCase();
+  if (!normalized || normalized === "-") return null;
+  return normalized;
+}
+
+function pvpsAuditStatusRank(status: PdfAuditStatus): number {
+  if (status === "nao_conforme") return 4;
+  if (status === "conforme") return 3;
+  if (status === "ocorrencia") return 2;
+  return 1;
+}
+
+function shouldReplacePvpsRepresentative(current: PdfPvpsAuditRow, candidate: PdfPvpsAuditRow): boolean {
+  const currentRank = pvpsAuditStatusRank(current.sitAud);
+  const candidateRank = pvpsAuditStatusRank(candidate.sitAud);
+  if (candidateRank !== currentRank) return candidateRank > currentRank;
+  if (candidate.sortKey !== current.sortKey) return candidate.sortKey > current.sortKey;
+  const currentPul = normalizePvpsPulKey(current.enderecoPulmao) ?? "";
+  const candidatePul = normalizePvpsPulKey(candidate.enderecoPulmao) ?? "";
+  if (candidatePul !== currentPul) return candidatePul < currentPul;
+  return candidate.coddv < current.coddv;
+}
+
+function consolidatePvpsAuditRows(rows: PdfPvpsAuditRow[]): PdfPvpsAuditRow[] {
+  const grouped = new Map<string, PdfPvpsAuditRow>();
+
+  rows.forEach((row, index) => {
+    const dedupeKey = normalizePvpsPulKey(row.enderecoPulmao) ?? `__pvps_row__${index}`;
+    const current = grouped.get(dedupeKey);
+    if (!current || shouldReplacePvpsRepresentative(current, row)) {
+      grouped.set(dedupeKey, row);
+    }
+  });
+
+  return Array.from(grouped.values());
 }
 
 function reportSummaryLabel(value: number): string {
@@ -1833,6 +1872,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       const normalizedRows: PdfPvpsAuditRow[] = [];
       for (const row of pvpsRowsOnly) {
         const auditId = reportValue(row, "audit_id");
+        const rowDtHr = reportValue(row, "dt_hr");
         const sepSituacaoRaw = reportValue(row, "end_sit", "end_situacao").toLowerCase();
         const sepSituacao = sepSituacaoRaw === "vazio" || sepSituacaoRaw === "obstruido"
           ? (sepSituacaoRaw as PvpsEndSit)
@@ -1856,7 +1896,8 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             enderecoPulmao: "-",
             validadePulmao: "-",
             sitAud: sepSituacao ? "ocorrencia" : "pendente_pul",
-            ocorrenciaTipo: sepSituacao
+            ocorrenciaTipo: sepSituacao,
+            sortKey: rowDtHr
           });
           continue;
         }
@@ -1875,16 +1916,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
             sitAud: pulSituacao || sepSituacao
               ? "ocorrencia"
               : (pulItem.is_lower ? "nao_conforme" : "conforme"),
-            ocorrenciaTipo: pulSituacao ?? sepSituacao
+            ocorrenciaTipo: pulSituacao ?? sepSituacao,
+            sortKey: pulItem.dt_hr ?? rowDtHr
           });
         }
       }
 
+      const consolidatedRows = consolidatePvpsAuditRows(normalizedRows);
+
       sections.push({
         modulo: "pvps",
         title: "PVPS",
-        summary: summarizePdfRows(normalizedRows),
-        nonConformeRows: normalizedRows.filter((row) => row.sitAud === "nao_conforme")
+        summary: summarizePdfRows(consolidatedRows),
+        nonConformeRows: consolidatedRows.filter((row) => row.sitAud === "nao_conforme")
       });
     }
 
@@ -2450,7 +2494,16 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
           "DATA",
           "HORA"
         ];
-        const rowsAoA: string[][] = [];
+        const normalizedRows: Array<PdfPvpsAuditRow & {
+          cd: string;
+          modulo: string;
+          descricao: string;
+          zona: string;
+          auditorNom: string;
+          auditorMat: string;
+          data: string;
+          hora: string;
+        }> = [];
         for (const row of sourceRows) {
           const auditId = reportValue(row, "audit_id");
           const dtHr = reportValue(row, "dt_hr");
@@ -2466,23 +2519,27 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
               sepSituacao === "vazio" || sepSituacao === "obstruido"
                 ? "ocorrencia"
                 : "pendente_pul";
-            rowsAoA.push([
-              reportValue(row, "cd"),
-              reportValue(row, "modulo").toUpperCase(),
-              reportValue(row, "coddv"),
-              reportValue(row, "descricao"),
-              reportValue(row, "zona"),
-              endSep,
-              "",
-              sepSituacao,
-              valSep,
-              "",
+            normalizedRows.push({
+              cd: reportValue(row, "cd"),
+              modulo: reportValue(row, "modulo").toUpperCase(),
+              coddv: reportValue(row, "coddv"),
+              descricao: reportValue(row, "descricao"),
+              zona: reportValue(row, "zona"),
+              enderecoSeparacao: endSep,
+              enderecoPulmao: "",
+              situacaoEndereco: sepSituacao,
+              validadeSeparacao: valSep,
+              validadePulmao: "",
               sitAud,
-              reportValue(row, "auditor_nome", "auditor_nom"),
-              reportValue(row, "auditor_mat"),
+              ocorrenciaTipo: sepSituacao === "vazio" || sepSituacao === "obstruido"
+                ? sepSituacao
+                : null,
+              auditorNom: reportValue(row, "auditor_nome", "auditor_nom"),
+              auditorMat: reportValue(row, "auditor_mat"),
               data,
-              hora
-            ]);
+              hora,
+              sortKey: dtHr
+            });
             continue;
           }
           for (const pulItem of pulList) {
@@ -2493,25 +2550,48 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                 ? "ocorrencia"
                 : (valSepRank != null && pulRank != null && pulRank < valSepRank ? "nao_conforme" : "conforme");
             const pulDtHr = pulItem.dt_hr ?? dtHr;
-            rowsAoA.push([
-              reportValue(row, "cd"),
-              reportValue(row, "modulo").toUpperCase(),
-              reportValue(row, "coddv"),
-              reportValue(row, "descricao"),
-              reportValue(row, "zona"),
-              endSep,
-              pulItem.end_pul,
-              pulItem.end_sit ?? sepSituacao,
-              valSep,
-              pulItem.val_pul ?? "",
+            normalizedRows.push({
+              cd: reportValue(row, "cd"),
+              modulo: reportValue(row, "modulo").toUpperCase(),
+              coddv: reportValue(row, "coddv"),
+              descricao: reportValue(row, "descricao"),
+              zona: reportValue(row, "zona"),
+              enderecoSeparacao: endSep,
+              enderecoPulmao: pulItem.end_pul,
+              situacaoEndereco: pulItem.end_sit ?? sepSituacao,
+              validadeSeparacao: valSep,
+              validadePulmao: pulItem.val_pul ?? "",
               sitAud,
-              pulItem.auditor_nome ?? reportValue(row, "auditor_nome", "auditor_nom"),
-              pulItem.auditor_mat ?? reportValue(row, "auditor_mat"),
-              pulDtHr ? formatDate(pulDtHr) : "",
-              pulDtHr ? formatTime(pulDtHr) : ""
-            ]);
+              ocorrenciaTipo:
+                pulSituacao === "vazio" || pulSituacao === "obstruido"
+                  ? pulSituacao
+                  : (sepSituacao === "vazio" || sepSituacao === "obstruido" ? sepSituacao : null),
+              auditorNom: pulItem.auditor_nome ?? reportValue(row, "auditor_nome", "auditor_nom"),
+              auditorMat: pulItem.auditor_mat ?? reportValue(row, "auditor_mat"),
+              data: pulDtHr ? formatDate(pulDtHr) : "",
+              hora: pulDtHr ? formatTime(pulDtHr) : "",
+              sortKey: pulDtHr
+            });
           }
         }
+        const consolidatedRows = consolidatePvpsAuditRows(normalizedRows);
+        const rowsAoA = consolidatedRows.map((row) => [
+          row.cd,
+          row.modulo,
+          row.coddv,
+          row.descricao,
+          row.zona,
+          row.enderecoSeparacao,
+          row.enderecoPulmao,
+          row.situacaoEndereco,
+          row.validadeSeparacao,
+          row.validadePulmao,
+          row.sitAud,
+          row.auditorNom,
+          row.auditorMat,
+          row.data,
+          row.hora
+        ]);
         const worksheetPvps = XLSX.utils.aoa_to_sheet([headers, ...rowsAoA]);
         worksheetPvps["!cols"] = headers.map((header, columnIndex) => {
           let maxLen = header.length;
