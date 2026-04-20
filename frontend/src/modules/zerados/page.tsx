@@ -1473,8 +1473,8 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
         incluir_pul: adminIncluirPul
       });
       setAdminSummary(summary);
-      setAdminSuccessMsg("Dados inseridos com sucesso no fluxo por Código e Dígito.");
-      setMsg(`Código e Dígito (CODDV) manual aplicado. Itens no escopo: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
+      setAdminSuccessMsg("Dados inseridos com sucesso no fluxo por Código e Dígito, sem recarregar lista antiga.");
+      setMsg(`Código e Dígito (CODDV) manual aplicado ao lote atual. Itens no escopo: ${summary.itens_afetados}. Total atual: ${summary.total_geral}.`);
       await reloadManifestAfterAdminApply();
       await loadAdminZones();
     } catch (error) {
@@ -1499,6 +1499,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     setAdminConfirm({
       title: "Confirmar inserção por Código e Dígito (CODDV)",
       lines: [
+        "Apenas o lote digitado agora será adicionado à base atual.",
         `Tipo de estoque: ${adminStockTypeLabel ?? "Não informado"}`,
         `Ignorar auditados recentes: ${adminRecentAuditDaysValue > 0 ? `${adminRecentAuditDaysValue} dia(s)` : "Não"}`,
         `Zonas na prévia: ${adminPreviewRows.length}`,
