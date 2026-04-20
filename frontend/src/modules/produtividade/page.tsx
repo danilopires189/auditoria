@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { jsPDF } from "jspdf";
@@ -512,7 +512,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         })
       ]);
 
-      setActivityTotals(totals);
+      setActivityTotals([...totals].sort((a, b) => a.activity_label.localeCompare(b.activity_label, "pt-BR")));
       setDailyRows(daily);
       setEntries(entryRows);
     } catch (error) {
@@ -879,6 +879,19 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCd, viewMode, rankingMonth]);
 
+  const dateDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (viewMode !== "history" || !canLoadRange || loading) return;
+    if (dateDebounceRef.current) clearTimeout(dateDebounceRef.current);
+    dateDebounceRef.current = setTimeout(() => {
+      void loadModuleData(selectedUserId ?? profile.user_id);
+    }, 600);
+    return () => {
+      if (dateDebounceRef.current) clearTimeout(dateDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateStart, dateEnd]);
+
   const onSelectCollaborator = useCallback((targetUserId: string) => {
     if (targetUserId === selectedUserId) return;
     setSelectedUserId(targetUserId);
@@ -1114,6 +1127,9 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                       className="btn btn-primary produtividade-apply-btn"
                       onClick={() => void loadModuleData(selectedUserId ?? profile.user_id)}
                       disabled={!canLoadRange || busyRefresh || loading || loadingDetail}
+                      style={{ visibility: "hidden", pointerEvents: "none" }}
+                      aria-hidden="true"
+                      tabIndex={-1}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true" style={{width:15,height:15,stroke:"currentColor",fill:"none",strokeWidth:2.2,strokeLinecap:"round",strokeLinejoin:"round",flexShrink:0}}>
                         <polyline points="20 6 9 17 4 12" />
@@ -1266,6 +1282,10 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                             onClick={onClearActivityFilter}
                             disabled={activityFilter == null}
                           >
+                            <svg viewBox="0 0 24 24" aria-hidden="true" style={{width:13,height:13,stroke:"currentColor",fill:"none",strokeWidth:2.5,strokeLinecap:"round",strokeLinejoin:"round",flexShrink:0}}>
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
                             Limpar filtro
                           </button>
                         </div>
@@ -1282,6 +1302,11 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                   <strong>{entry.activity_label}</strong>
                                   <span>{formatMetricWithUnit(entry.metric_value, entry.unit_label)}</span>
                                 </div>
+                                {isAllCollaboratorsSelected ? (
+                                  <div className="produtividade-entry-collaborator">
+                                    <span>{entry.mat} {entry.nome}</span>
+                                  </div>
+                                ) : null}
                                 <p>{entry.detail || "-"}</p>
                                 <div className="produtividade-entry-meta">
                                   <span>Data: {formatDate(entry.event_date)}</span>

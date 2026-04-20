@@ -5555,6 +5555,13 @@ small {
   font-weight: 500;
 }
 
+.produtividade-entry-collaborator {
+  font-size: 0.78rem;
+  color: #5a7498;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
 .produtividade-entry-meta {
   display: flex;
   flex-wrap: wrap;

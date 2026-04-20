@@ -55,6 +55,8 @@ export interface ProdutividadeEntryRow {
   metric_value: number;
   detail: string;
   source_ref: string | null;
+  mat: string;
+  nome: string;
 }
 
 export interface ProdutividadeRankingRow {

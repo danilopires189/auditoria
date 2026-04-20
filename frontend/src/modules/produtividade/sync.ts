@@ -164,7 +164,9 @@ function mapEntryRow(raw: Record<string, unknown>): ProdutividadeEntryRow {
     unit_label: parseString(raw.unit_label),
     metric_value: parseNumber(raw.metric_value),
     detail: parseString(raw.detail),
-    source_ref: parseNullableString(raw.source_ref)
+    source_ref: parseNullableString(raw.source_ref),
+    mat: parseString(raw.mat),
+    nome: parseString(raw.nome)
   };
 }
 
