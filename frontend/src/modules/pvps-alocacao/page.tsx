@@ -49,6 +49,7 @@ import {
   loadOfflineSnapshot,
   removeOfflineEvent,
   removeOfflineAlocacaoEvent,
+  removeOfflinePulEventsBySep,
   saveOfflineAlocacaoEvent,
   saveOfflineSnapshot,
   savePvpsAlocPrefs,
@@ -3790,6 +3791,12 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     setErrorMessage(null);
     setStatusMessage(null);
     try {
+      await removeOfflinePulEventsBySep({
+        user_id: profile.user_id,
+        cd: activeCd,
+        coddv: row.coddv,
+        end_sep: row.end_sep
+      });
       await saveOfflineSepEvent({
         user_id: profile.user_id,
         cd: activeCd,
@@ -4231,6 +4238,14 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
       setErrorMessage(null);
       setStatusMessage(null);
       try {
+        if (hasOcorrencia) {
+          await removeOfflinePulEventsBySep({
+            user_id: profile.user_id,
+            cd: activeCd,
+            coddv: currentPvps.coddv,
+            end_sep: currentPvps.end_sep
+          });
+        }
         await saveOfflineSepEvent({
           user_id: profile.user_id,
           cd: activeCd,
@@ -4294,7 +4309,9 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         end_sit: endSit || null,
         val_sep: hasOcorrencia ? null : normalizedValSep
       });
-      const normalizedResultValSep = normalizeMmaa(result.val_sep ?? normalizedValSep);
+      const normalizedResultValSep = result.end_sit === "vazio" || result.end_sit === "obstruido"
+        ? null
+        : normalizeMmaa(result.val_sep ?? normalizedValSep);
       if (!(result.end_sit === "vazio" || result.end_sit === "obstruido")) {
         rememberSepConcludedAt(currentPvps.coddv, currentPvps.end_sep);
       }
@@ -4311,6 +4328,19 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
         end_sit: result.end_sit,
         val_sep: normalizedResultValSep
       });
+      if (result.end_sit === "vazio" || result.end_sit === "obstruido") {
+        await removeOfflinePulEventsBySep({
+          user_id: profile.user_id,
+          cd: activeCd,
+          coddv: currentPvps.coddv,
+          end_sep: currentPvps.end_sep
+        }).catch(() => {
+          // Limpeza local é best effort; a fonte de verdade será recarregada do servidor.
+        });
+        await refreshPendingState().catch(() => {
+          // Ignora falha transitória na contagem local; reload abaixo recompõe a tela.
+        });
+      }
       await loadCurrent();
       setEditingPvpsCompleted(null);
       if (!isEditingCompleted && tab === "ambos") {

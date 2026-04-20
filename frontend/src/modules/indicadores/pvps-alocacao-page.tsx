@@ -535,25 +535,51 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
     [zoneTotals]
   );
 
+  const activeMetrics = useMemo(() => {
+    if (!summary) return null;
+    if (showingMonthDetails) {
+      return {
+        enderecos_auditados: summary.enderecos_auditados,
+        conformes_elegiveis: summary.conformes_elegiveis,
+        nao_conformes: summary.nao_conformes,
+        percentual_conformidade: summary.percentual_conformidade,
+        percentual_erro: summary.percentual_erro,
+        media_sku_dia: summary.media_sku_dia,
+        erros_total: summary.erros_total,
+        baseLabel: `Base: mês ${selectedMonthLabel}`
+      };
+    }
+
+    return {
+      enderecos_auditados: selectedDaySeries?.enderecos_auditados ?? 0,
+      conformes_elegiveis: selectedDaySeries?.conformes_elegiveis ?? 0,
+      nao_conformes: selectedDaySeries?.nao_conformes ?? 0,
+      percentual_conformidade: selectedDaySeries?.percentual_conformidade ?? 0,
+      percentual_erro: selectedDaySeries?.percentual_erro ?? 0,
+      media_sku_dia: selectedDaySeries?.media_sku_dia ?? 0,
+      erros_total: selectedDaySeries?.erros_total ?? 0,
+      baseLabel: selectedDay ? `Base: ${formatDate(selectedDay)}` : `Base: mês ${selectedMonthLabel}`
+    };
+  }, [selectedDay, selectedDaySeries, selectedMonthLabel, showingMonthDetails, summary]);
+
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
-    if (!summary) return [];
-    const selectedDayErrors = formatInteger(selectedDaySeries?.nao_conformes ?? 0);
+    if (!activeMetrics) return [];
 
     const cards: MetricCardDefinition[] = [
-      { key: "percentual-conformidade", label: "% Conformidade", value: formatPercent(summary.percentual_conformidade, 2) },
-      { key: "enderecos-conforme", label: "End. Conforme", value: formatInteger(summary.conformes_elegiveis) },
-      { key: "enderecos-auditado", label: eligibleAuditLabel(selectedType), value: formatInteger(summary.enderecos_auditados) },
-      { key: "percentual-nao-conforme", label: "% Não Conforme", value: formatPercent(summary.percentual_erro, 2), accent: "danger" },
-      { key: "enderecos-nao-conforme", label: "End. Não Conforme", value: formatInteger(summary.nao_conformes), accent: "danger" },
-      { key: "media-sku-dia", label: "Média Sku Dia", value: formatInteger(summary.media_sku_dia) }
+      { key: "percentual-conformidade", label: "% Conformidade", value: formatPercent(activeMetrics.percentual_conformidade, 2) },
+      { key: "enderecos-conforme", label: "End. Conforme", value: formatInteger(activeMetrics.conformes_elegiveis) },
+      { key: "enderecos-auditado", label: eligibleAuditLabel(selectedType), value: formatInteger(activeMetrics.enderecos_auditados) },
+      { key: "percentual-nao-conforme", label: "% Não Conforme", value: formatPercent(activeMetrics.percentual_erro, 2), accent: "danger" },
+      { key: "enderecos-nao-conforme", label: "End. Não Conforme", value: formatInteger(activeMetrics.nao_conformes), accent: "danger" },
+      { key: "media-sku-dia", label: "Média Sku Dia", value: formatInteger(activeMetrics.media_sku_dia) }
     ];
 
     if (!showingMonthDetails) {
-      cards.push({ key: "erros-dia", label: "Erros do dia", value: selectedDayErrors, accent: "danger" });
+      cards.push({ key: "erros-dia", label: "Erros do dia", value: formatInteger(activeMetrics.erros_total), accent: "danger" });
     }
 
     return cards;
-  }, [selectedDaySeries, selectedType, showingMonthDetails, summary]);
+  }, [activeMetrics, selectedType, showingMonthDetails]);
 
   return (
     <>
@@ -589,60 +615,64 @@ export default function IndicadoresPvpsAlocacaoPage({ isOnline, profile }: Indic
         <article className="module-screen surface-enter indicadores-screen indicadores-screen-blitz">
           <div className="module-screen-header">
             <div className="module-screen-title-row">
-              <div className="module-screen-title indicadores-title-stack">
+              <div className="module-screen-title indicadores-title-stack indicadores-title-stack-pvps-aloc">
                 <img className="indicadores-screen-logo" src={pmImage} alt="PM" />
-                <div>
-                  <h2>Dashboard PVPS e Alocação</h2>
-                  <span className="module-status">
-                    {displayCdName} · {formatTipoLabel(selectedType)} · mês {selectedMonthLabel} · atualizado em {formatDateTime(summary?.updated_at ?? null)}
-                  </span>
+                <div className="indicadores-title-content-pvps-aloc">
+                  <div>
+                    <h2>Dashboard PVPS e Alocação</h2>
+                    <span className="module-status">
+                      {displayCdName} · {formatTipoLabel(selectedType)} · mês {selectedMonthLabel} · atualizado em {formatDateTime(summary?.updated_at ?? null)}
+                    </span>
+                  </div>
+                  <div className="indicadores-filters indicadores-filters-pvps-aloc">
+                    <label>
+                      <span>Mês/Ano</span>
+                      <select
+                        value={selectedMonthStart}
+                        onChange={(event) => setSelectedMonthStart(event.target.value)}
+                        disabled={loadingMonths || monthOptions.length === 0}
+                      >
+                        {monthOptions.length === 0 ? <option value="">Sem meses</option> : null}
+                        {monthOptions.map((option) => (
+                          <option key={option.month_start} value={option.month_start}>
+                            {option.month_label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Data</span>
+                      <select
+                        value={selectedDay}
+                        onChange={(event) => setSelectedDay(event.target.value)}
+                        disabled={!summary || dayOptions.length === 0}
+                      >
+                        {dayOptions.length === 0 ? <option value="">Sem datas</option> : null}
+                        {dayOptions.length > 0 ? <option value={ALL_DAYS_VALUE}>Todos</option> : null}
+                        {dayOptions.map((day) => (
+                          <option key={day} value={day}>
+                            {formatDate(day)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Tipo</span>
+                      <select value={selectedType} onChange={(event) => setSelectedType(event.target.value as IndicadoresPvpsAlocTipo)}>
+                        <option value="ambos">Ambos</option>
+                        <option value="pvps">PVPS</option>
+                        <option value="alocacao">Alocação</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
-              </div>
-              <div className="indicadores-filters">
-                <label>
-                  <span>Mês/Ano</span>
-                  <select
-                    value={selectedMonthStart}
-                    onChange={(event) => setSelectedMonthStart(event.target.value)}
-                    disabled={loadingMonths || monthOptions.length === 0}
-                  >
-                    {monthOptions.length === 0 ? <option value="">Sem meses</option> : null}
-                    {monthOptions.map((option) => (
-                      <option key={option.month_start} value={option.month_start}>
-                        {option.month_label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>Data</span>
-                  <select
-                    value={selectedDay}
-                    onChange={(event) => setSelectedDay(event.target.value)}
-                    disabled={!summary || dayOptions.length === 0}
-                  >
-                    {dayOptions.length === 0 ? <option value="">Sem datas</option> : null}
-                    {dayOptions.length > 0 ? <option value={ALL_DAYS_VALUE}>Todos</option> : null}
-                    {dayOptions.map((day) => (
-                      <option key={day} value={day}>
-                        {formatDate(day)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>Tipo</span>
-                  <select value={selectedType} onChange={(event) => setSelectedType(event.target.value as IndicadoresPvpsAlocTipo)}>
-                    <option value="ambos">Ambos</option>
-                    <option value="pvps">PVPS</option>
-                    <option value="alocacao">Alocação</option>
-                  </select>
-                </label>
               </div>
             </div>
           </div>
 
           {errorMessage ? <div className="indicadores-feedback is-error">{errorMessage}</div> : null}
+
+          {activeMetrics ? <div className="indicadores-metrics-context">{activeMetrics.baseLabel}</div> : null}
 
           <div className="indicadores-metrics-grid indicadores-metrics-grid-pvps-aloc">
             {metricCards.map((card) => (

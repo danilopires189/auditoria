@@ -86,6 +86,15 @@ function normalizeAddress(value: string | null | undefined): string {
   return String(value ?? "").trim().toUpperCase();
 }
 
+function normalizeEndSit(value: string | null | undefined): PvpsEndSit | null {
+  return value === "vazio" || value === "obstruido" ? value : null;
+}
+
+function normalizeOfflineValue(value: string | null | undefined): string | null {
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized : null;
+}
+
 function normalizePrefs(value: Partial<PvpsAlocOfflinePreferences> | null | undefined): PvpsAlocOfflinePreferences {
   return {
     prefer_offline_mode: Boolean(value?.prefer_offline_mode)
@@ -288,6 +297,10 @@ export async function queueOfflineEvent(input: {
   const endSep = normalizeAddress(input.end_sep);
   const endPul = normalizeAddress(input.end_pul);
   const queueId = String(input.queue_id ?? "").trim();
+  const endSit = normalizeEndSit(input.end_sit);
+  const valSep = input.kind === "sep" && !endSit ? normalizeOfflineValue(input.val_sep) : null;
+  const valPul = input.kind === "pul" && !endSit ? normalizeOfflineValue(input.val_pul) : null;
+  const valConf = input.kind === "alocacao" && !endSit ? normalizeOfflineValue(input.val_conf) : null;
 
   const eventId = input.kind === "sep"
     ? sepEventKey(input.user_id, cd, coddv, endSep)
@@ -310,10 +323,10 @@ export async function queueOfflineEvent(input: {
     end_sep: endSep || null,
     end_pul: endPul || null,
     queue_id: queueId || null,
-    end_sit: input.end_sit ?? null,
-    val_sep: input.val_sep ?? null,
-    val_pul: input.val_pul ?? null,
-    val_conf: input.val_conf ?? null,
+    end_sit: endSit,
+    val_sep: valSep,
+    val_pul: valPul,
+    val_conf: valConf,
     audit_id: input.audit_id ?? null,
     created_at: nowIso,
     updated_at: nowIso
@@ -383,6 +396,32 @@ export async function removeOfflineEvent(eventId: string): Promise<void> {
   const tx = db.transaction(STORE_EVENTS, "readwrite");
   tx.objectStore(STORE_EVENTS).delete(eventId);
   await transactionDone(tx);
+}
+
+export async function removeOfflinePulEventsBySep(params: {
+  user_id: string;
+  cd: number;
+  coddv: number;
+  end_sep: string;
+}): Promise<number> {
+  const db = await getDb();
+  const tx = db.transaction(STORE_EVENTS, "readwrite");
+  const index = tx.objectStore(STORE_EVENTS).index(INDEX_EVENTS_BY_USER_CD);
+  const raw = await requestToPromise(index.getAll(IDBKeyRange.only([params.user_id, toCd(params.cd)])));
+  const rows = (raw as EventsStoreRow[] | undefined) ?? [];
+  const normalizedEndSep = normalizeAddress(params.end_sep);
+  let removed = 0;
+
+  for (const row of rows) {
+    if (row.kind !== "pul") continue;
+    if (row.coddv !== toCd(params.coddv)) continue;
+    if (normalizeAddress(row.end_sep) !== normalizedEndSep) continue;
+    tx.objectStore(STORE_EVENTS).delete(row.event_id);
+    removed += 1;
+  }
+
+  await transactionDone(tx);
+  return removed;
 }
 
 export async function saveOfflineSepEvent(params: {
@@ -461,14 +500,15 @@ export async function upsertOfflineSepCache(params: {
   end_sit?: PvpsEndSit | null;
   val_sep?: string | null;
 }): Promise<PvpsOfflineSepCacheRow> {
+  const endSit = normalizeEndSit(params.end_sit);
   const row: PvpsOfflineSepCacheRow = {
     key: sepCacheKey(params.user_id, params.cd, params.coddv, params.end_sep),
     user_id: params.user_id,
     cd: toCd(params.cd),
     coddv: toCd(params.coddv),
     end_sep: normalizeAddress(params.end_sep),
-    end_sit: params.end_sit ?? null,
-    val_sep: params.val_sep ?? null,
+    end_sit: endSit,
+    val_sep: endSit ? null : normalizeOfflineValue(params.val_sep),
     saved_at: new Date().toISOString()
   };
 

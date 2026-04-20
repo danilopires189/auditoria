@@ -11748,11 +11748,33 @@ small {
   gap: 4px;
 }
 
+.indicadores-title-stack-pvps-aloc {
+  align-items: flex-start;
+  width: 100%;
+}
+
+.indicadores-title-content-pvps-aloc {
+  display: grid;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .indicadores-filters {
   display: flex;
   align-items: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.indicadores-filters-pvps-aloc {
+  width: 100%;
+}
+
+.indicadores-filters-pvps-aloc label {
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 220px;
 }
 
 .indicadores-filters label {
@@ -11782,6 +11804,13 @@ small {
   color: #163d72;
   font: inherit;
   padding: 0 12px;
+}
+
+.indicadores-metrics-context {
+  color: #5a6f94;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin: -2px 0 4px;
 }
 
 .gestao-estq-report-export-trigger {
@@ -12726,6 +12755,10 @@ small {
 
   .indicadores-filters {
     width: 100%;
+  }
+
+  .indicadores-filters-pvps-aloc label {
+    max-width: none;
   }
 
   .indicadores-filters label {
