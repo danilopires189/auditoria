@@ -59,6 +59,7 @@ type RankingMetricConfig = {
 
 const MODULE_DEF = getModuleByKeyOrThrow("produtividade");
 let reportLogoDataUrlPromise: Promise<string | null> | null = null;
+const ALL_COLLABORATORS_VALUE = "__all__";
 
 const RANKING_METRICS: RankingMetricConfig[] = [
   { label: "PVPs", pdfLabel: "PVPs", pointsKey: "pvps_pontos", qtyKey: "pvps_qtd", singular: "end", plural: "ends" },
@@ -392,16 +393,22 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   const [activityFilter, setActivityFilter] = useState<string | null>(null);
   const [expandedDailyDates, setExpandedDailyDates] = useState<Set<string>>(new Set());
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const isAllCollaboratorsSelected = selectedUserId === ALL_COLLABORATORS_VALUE;
 
   const selectedCollaborator = useMemo(
     () => collaborators.find((row) => row.user_id === selectedUserId) ?? null,
     [collaborators, selectedUserId]
   );
+  const sortedCollaborators = useMemo(() => {
+    return [...collaborators].sort((left, right) => (
+      left.nome.localeCompare(right.nome, "pt-BR", { sensitivity: "base" }) || left.mat.localeCompare(right.mat, "pt-BR")
+    ));
+  }, [collaborators]);
   const filteredCollaborators = useMemo(() => {
     const query = collaboratorSearch.trim().toLocaleLowerCase("pt-BR");
-    if (!query) return collaborators;
-    return collaborators.filter((row) => `${row.nome} ${row.mat}`.toLocaleLowerCase("pt-BR").includes(query));
-  }, [collaboratorSearch, collaborators]);
+    if (!query) return sortedCollaborators;
+    return sortedCollaborators.filter((row) => `${row.nome} ${row.mat}`.toLocaleLowerCase("pt-BR").includes(query));
+  }, [collaboratorSearch, sortedCollaborators]);
   const moduleTotals = useMemo(() => {
     return collaborators.reduce(
       (acc, row) => {
@@ -454,13 +461,13 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   }, []);
 
   const loadEntriesOnly = useCallback(async (targetUserId: string | null, nextActivityKey: string | null) => {
-    if (activeCd == null || targetUserId == null) {
+    if (activeCd == null) {
       setEntries([]);
       return;
     }
     const rows = await fetchProdutividadeEntries({
       cd: activeCd,
-      targetUserId,
+      targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
       dtIni: dateStart,
       dtFim: dateEnd,
       activityKey: nextActivityKey,
@@ -470,7 +477,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   }, [activeCd, dateEnd, dateStart]);
 
   const loadUserPanels = useCallback(async (targetUserId: string | null, nextActivityKey: string | null) => {
-    if (activeCd == null || targetUserId == null) {
+    if (activeCd == null) {
       setActivityTotals([]);
       setDailyRows([]);
       setEntries([]);
@@ -485,19 +492,19 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       const [totals, daily, entryRows] = await Promise.all([
         fetchProdutividadeActivityTotals({
           cd: activeCd,
-          targetUserId,
+          targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
           dtIni: dateStart,
           dtFim: dateEnd
         }),
         fetchProdutividadeDaily({
           cd: activeCd,
-          targetUserId,
+          targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
           dtIni: dateStart,
           dtFim: dateEnd
         }),
         fetchProdutividadeEntries({
           cd: activeCd,
-          targetUserId,
+          targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
           dtIni: dateStart,
           dtFim: dateEnd,
           activityKey: nextActivityKey,
@@ -552,11 +559,11 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       const preferred = preferredUserId ?? selectedUserId ?? profile.user_id;
       let nextSelectedUserId: string | null = preferred;
       if (collaboratorRows.length > 0) {
-        if (!nextSelectedUserId || !collaboratorRows.some((row) => row.user_id === nextSelectedUserId)) {
+        if (nextSelectedUserId !== ALL_COLLABORATORS_VALUE && (!nextSelectedUserId || !collaboratorRows.some((row) => row.user_id === nextSelectedUserId))) {
           nextSelectedUserId = collaboratorRows[0].user_id;
         }
       } else {
-        nextSelectedUserId = profile.user_id;
+        nextSelectedUserId = ALL_COLLABORATORS_VALUE;
       }
 
       setVisibility(visibilityRow);
@@ -1148,13 +1155,16 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                           const uid = e.target.value;
                           if (uid) onSelectCollaborator(uid);
                         }}
-                        disabled={collaborators.length === 0}
+                        disabled={sortedCollaborators.length === 0}
                       >
-                        {collaborators.length === 0
+                        {sortedCollaborators.length === 0
                           ? <option value="">Sem colaboradores</option>
-                          : collaborators.map((c) => (
-                            <option key={c.user_id} value={c.user_id}>{c.nome}</option>
-                          ))
+                          : [
+                            <option key={ALL_COLLABORATORS_VALUE} value={ALL_COLLABORATORS_VALUE}>Todos colaboradores</option>,
+                            ...sortedCollaborators.map((c) => (
+                              <option key={c.user_id} value={c.user_id}>{c.nome}</option>
+                            ))
+                          ]
                         }
                       </select>
                     </label>
@@ -1162,13 +1172,16 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                 </section>
 
                 <section className="produtividade-detail">
-                    {selectedCollaborator ? (
+                    {selectedCollaborator || isAllCollaboratorsSelected ? (
                       <div className="produtividade-summary-strip">
-                        <span><strong>{selectedCollaborator.nome}</strong> · Mat. {selectedCollaborator.mat}</span>
-                        <span>{formatCountLabel(selectedCollaborator.registros_count, "registro", "registros")}</span>
-                        <span>{formatCountLabel(selectedCollaborator.dias_ativos, "dia ativo", "dias ativos")}</span>
-                        <span>{formatCountLabel(selectedCollaborator.atividades_count, "atividade", "atividades")}</span>
-                        <span>Bruto: {formatMetric(selectedCollaborator.valor_total, "")}</span>
+                        <span>
+                          <strong>{isAllCollaboratorsSelected ? "Todos colaboradores" : selectedCollaborator?.nome}</strong>
+                          {isAllCollaboratorsSelected ? "" : ` · Mat. ${selectedCollaborator?.mat ?? "-"}`}
+                        </span>
+                        <span>{formatCountLabel(isAllCollaboratorsSelected ? moduleTotals.registros : selectedCollaborator?.registros_count ?? 0, "registro", "registros")}</span>
+                        <span>{formatCountLabel(isAllCollaboratorsSelected ? collaborators.length : selectedCollaborator?.dias_ativos ?? 0, isAllCollaboratorsSelected ? "colaborador" : "dia ativo", isAllCollaboratorsSelected ? "colaboradores" : "dias ativos")}</span>
+                        <span>{formatCountLabel(isAllCollaboratorsSelected ? activityTotals.filter((row) => row.registros_count > 0).length : selectedCollaborator?.atividades_count ?? 0, "atividade", "atividades")}</span>
+                        <span>Bruto: {formatMetric(isAllCollaboratorsSelected ? moduleTotals.valorTotal : selectedCollaborator?.valor_total ?? 0, "")}</span>
                       </div>
                     ) : null}
 
@@ -1177,7 +1190,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                         <div className="produtividade-panel produtividade-activity-block">
                           <h4>Atividades principais</h4>
                           {activityTotals.length === 0 ? (
-                            <div className="coleta-empty">Sem atividades para o colaborador selecionado.</div>
+                            <div className="coleta-empty">Sem atividades para a seleção atual.</div>
                           ) : (
                             <div className="produtividade-activity-grid">
                               {activityTotals.map((row) => (
