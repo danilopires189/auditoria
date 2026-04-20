@@ -414,10 +414,10 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
       ? (summary.monthly_projection / summary.total_target) * 100
       : null;
     return [
+      { label: "Meta do mês", value: formatHeaderMetricValue(summary.total_target, valueMode) },
       { label: "Meta por dia", value: summary.daily_target_value == null ? "-" : formatHeaderMetricValue(summary.daily_target_value, valueMode) },
       { label: "Dias úteis no mês", value: String(summary.month_workdays) },
       { label: "Total do mês", value: formatHeaderMetricValue(summary.total_actual, valueMode) },
-      { label: "Meta do mês", value: formatHeaderMetricValue(summary.total_target, valueMode) },
       {
         label: "% de atingimento",
         value: formatPercent(summary.achievement_percent),
