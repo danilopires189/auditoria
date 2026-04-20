@@ -30,6 +30,8 @@ interface MetricCardDefinition {
   label: string;
   value: string;
   accent?: "success" | "danger" | "warning" | "neutral";
+  projectionPercentLabel?: string;
+  projectionPercentTone?: "below-target" | "on-target" | "above-target";
 }
 
 const MODULE_DEF = getModuleByKeyOrThrow("meta-mes");
@@ -130,6 +132,12 @@ function formatPercent(value: number | null): string {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1
   }).format(value)}%`;
+}
+
+function resolveProjectionPercentTone(value: number): "below-target" | "on-target" | "above-target" {
+  if (value >= 120) return "above-target";
+  if (value >= 100) return "on-target";
+  return "below-target";
 }
 
 function formatBalance(value: number, mode: MetaMesValueMode): string {
@@ -402,6 +410,9 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
 
   const metricCards = useMemo<MetricCardDefinition[]>(() => {
     if (!summary) return [];
+    const projectionPercent = summary.total_target > 0
+      ? (summary.monthly_projection / summary.total_target) * 100
+      : null;
     return [
       { label: "Meta por dia", value: summary.daily_target_value == null ? "-" : formatHeaderMetricValue(summary.daily_target_value, valueMode) },
       { label: "Dias úteis no mês", value: String(summary.month_workdays) },
@@ -413,7 +424,13 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
         accent: summary.achievement_percent != null && summary.achievement_percent >= 100 ? "success" : "danger"
       },
       { label: "Média dia", value: formatHeaderMetricValue(summary.daily_average, valueMode) },
-      { label: "Projeção mensal", value: formatHeaderMetricValue(summary.monthly_projection, valueMode), accent: "neutral" },
+      {
+        label: "Projeção mensal",
+        value: formatHeaderMetricValue(summary.monthly_projection, valueMode),
+        accent: "neutral",
+        projectionPercentLabel: projectionPercent != null ? formatPercent(projectionPercent) : undefined,
+        projectionPercentTone: projectionPercent != null ? resolveProjectionPercentTone(projectionPercent) : undefined
+      },
       { label: "Dias atingidos", value: String(summary.days_hit), accent: summary.days_hit > 0 ? "success" : "neutral" }
     ];
   }, [summary, valueMode]);
@@ -635,8 +652,20 @@ export default function MetaMesPage({ isOnline, profile }: MetaMesPageProps) {
 
           <div className="indicadores-metrics-grid meta-mes-metrics-grid">
             {metricCards.map((card) => (
-              <article key={card.label} className={`indicadores-metric-card meta-mes-metric-card ${card.accent ? `accent-${card.accent}` : ""}`}>
-                <span>{card.label}</span>
+              <article
+                key={card.label}
+                className={`indicadores-metric-card meta-mes-metric-card ${card.accent ? `accent-${card.accent}` : ""}${card.projectionPercentTone ? ` is-projection is-${card.projectionPercentTone}` : ""}`}
+              >
+                {card.projectionPercentLabel && card.projectionPercentTone ? (
+                  <div className="meta-mes-metric-heading">
+                    <span>{card.label}</span>
+                    <small className={`meta-mes-metric-projection-badge is-${card.projectionPercentTone}`}>
+                      {card.projectionPercentLabel}
+                    </small>
+                  </div>
+                ) : (
+                  <span>{card.label}</span>
+                )}
                 <strong>{card.value}</strong>
               </article>
             ))}

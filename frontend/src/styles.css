@@ -13726,6 +13726,77 @@ small {
   overflow-wrap: anywhere;
 }
 
+.meta-mes-metric-card.is-projection {
+  align-content: start;
+}
+
+.meta-mes-metric-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.meta-mes-metric-heading span {
+  min-width: 0;
+}
+
+.meta-mes-metric-heading .meta-mes-metric-projection-badge {
+  flex: 0 0 auto;
+}
+
+.meta-mes-metric-card.is-projection strong {
+  display: block;
+  max-width: 100%;
+}
+
+.meta-mes-metric-card.is-projection strong {
+  color: #0f2f62;
+  font-size: clamp(1.4rem, 1.1rem + 1vw, 2.08rem);
+  line-height: 1.05;
+}
+
+.meta-mes-metric-card.is-projection .meta-mes-metric-projection-badge {
+  font-size: 0.56rem;
+}
+
+.meta-mes-metric-card.is-projection {
+  gap: 10px;
+}
+
+.meta-mes-metric-card.is-projection .meta-mes-metric-heading {
+  align-items: flex-start;
+}
+
+.meta-mes-metric-projection-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.7em;
+  padding: 0.2em 0.6em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.meta-mes-metric-projection-badge.is-below-target {
+  color: #b33131;
+  background: rgba(255, 234, 234, 0.96);
+}
+
+.meta-mes-metric-projection-badge.is-on-target {
+  color: #1f7a39;
+  background: rgba(234, 249, 238, 0.96);
+}
+
+.meta-mes-metric-projection-badge.is-above-target {
+  color: #1f59c7;
+  background: rgba(234, 242, 255, 0.96);
+}
+
 .meta-mes-metric-card.accent-success {
   border-color: #bdd9c0;
   background: linear-gradient(160deg, #f4fbf4, #ffffff 86%);
