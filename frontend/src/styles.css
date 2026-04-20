@@ -12884,6 +12884,8 @@ small {
     min-height: 540px;
     height: 540px;
     max-height: 540px;
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .gestao-estq-panel-reentry {
@@ -12892,6 +12894,8 @@ small {
     max-height: 540px;
     grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .gestao-estq-panel-reentry > :last-child {
@@ -12899,6 +12903,12 @@ small {
     height: 100%;
     overflow: hidden;
     display: grid;
+  }
+
+  .gestao-estq-panel-zone-values {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 360px;
   }
 
   .gestao-estq-panel-top {
@@ -12918,6 +12928,30 @@ small {
   .gestao-estq-chart-shell .indicadores-chart-scroll {
     align-self: stretch;
     padding-bottom: 6px;
+  }
+
+  .gestao-estq-zone-chart .indicadores-zone-scroll {
+    align-items: flex-end;
+  }
+
+  .gestao-estq-zone-column {
+    min-width: 96px;
+  }
+
+  .gestao-estq-zone-value {
+    max-width: 88px;
+    font-size: 0.76rem;
+    line-height: 1.2;
+    text-align: center;
+    color: #4f647f;
+  }
+
+  .gestao-estq-zone-segment.is-entry {
+    background: linear-gradient(180deg, rgba(31, 120, 209, 0.92), rgba(31, 120, 209, 0.68));
+  }
+
+  .gestao-estq-zone-segment.is-exit {
+    background: linear-gradient(180deg, rgba(199, 57, 83, 0.92), rgba(199, 57, 83, 0.68));
   }
 
   .gestao-estq-chart-entry {
@@ -13249,6 +13283,13 @@ small {
       grid-template-columns: 1fr;
     }
 
+    .gestao-estq-panel-chart,
+    .gestao-estq-panel-reentry,
+    .gestao-estq-panel-zone-values {
+      grid-column: auto;
+      grid-row: auto;
+    }
+
     .gestao-estq-panel-reentry {
       min-height: 0;
       height: auto;
@@ -13257,6 +13298,7 @@ small {
   }
 
 @media (max-width: 720px) {
+  .gestao-estq-panel-zone-values,
   .gestao-estq-panel-reentry,
   .gestao-estq-panel-top,
   .gestao-estq-panel-loss,

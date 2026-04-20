@@ -22,6 +22,7 @@ import {
   fetchIndicadoresGestaoEstoqueReportTopItems,
   fetchIndicadoresGestaoEstoqueSummary,
   fetchIndicadoresGestaoEstoqueTopItems,
+  fetchIndicadoresGestaoEstoqueZoneValues,
   fetchIndicadoresGestaoEstoqueYearReentryItems
 } from "./gestao-estoque-sync";
 import type {
@@ -35,7 +36,8 @@ import type {
   IndicadoresGestaoEstoqueMovementFilter,
   IndicadoresGestaoEstoqueReentryItem,
   IndicadoresGestaoEstoqueSummary,
-  IndicadoresGestaoEstoqueTopItem
+  IndicadoresGestaoEstoqueTopItem,
+  IndicadoresGestaoEstoqueZoneValueRow
 } from "./gestao-estoque-types";
 
 interface IndicadoresGestaoEstoquePageProps {
@@ -52,7 +54,7 @@ interface MetricCardDefinition {
   valueTone?: "default" | "entry" | "exit";
 }
 
-type MobileAccordionSection = "reentry" | "topEntradas" | "topSaidas" | "supplierLoss" | "categoryLoss" | "details";
+type MobileAccordionSection = "zoneValues" | "reentry" | "topEntradas" | "topSaidas" | "supplierLoss" | "categoryLoss" | "details";
 type InventarioStockTypeValue = IndicadoresGestaoEstoqueInventarioStockType | "";
 
 interface MobileAccordionControl {
@@ -450,6 +452,68 @@ function TopList({
   );
 }
 
+function formatCompactCurrency(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return `R$ ${new Intl.NumberFormat("pt-BR", {
+    notation: "compact",
+    minimumFractionDigits: Math.abs(safe) >= 1000 ? 1 : 0,
+    maximumFractionDigits: 1
+  }).format(safe)}`;
+}
+
+function ZoneValueChart({
+  rows,
+  movementFilter
+}: {
+  rows: IndicadoresGestaoEstoqueZoneValueRow[];
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="indicadores-empty-box">
+        <p>Nenhuma movimentação por zona encontrada para o filtro selecionado.</p>
+      </div>
+    );
+  }
+
+  const maxTotal = Math.max(1, ...rows.map((row) => row.valor_total));
+
+  return (
+    <div className="indicadores-zone-chart gestao-estq-zone-chart">
+      <div className="indicadores-zone-scroll">
+        {rows.map((row) => {
+          const entradaHeight = (row.entrada_total / maxTotal) * 180;
+          const saidaHeight = (row.saida_total / maxTotal) * 180;
+          const valueTitle =
+            movementFilter === "entrada"
+              ? `${row.zona}: Entrada ${formatCurrency(row.entrada_total)}`
+              : movementFilter === "saida"
+                ? `${row.zona}: Saída ${formatCurrency(row.saida_total)}`
+                : `${row.zona}: Entrada ${formatCurrency(row.entrada_total)} · Saída ${formatCurrency(row.saida_total)} · Total ${formatCurrency(row.valor_total)}`;
+          return (
+            <div key={row.zona} className="indicadores-zone-column gestao-estq-zone-column">
+              <div className="indicadores-zone-stack" title={valueTitle}>
+                {(movementFilter === "todas" || movementFilter === "saida") && saidaHeight > 0 ? (
+                  <div className="indicadores-zone-segment gestao-estq-zone-segment is-exit" style={{ height: `${saidaHeight}px` }} />
+                ) : null}
+                {(movementFilter === "todas" || movementFilter === "entrada") && entradaHeight > 0 ? (
+                  <div className="indicadores-zone-segment gestao-estq-zone-segment is-entry" style={{ height: `${entradaHeight}px` }} />
+                ) : null}
+              </div>
+              <strong>{row.zona}</strong>
+              <span className="gestao-estq-zone-value">{formatCompactCurrency(row.valor_total)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="indicadores-chart-legend">
+        {movementFilter !== "saida" ? <span><i className="gestao-estq-legend-entry" /> Entrada</span> : null}
+        {movementFilter !== "entrada" ? <span><i className="gestao-estq-legend-exit" /> Saída</span> : null}
+      </div>
+    </div>
+  );
+}
+
 function LossDimensionList({
   title,
   subtitle,
@@ -505,6 +569,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
   const [summary, setSummary] = useState<IndicadoresGestaoEstoqueSummary | null>(null);
   const [dailySeries, setDailySeries] = useState<IndicadoresGestaoEstoqueDailyRow[]>([]);
+  const [zoneValueRows, setZoneValueRows] = useState<IndicadoresGestaoEstoqueZoneValueRow[]>([]);
   const [topEntradas, setTopEntradas] = useState<IndicadoresGestaoEstoqueTopItem[]>([]);
   const [topSaidas, setTopSaidas] = useState<IndicadoresGestaoEstoqueTopItem[]>([]);
   const [detailRows, setDetailRows] = useState<IndicadoresGestaoEstoqueDetailRow[]>([]);
@@ -514,10 +579,12 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
   const [loadingMonths, setLoadingMonths] = useState(true);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
+  const [loadingZoneValues, setLoadingZoneValues] = useState(false);
   const [loadingTopLists, setLoadingTopLists] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null);
+  const [zoneValuesErrorMessage, setZoneValuesErrorMessage] = useState<string | null>(null);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportErrorMessage, setReportErrorMessage] = useState<string | null>(null);
@@ -608,6 +675,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     if (!selectedMonthStart) {
       setSummary(null);
       setDailySeries([]);
+      setZoneValueRows([]);
       setTopEntradas([]);
       setTopSaidas([]);
       setReentryRows([]);
@@ -647,6 +715,42 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       cancelled = true;
     };
   }, [activeCd, movementFilter, selectedMonthStart]);
+
+  useEffect(() => {
+    if (!selectedMonthStart) {
+      setZoneValueRows([]);
+      setZoneValuesErrorMessage(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadZoneValues() {
+      setLoadingZoneValues(true);
+      setZoneValuesErrorMessage(null);
+      try {
+        const rows = await fetchIndicadoresGestaoEstoqueZoneValues(
+          activeCd,
+          selectedMonthStart,
+          selectedDay === ALL_DAYS_VALUE ? null : selectedDay,
+          movementFilter
+        );
+        if (!cancelled) setZoneValueRows(rows);
+      } catch (error) {
+        if (!cancelled) {
+          setZoneValueRows([]);
+          setZoneValuesErrorMessage(asErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) setLoadingZoneValues(false);
+      }
+    }
+
+    void loadZoneValues();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
 
   useEffect(() => {
     if (!selectedMonthStart) {
@@ -1465,6 +1569,31 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
               ) : (
                 <DailyChart rows={dailySeries} />
               )}
+            </section>
+
+            <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-zone-values">
+              <PanelHead
+                title="Valor de movimentação por zona"
+                subtitle={
+                  loadingZoneValues
+                    ? "Atualizando zonas..."
+                    : selectedDay === ALL_DAYS_VALUE
+                      ? "Acumulado do mês no filtro ativo."
+                      : `Data ${formatDate(selectedDay)}`
+                }
+                mobileAccordion={mobileAccordionControl("zoneValues", "gestao-estq-zone-values-body")}
+              />
+              {!isMobileAccordion || expandedMobileSection === "zoneValues" ? (
+                <div id="gestao-estq-zone-values-body">
+                  {zoneValuesErrorMessage ? (
+                    <div className="indicadores-empty-box"><p>{zoneValuesErrorMessage}</p></div>
+                  ) : loadingZoneValues ? (
+                    <div className="indicadores-empty-box"><p>Carregando movimentações por zona...</p></div>
+                  ) : (
+                    <ZoneValueChart rows={zoneValueRows} movementFilter={movementFilter} />
+                  )}
+                </div>
+              ) : null}
             </section>
 
             <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-reentry">

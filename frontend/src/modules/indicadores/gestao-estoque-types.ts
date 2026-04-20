@@ -30,6 +30,13 @@ export interface IndicadoresGestaoEstoqueDailyRow {
   perda_total: number;
 }
 
+export interface IndicadoresGestaoEstoqueZoneValueRow {
+  zona: string;
+  entrada_total: number;
+  saida_total: number;
+  valor_total: number;
+}
+
 export interface IndicadoresGestaoEstoqueTopItem {
   coddv: number;
   descricao: string;
