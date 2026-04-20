@@ -2,6 +2,15 @@ export type ControleAvariasSyncStatus = "pending_insert" | "pending_update" | "p
 
 export type ControleAvariasMotivo = string;
 export type ControleAvariasOrigem = "Entrada" | "Expedição" | "Pulmão" | "Separação";
+export type ControleAvariasSituacao =
+  | "Amassado"
+  | "Furado"
+  | "Manchado"
+  | "Molhado"
+  | "Quebrado"
+  | "Rasgado"
+  | "Vazando"
+  | "Vazio";
 
 export interface ControleAvariasModuleProfile {
   user_id: string;
@@ -30,6 +39,7 @@ export interface ControleAvariasRow {
   descricao: string;
   qtd: number;
   motivo: ControleAvariasMotivo;
+  situacao: ControleAvariasSituacao | null;
   origem: ControleAvariasOrigem;
   lote: string | null;
   val_mmaa: string | null;
@@ -73,6 +83,7 @@ export interface ControleAvariasReportRow {
   descricao: string;
   qtd: number;
   motivo: ControleAvariasMotivo;
+  situacao: ControleAvariasSituacao | null;
   origem: ControleAvariasOrigem;
   lote: string | null;
   val_mmaa: string | null;

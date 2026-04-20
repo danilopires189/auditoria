@@ -52,7 +52,8 @@ import type {
   ControleAvariasModuleProfile,
   ControleAvariasOrigem,
   ControleAvariasReportFilters,
-  ControleAvariasRow
+  ControleAvariasRow,
+  ControleAvariasSituacao
 } from "./types";
 
 interface ControleAvariasPageProps {
@@ -70,6 +71,31 @@ const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const LOOKUP_CACHE_MAX_ENTRIES = 800;
 const ORIGEM_OPTIONS: ControleAvariasOrigem[] = ["Entrada", "Expedição", "Pulmão", "Separação"];
+const CAUSA_OPTIONS = [
+  "Armazenamento",
+  "Caixa do fornecedor",
+  "Contaminado por outro produto",
+  "Empilhadeira",
+  "Embalagem sem produto",
+  "Excesso no bin",
+  "Gaiola",
+  "Goteira",
+  "Outro",
+  "Prego no pallet",
+  "Produto sem embalagem",
+  "Queda",
+  "Queda por excesso"
+] as const satisfies readonly string[];
+const SITUACAO_OPTIONS: ControleAvariasSituacao[] = [
+  "Amassado",
+  "Furado",
+  "Manchado",
+  "Molhado",
+  "Quebrado",
+  "Rasgado",
+  "Vazando",
+  "Vazio"
+];
 const PENDING_SYNC_STATUSES = new Set<ControleAvariasRow["sync_status"]>([
   "pending_insert",
   "pending_update",
@@ -100,7 +126,8 @@ function createScannerInputState(): ScannerInputState {
 type RowEditDraft = {
   qtd: string;
   etiqueta: string;
-  motivo: string;
+  motivo: "" | typeof CAUSA_OPTIONS[number];
+  situacao: "" | ControleAvariasSituacao;
   origem: "" | ControleAvariasOrigem;
   lote: string;
   validade: string;
@@ -403,7 +430,8 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
   const [barcodeInput, setBarcodeInput] = useState("");
   const [barcodeValidationState, setBarcodeValidationState] = useState<BarcodeValidationState>("idle");
   const [multiploInput, setMultiploInput] = useState("1");
-  const [motivoInput, setMotivoInput] = useState("");
+  const [motivoInput, setMotivoInput] = useState<"" | typeof CAUSA_OPTIONS[number]>("");
+  const [situacaoInput, setSituacaoInput] = useState<"" | ControleAvariasSituacao>("");
   const [origemInput, setOrigemInput] = useState<"" | ControleAvariasOrigem>("");
   const [loteInput, setLoteInput] = useState("");
   const [validadeInput, setValidadeInput] = useState("");
@@ -748,7 +776,10 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
     return {
       qtd: String(row.qtd),
       etiqueta: row.etiqueta ?? "",
-      motivo: row.motivo,
+      motivo: CAUSA_OPTIONS.includes(row.motivo as (typeof CAUSA_OPTIONS)[number])
+        ? (row.motivo as (typeof CAUSA_OPTIONS)[number])
+        : "",
+      situacao: row.situacao ?? "",
       origem: row.origem,
       lote: row.lote ?? "",
       validade: formatValidade(row.val_mmaa)
@@ -998,13 +1029,18 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
       try {
         const nextQtd = parseMultiplo(editDraft.qtd);
         const nextEtiqueta = editDraft.etiqueta.trim() || null;
-        const nextMotivo = editDraft.motivo.trim();
+        const nextMotivo = editDraft.motivo;
+        const nextSituacao = editDraft.situacao;
         const nextOrigem = editDraft.origem;
         const nextLote = editDraft.lote.trim() || null;
         const nextValMmaa = normalizeValidadeInput(editDraft.validade);
 
         if (!nextMotivo) {
-          setErrorMessage("Motivo obrigatório.");
+          setErrorMessage("Causa obrigatória.");
+          return;
+        }
+        if (!nextSituacao) {
+          setErrorMessage("Situação obrigatória.");
           return;
         }
         if (!nextOrigem) {
@@ -1016,6 +1052,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
         if (nextQtd !== row.qtd) patch.qtd = nextQtd;
         if (nextEtiqueta !== row.etiqueta) patch.etiqueta = nextEtiqueta;
         if (nextMotivo !== row.motivo) patch.motivo = nextMotivo;
+        if (nextSituacao !== row.situacao) patch.situacao = nextSituacao;
         if (nextOrigem !== row.origem) patch.origem = nextOrigem;
         if (nextLote !== row.lote) patch.lote = nextLote;
         if (nextValMmaa !== row.val_mmaa) patch.val_mmaa = nextValMmaa;
@@ -1149,7 +1186,8 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
         Descricao: row.descricao,
         Quantidade: row.qtd,
         Origem: row.origem,
-        Motivo: row.motivo ?? "",
+        Causa: row.motivo ?? "",
+        Situação: row.situacao ?? "",
         Lote: row.lote ?? "",
         Validade: formatValidade(row.val_mmaa),
         Matricula_Auditor: row.mat_aud,
@@ -1165,6 +1203,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
         { wch: 10 },
         { wch: 48 },
         { wch: 12 },
+        { wch: 14 },
         { wch: 14 },
         { wch: 14 },
         { wch: 16 },
@@ -1331,7 +1370,12 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
       const motivo = motivoInput.trim();
       if (!motivo) {
         setBarcodeValidationState("invalid");
-        setErrorMessage("Motivo obrigatório.");
+        setErrorMessage("Causa obrigatória.");
+        return;
+      }
+      if (!situacaoInput) {
+        setBarcodeValidationState("invalid");
+        setErrorMessage("Situação obrigatória.");
         return;
       }
       if (!origemInput) {
@@ -1412,6 +1456,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
         descricao: product.descricao,
         qtd,
         motivo,
+        situacao: situacaoInput,
         origem: origemInput,
         lote: loteInput.trim() || null,
         val_mmaa: valMmaa,
@@ -1430,6 +1475,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
       setBarcodeInput("");
       setMultiploInput("1");
       setMotivoInput("");
+      setSituacaoInput("");
       setLoteInput("");
       setValidadeInput("");
       setExpandedRowId(row.local_id);
@@ -1465,6 +1511,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
     multiploInput,
     motivoInput,
     origemInput,
+    situacaoInput,
     preferOfflineMode,
     profile.mat,
     profile.nome,
@@ -1844,7 +1891,8 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
           subtitle: `Status ${asStatusLabel(row.sync_status)}`,
           detail: [
             row.origem ? `Origem ${row.origem}` : null,
-            row.motivo ? `Motivo ${row.motivo}` : null,
+            row.motivo ? `Causa ${row.motivo}` : null,
+            row.situacao ? `Situação ${row.situacao}` : null,
             row.etiqueta ? `Etiqueta ${row.etiqueta}` : null
           ].filter(Boolean).join(" | ") || `Barras ${row.barras}`,
           error: row.sync_error,
@@ -2130,14 +2178,31 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
               </label>
             ) : null}
             <label>
-              Motivo
-              <input
-                type="text"
+              Causa
+              <select
                 value={motivoInput}
-                onChange={(event) => setMotivoInput(event.target.value)}
-                placeholder="Digite o motivo"
+                onChange={(event) => setMotivoInput(event.target.value as "" | typeof CAUSA_OPTIONS[number])}
                 required
-              />
+              >
+                <option value="" disabled>Selecione a causa</option>
+                {CAUSA_OPTIONS.map((causa) => (
+                  <option key={causa} value={causa}>{causa}</option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Situação
+              <select
+                value={situacaoInput}
+                onChange={(event) => setSituacaoInput(event.target.value as "" | ControleAvariasSituacao)}
+                required
+              >
+                <option value="" disabled>Selecione a situação</option>
+                {SITUACAO_OPTIONS.map((situacao) => (
+                  <option key={situacao} value={situacao}>{situacao}</option>
+                ))}
+              </select>
             </label>
 
             <label>
@@ -2254,7 +2319,8 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
                         <p>Barras: {row.barras} | CODDV: {row.coddv}</p>
                         <p>Qtd: {row.qtd}</p>
                         <p>Origem: {row.origem}</p>
-                        <p>Motivo: {row.motivo || "-"}</p>
+                        <p>Causa: {row.motivo || "-"}</p>
+                        <p>Situação: {row.situacao || "-"}</p>
                         <p>Registrado em {formatDateTime(row.data_hr)}</p>
                         {hasRowChangeAfterCollect(row) ? (
                           <p>Última alteração em {formatDateTime(row.updated_at)}</p>
@@ -2310,15 +2376,35 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
                           </label>
 
                           <label>
-                            Motivo
-                            <input
-                              type="text"
+                            Causa
+                            <select
                               value={editDraft.motivo}
                               onChange={(event) => {
-                                const next = event.target.value;
+                                const next = event.target.value as "" | typeof CAUSA_OPTIONS[number];
                                 setEditDraft((current) => (current ? { ...current, motivo: next } : current));
                               }}
-                            />
+                            >
+                              <option value="" disabled>Selecione a causa</option>
+                              {CAUSA_OPTIONS.map((causa) => (
+                                <option key={causa} value={causa}>{causa}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label>
+                            Situação
+                            <select
+                              value={editDraft.situacao}
+                              onChange={(event) => {
+                                const next = event.target.value as "" | ControleAvariasSituacao;
+                                setEditDraft((current) => (current ? { ...current, situacao: next } : current));
+                              }}
+                            >
+                              <option value="" disabled>Selecione a situação</option>
+                              {SITUACAO_OPTIONS.map((situacao) => (
+                                <option key={situacao} value={situacao}>{situacao}</option>
+                              ))}
+                            </select>
                           </label>
 
                           <label>
@@ -2378,8 +2464,12 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
                             <strong>{row.origem}</strong>
                           </div>
                           <div className="coleta-row-detail">
-                            <span>Motivo</span>
+                            <span>Causa</span>
                             <strong>{row.motivo || "-"}</strong>
+                          </div>
+                          <div className="coleta-row-detail">
+                            <span>Situação</span>
+                            <strong>{row.situacao || "-"}</strong>
                           </div>
                           <div className="coleta-row-detail">
                             <span>Lote</span>

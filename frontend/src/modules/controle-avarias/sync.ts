@@ -17,6 +17,7 @@ import type {
   ControleAvariasReportFilters,
   ControleAvariasReportRow,
   ControleAvariasRow,
+  ControleAvariasSituacao,
   DbBarrasCacheRow
 } from "./types";
 
@@ -90,6 +91,19 @@ function parseOrigem(value: unknown): ControleAvariasOrigem {
     : "Expedição";
 }
 
+function parseSituacao(value: unknown): ControleAvariasSituacao | null {
+  return value === "Amassado"
+    || value === "Furado"
+    || value === "Manchado"
+    || value === "Molhado"
+    || value === "Quebrado"
+    || value === "Rasgado"
+    || value === "Vazando"
+    || value === "Vazio"
+    ? value
+    : null;
+}
+
 function mapRpcRowToControleAvariasRow(raw: Record<string, unknown>, userIdFallback = ""): ControleAvariasRow {
   const id = typeof raw.id === "string" ? raw.id : "";
   const dataHr = typeof raw.data_hr === "string" ? raw.data_hr : new Date().toISOString();
@@ -107,6 +121,7 @@ function mapRpcRowToControleAvariasRow(raw: Record<string, unknown>, userIdFallb
     descricao: String(raw.descricao ?? "").trim(),
     qtd: parseInteger(raw.qtd, 1),
     motivo: parseRequiredString(raw.motivo),
+    situacao: parseSituacao(raw.situacao),
     origem: parseOrigem(raw.origem),
     lote: parseNullableString(raw.lote),
     val_mmaa: parseNullableString(raw.val_mmaa),
@@ -130,6 +145,7 @@ function mapRpcRowToReport(raw: Record<string, unknown>): ControleAvariasReportR
     descricao: String(raw.descricao ?? ""),
     qtd: parseInteger(raw.qtd),
     motivo: parseRequiredString(raw.motivo),
+    situacao: parseSituacao(raw.situacao),
     origem: parseOrigem(raw.origem),
     lote: parseNullableString(raw.lote),
     val_mmaa: parseNullableString(raw.val_mmaa),
@@ -486,6 +502,7 @@ async function syncInsert(row: ControleAvariasRow): Promise<void> {
     p_qtd: row.qtd,
     p_etiqueta: row.etiqueta,
     p_motivo: row.motivo,
+    p_situacao: row.situacao,
     p_origem: row.origem,
     p_lote: row.lote,
     p_val_mmaa: row.val_mmaa,
@@ -513,6 +530,7 @@ async function syncUpdate(row: ControleAvariasRow): Promise<void> {
     p_qtd: row.qtd,
     p_etiqueta: row.etiqueta,
     p_motivo: row.motivo,
+    p_situacao: row.situacao,
     p_origem: row.origem,
     p_lote: row.lote,
     p_val_mmaa: row.val_mmaa
