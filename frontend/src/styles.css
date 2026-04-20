@@ -8154,6 +8154,35 @@ small {
   transition: background 200ms ease, border-color 200ms ease, box-shadow 200ms ease, color 200ms ease;
 }
 
+.pvps-toolbar-btn-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.pvps-toolbar-btn-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.8rem;
+  min-height: 1.15rem;
+  padding: 0.08rem 0.42rem;
+  border: 1.5px solid #f7c948;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff7d6 0%, #ffe7a3 100%);
+  color: #a61b1b;
+  font-size: 0.56em;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgba(133, 77, 14, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+
 .pvps-toolbar-btn:active {
   transform: scale(0.97);
 }
@@ -8199,6 +8228,12 @@ small {
 
 .pvps-toolbar-btn.is-active .pvps-btn-icon svg {
   stroke-width: 2.2;
+}
+
+.pvps-toolbar-btn.is-active .pvps-toolbar-btn-count {
+  background: linear-gradient(180deg, #fff6cc 0%, #ffe08a 100%);
+  border-color: #f0b429;
+  color: #911111;
 }
 
 .pvps-toolbar-btn-center {

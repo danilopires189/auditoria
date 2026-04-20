@@ -969,6 +969,10 @@ function pendingSortIcon(direction: PendingAddressSortDirection) {
   );
 }
 
+function formatPendingFrontCount(value: number): string {
+  return String(Math.max(0, Math.trunc(value)));
+}
+
 function reportIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3121,6 +3125,17 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
     });
   }, [pvpsFeedItems, visibleAlocRows, effectivePendingAddressSortDirection]);
 
+  const pendingFrontCount = useMemo(() => {
+    if (tab === "pvps") return pvpsFeedItems.length;
+    if (tab === "alocacao") return visibleAlocRows.length;
+    return combinedPendingItems.length;
+  }, [tab, pvpsFeedItems.length, visibleAlocRows.length, combinedPendingItems.length]);
+
+  const pendingFrontCountLabel = useMemo(
+    () => formatPendingFrontCount(pendingFrontCount),
+    [pendingFrontCount]
+  );
+
   const pvpsCompletedRowsForView = useMemo(() => {
     const byRowKey = new Set<string>();
     const rows = [...pvpsCompletedRows];
@@ -5195,9 +5210,13 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
                   className={`btn btn-muted pvps-toolbar-btn${feedView === "pendentes" ? " is-active" : ""}`}
                   onClick={() => setFeedView("pendentes")}
                   aria-pressed={feedView === "pendentes"}
+                  aria-label={`Pendentes: ${pendingFrontCount} endereços visíveis`}
                 >
                   <span className="pvps-btn-icon" aria-hidden="true">{listIcon()}</span>
-                  <span>Pendentes</span>
+                  <span className="pvps-toolbar-btn-label">
+                    <span>Pendentes</span>
+                    <span className="pvps-toolbar-btn-count" aria-hidden="true">{pendingFrontCountLabel}</span>
+                  </span>
                 </button>
                 <button
                   type="button"
