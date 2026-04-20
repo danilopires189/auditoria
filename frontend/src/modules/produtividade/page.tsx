@@ -192,35 +192,37 @@ function buildPdfColumnStyles(
 ): Record<number, { cellWidth: number; overflow?: "linebreak" | "ellipsize" }> {
   const fontSize = 7;
   const horizontalPadding = 12;
-  const defaultMinWidth = 38;
+  const defaultMinWidth = 26;
+  const absoluteMinWidth = 18;
   const wrapSet = new Set(wrapColumns);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(fontSize);
 
-  const measured = headRow.map((header, columnIndex) => {
-    let longest = doc.getTextWidth(String(header ?? ""));
-    for (const row of bodyRows) {
-      const width = doc.getTextWidth(String(row[columnIndex] ?? ""));
-      if (width > longest) longest = width;
-    }
-    const minWidth = Math.max(minWidths?.[columnIndex] ?? defaultMinWidth, longest + horizontalPadding);
-    const maxWidth = maxWidths?.[columnIndex] ?? (wrapSet.has(columnIndex) ? 140 : 90);
-    return Math.min(Math.max(minWidth, defaultMinWidth), maxWidth);
+  void bodyRows;
+
+  const baseMinWidths = headRow.map((_, columnIndex) => Math.max(minWidths?.[columnIndex] ?? defaultMinWidth, absoluteMinWidth));
+  const maxColumnWidths = headRow.map((header, columnIndex) => {
+    const headerWidth = doc.getTextWidth(String(header ?? "")) + horizontalPadding;
+    const fallbackMax = wrapSet.has(columnIndex) ? 140 : 90;
+    return Math.max(maxWidths?.[columnIndex] ?? fallbackMax, headerWidth, baseMinWidths[columnIndex]);
+  });
+  const headerWeights = headRow.map((header, columnIndex) => {
+    const headerWidth = doc.getTextWidth(String(header ?? "")) + horizontalPadding;
+    return Math.max(headerWidth, baseMinWidths[columnIndex], absoluteMinWidth);
   });
 
-  const baseMinWidths = headRow.map((_, columnIndex) => minWidths?.[columnIndex] ?? defaultMinWidth);
-  let widths = [...measured];
+  let widths = [...baseMinWidths];
   let total = widths.reduce((sum, value) => sum + value, 0);
 
   if (total > contentWidth) {
-    let shrinkable = widths.reduce((sum, value, index) => sum + Math.max(value - baseMinWidths[index], 0), 0);
-    if (shrinkable > 0) {
+    const scalableTotal = widths.reduce((sum, value) => sum + Math.max(value - absoluteMinWidth, 0), 0);
+    if (scalableTotal > 0) {
       const overflow = total - contentWidth;
-      widths = widths.map((value, index) => {
-        const available = Math.max(value - baseMinWidths[index], 0);
-        if (available <= 0 || shrinkable <= 0) return value;
-        const reduction = Math.min(available, (available / shrinkable) * overflow);
+      widths = widths.map((value) => {
+        const shrinkable = Math.max(value - absoluteMinWidth, 0);
+        if (shrinkable <= 0) return value;
+        const reduction = Math.min(shrinkable, (shrinkable / scalableTotal) * overflow);
         return value - reduction;
       });
       total = widths.reduce((sum, value) => sum + value, 0);
@@ -228,11 +230,29 @@ function buildPdfColumnStyles(
   }
 
   if (total < contentWidth) {
-    const growableColumns = headRow.map((_, index) => index).filter((index) => wrapSet.has(index));
-    const perColumnExtra = growableColumns.length > 0 ? (contentWidth - total) / growableColumns.length : 0;
-    widths = widths.map((value, index) => (
-      growableColumns.includes(index) ? value + perColumnExtra : value
-    ));
+    let remaining = contentWidth - total;
+    const eligible = headRow.map((_, index) => index);
+
+    while (remaining > 0.01 && eligible.length > 0) {
+      const weightTotal = eligible.reduce((sum, index) => sum + headerWeights[index], 0);
+      let consumed = 0;
+      const nextEligible: number[] = [];
+
+      for (const index of eligible) {
+        const share = weightTotal > 0 ? (remaining * headerWeights[index]) / weightTotal : remaining / eligible.length;
+        const room = Math.max(maxColumnWidths[index] - widths[index], 0);
+        const growth = Math.min(share, room);
+        widths[index] += growth;
+        consumed += growth;
+        if (widths[index] + 0.01 < maxColumnWidths[index]) {
+          nextEligible.push(index);
+        }
+      }
+
+      if (consumed <= 0.01) break;
+      remaining -= consumed;
+      eligible.splice(0, eligible.length, ...nextEligible);
+    }
   }
 
   return Object.fromEntries(
