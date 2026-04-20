@@ -48,8 +48,36 @@ interface ProdutividadePdfPreview {
   rankingRows: ProdutividadeRankingRow[];
 }
 
+type RankingMetricConfig = {
+  label: string;
+  pdfLabel: string;
+  pointsKey: keyof ProdutividadeRankingRow;
+  qtyKey: keyof ProdutividadeRankingRow;
+  singular: string;
+  plural: string;
+};
+
 const MODULE_DEF = getModuleByKeyOrThrow("produtividade");
 let reportLogoDataUrlPromise: Promise<string | null> | null = null;
+
+const RANKING_METRICS: RankingMetricConfig[] = [
+  { label: "PVPs", pdfLabel: "PVPs", pointsKey: "pvps_pontos", qtyKey: "pvps_qtd", singular: "end", plural: "ends" },
+  { label: "Vol. Expedido", pdfLabel: "Vol. Expedido", pointsKey: "vol_pontos", qtyKey: "vol_qtd", singular: "Vol.", plural: "Vol." },
+  { label: "Blitz", pdfLabel: "Blitz", pointsKey: "blitz_pontos", qtyKey: "blitz_qtd", singular: "un", plural: "un" },
+  { label: "Zerados", pdfLabel: "Zerados", pointsKey: "zerados_pontos", qtyKey: "zerados_qtd", singular: "end", plural: "ends" },
+  { label: "Ativ Extra", pdfLabel: "Ativ Extra", pointsKey: "atividade_extra_pontos", qtyKey: "atividade_extra_qtd", singular: "Regist.", plural: "Regist." },
+  { label: "Alocação", pdfLabel: "Alocação", pointsKey: "alocacao_pontos", qtyKey: "alocacao_qtd", singular: "end", plural: "ends" },
+  { label: "Devolução", pdfLabel: "Devolução", pointsKey: "devolucao_pontos", qtyKey: "devolucao_qtd", singular: "devol.", plural: "devol." },
+  { label: "Ter. Conf", pdfLabel: "Ter. Conf", pointsKey: "conf_termo_pontos", qtyKey: "conf_termo_qtd", singular: "sku", plural: "skus" },
+  { label: "Avul. Conf", pdfLabel: "Avul. Conf", pointsKey: "conf_avulso_pontos", qtyKey: "conf_avulso_qtd", singular: "sku", plural: "skus" },
+  { label: "Ent. Notas", pdfLabel: "Ent. Notas", pointsKey: "conf_entrada_pontos", qtyKey: "conf_entrada_qtd", singular: "sku", plural: "skus" },
+  { label: "Transf. CD", pdfLabel: "Transf. CD", pointsKey: "conf_transferencia_cd_pontos", qtyKey: "conf_transferencia_cd_qtd", singular: "sku", plural: "skus" },
+  { label: "Reg Lojas", pdfLabel: "Reg Lojas", pointsKey: "conf_lojas_pontos", qtyKey: "conf_lojas_qtd", singular: "loja", plural: "lojas" },
+  { label: "Aud. Caixa", pdfLabel: "Aud. Caixa", pointsKey: "aud_caixa_pontos", qtyKey: "aud_caixa_qtd", singular: "volume", plural: "volumes" },
+  { label: "Caixa Térmica", pdfLabel: "Cx. Térmica", pointsKey: "caixa_termica_pontos", qtyKey: "caixa_termica_qtd", singular: "mov.", plural: "mov." },
+  { label: "Ronda Qualidade", pdfLabel: "Ronda Qual.", pointsKey: "ronda_quality_pontos", qtyKey: "ronda_quality_qtd", singular: "aud.", plural: "aud." },
+  { label: "Check List", pdfLabel: "Check List", pointsKey: "checklist_pontos", qtyKey: "checklist_qtd", singular: "checklist", plural: "checklists" }
+];
 
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
@@ -115,6 +143,19 @@ function formatRankingPdfPointsAndCount(points: number, count: number, singular:
   return `${formatMetric(points, "")} pts\n${formatCountLabel(count, singular, plural, {
     formatValue: (value) => formatMetric(value, "")
   })}`;
+}
+
+function buildRankingMetricItems(row: ProdutividadeRankingRow) {
+  return RANKING_METRICS.map((metric) => {
+    const points = Number(row[metric.pointsKey] ?? 0);
+    const count = Number(row[metric.qtyKey] ?? 0);
+    return {
+      label: metric.label,
+      pdfLabel: metric.pdfLabel,
+      value: formatRankingPointsAndCount(points, count, metric.singular, metric.plural),
+      pdfValue: formatRankingPdfPointsAndCount(points, count, metric.singular, metric.plural)
+    };
+  });
 }
 
 function asUnknownErrorMessage(error: unknown): string {
@@ -699,43 +740,18 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       "Colaborador",
       "Matrícula",
       "Total",
-      "PVPs",
-      "Vol. Expedido",
-      "Blitz",
-      "Zerados",
-      "Ativ Extra",
-      "Alocação",
-      "Devolução",
-      "Ter. Conf",
-      "Avul. Conf",
-      "Ent. Notas",
-      "Transf. CD",
-      "Reg Lojas",
-      "Aud. Caixa",
-      "Ronda Qual.",
-      "Check List"
+      ...RANKING_METRICS.map((metric) => metric.pdfLabel)
     ]];
-    const detailsBody = preview.rankingRows.map((row, index) => [
-      String(row.posicao > 0 ? row.posicao : index + 1),
-      row.nome,
-      row.mat,
-      `${formatMetric(row.total_pontos, "")} pts`,
-      formatRankingPdfPointsAndCount(row.pvps_pontos, row.pvps_qtd, "end", "ends"),
-      formatRankingPdfPointsAndCount(row.vol_pontos, row.vol_qtd, "Vol.", "Vol."),
-      formatRankingPdfPointsAndCount(row.blitz_pontos, row.blitz_qtd, "un", "un"),
-      formatRankingPdfPointsAndCount(row.zerados_pontos, row.zerados_qtd, "end", "ends"),
-      formatRankingPdfPointsAndCount(row.atividade_extra_pontos, row.atividade_extra_qtd, "Regist.", "Regist."),
-      formatRankingPdfPointsAndCount(row.alocacao_pontos, row.alocacao_qtd, "end", "ends"),
-      formatRankingPdfPointsAndCount(row.devolucao_pontos, row.devolucao_qtd, "devol.", "devol."),
-      formatRankingPdfPointsAndCount(row.conf_termo_pontos, row.conf_termo_qtd, "sku", "skus"),
-      formatRankingPdfPointsAndCount(row.conf_avulso_pontos, row.conf_avulso_qtd, "sku", "skus"),
-      formatRankingPdfPointsAndCount(row.conf_entrada_pontos, row.conf_entrada_qtd, "sku", "skus"),
-      formatRankingPdfPointsAndCount(row.conf_transferencia_cd_pontos, row.conf_transferencia_cd_qtd, "sku", "skus"),
-      formatRankingPdfPointsAndCount(row.conf_lojas_pontos, row.conf_lojas_qtd, "loja", "lojas"),
-      formatRankingPdfPointsAndCount(row.aud_caixa_pontos, row.aud_caixa_qtd, "volume", "volumes"),
-      formatRankingPdfPointsAndCount(row.ronda_quality_pontos, row.ronda_quality_qtd, "aud.", "aud."),
-      formatRankingPdfPointsAndCount(row.checklist_pontos, row.checklist_qtd, "checklist", "checklists")
-    ]);
+    const detailsBody = preview.rankingRows.map((row, index) => {
+      const metricItems = buildRankingMetricItems(row);
+      return [
+        String(row.posicao > 0 ? row.posicao : index + 1),
+        row.nome,
+        row.mat,
+        `${formatMetric(row.total_pontos, "")} pts`,
+        ...metricItems.map((item) => item.pdfValue)
+      ];
+    });
     autoTable(doc, {
       startY: 60,
       margin: { left: marginX, right: marginX },
@@ -766,7 +782,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         detailsHead[0],
         detailsBody,
         contentWidth,
-        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
         {
           0: 24,
           1: 92,
@@ -786,7 +802,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           15: 42,
           16: 42,
           17: 46,
-          18: 46
+          18: 46,
+          19: 46
         },
         {
           1: 122,
@@ -804,7 +821,8 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           15: 50,
           16: 50,
           17: 56,
-          18: 56
+          18: 56,
+          19: 56
         }
       )
     });
@@ -1057,123 +1075,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                 </div>
                               {isExpanded && (
                                 <div className="ranking-details-grid">
-                                      {[
-                                        {
-                                          label: "PVPs",
-                                          value: formatRankingPointsAndCount(row.pvps_pontos, row.pvps_qtd, "end", "ends")
-                                        },
-                                        {
-                                          label: "Vol. Expedido",
-                                          value: formatRankingPointsAndCount(row.vol_pontos, row.vol_qtd, "Vol.", "Vol.")
-                                        },
-                                        {
-                                          label: "Blitz",
-                                          value: formatRankingPointsAndCount(row.blitz_pontos, row.blitz_qtd, "un", "un")
-                                        },
-                                        {
-                                          label: "Zerados",
-                                          value: formatRankingPointsAndCount(row.zerados_pontos, row.zerados_qtd, "end", "ends")
-                                        },
-                                        {
-                                          label: "Ativ Extra",
-                                          value: formatRankingPointsAndCount(
-                                            row.atividade_extra_pontos,
-                                            row.atividade_extra_qtd,
-                                            "Regist.",
-                                            "Regist."
-                                          )
-                                        },
-                                        {
-                                          label: "Alocação",
-                                          value: formatRankingPointsAndCount(
-                                            row.alocacao_pontos,
-                                            row.alocacao_qtd,
-                                            "end",
-                                            "ends"
-                                          )
-                                        },
-                                        {
-                                          label: "Devolução",
-                                          value: formatRankingPointsAndCount(
-                                            row.devolucao_pontos,
-                                            row.devolucao_qtd,
-                                            "devol.",
-                                            "devol."
-                                          )
-                                        },
-                                        {
-                                          label: "Ter. Conf",
-                                          value: formatRankingPointsAndCount(
-                                            row.conf_termo_pontos,
-                                            row.conf_termo_qtd,
-                                            "sku",
-                                            "skus"
-                                          )
-                                        },
-                                        {
-                                          label: "Avul. Conf",
-                                          value: formatRankingPointsAndCount(
-                                            row.conf_avulso_pontos,
-                                            row.conf_avulso_qtd,
-                                            "sku",
-                                            "skus"
-                                          )
-                                        },
-                                        {
-                                          label: "Ent. Notas",
-                                          value: formatRankingPointsAndCount(
-                                            row.conf_entrada_pontos,
-                                            row.conf_entrada_qtd,
-                                            "sku",
-                                            "skus"
-                                          )
-                                        },
-                                        {
-                                          label: "Transf. CD",
-                                          value: formatRankingPointsAndCount(
-                                            row.conf_transferencia_cd_pontos,
-                                            row.conf_transferencia_cd_qtd,
-                                            "sku",
-                                            "skus"
-                                          )
-                                        },
-                                        {
-                                          label: "Reg Lojas",
-                                          value: formatRankingPointsAndCount(
-                                            row.conf_lojas_pontos,
-                                            row.conf_lojas_qtd,
-                                            "loja",
-                                            "lojas"
-                                          )
-                                        },
-                                        {
-                                          label: "Aud. Caixa",
-                                          value: formatRankingPointsAndCount(
-                                            row.aud_caixa_pontos,
-                                            row.aud_caixa_qtd,
-                                            "volume",
-                                            "volumes"
-                                          )
-                                        },
-                                        {
-                                          label: "Ronda Qualidade",
-                                          value: formatRankingPointsAndCount(
-                                            row.ronda_quality_pontos,
-                                            row.ronda_quality_qtd,
-                                            "aud.",
-                                            "aud."
-                                          )
-                                        },
-                                        {
-                                          label: "Check List",
-                                          value: formatRankingPointsAndCount(
-                                            row.checklist_pontos,
-                                            row.checklist_qtd,
-                                            "checklist",
-                                            "checklists"
-                                          )
-                                        }
-                                      ].map((item) => (
+                                      {buildRankingMetricItems(row).map((item) => (
                                         <div key={item.label}>
                                           <strong>{item.label}</strong>
                                           <span>{item.value}</span>
