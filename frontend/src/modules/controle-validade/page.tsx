@@ -132,8 +132,15 @@ function toDisplayName(value: string): string {
     .join(" ");
 }
 
+function extractValidadeDigits(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length <= 4) return digits;
+  return digits.slice(-4);
+}
+
 function normalizeValidadeInput(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 4);
+  const digits = extractValidadeDigits(raw);
   if (digits.length !== 4) throw new Error("Validade deve estar no formato MMAA.");
   const month = Number.parseInt(digits.slice(0, 2), 10);
   if (!Number.isFinite(month) || month < 1 || month > 12) throw new Error("Mês da validade inválido.");
@@ -2058,9 +2065,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                           ref={validadeRef}
                           type="text"
                           inputMode={validadeInputMode}
-                          maxLength={4}
                           value={validadeInput}
-                          onChange={(event) => setValidadeInput(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                          onChange={(event) => setValidadeInput(extractValidadeDigits(event.target.value))}
                           onFocus={enableValidadeSoftKeyboard}
                           onPointerDown={enableValidadeSoftKeyboard}
                           onBlur={disableValidadeSoftKeyboard}
@@ -2176,9 +2182,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                     <input
                                       type="text"
                                       inputMode="numeric"
-                                      maxLength={4}
                                       value={editingColetaValidade}
-                                      onChange={(event) => setEditingColetaValidade(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                      onChange={(event) => setEditingColetaValidade(extractValidadeDigits(event.target.value))}
                                       placeholder="MMAA"
                                     />
                                     <button type="button" className="btn btn-primary" onClick={() => void saveEditingColeta(lastColetaSearchResult)} disabled={busyEdit}>
@@ -2254,9 +2259,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                           <input
                                             type="text"
                                             inputMode="numeric"
-                                            maxLength={4}
                                             value={editingColetaValidade}
-                                            onChange={(event) => setEditingColetaValidade(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                                            onChange={(event) => setEditingColetaValidade(extractValidadeDigits(event.target.value))}
                                             placeholder="MMAA"
                                           />
                                           <button type="button" className="btn btn-primary" onClick={() => void saveEditingColeta(row)} disabled={busyEdit}>
