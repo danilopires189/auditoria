@@ -12403,6 +12403,27 @@ small {
   scrollbar-gutter: stable;
 }
 
+@media (min-width: 1181px) {
+  .indicadores-screen-blitz .indicadores-layout-grid {
+    --indicadores-row-height: clamp(390px, 45vh, 470px);
+  }
+
+  .indicadores-panel-zonas {
+    padding-top: 22px;
+  }
+
+  .indicadores-panel-zonas .indicadores-zone-chart {
+    padding-top: 10px;
+  }
+
+  .indicadores-panel-zonas .indicadores-zone-scroll {
+    box-sizing: border-box;
+    height: auto;
+    min-height: 100%;
+    padding-top: 18px;
+  }
+}
+
 .indicadores-zone-column {
   flex: 0 0 74px;
   display: grid;

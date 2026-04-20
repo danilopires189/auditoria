@@ -273,14 +273,15 @@ function ZoneChart({ rows }: { rows: IndicadoresBlitzZoneTotalRow[] }) {
   }
 
   const maxTotal = Math.max(1, ...rows.map((row) => row.erro_total));
+  const maxStackFill = 166;
 
   return (
     <div className="indicadores-zone-chart">
       <div className="indicadores-zone-scroll">
         {rows.map((row) => {
-          const faltaHeight = (row.falta_total / maxTotal) * 180;
-          const sobraHeight = (row.sobra_total / maxTotal) * 180;
-          const foraHeight = (row.fora_politica_total / maxTotal) * 180;
+          const faltaHeight = (row.falta_total / maxTotal) * maxStackFill;
+          const sobraHeight = (row.sobra_total / maxTotal) * maxStackFill;
+          const foraHeight = (row.fora_politica_total / maxTotal) * maxStackFill;
           return (
             <div key={row.zona} className="indicadores-zone-column">
               <div className="indicadores-zone-stack" title={`${row.zona}: ${formatInteger(row.erro_total)} erros`}>
