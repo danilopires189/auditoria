@@ -5182,7 +5182,7 @@ small {
 /* ── KPI strip ── */
 .produtividade-overview-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -5193,6 +5193,8 @@ small {
   display: grid;
   gap: 4px;
   cursor: default;
+  min-height: 110px;
+  align-content: start;
 }
 
 .produtividade-kpi-icon {
@@ -5229,6 +5231,7 @@ small {
   color: #163f87;
   font-weight: 700;
   line-height: 1.2;
+  min-height: 1.2em;
 }
 
 /* Botão aplicar período */
