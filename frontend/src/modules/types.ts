@@ -30,7 +30,7 @@ export type ModuleIconName =
   | "zero"
   | "damage";
 
-export type ModuleTone = "blue" | "red" | "teal" | "amber";
+export type ModuleTone = "blue" | "red" | "teal" | "amber" | "graphite";
 
 export type DashboardModuleKey =
   | "apoio-gestor"

@@ -4998,6 +4998,10 @@ small {
   --tone: #b9791b;
 }
 
+.tone-graphite {
+  --tone: #53473a;
+}
+
 @keyframes surface-enter {
   from {
     opacity: 0;

@@ -43,9 +43,14 @@ function parseCdNumber(cdLabel: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function toFirstName(name: string): string {
-  const first = name.trim().split(/\s+/)[0] ?? name;
-  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+function toDisplayName(name: string): string {
+  const compact = name.trim().replace(/\s+/g, " ");
+  if (!compact) return "Usuário";
+  return compact
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((chunk) => chunk.charAt(0).toLocaleUpperCase("pt-BR") + chunk.slice(1))
+    .join(" ");
 }
 
 function pctTone(pct: number | null): "success" | "warning" | "danger" | "neutral" {
@@ -56,10 +61,10 @@ function pctTone(pct: number | null): "success" | "warning" | "danger" | "neutra
 }
 
 const ARC_COLOR: Record<string, string> = {
-  success: "#16a34a",
-  warning: "#d97706",
-  danger: "#dc2626",
-  neutral: "#64748b",
+  success: "#4d8a6a",
+  warning: "#b58542",
+  danger: "#b16659",
+  neutral: "#8f7d6b",
 };
 
 interface ArcGaugeProps {
@@ -69,30 +74,34 @@ interface ArcGaugeProps {
 
 function ArcGauge({ pct, tone }: ArcGaugeProps) {
   const clamped = Math.min(pct, 100);
-  const r = 44;
-  const circumference = Math.PI * r;
+  const r = 52;
+  const circumference = 2 * Math.PI * r;
   const offset = circumference * (1 - clamped / 100);
   const arcColor = ARC_COLOR[tone];
-  const arcPath = "M 16 60 A 44 44 0 0 1 104 60";
 
   return (
-    <svg width="120" height="70" viewBox="0 0 120 70" aria-hidden="true">
-      <path
-        d={arcPath}
+    <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+      <circle
+        cx="66"
+        cy="66"
+        r={r}
         fill="none"
         className="ag-card__gauge-arc--track"
-        strokeWidth="10"
+        strokeWidth="14"
         strokeLinecap="round"
       />
-      <path
-        d={arcPath}
+      <circle
+        cx="66"
+        cy="66"
+        r={r}
         fill="none"
         className="ag-card__gauge-arc--fill"
-        strokeWidth="10"
+        strokeWidth="14"
         strokeLinecap="round"
         stroke={arcColor}
         strokeDasharray={`${circumference}`}
         strokeDashoffset={`${offset}`}
+        transform="rotate(-90 66 66)"
       />
     </svg>
   );
@@ -102,10 +111,15 @@ interface ActivityCardProps {
   row: ApoioGestorActivityRow;
 }
 
+function formatMetric(value: number): string {
+  return value.toLocaleString("pt-BR");
+}
+
 function ActivityCard({ row }: ActivityCardProps) {
   const tone = pctTone(row.achievement_pct);
   const pctDisplay =
     row.achievement_pct !== null ? `${row.achievement_pct.toFixed(1)}%` : "—";
+  const cardToneClass = row.has_meta ? `ag-card--${tone}` : "";
 
   const badgeLabel =
     tone === "success"
@@ -118,37 +132,51 @@ function ActivityCard({ row }: ActivityCardProps) {
 
   if (row.has_meta) {
     return (
-      <div className="ag-card ag-card--meta">
-        <div className="ag-card__label">{row.activity_label}</div>
-        <div className="ag-card__gauge">
-          <ArcGauge pct={row.achievement_pct ?? 0} tone={tone} />
-          <div className={`ag-card__pct ag-card__pct--${tone}`}>{pctDisplay}</div>
-        </div>
-        <div className="ag-card__counts">
-          <span className="ag-card__actual">
-            {row.actual_today.toLocaleString("pt-BR")}
-          </span>
-          {row.target_today !== null && (
-            <span className="ag-card__target">
-              {" "}/ {row.target_today.toLocaleString("pt-BR")}
-            </span>
+      <div className={`ag-card ag-card--meta ${cardToneClass}`}>
+        <div className={`ag-card__topbar ag-card__topbar--${tone}`}>
+          <span className="ag-card__label">{row.activity_label}</span>
+          {badgeLabel && (
+            <span className={`ag-card__badge ag-card__badge--${tone}`}>{badgeLabel}</span>
           )}
-          <span className="ag-card__unit"> {row.unit_label}</span>
         </div>
-        {badgeLabel && (
-          <div className={`ag-card__badge ag-card__badge--${tone}`}>{badgeLabel}</div>
-        )}
+        <div className="ag-card__body">
+          <div className="ag-card__gauge-panel">
+            <div className="ag-card__gauge">
+              <ArcGauge pct={row.achievement_pct ?? 0} tone={tone} />
+              <div className={`ag-card__pct ag-card__pct--${tone}`}>{pctDisplay}</div>
+            </div>
+          </div>
+          <div className="ag-card__metrics">
+            <div className="ag-card__metric">
+              <span className="ag-card__metric-label">Produzido hoje</span>
+              <strong className="ag-card__actual">{formatMetric(row.actual_today)}</strong>
+            </div>
+            <div className="ag-card__metric">
+              <span className="ag-card__metric-label">Meta do dia</span>
+              <strong className="ag-card__target-value">
+                {row.target_today != null ? formatMetric(row.target_today) : "—"}
+              </strong>
+            </div>
+            <div className="ag-card__unit-row">{row.unit_label}</div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="ag-card ag-card--simple">
-      <div className="ag-card__label">{row.activity_label}</div>
-      <div className="ag-card__big-number">
-        {row.actual_today.toLocaleString("pt-BR")}
+      <div className="ag-card__topbar ag-card__topbar--simple">
+        <span className="ag-card__label">{row.activity_label}</span>
+        <span className="ag-card__badge ag-card__badge--simple">Sem meta</span>
       </div>
-      <div className="ag-card__unit-label">{row.unit_label}</div>
+      <div className="ag-card__body ag-card__body--simple">
+        <div className="ag-card__big-number">
+          {formatMetric(row.actual_today)}
+        </div>
+        <div className="ag-card__unit-label">{row.unit_label}</div>
+        <div className="ag-card__simple-caption">Acompanhamento livre no dia</div>
+      </div>
     </div>
   );
 }
@@ -202,8 +230,14 @@ export default function ApoioGestorPage({
     };
   }, [isOnline, load]);
 
-  const metaRows = rows.filter((r) => r.has_meta);
-  const simpleRows = rows.filter((r) => !r.has_meta);
+  const metaRows = [...rows]
+    .filter((r) => r.has_meta)
+    .sort((a, b) => a.activity_label.localeCompare(b.activity_label, "pt-BR"));
+  const simpleRows = rows
+    .filter((r) => !r.has_meta)
+    .sort((a, b) => a.activity_label.localeCompare(b.activity_label, "pt-BR"));
+  const hitCount = metaRows.filter((row) => pctTone(row.achievement_pct) === "success").length;
+  const totalActual = rows.reduce((sum, row) => sum + row.actual_today, 0);
 
   return (
     <div className="ag-page">
@@ -214,7 +248,7 @@ export default function ApoioGestorPage({
             <span>Início</span>
           </Link>
           <div className="module-topbar-user-side">
-            <span className="module-user-greeting">Olá, {toFirstName(userName)}</span>
+            <span className="module-user-greeting">Olá, {toDisplayName(userName)}</span>
             <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
               {isOnline ? "🟢 Online" : "🔴 Offline"}
             </span>
@@ -226,61 +260,97 @@ export default function ApoioGestorPage({
         </div>
       </header>
 
-      <div className="ag-header">
-        <div className="ag-header__cd">{parseCityFromCdLabel(cdName) || cdName || "CD"}</div>
-        <div className="ag-header__date">{fullDate}</div>
-        {lastRefresh && (
-          <div className="ag-header__refresh">
-            Atualizado às{" "}
-            {lastRefresh.toLocaleTimeString("pt-BR", {
-              timeZone: BRAZIL_TZ,
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+      <div className="ag-content-shell">
+        <section className="ag-header">
+          <div className="ag-header__main">
+            <div className="ag-header__title-block">
+              <span className="ag-header__eyebrow">Painel operacional do dia</span>
+              <div className="ag-header__cd">{parseCityFromCdLabel(cdName) || cdName || "CD"}</div>
+              <div className="ag-header__date">{fullDate}</div>
+            </div>
+            <div className="ag-header__info-grid">
+              <div className="ag-header__info-card">
+                <span className="ag-header__info-label">Monitoramento</span>
+                <strong className="ag-header__info-value">{metaRows.length} com meta</strong>
+              </div>
+              {lastRefresh && (
+                <div className="ag-header__info-card ag-header__info-card--refresh">
+                  <span className="ag-header__info-label">Atualizado às</span>
+                  <strong className="ag-header__info-value">
+                    {lastRefresh.toLocaleTimeString("pt-BR", {
+                      timeZone: BRAZIL_TZ,
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </strong>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="ag-overview">
+          <article className="ag-overview__card">
+            <span className="ag-overview__label">Atividades monitoradas</span>
+            <strong className="ag-overview__value">{rows.length}</strong>
+          </article>
+          <article className="ag-overview__card ag-overview__card--accent">
+            <span className="ag-overview__label">Metas atingidas</span>
+            <strong className="ag-overview__value">{hitCount}</strong>
+          </article>
+          <article className="ag-overview__card">
+            <span className="ag-overview__label">Volume total do dia</span>
+            <strong className="ag-overview__value">{formatMetric(totalActual)}</strong>
+          </article>
+        </section>
+
+        {loading ? (
+          <div className="ag-state ag-state--loading">
+            <div className="ag-spinner" />
+            <span>Carregando atividades...</span>
+          </div>
+        ) : error ? (
+          <div className="ag-state ag-state--error">
+            <span>{error}</span>
+            <button type="button" className="ag-retry-btn" onClick={() => void load()}>
+              Tentar novamente
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="ag-state ag-state--empty">
+            Nenhuma atividade registrada hoje.
+          </div>
+        ) : (
+          <div className="ag-content">
+            {metaRows.length > 0 && (
+              <section className="ag-section">
+                <div className="ag-section__header">
+                  <h2 className="ag-section__title">Atividades com Meta</h2>
+                  <span className="ag-section__count">{metaRows.length} cards</span>
+                </div>
+                <div className="ag-grid">
+                  {metaRows.map((r) => (
+                    <ActivityCard key={r.activity_key} row={r} />
+                  ))}
+                </div>
+              </section>
+            )}
+            {simpleRows.length > 0 && (
+              <section className="ag-section">
+                <div className="ag-section__header">
+                  <h2 className="ag-section__title">Outras Atividades</h2>
+                  <span className="ag-section__count">{simpleRows.length} cards</span>
+                </div>
+                <div className="ag-grid">
+                  {simpleRows.map((r) => (
+                    <ActivityCard key={r.activity_key} row={r} />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>
-
-      {loading ? (
-        <div className="ag-state ag-state--loading">
-          <div className="ag-spinner" />
-          <span>Carregando atividades...</span>
-        </div>
-      ) : error ? (
-        <div className="ag-state ag-state--error">
-          <span>{error}</span>
-          <button type="button" className="ag-retry-btn" onClick={() => void load()}>
-            Tentar novamente
-          </button>
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="ag-state ag-state--empty">
-          Nenhuma atividade registrada hoje.
-        </div>
-      ) : (
-        <div className="ag-content">
-          {metaRows.length > 0 && (
-            <section className="ag-section">
-              <h2 className="ag-section__title">Atividades com Meta</h2>
-              <div className="ag-grid">
-                {metaRows.map((r) => (
-                  <ActivityCard key={r.activity_key} row={r} />
-                ))}
-              </div>
-            </section>
-          )}
-          {simpleRows.length > 0 && (
-            <section className="ag-section">
-              <h2 className="ag-section__title">Outras Atividades</h2>
-              <div className="ag-grid">
-                {simpleRows.map((r) => (
-                  <ActivityCard key={r.activity_key} row={r} />
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
     </div>
   );
 }
