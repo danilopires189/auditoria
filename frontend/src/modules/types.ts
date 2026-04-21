@@ -2,6 +2,7 @@ export type ModuleIconName =
   | "audit"
   | "box"
   | "chart"
+  | "numbers"
   | "calendar"
   | "expiry"
   | "extra"
@@ -32,6 +33,7 @@ export type ModuleIconName =
 export type ModuleTone = "blue" | "red" | "teal" | "amber";
 
 export type DashboardModuleKey =
+  | "apoio-gestor"
   | "atividade-extra"
   | "auditoria-caixa"
   | "busca-produto"

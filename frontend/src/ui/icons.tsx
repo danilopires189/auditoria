@@ -12,6 +12,18 @@ export function ModuleIcon({ name }: { name: ModuleIconName }) {
           <path d="M6 11l5-4 4 2 3-3" />
         </svg>
       );
+    case "numbers":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 7h5" />
+          <path d="M5 12h5" />
+          <path d="M5 17h5" />
+          <path d="M14 6v12" />
+          <path d="M18 6v12" />
+          <path d="M12 9h8" />
+          <path d="M12 15h8" />
+        </svg>
+      );
     case "calendar":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">

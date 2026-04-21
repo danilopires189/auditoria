@@ -7,6 +7,7 @@ import type { DisplayContext, HomeModulesViewMode } from "../types/ui";
 import { LogoutIcon, ModuleIcon, ViewGridIcon, ViewListIcon } from "../ui/icons";
 
 const AVAILABLE_MODULE_KEYS = new Set([
+  "apoio-gestor",
   "auditoria-caixa",
   "atividade-extra",
   "busca-produto",

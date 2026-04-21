@@ -77,6 +77,7 @@ import { clearUserControleValidadeCache } from "./modules/controle-validade/stor
 import type { CaixaTermicaModuleProfile } from "./modules/registro-embarque-caixa-termica/types";
 import { clearUserCaixaTermicaSessionCache } from "./modules/registro-embarque-caixa-termica/storage";
 import { monthStartIsoBrasilia } from "./shared/brasilia-datetime";
+import ApoioGestorPage from "./modules/apoio-gestor/page";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
@@ -189,6 +190,17 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   "indicadorescd.vercel.app": INDICADORES_AUTH_BRANDING,
   "www.indicadorescd.vercel.app": INDICADORES_AUTH_BRANDING
 };
+
+const APOIO_GESTOR_ALLOWED_HOSTS = new Set(["prevencaocd.vercel.app", "www.prevencaocd.vercel.app"]);
+
+function isLocalNetworkHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1") return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(normalized)) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(normalized)) return true;
+  return /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(normalized);
+}
 
 function resolveAuthBranding(hostname: string | undefined): AuthBranding {
   if (!hostname) return DEFAULT_AUTH_BRANDING;
@@ -1202,7 +1214,10 @@ export default function App() {
     () => resolveAuthBranding(typeof window === "undefined" ? undefined : window.location.hostname),
     []
   );
-  const hiddenModuleKeySet = useMemo(() => new Set(authBranding.hiddenModuleKeys), [authBranding.hiddenModuleKeys]);
+  const currentHostname = useMemo(
+    () => (typeof window === "undefined" ? "" : window.location.hostname.trim().toLowerCase()),
+    []
+  );
 
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [session, setSession] = useState<Session | null>(null);
@@ -2557,6 +2572,30 @@ export default function App() {
       roleLabel: roleLabel(isGlobalAdmin ? "admin" : role)
     };
   }, [effectiveProfileWithCd, isOnline, profileSyncRetryCount, session]);
+  const canAccessApoioGestor = useMemo(
+    () =>
+      effectiveProfileWithCd?.role === "admin"
+      && (APOIO_GESTOR_ALLOWED_HOSTS.has(currentHostname) || isLocalNetworkHostname(currentHostname)),
+    [currentHostname, effectiveProfileWithCd]
+  );
+  const effectiveHiddenModuleKeys = useMemo<DashboardModuleKey[]>(() => {
+    if (!canAccessApoioGestor && !authBranding.hiddenModuleKeys.includes("apoio-gestor")) {
+      return [...authBranding.hiddenModuleKeys, "apoio-gestor"];
+    }
+    return authBranding.hiddenModuleKeys;
+  }, [authBranding.hiddenModuleKeys, canAccessApoioGestor]);
+  const hiddenModuleKeySet = useMemo(() => new Set(effectiveHiddenModuleKeys), [effectiveHiddenModuleKeys]);
+  const effectiveAllowedModuleKeys = useMemo<DashboardModuleKey[] | null>(() => {
+    const baseAllowed = authBranding.allowedModuleKeys ?? null;
+    if (!canAccessApoioGestor) {
+      return (
+        baseAllowed?.filter((moduleKey): moduleKey is DashboardModuleKey => moduleKey !== "apoio-gestor")
+        ?? baseAllowed
+      );
+    }
+    if (baseAllowed == null) return null;
+    return baseAllowed.includes("apoio-gestor") ? baseAllowed : [...baseAllowed, "apoio-gestor"];
+  }, [authBranding.allowedModuleKeys, canAccessApoioGestor]);
 
   const activeModule = useMemo(() => findModuleByPath(location.pathname), [location.pathname]);
   const isModuleRoute = activeModule != null;
@@ -2568,10 +2607,15 @@ export default function App() {
     if (!isModuleAccessible(moduleDef.key, authBranding)) return null;
     return moduleDef.path;
   }, [authBranding]);
-  const currentModuleAllowed = useMemo(
-    () => (activeModule ? isModuleAccessible(activeModule.key, authBranding) : true),
-    [activeModule, authBranding]
-  );
+  const currentModuleAllowed = useMemo(() => {
+    if (!activeModule) return true;
+    if (activeModule.key === "apoio-gestor") return canAccessApoioGestor;
+    return isModuleAccessible(activeModule.key, {
+      ...authBranding,
+      hiddenModuleKeys: effectiveHiddenModuleKeys,
+      allowedModuleKeys: effectiveAllowedModuleKeys
+    });
+  }, [activeModule, authBranding, canAccessApoioGestor, effectiveAllowedModuleKeys, effectiveHiddenModuleKeys]);
   if (!runtimeStatus.initialized) {
     return (
       <div className="page-shell">
@@ -2623,8 +2667,8 @@ export default function App() {
                 <HomePage
                   displayContext={displayContext}
                   appHeading={authBranding.authCaption}
-                  hiddenModuleKeys={authBranding.hiddenModuleKeys}
-                  allowedModuleKeys={authBranding.allowedModuleKeys ?? null}
+                  hiddenModuleKeys={effectiveHiddenModuleKeys}
+                  allowedModuleKeys={effectiveAllowedModuleKeys}
                   atividadeExtraPendingApprovalsCount={atividadeExtraPendingApprovalsCount}
                   isOnline={isOnline}
                   onRequestLogout={openLogoutConfirm}
@@ -2636,6 +2680,16 @@ export default function App() {
                     setShowGlobalCdSwitcher(true);
                   }}
                 />
+              )
+            }
+          />
+          <Route
+            path="/modulos/apoio-gestor"
+            element={
+              canAccessApoioGestor ? (
+                <ApoioGestorPage isOnline={isOnline} userName={displayContext.nome} />
+              ) : (
+                <Navigate to="/inicio" replace />
               )
             }
           />
