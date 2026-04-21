@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(powershell -Command ' *)",
-      "Bash(powershell -Command \"\\(Get-Content 'c:\\\\PROJETOS\\\\AUDITORIA\\\\frontend\\\\src\\\\styles.css' | Select-String -Pattern '\\\\.checklist-'\\).Count\")"
+      "Bash(powershell -Command \"\\(Get-Content 'c:\\\\PROJETOS\\\\AUDITORIA\\\\frontend\\\\src\\\\styles.css' | Select-String -Pattern '\\\\.checklist-'\\).Count\")",
+      "Bash(../.venv/Scripts/python.exe main.py bootstrap --config config.yml --env-file .env)"
     ]
   }
 }

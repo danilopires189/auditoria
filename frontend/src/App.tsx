@@ -2687,7 +2687,7 @@ export default function App() {
             path="/modulos/apoio-gestor"
             element={
               canAccessApoioGestor ? (
-                <ApoioGestorPage isOnline={isOnline} userName={displayContext.nome} />
+                <ApoioGestorPage isOnline={isOnline} userName={displayContext.nome} cdName={displayContext.cdLabel} />
               ) : (
                 <Navigate to="/inicio" replace />
               )
