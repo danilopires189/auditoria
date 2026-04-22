@@ -107,6 +107,8 @@ export const PEDIDO_DIRETO_LABEL_PRINT_CSS = `
 :root {
   --pd-label-width: 156mm;
   --pd-label-height: 68mm;
+  --pd-label-brand-width: 26mm;
+  --pd-label-brand-height: 11mm;
 }
 * { box-sizing: border-box; }
 html, body {
@@ -126,13 +128,13 @@ body {
 }
 .pedido-direto-label-card {
   width: var(--pd-label-width);
-  min-height: var(--pd-label-height);
+  height: var(--pd-label-height);
   border: 1px solid #111827;
   border-radius: 4mm;
   background: #ffffff;
   padding: 3mm;
   display: grid;
-  gap: 2mm;
+  gap: 1mm;
   page-break-inside: avoid;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
 }
@@ -144,10 +146,10 @@ body {
   border: 1px solid #cad5e7;
   border-radius: 3mm;
   background: #f5f8ff;
-  padding: 1.5mm 2mm;
+  padding: 0.75mm 2mm;
 }
 .pedido-direto-label-title {
-  font-size: 14pt;
+  font-size: 10pt;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -155,13 +157,20 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 27.2mm;
-  min-height: 11.2mm;
+  width: var(--pd-label-brand-width);
+  min-width: var(--pd-label-brand-width);
+  max-width: var(--pd-label-brand-width);
+  height: var(--pd-label-brand-height);
+  min-height: var(--pd-label-brand-height);
+  max-height: var(--pd-label-brand-height);
+  flex: 0 0 var(--pd-label-brand-width);
+  overflow: hidden;
 }
 .pedido-direto-label-brand img {
   display: block;
   width: 100%;
-  height: auto;
+  max-width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 .pedido-direto-label-main {
@@ -228,10 +237,11 @@ body {
   .pedido-direto-label-card {
     display: grid;
     width: var(--pd-label-width);
-    min-height: var(--pd-label-height);
+    height: var(--pd-label-height);
     margin: 0;
     border-radius: 0;
     box-shadow: none;
+    overflow: hidden;
     page-break-after: always;
     break-after: page;
     page-break-inside: avoid;
@@ -285,7 +295,7 @@ export function PedidoDiretoLabelSheet({ labels }: { labels: PedidoDiretoLabelDa
           </div>
 
           <footer className="pedido-direto-label-meta">
-            <span>CD: <strong>{label.cd_nome || `CD ${label.cd}`}</strong></span>
+            <span><strong>{label.cd_nome || `CD ${label.cd}`}</strong></span>
             {label.matricula ? <span>MATRÍCULA: <strong>{label.matricula}</strong></span> : null}
             <span>SEPARADO EM: <strong>{formatGeneratedAt(label.generated_at)}</strong></span>
           </footer>

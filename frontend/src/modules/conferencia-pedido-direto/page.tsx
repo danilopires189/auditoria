@@ -2055,6 +2055,7 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="${document.baseURI}" />
     <title>Etiquetas Pedido Direto</title>
     <style>${PEDIDO_DIRETO_LABEL_PRINT_CSS}</style>
   </head>
@@ -2064,17 +2065,37 @@ export default function ConferenciaPedidoDiretoPage({ isOnline, profile }: Confe
 </html>`);
     printDocument.close();
 
-    window.setTimeout(() => {
-      try {
+    const waitForImages = async () => {
+      const images = Array.from(printDocument.images);
+      if (!images.length) return;
+      await Promise.all(images.map((image) => {
+        if (image.complete) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          const finish = () => resolve();
+          image.addEventListener("load", finish, { once: true });
+          image.addEventListener("error", finish, { once: true });
+        });
+      }));
+    };
+
+    const waitForLayout = async () => {
+      await waitForImages();
+      await new Promise<void>((resolve) => printWindow.requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => printWindow.requestAnimationFrame(() => resolve()));
+    };
+
+    printWindow.onafterprint = cleanup;
+
+    void waitForLayout()
+      .then(() => {
         printWindow.focus();
         printWindow.print();
         setLabelError(null);
-      } catch {
+      })
+      .catch(() => {
         setLabelError("Nao foi possivel iniciar a impressao da etiqueta.");
-      } finally {
         cleanup();
-      }
-    }, 180);
+      });
   }, [activeVolume, labelVolumeCountInput]);
 
   const discardPendingSyncRow = useCallback(async (row: PedidoDiretoLocalVolume) => {
