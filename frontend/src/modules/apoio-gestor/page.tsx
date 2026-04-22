@@ -111,6 +111,7 @@ function ArcGauge({ pct, tone }: ArcGaugeProps) {
 
 interface ActivityCardProps {
   row: ApoioGestorActivityRow;
+  noMetaReason: string;
 }
 
 function formatMetric(value: number): string {
@@ -127,11 +128,44 @@ function dayStatusLabel(flags: ApoioGestorDayFlags): string | null {
   return null;
 }
 
-function ActivityCard({ row }: ActivityCardProps) {
+function tonePriority(tone: ReturnType<typeof pctTone>): number {
+  if (tone === "danger") return 0;
+  if (tone === "warning") return 1;
+  if (tone === "success") return 2;
+  if (tone === "exceeded") return 3;
+  return 4;
+}
+
+function describeDelta(row: ApoioGestorActivityRow, tone: ReturnType<typeof pctTone>): string {
+  if (row.target_today == null) return "Sem meta configurada para hoje";
+  const diff = row.actual_today - row.target_today;
+  if (tone === "danger" || tone === "warning") {
+    return `Faltam ${formatMetric(Math.max(0, Math.abs(diff)))} ${row.unit_label.toLowerCase()}`;
+  }
+  if (tone === "success") {
+    return "Meta batida dentro da faixa esperada";
+  }
+  if (tone === "exceeded") {
+    return `Acima ${formatMetric(Math.max(0, diff))} ${row.unit_label.toLowerCase()}`;
+  }
+  return "Sem percentual calculado";
+}
+
+function toneSummaryLabel(tone: ReturnType<typeof pctTone>): string {
+  if (tone === "danger") return "Prioridade alta";
+  if (tone === "warning") return "Atenção";
+  if (tone === "success") return "Meta batida";
+  if (tone === "exceeded") return "Meta superada";
+  return "Sem meta";
+}
+
+function ActivityCard({ row, noMetaReason }: ActivityCardProps) {
   const tone = pctTone(row.achievement_pct);
   const pctDisplay =
     row.achievement_pct !== null ? `${row.achievement_pct.toFixed(1)}%` : "—";
   const cardToneClass = row.has_meta ? `ag-card--${tone}` : "";
+  const deltaLabel = describeDelta(row, tone);
+  const toneSummary = toneSummaryLabel(tone);
 
   const badgeLabel =
     tone === "success"
@@ -148,7 +182,10 @@ function ActivityCard({ row }: ActivityCardProps) {
     return (
       <div className={`ag-card ag-card--meta ${cardToneClass}`}>
         <div className={`ag-card__topbar ag-card__topbar--${tone}`}>
-          <span className="ag-card__label">{row.activity_label}</span>
+          <div className="ag-card__title-wrap">
+            <span className="ag-card__label">{row.activity_label}</span>
+            <span className="ag-card__summary">{toneSummary}</span>
+          </div>
           {badgeLabel && (
             <span className={`ag-card__badge ag-card__badge--${tone}`}>{badgeLabel}</span>
           )}
@@ -171,6 +208,7 @@ function ActivityCard({ row }: ActivityCardProps) {
                 {row.target_today != null ? formatMetric(row.target_today) : "—"}
               </strong>
             </div>
+            <div className={`ag-card__signal ag-card__signal--${tone}`}>{deltaLabel}</div>
             <div className="ag-card__unit-row">{row.unit_label}</div>
           </div>
         </div>
@@ -181,7 +219,10 @@ function ActivityCard({ row }: ActivityCardProps) {
   return (
     <div className="ag-card ag-card--simple">
       <div className="ag-card__topbar ag-card__topbar--simple">
-        <span className="ag-card__label">{row.activity_label}</span>
+        <div className="ag-card__title-wrap">
+          <span className="ag-card__label">{row.activity_label}</span>
+          <span className="ag-card__summary">Monitoramento livre</span>
+        </div>
         <span className="ag-card__badge ag-card__badge--simple">Sem meta</span>
       </div>
       <div className="ag-card__body ag-card__body--simple">
@@ -189,7 +230,7 @@ function ActivityCard({ row }: ActivityCardProps) {
           {formatMetric(row.actual_today)}
         </div>
         <div className="ag-card__unit-label">{row.unit_label}</div>
-        <div className="ag-card__simple-caption">Acompanhamento livre no dia</div>
+        <div className="ag-card__simple-caption">{noMetaReason}</div>
       </div>
     </div>
   );
@@ -255,13 +296,26 @@ export default function ApoioGestorPage({
 
   const metaRows = [...rows]
     .filter((r) => r.has_meta)
-    .sort((a, b) => a.activity_label.localeCompare(b.activity_label, "pt-BR"));
+    .sort((a, b) => {
+      const toneDiff = tonePriority(pctTone(a.achievement_pct)) - tonePriority(pctTone(b.achievement_pct));
+      if (toneDiff !== 0) return toneDiff;
+      const pctA = a.achievement_pct ?? -1;
+      const pctB = b.achievement_pct ?? -1;
+      if (pctA !== pctB) return pctA - pctB;
+      return a.activity_label.localeCompare(b.activity_label, "pt-BR");
+    });
   const simpleRows = rows
     .filter((r) => !r.has_meta)
     .sort((a, b) => a.activity_label.localeCompare(b.activity_label, "pt-BR"));
+  const criticalCount = metaRows.filter((row) => pctTone(row.achievement_pct) === "danger").length;
+  const warningCount = metaRows.filter((row) => pctTone(row.achievement_pct) === "warning").length;
   const hitCount = metaRows.filter((row) => pctTone(row.achievement_pct) === "success").length;
+  const exceededCount = metaRows.filter((row) => pctTone(row.achievement_pct) === "exceeded").length;
   const totalActual = rows.reduce((sum, row) => sum + row.actual_today, 0);
   const currentDayStatus = dayStatusLabel(dayFlags);
+  const noMetaReason = currentDayStatus
+    ? `Dia classificado como ${currentDayStatus.toLowerCase()} no Meta Mês`
+    : "Sem meta configurada para hoje";
 
   return (
     <div className="ag-page">
@@ -301,6 +355,7 @@ export default function ApoioGestorPage({
               <div className="ag-header__info-card">
                 <span className="ag-header__info-label">Monitoramento</span>
                 <strong className="ag-header__info-value">{formatMonitoringLabel(dayFlags.meta_defined_count)}</strong>
+                <span className="ag-header__info-subvalue">Painel priorizado por urgência</span>
               </div>
               {lastRefresh && (
                 <div className="ag-header__info-card ag-header__info-card--refresh">
@@ -312,6 +367,7 @@ export default function ApoioGestorPage({
                       minute: "2-digit",
                     })}
                   </strong>
+                  <span className="ag-header__info-subvalue">Leitura do dia em tempo real</span>
                 </div>
               )}
             </div>
@@ -319,17 +375,35 @@ export default function ApoioGestorPage({
         </section>
 
         <section className="ag-overview">
-          <article className="ag-overview__card">
-            <span className="ag-overview__label">Atividades monitoradas</span>
-            <strong className="ag-overview__value">{rows.length}</strong>
+          <article className="ag-overview__card ag-overview__card--strong">
+            <span className="ag-overview__label">Com meta hoje</span>
+            <strong className="ag-overview__value">{metaRows.length}</strong>
+            <span className="ag-overview__hint">Indicadores ativos no Meta Mês</span>
+          </article>
+          <article className="ag-overview__card ag-overview__card--danger">
+            <span className="ag-overview__label">Abaixo da meta</span>
+            <strong className="ag-overview__value">{criticalCount}</strong>
+            <span className="ag-overview__hint">Precisam de ação primeiro</span>
+          </article>
+          <article className="ag-overview__card ag-overview__card--warning">
+            <span className="ag-overview__label">Em andamento</span>
+            <strong className="ag-overview__value">{warningCount}</strong>
+            <span className="ag-overview__hint">Ainda abaixo da faixa ideal</span>
           </article>
           <article className="ag-overview__card ag-overview__card--accent">
-            <span className="ag-overview__label">Metas atingidas</span>
+            <span className="ag-overview__label">Meta batida</span>
             <strong className="ag-overview__value">{hitCount}</strong>
+            <span className="ag-overview__hint">Faixa de 100% a 119%</span>
+          </article>
+          <article className="ag-overview__card ag-overview__card--info">
+            <span className="ag-overview__label">Meta superada</span>
+            <strong className="ag-overview__value">{exceededCount}</strong>
+            <span className="ag-overview__hint">Acima de 120%</span>
           </article>
           <article className="ag-overview__card">
-            <span className="ag-overview__label">Volume total do dia</span>
+            <span className="ag-overview__label">Volume do dia</span>
             <strong className="ag-overview__value">{formatMetric(totalActual)}</strong>
+            <span className="ag-overview__hint">Soma de todas as atividades</span>
           </article>
         </section>
 
@@ -359,7 +433,7 @@ export default function ApoioGestorPage({
                 </div>
                 <div className="ag-grid">
                   {metaRows.map((r) => (
-                    <ActivityCard key={r.activity_key} row={r} />
+                    <ActivityCard key={r.activity_key} row={r} noMetaReason={noMetaReason} />
                   ))}
                 </div>
               </section>
@@ -372,7 +446,7 @@ export default function ApoioGestorPage({
                 </div>
                 <div className="ag-grid">
                   {simpleRows.map((r) => (
-                    <ActivityCard key={r.activity_key} row={r} />
+                    <ActivityCard key={r.activity_key} row={r} noMetaReason={noMetaReason} />
                   ))}
                 </div>
               </section>
