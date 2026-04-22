@@ -117,6 +117,7 @@ html, body {
   background: #ffffff;
   color: #111827;
   font-family: "Arial", sans-serif;
+  font-weight: 700;
 }
 body {
   padding: 0;
@@ -149,7 +150,7 @@ body {
   padding: 0.75mm 2mm;
 }
 .pedido-direto-label-title {
-  font-size: 10pt;
+  font-size: 12pt;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -183,7 +184,7 @@ body {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 1mm 2mm;
-  font-size: 11pt;
+  font-size: 13pt;
 }
 .pedido-direto-label-info dt {
   margin: 0;
@@ -191,6 +192,7 @@ body {
 }
 .pedido-direto-label-info dd {
   margin: 0;
+  font-weight: 700;
 }
 .pedido-direto-label-volume {
   border: 1px solid #111827;
@@ -202,16 +204,16 @@ body {
   text-align: center;
 }
 .pedido-direto-label-volume-title {
-  font-size: 10pt;
+  font-size: 12pt;
   font-weight: 800;
 }
 .pedido-direto-label-volume-main {
-  font-size: 22pt;
+  font-size: 24pt;
   line-height: 1;
   font-weight: 900;
 }
 .pedido-direto-label-volume-note {
-  font-size: 9pt;
+  font-size: 11pt;
   font-weight: 700;
 }
 .pedido-direto-label-meta {
@@ -219,6 +221,7 @@ body {
   flex-wrap: wrap;
   gap: 6mm;
   font-size: 9pt;
+  font-weight: 700;
 }
 .pedido-direto-label-meta strong {
   font-weight: 800;
@@ -274,9 +277,7 @@ export function PedidoDiretoLabelSheet({ labels }: { labels: PedidoDiretoLabelDa
               <dt>LOJA:</dt>
               <dd>{formatLoja(label)}</dd>
               <dt>N° PEDIDO:</dt>
-              <dd>{formatPedido(label.pedido)}</dd>
-              <dt>SEQ:</dt>
-              <dd>{formatSeq(label.sq)}</dd>
+              <dd>{`${formatPedido(label.pedido)}  SEQ: ${formatSeq(label.sq)}`}</dd>
               <dt>DT PEDIDO:</dt>
               <dd>{formatPedidoDate(label.pedido)}</dd>
               <dt>ROTA:</dt>
