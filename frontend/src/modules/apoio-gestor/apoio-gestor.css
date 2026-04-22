@@ -612,7 +612,7 @@
   }
 
   .ag-overview {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .ag-header__info-grid {
@@ -620,10 +620,21 @@
   }
 
   .ag-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .ag-card__metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 390px) {
+  .ag-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .ag-grid {
     grid-template-columns: 1fr;
   }
 }
