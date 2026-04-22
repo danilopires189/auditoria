@@ -220,7 +220,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6mm;
-  font-size: 9pt;
+  font-size: 11pt;
   font-weight: 700;
 }
 .pedido-direto-label-meta strong {
@@ -277,7 +277,7 @@ export function PedidoDiretoLabelSheet({ labels }: { labels: PedidoDiretoLabelDa
               <dt>LOJA:</dt>
               <dd>{formatLoja(label)}</dd>
               <dt>N° PEDIDO:</dt>
-              <dd>{`${formatPedido(label.pedido)}  SEQ: ${formatSeq(label.sq)}`}</dd>
+              <dd>{`${formatPedido(label.pedido)}         SEQ: ${formatSeq(label.sq)}`}</dd>
               <dt>DT PEDIDO:</dt>
               <dd>{formatPedidoDate(label.pedido)}</dd>
               <dt>ROTA:</dt>
