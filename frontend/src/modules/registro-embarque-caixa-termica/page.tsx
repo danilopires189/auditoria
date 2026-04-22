@@ -21,9 +21,12 @@ import {
 } from "./storage";
 import {
   fetchAndCacheCaixaTermicaBoxes,
+  fetchCaixaTermicaCadastroReportRows,
   fetchCaixaTermicaFeedDiario,
   fetchCaixaTermicaHistorico,
+  fetchCaixaTermicaReportRowsCursor,
   lookupCaixaTermicaByCodigo as lookupRemoteCaixaTermicaByCodigo,
+  countCaixaTermicaReportRows,
   rpcDeleteCaixaTermica,
   rpcExpedirCaixaTermica,
   rpcInsertCaixaTermica,
@@ -43,10 +46,12 @@ import {
 } from "../auditoria-caixa/sync";
 import type {
   CaixaTermicaBox,
+  CaixaTermicaCadastroReportRow,
   CaixaTermicaFeedRow,
   CaixaTermicaMarca,
   CaixaTermicaModuleProfile,
   CaixaTermicaMov,
+  CaixaTermicaReportRow,
   CaixaTermicaView,
   EditarCaixaDraft,
   ExpedicaoDraft,
@@ -63,6 +68,7 @@ const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const QUICK_SYNC_THROTTLE_MS = 2500;
 const FEED_REFRESH_INTERVAL_MS = 60_000;
 const ROUTE_CACHE_REFRESH_COOLDOWN_MS = 45_000;
+const REPORT_EXPORT_BATCH_SIZE = 1000;
 const PLATE_RE = /^[A-Z]{3}-?(?:\d{4}|\d[A-Z]\d{2})$/i;
 const CAIXA_TERMICA_TITLE = "Caixa Térmica";
 const CAIXA_TERMICA_MARCAS: CaixaTermicaMarca[] = ["Ecobox", "Coleman", "Isopor genérica"];
@@ -79,6 +85,40 @@ function cdCodeLabel(cd: number | null): string {
   return `CD ${String(cd).padStart(2, "0")}`;
 }
 
+const REPORT_EXPORT_HEADERS = [
+  "Data/Hora",
+  "CD",
+  "Codigo caixa",
+  "Descricao",
+  "Capacidade (L)",
+  "Marca",
+  "Tipo",
+  "Etiqueta volume",
+  "Filial",
+  "Filial nome",
+  "Rota",
+  "Pedido",
+  "Data pedido",
+  "Placa",
+  "Observacao recebimento",
+  "Matricula responsavel",
+  "Nome responsavel"
+] as const;
+
+const REPORT_CADASTRO_HEADERS = [
+  "Codigo",
+  "Descricao",
+  "Capacidade (L)",
+  "Marca",
+  "Status",
+  "Criado em",
+  "Matricula criacao",
+  "Nome criacao",
+  "Atualizado em",
+  "Matricula atualizacao",
+  "Nome atualizacao"
+] as const;
+
 function SyncIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -86,6 +126,17 @@ function SyncIcon() {
       <path d="M4 17v-5h5" />
       <path d="M7.5 9A6 6 0 0 1 18 7" />
       <path d="M16.5 15A6 6 0 0 1 6 17" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 3h7l5 5v13H7z" />
+      <path d="M14 3v5h5" />
+      <path d="M10 12h6" />
+      <path d="M10 16h6" />
     </svg>
   );
 }
@@ -138,6 +189,44 @@ function safeUuid(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function toCaixaTermicaReportSheetRow(row: CaixaTermicaReportRow): (string | number)[] {
+  return [
+    formatDateTimeBrasilia(row.data_hr),
+    row.cd,
+    row.codigo_caixa,
+    row.descricao,
+    row.capacidade_litros ?? "",
+    row.marca ?? "",
+    row.tipo === "expedicao" ? "Expedição" : "Recebimento",
+    row.etiqueta_volume ?? "",
+    row.filial ?? "",
+    row.filial_nome ?? "",
+    row.rota ?? "Sem rota",
+    row.pedido ?? "",
+    formatDateOnlyPtBR(row.data_pedido),
+    row.placa ?? "",
+    row.obs_recebimento ?? "",
+    row.mat_resp ?? "",
+    row.nome_resp ?? ""
+  ];
+}
+
+function toCaixaTermicaCadastroSheetRow(row: CaixaTermicaCadastroReportRow): (string | number)[] {
+  return [
+    row.codigo,
+    row.descricao,
+    row.capacidade_litros ?? "",
+    row.marca ?? "",
+    row.status === "em_transito" ? "Em trânsito" : "Disponível",
+    formatDateTimeBrasilia(row.created_at),
+    row.created_mat ?? "",
+    row.created_nome ?? "",
+    formatDateTimeBrasilia(row.updated_at),
+    row.updated_mat ?? "",
+    row.updated_nome ?? ""
+  ];
+}
+
 // ── Scanner input state ──────────────────────────────────────
 
 interface ScannerInputState {
@@ -174,6 +263,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   profile
 }: RegistroEmbarqueCaixaTermicaPageProps) {
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
+  const [isDesktop, setIsDesktop] = useState(false);
   const isGlobalAdmin = useMemo(
     () => profile.role === "admin" && profile.cd_default == null,
     [profile.cd_default, profile.role]
@@ -268,6 +358,14 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   const [feedRows, setFeedRows] = useState<CaixaTermicaFeedRow[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [showReport, setShowReport] = useState(false);
+  const [reportDtIni, setReportDtIni] = useState(todayIsoBrasilia());
+  const [reportDtFim, setReportDtFim] = useState(todayIsoBrasilia());
+  const [reportCount, setReportCount] = useState<number | null>(null);
+  const [reportBusySearch, setReportBusySearch] = useState(false);
+  const [reportBusyExport, setReportBusyExport] = useState(false);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   // ── Derived state ──
   const filteredBoxes = useMemo(() => {
@@ -292,6 +390,8 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     () => (profile.role === "admin" || isGlobalAdmin) && isOnline,
     [isGlobalAdmin, isOnline, profile.role]
   );
+  const canSeeReportTools = isDesktop && profile.role === "admin";
+  const canRunReport = canSeeReportTools && isOnline && currentCd != null;
   const offlineReady = preferOfflineMode && dbRotasCount > 0;
   const anyOverlayOpen = Boolean(
     scanActionBox ||
@@ -305,6 +405,19 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   );
 
   // ── Load CD prefs ──
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(min-width: 980px)");
+    const onChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
+    setIsDesktop(media.matches);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", onChange);
+      return () => media.removeEventListener("change", onChange);
+    }
+    media.addListener(onChange);
+    return () => media.removeListener(onChange);
+  }, []);
+
   useEffect(() => {
     if (!profile.user_id) return;
     setPreferencesReady(false);
@@ -409,6 +522,18 @@ export default function RegistroEmbarqueCaixaTermicaPage({
       documentElement.style.overscrollBehavior = previousHtmlOverscroll;
     };
   }, [anyOverlayOpen]);
+
+  useEffect(() => {
+    if (!reportError) return undefined;
+    const timer = window.setTimeout(() => setReportError(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [reportError]);
+
+  useEffect(() => {
+    if (!reportMessage) return undefined;
+    const timer = window.setTimeout(() => setReportMessage(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [reportMessage]);
 
   // ── Success toast ──
   const showSuccess = useCallback((msg: string) => {
@@ -1019,6 +1144,125 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     }
   }, [recebimentoDraft, currentCd, isOnline, profile, showSuccess, triggerQuickSync]);
 
+  const runReportSearch = useCallback(async () => {
+    if (!canRunReport || currentCd == null) return;
+    if (!reportDtIni || !reportDtFim) {
+      setReportError("Informe data inicial e final para gerar o relatório.");
+      return;
+    }
+
+    const dtIni = new Date(reportDtIni);
+    const dtFim = new Date(reportDtFim);
+    if (Number.isNaN(dtIni.getTime()) || Number.isNaN(dtFim.getTime())) {
+      setReportError("Período inválido.");
+      return;
+    }
+    if (dtFim < dtIni) {
+      setReportError("A data final não pode ser menor que a data inicial.");
+      return;
+    }
+
+    setReportBusySearch(true);
+    setReportError(null);
+    setReportMessage(null);
+    try {
+      const total = await countCaixaTermicaReportRows({
+        dtIni: reportDtIni,
+        dtFim: reportDtFim,
+        cd: currentCd
+      });
+      setReportCount(total);
+      setReportMessage(total > 0 ? `${total} movimentação(ões) encontrada(s).` : "Nenhuma movimentação encontrada no período.");
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Falha ao buscar relatório.");
+      setReportCount(null);
+    } finally {
+      setReportBusySearch(false);
+    }
+  }, [canRunReport, currentCd, reportDtFim, reportDtIni]);
+
+  const runReportExport = useCallback(async () => {
+    if (!canRunReport || currentCd == null || !reportCount || reportCount <= 0) return;
+    setReportBusyExport(true);
+    setReportError(null);
+    setReportMessage(null);
+
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+      const cadastroRows = await fetchCaixaTermicaCadastroReportRows(currentCd);
+      const cadastroWorksheet = XLSX.utils.aoa_to_sheet([Array.from(REPORT_CADASTRO_HEADERS)]);
+      XLSX.utils.sheet_add_aoa(
+        cadastroWorksheet,
+        cadastroRows.map((row) => toCaixaTermicaCadastroSheetRow(row)),
+        { origin: -1 }
+      );
+      XLSX.utils.book_append_sheet(workbook, cadastroWorksheet, "Cadastro");
+
+      const embarqueWorksheet = XLSX.utils.aoa_to_sheet([Array.from(REPORT_EXPORT_HEADERS)]);
+      const recebimentoWorksheet = XLSX.utils.aoa_to_sheet([Array.from(REPORT_EXPORT_HEADERS)]);
+      XLSX.utils.book_append_sheet(workbook, embarqueWorksheet, "Embarque");
+      XLSX.utils.book_append_sheet(workbook, recebimentoWorksheet, "Recebimento");
+
+      let cursorDt: string | null = null;
+      let cursorId: string | null = null;
+      let processed = 0;
+
+      while (processed < reportCount) {
+        const rows = await fetchCaixaTermicaReportRowsCursor(
+          { dtIni: reportDtIni, dtFim: reportDtFim, cd: currentCd },
+          { cursorDt, cursorId, limit: REPORT_EXPORT_BATCH_SIZE }
+        );
+
+        if (rows.length === 0) break;
+
+        const embarqueRows = rows.filter((row) => row.tipo === "expedicao");
+        const recebimentoRows = rows.filter((row) => row.tipo === "recebimento");
+
+        if (embarqueRows.length > 0) {
+          XLSX.utils.sheet_add_aoa(
+            embarqueWorksheet,
+            embarqueRows.map((row) => toCaixaTermicaReportSheetRow(row)),
+            { origin: -1 }
+          );
+        }
+
+        if (recebimentoRows.length > 0) {
+          XLSX.utils.sheet_add_aoa(
+            recebimentoWorksheet,
+            recebimentoRows.map((row) => toCaixaTermicaReportSheetRow(row)),
+            { origin: -1 }
+          );
+        }
+
+        processed += rows.length;
+        setReportMessage(`Gerando Excel... ${processed}/${reportCount}`);
+
+        const lastRow = rows[rows.length - 1];
+        cursorDt = lastRow.data_hr;
+        cursorId = lastRow.id;
+
+        if (rows.length < REPORT_EXPORT_BATCH_SIZE) break;
+      }
+
+      if (processed === 0 && cadastroRows.length === 0) {
+        setReportMessage("Nenhum dado disponível para exportação.");
+        return;
+      }
+
+      XLSX.writeFile(
+        workbook,
+        `relatorio-caixa-termica-${reportDtIni}-${reportDtFim}-cd${String(currentCd).padStart(2, "0")}.xlsx`,
+        { compression: true }
+      );
+      setReportMessage(`Relatório gerado com sucesso (${processed} linhas).`);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Falha ao gerar relatório Excel.");
+    } finally {
+      setReportBusyExport(false);
+    }
+  }, [canRunReport, currentCd, reportCount, reportDtFim, reportDtIni]);
+
   // ── Render ────────────────────────────────────────────────
 
   return (
@@ -1074,6 +1318,8 @@ export default function RegistroEmbarqueCaixaTermicaPage({
         )}
         {offlineErrorMessage ? <div className="alert error">{offlineErrorMessage}</div> : null}
         {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+        {reportError ? <div className="alert error">{reportError}</div> : null}
+        {reportMessage ? <div className="alert success">{reportMessage}</div> : null}
         {scanActionBusy ? <div className="alert success">Buscando caixa bipada...</div> : null}
         {offlineReady ? (
           <div className="alert success">
@@ -1112,7 +1358,79 @@ export default function RegistroEmbarqueCaixaTermicaPage({
             <span aria-hidden="true"><SyncIcon /></span>
             {busyRefresh || busySync ? "Sincronizando..." : "Sincronizar agora"}
           </button>
+          {canSeeReportTools ? (
+            <button
+              type="button"
+              className={`btn btn-muted termo-report-toggle${showReport ? " is-active" : ""}`}
+              aria-pressed={showReport}
+              onClick={() => {
+                setShowReport((value) => {
+                  const next = !value;
+                  if (next) {
+                    const today = todayIsoBrasilia();
+                    setReportDtIni(today);
+                    setReportDtFim(today);
+                  }
+                  return next;
+                });
+                setReportCount(null);
+                setReportError(null);
+                setReportMessage(null);
+              }}
+              title="Buscar movimentações para relatório"
+              disabled={!isOnline || currentCd == null}
+            >
+              <span className="termo-report-toggle-icon" aria-hidden="true"><FileIcon /></span>
+              Relatório Excel
+            </button>
+          ) : null}
         </div>
+
+        {showReport && canSeeReportTools ? (
+          <section className="coleta-report-panel">
+            <div className="coleta-report-head">
+              <h3>Relatório de Caixa Térmica (Admin)</h3>
+              <p>Consulte o período e exporte as movimentações do CD atual.</p>
+            </div>
+            <div className="coleta-report-grid">
+              <label>
+                Data inicial
+                <input
+                  type="date"
+                  autoComplete="off"
+                  value={reportDtIni}
+                  onChange={(event) => setReportDtIni(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Data final
+                <input
+                  type="date"
+                  autoComplete="off"
+                  value={reportDtFim}
+                  onChange={(event) => setReportDtFim(event.target.value)}
+                  required
+                />
+              </label>
+            </div>
+            <div className="coleta-report-actions">
+              <button type="button" className="btn btn-muted" onClick={() => void runReportSearch()} disabled={!canRunReport || reportBusySearch}>
+                {reportBusySearch ? "Buscando..." : "Buscar no período"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary coleta-export-btn"
+                onClick={() => void runReportExport()}
+                disabled={!canRunReport || reportBusyExport || (reportCount ?? 0) <= 0}
+              >
+                <span aria-hidden="true"><FileIcon /></span>
+                {reportBusyExport ? "Gerando Excel..." : "Gerar relatório Excel"}
+              </button>
+            </div>
+            {reportCount != null ? <p className="coleta-report-count">Registros encontrados: {reportCount}</p> : null}
+          </section>
+        ) : null}
 
         {/* ── LIST VIEW ── */}
         {view === "list" && (

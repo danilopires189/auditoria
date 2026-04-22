@@ -9,9 +9,12 @@ import {
 } from "./storage";
 import type {
   CaixaTermicaBox,
+  CaixaTermicaCadastroReportRow,
   CaixaTermicaFeedRow,
   CaixaTermicaMarca,
   CaixaTermicaMov,
+  CaixaTermicaReportFilters,
+  CaixaTermicaReportRow,
   CaixaTermicaTipoMov
 } from "./types";
 
@@ -35,6 +38,13 @@ function toErrorMessage(error: unknown): string {
     if (n.includes("APENAS_ADMIN")) return "Apenas administradores podem editar ou excluir caixas.";
     if (n.includes("CAIXA_EM_TRANSITO_NAO_PODE_EXCLUIR")) return "Receba a caixa antes de excluir/inativar.";
     if (n.includes("CAIXA_ID_OBRIGATORIO")) return "ID da caixa não informado.";
+    if (n.includes("APENAS_ADMIN")) return "Apenas administradores podem gerar este relatório.";
+    if (n.includes("PERIODO_OBRIGATORIO")) return "Informe data inicial e final para gerar o relatório.";
+    if (n.includes("PERIODO_INVALIDO")) return "A data final não pode ser menor que a data inicial.";
+    if (n.includes("JANELA_MAX_31_DIAS")) return "O período máximo permitido é de 31 dias.";
+    if (n.includes("CD_SEM_ACESSO")) return "Você não possui acesso ao CD informado.";
+    if (n.includes("CD_NAO_DEFINIDO_USUARIO")) return "CD não definido para este usuário.";
+    if (n.includes("CURSOR_INVALIDO")) return "Cursor inválido para exportação.";
     if (n.includes("ETIQUETA_") || n.includes("PEDIDO_INVALIDO") || n.includes("FILIAL_INVALIDA")) {
       return "Etiqueta de volume inválida. Revise e tente novamente.";
     }
@@ -154,6 +164,47 @@ function mapRpcMovRow(raw: Record<string, unknown>): CaixaTermicaMov {
     data_hr: parseString(raw.data_hr),
     created_at: parseString(raw.created_at),
     transit_minutes: null
+  };
+}
+
+function mapRpcReportRow(raw: Record<string, unknown>): CaixaTermicaReportRow {
+  return {
+    id: parseString(raw.id),
+    caixa_id: parseString(raw.caixa_id),
+    codigo_caixa: parseString(raw.codigo_caixa).toUpperCase(),
+    descricao: parseString(raw.descricao),
+    capacidade_litros: parseNullableInteger(raw.capacidade_litros),
+    marca: parseMarca(raw.marca),
+    tipo: raw.tipo === "recebimento" ? "recebimento" : "expedicao",
+    cd: parseInteger(raw.cd),
+    data_hr: parseString(raw.data_hr),
+    etiqueta_volume: parseNullableString(raw.etiqueta_volume),
+    filial: parseNullableInteger(raw.filial),
+    filial_nome: parseNullableString(raw.filial_nome),
+    rota: parseNullableString(raw.rota),
+    pedido: parseNullableInteger(raw.pedido),
+    data_pedido: parseNullableString(raw.data_pedido),
+    placa: parseNullableString(raw.placa),
+    obs_recebimento: parseNullableString(raw.obs_recebimento),
+    mat_resp: parseNullableString(raw.mat_resp),
+    nome_resp: parseNullableString(raw.nome_resp)
+  };
+}
+
+function mapRpcCadastroReportRow(raw: Record<string, unknown>): CaixaTermicaCadastroReportRow {
+  return {
+    id: parseString(raw.id),
+    codigo: parseString(raw.codigo).toUpperCase(),
+    descricao: parseString(raw.descricao),
+    capacidade_litros: parseNullableInteger(raw.capacidade_litros),
+    marca: parseMarca(raw.marca),
+    status: raw.status === "em_transito" ? "em_transito" : "disponivel",
+    created_at: parseString(raw.created_at),
+    created_mat: parseNullableString(raw.created_mat),
+    created_nome: parseNullableString(raw.created_nome),
+    updated_at: parseString(raw.updated_at),
+    updated_mat: parseNullableString(raw.updated_mat),
+    updated_nome: parseNullableString(raw.updated_nome)
   };
 }
 
@@ -591,6 +642,49 @@ export async function fetchCaixaTermicaFeedDiario(
       caixas
     };
   });
+}
+
+export async function countCaixaTermicaReportRows(filters: CaixaTermicaReportFilters): Promise<number> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_caixa_termica_report_count", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  return parseInteger(data, 0);
+}
+
+export async function fetchCaixaTermicaReportRowsCursor(
+  filters: CaixaTermicaReportFilters,
+  options?: {
+    cursorDt?: string | null;
+    cursorId?: string | null;
+    limit?: number;
+  }
+): Promise<CaixaTermicaReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_caixa_termica_report_rows_cursor", {
+    p_dt_ini: filters.dtIni,
+    p_dt_fim: filters.dtFim,
+    p_cd: filters.cd,
+    p_cursor_dt: options?.cursorDt ?? null,
+    p_cursor_id: options?.cursorId ?? null,
+    p_limit: options?.limit ?? 1000
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((item) => mapRpcReportRow(item as Record<string, unknown>));
+}
+
+export async function fetchCaixaTermicaCadastroReportRows(cd: number): Promise<CaixaTermicaCadastroReportRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_caixa_termica_report_cadastro", {
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((item) => mapRpcCadastroReportRow(item as Record<string, unknown>));
 }
 
 export async function syncPendingCaixaTermicaBoxes(

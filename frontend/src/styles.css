@@ -19491,6 +19491,19 @@ small {
   white-space: normal;
 }
 
+@media (min-width: 980px) {
+  .caixa-termica-shell .termo-actions-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .caixa-termica-shell .termo-actions-row .btn {
+    width: auto;
+    white-space: nowrap;
+  }
+}
+
 .conservadora-actions-row {
   align-items: stretch;
 }

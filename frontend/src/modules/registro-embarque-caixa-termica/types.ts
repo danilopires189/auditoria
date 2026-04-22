@@ -136,3 +136,46 @@ export interface CaixaTermicaPrefs {
 }
 
 export type CaixaTermicaView = "list" | "feed";
+
+export interface CaixaTermicaReportFilters {
+  dtIni: string;
+  dtFim: string;
+  cd: number | null;
+}
+
+export interface CaixaTermicaReportRow {
+  id: string;
+  caixa_id: string;
+  codigo_caixa: string;
+  descricao: string;
+  capacidade_litros: number | null;
+  marca: CaixaTermicaMarca | null;
+  tipo: CaixaTermicaTipoMov;
+  cd: number;
+  data_hr: string;
+  etiqueta_volume: string | null;
+  filial: number | null;
+  filial_nome: string | null;
+  rota: string | null;
+  pedido: number | null;
+  data_pedido: string | null;
+  placa: string | null;
+  obs_recebimento: string | null;
+  mat_resp: string | null;
+  nome_resp: string | null;
+}
+
+export interface CaixaTermicaCadastroReportRow {
+  id: string;
+  codigo: string;
+  descricao: string;
+  capacidade_litros: number | null;
+  marca: CaixaTermicaMarca | null;
+  status: CaixaTermicaStatus;
+  created_at: string;
+  created_mat: string | null;
+  created_nome: string | null;
+  updated_at: string;
+  updated_mat: string | null;
+  updated_nome: string | null;
+}
