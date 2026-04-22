@@ -58,6 +58,7 @@ type RankingMetricConfig = {
 };
 
 const MODULE_DEF = getModuleByKeyOrThrow("produtividade");
+const PRODUTIVIDADE_ENTRIES_LIMIT = 200;
 let reportLogoDataUrlPromise: Promise<string | null> | null = null;
 const ALL_COLLABORATORS_VALUE = "__all__";
 
@@ -471,7 +472,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       dtIni: dateStart,
       dtFim: dateEnd,
       activityKey: nextActivityKey,
-      limit: 500
+      limit: PRODUTIVIDADE_ENTRIES_LIMIT
     });
     setEntries(rows);
   }, [activeCd, dateEnd, dateStart]);
@@ -489,7 +490,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     setExpandedDailyDates(new Set());
     setErrorMessage(null);
     try {
-      const [totals, daily, entryRows] = await Promise.all([
+      const [totals, daily] = await Promise.all([
         fetchProdutividadeActivityTotals({
           cd: activeCd,
           targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
@@ -501,16 +502,16 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
           targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
           dtIni: dateStart,
           dtFim: dateEnd
-        }),
-        fetchProdutividadeEntries({
-          cd: activeCd,
-          targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
-          dtIni: dateStart,
-          dtFim: dateEnd,
-          activityKey: nextActivityKey,
-          limit: 500
         })
       ]);
+      const entryRows = await fetchProdutividadeEntries({
+        cd: activeCd,
+        targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
+        dtIni: dateStart,
+        dtFim: dateEnd,
+        activityKey: nextActivityKey,
+        limit: PRODUTIVIDADE_ENTRIES_LIMIT
+      });
 
       setActivityTotals([...totals].sort((a, b) => a.activity_label.localeCompare(b.activity_label, "pt-BR")));
       setDailyRows(daily);
