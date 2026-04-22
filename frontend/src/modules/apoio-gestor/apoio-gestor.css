@@ -279,6 +279,10 @@
   background: linear-gradient(145deg, #12b76a, #099250);
 }
 
+.ag-card__topbar--exceeded {
+  background: linear-gradient(145deg, #2563eb, #1d4ed8);
+}
+
 .ag-card__topbar--warning {
   background: linear-gradient(145deg, #f79009, #dc6803);
 }
@@ -351,6 +355,10 @@
   color: #099250;
 }
 
+.ag-card__pct--exceeded {
+  color: #1d4ed8;
+}
+
 .ag-card__pct--warning {
   color: #dc6803;
 }
@@ -414,6 +422,7 @@
 }
 
 .ag-card__badge--success,
+.ag-card__badge--exceeded,
 .ag-card__badge--warning,
 .ag-card__badge--danger {
   color: #fff;

@@ -53,8 +53,9 @@ function toDisplayName(name: string): string {
     .join(" ");
 }
 
-function pctTone(pct: number | null): "success" | "warning" | "danger" | "neutral" {
+function pctTone(pct: number | null): "success" | "exceeded" | "warning" | "danger" | "neutral" {
   if (pct === null) return "neutral";
+  if (pct >= 120) return "exceeded";
   if (pct >= 100) return "success";
   if (pct >= 70) return "warning";
   return "danger";
@@ -62,6 +63,7 @@ function pctTone(pct: number | null): "success" | "warning" | "danger" | "neutra
 
 const ARC_COLOR: Record<string, string> = {
   success: "#4d8a6a",
+  exceeded: "#1d4ed8",
   warning: "#b58542",
   danger: "#b16659",
   neutral: "#8f7d6b",
@@ -69,7 +71,7 @@ const ARC_COLOR: Record<string, string> = {
 
 interface ArcGaugeProps {
   pct: number;
-  tone: "success" | "warning" | "danger" | "neutral";
+  tone: "success" | "exceeded" | "warning" | "danger" | "neutral";
 }
 
 function ArcGauge({ pct, tone }: ArcGaugeProps) {
@@ -134,6 +136,8 @@ function ActivityCard({ row }: ActivityCardProps) {
   const badgeLabel =
     tone === "success"
       ? "Meta atingida"
+      : tone === "exceeded"
+      ? "Meta superada"
       : tone === "warning"
       ? "Em andamento"
       : tone === "danger"
