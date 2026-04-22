@@ -23,9 +23,9 @@ echo.
 echo INTERVALOS CONFIGURADOS:
 echo • 30min: DB_ENTRADA_NOTAS, DB_ATENDIMENTO
 echo • 5min: DB_DEVOLUCAO (monitor dedicado)
-echo • 1 HORA: DB_TERMO, DB_PEDIDO_DIRETO, DB_ESTQ_ENTR, DB_BLITZ  
+echo • 1 HORA: DB_TERMO, DB_PEDIDO_DIRETO, DB_PROD_VOL, DB_ESTQ_ENTR, DB_BLITZ  
 echo • 6 HORAS: BD_END
-echo • 1x POR DIA: DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO, DB_PROD_VOL, DB_GESTAO_ESTQ, DB_TRANSF_CD
+echo • 1x POR DIA: DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO, DB_GESTAO_ESTQ, DB_TRANSF_CD
 echo ==========================================
 echo.
 echo Pressione qualquer tecla para continuar...

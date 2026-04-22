@@ -115,8 +115,8 @@ tables:
   db_devolucao:
     file: "DB_DEVOLUCAO.xlsx"
     sheet: "DB_DEVOLUCAO"
-    mode: "full_replace"
-    unique_keys: []
+    mode: "upsert"
+    unique_keys: ["chave"]
     required_columns: ["cd", "chave", "coddv", "dt_gera"]
     refresh_before_load: false
     types:
@@ -227,7 +227,7 @@ tables:
   db_prod_vol:
     file: "DB_PROD_VOL.xlsx"
     sheet: "DB_PROD_VOL"
-    mode: "full_replace"
+    mode: "insert_new"
     unique_keys: []
     required_columns: ["cd", "seq_ped", "filial", "usuario", "vol_conf"]
     refresh_before_load: false

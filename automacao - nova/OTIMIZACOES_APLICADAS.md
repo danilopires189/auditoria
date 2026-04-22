@@ -17,7 +17,7 @@ Mudança de `full_replace` para `upsert` nas seguintes tabelas:
 - `db_termo`: só atualiza o que mudou
 - `db_estq_entr`: só atualiza o que mudou
 - `db_conf_blitz`: só atualiza o que mudou
-- `db_prod_vol`: só atualiza o que mudou
+- `db_prod_vol`: só acrescenta dados novos
 - `db_end`: já estava otimizada
 
 ### 3. Frequência por Arquivo
@@ -31,7 +31,10 @@ Mudança de `full_replace` para `upsert` nas seguintes tabelas:
 - **Benefício:** Mais intuitivo e previsível
 
 **Tabelas com frequência "1x por dia":**
-- DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO, DB_PROD_VOL
+- DB_BARRAS, BD_AVULSO, BD_ROTAS, DB_LOG_END, DB_USUARIO
+
+**Tabelas com frequência "1 hora":**
+- DB_TERMO, DB_PEDIDO_DIRETO, DB_PROD_VOL, DB_ESTQ_ENTR, DB_BLITZ
 
 ### 5. Configurações do Sistema
 - **Pool de conexões:** 5 → 3 (menos conexões simultâneas)

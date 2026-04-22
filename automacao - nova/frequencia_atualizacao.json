@@ -24,7 +24,6 @@
         "BD_ROTAS.xlsx",
         "DB_LOG_END.xlsx",
         "DB_USUARIO.xlsx",
-        "DB_PROD_VOL.xlsx",
         "DB_GESTAO_ESTQ.xlsx",
         "DB_TRANSF_CD.xlsx"
       ]
@@ -42,6 +41,7 @@
       "arquivos": [
         "DB_TERMO.xlsx",
         "DB_PEDIDO_DIRETO.xlsx",
+        "DB_PROD_VOL.xlsx",
         "DB_ESTQ_ENTR.xlsx",
         "DB_BLITZ.xlsx"
       ]
