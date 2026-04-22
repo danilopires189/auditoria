@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -7,36 +7,6 @@ import logoImage from "../assets/logo.png";
 import pmImage from "../assets/pm.png";
 import { supabase, supabaseInitError } from "./lib/supabase";
 import { findModuleByPath } from "./modules/registry";
-import ControleValidadePage from "./modules/controle-validade/page";
-import AtividadeExtraPage from "./modules/atividade-extra/page";
-import BuscaProdutoPage from "./modules/busca-produto/page";
-import GestaoEstoquePage from "./modules/gestao-estoque/page";
-import IndicadoresPage from "./modules/indicadores/page";
-import IndicadoresBlitzPage from "./modules/indicadores/blitz-page";
-import IndicadoresGestaoEstoquePage from "./modules/indicadores/gestao-estoque-page";
-import IndicadoresPvpsAlocacaoPage from "./modules/indicadores/pvps-alocacao-page";
-import ValidarEnderecamentoPage from "./modules/validar-enderecamento/page";
-import ValidarEtiquetaPulmaoPage from "./modules/validar-etiqueta-pulmao/page";
-import AuditoriaCaixaPage from "./modules/auditoria-caixa/page";
-import CheckListPage from "./modules/check-list/page";
-import ColetaMercadoriaPage from "./modules/coleta-mercadoria/page";
-import ConferenciaEntradaNotasPage from "./modules/conferencia-entrada-notas/page";
-import ConferenciaPedidoDiretoPage from "./modules/conferencia-pedido-direto/page";
-import ConferenciaTermoPage from "./modules/conferencia-termo/page";
-import ConferenciaVolumeAvulsoPage from "./modules/conferencia-volume-avulso/page";
-import TransferenciaCdPage from "./modules/transferencia-cd/page";
-import DevolucaoMercadoriaPage from "./modules/devolucao-mercadoria/page";
-import MetaMesPage from "./modules/meta-mes/page";
-import ProdutividadePage from "./modules/produtividade/page";
-import PvpsAlocacaoPage from "./modules/pvps-alocacao/page";
-import ControleAvariasPage from "./modules/controle-avarias/page";
-import GestaoConservadorasPage from "./modules/gestao-conservadoras/page";
-import RegistroEmbarquePage from "./modules/registro-embarque/page";
-import RegistroEmbarqueCaixaTermicaPage from "./modules/registro-embarque-caixa-termica/page";
-import RondaPage from "./modules/ronda/page";
-import ZeradosPage from "./modules/zerados/page";
-import HomePage from "./pages/HomePage";
-import MaintenancePage from "./pages/MaintenancePage";
 import type { DashboardModuleKey } from "./modules/types";
 import type { AuthMode, ChallengeRow, ProfileContext } from "./types/auth";
 import type { HomeModulesViewMode } from "./types/ui";
@@ -77,7 +47,6 @@ import { clearUserControleValidadeCache } from "./modules/controle-validade/stor
 import type { CaixaTermicaModuleProfile } from "./modules/registro-embarque-caixa-termica/types";
 import { clearUserCaixaTermicaSessionCache } from "./modules/registro-embarque-caixa-termica/storage";
 import { monthStartIsoBrasilia } from "./shared/brasilia-datetime";
-import ApoioGestorPage from "./modules/apoio-gestor/page";
 
 const PASSWORD_HINT = "A senha deve ter ao menos 8 caracteres, com letras e números.";
 const GLOBAL_CD_STORAGE_PREFIX = "auditoria.global_cd.v1:";
@@ -94,6 +63,7 @@ const AUTH_REQUEST_TIMEOUT_MS = 25_000;
 const LOGIN_RPC_TIMEOUT_MS = 15_000;
 const PROFILE_RPC_TIMEOUT_MS = 12_000;
 const RUNTIME_STATUS_REFRESH_INTERVAL_MS = 60 * 1000;
+const CONNECTIVITY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const PROFILE_SYNC_RETRY_BASE_MS = 5_000;
 const PROFILE_SYNC_RETRY_MAX_MS = 60_000;
 const PROFILE_SYNC_MAX_RETRIES = 6;
@@ -192,6 +162,38 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
 };
 
 const APOIO_GESTOR_ALLOWED_HOSTS = new Set(["prevencaocd.vercel.app", "www.prevencaocd.vercel.app"]);
+
+const ApoioGestorPage = React.lazy(() => import("./modules/apoio-gestor/page"));
+const ControleValidadePage = React.lazy(() => import("./modules/controle-validade/page"));
+const PvpsAlocacaoPage = React.lazy(() => import("./modules/pvps-alocacao/page"));
+const GestaoEstoquePage = React.lazy(() => import("./modules/gestao-estoque/page"));
+const IndicadoresPage = React.lazy(() => import("./modules/indicadores/page"));
+const IndicadoresBlitzPage = React.lazy(() => import("./modules/indicadores/blitz-page"));
+const IndicadoresGestaoEstoquePage = React.lazy(() => import("./modules/indicadores/gestao-estoque-page"));
+const IndicadoresPvpsAlocacaoPage = React.lazy(() => import("./modules/indicadores/pvps-alocacao-page"));
+const AtividadeExtraPage = React.lazy(() => import("./modules/atividade-extra/page"));
+const BuscaProdutoPage = React.lazy(() => import("./modules/busca-produto/page"));
+const ValidarEnderecamentoPage = React.lazy(() => import("./modules/validar-enderecamento/page"));
+const ValidarEtiquetaPulmaoPage = React.lazy(() => import("./modules/validar-etiqueta-pulmao/page"));
+const AuditoriaCaixaPage = React.lazy(() => import("./modules/auditoria-caixa/page"));
+const CheckListPage = React.lazy(() => import("./modules/check-list/page"));
+const ColetaMercadoriaPage = React.lazy(() => import("./modules/coleta-mercadoria/page"));
+const ConferenciaTermoPage = React.lazy(() => import("./modules/conferencia-termo/page"));
+const ConferenciaVolumeAvulsoPage = React.lazy(() => import("./modules/conferencia-volume-avulso/page"));
+const TransferenciaCdPage = React.lazy(() => import("./modules/transferencia-cd/page"));
+const ConferenciaPedidoDiretoPage = React.lazy(() => import("./modules/conferencia-pedido-direto/page"));
+const ConferenciaEntradaNotasPage = React.lazy(() => import("./modules/conferencia-entrada-notas/page"));
+const DevolucaoMercadoriaPage = React.lazy(() => import("./modules/devolucao-mercadoria/page"));
+const ControleAvariasPage = React.lazy(() => import("./modules/controle-avarias/page"));
+const RegistroEmbarquePage = React.lazy(() => import("./modules/registro-embarque/page"));
+const RegistroEmbarqueCaixaTermicaPage = React.lazy(() => import("./modules/registro-embarque-caixa-termica/page"));
+const GestaoConservadorasPage = React.lazy(() => import("./modules/gestao-conservadoras/page"));
+const RondaPage = React.lazy(() => import("./modules/ronda/page"));
+const MetaMesPage = React.lazy(() => import("./modules/meta-mes/page"));
+const ProdutividadePage = React.lazy(() => import("./modules/produtividade/page"));
+const ZeradosPage = React.lazy(() => import("./modules/zerados/page"));
+const HomePage = React.lazy(() => import("./pages/HomePage"));
+const MaintenancePage = React.lazy(() => import("./pages/MaintenancePage"));
 
 function isLocalNetworkHostname(hostname: string): boolean {
   const normalized = hostname.trim().toLowerCase();
@@ -673,6 +675,20 @@ async function probeInternetConnection(timeoutMs = 3500): Promise<boolean> {
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+function AppLoadingCard({ message }: { message: string }) {
+  return (
+    <div className="page-shell">
+      <div className="loading-card surface-enter">
+        <div className="loading-brands">
+          <img className="loading-logo" src={logoImage} alt="Logo" />
+          <img className="loading-pm" src={pmImage} alt="PM" />
+        </div>
+        <p>{message}</p>
+      </div>
+    </div>
+  );
 }
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -1561,7 +1577,7 @@ export default function App() {
       if (document.visibilityState === "visible") {
         void checkConnectivity();
       }
-    }, 15000);
+    }, CONNECTIVITY_REFRESH_INTERVAL_MS);
 
     return () => {
       mounted = false;
@@ -2617,35 +2633,19 @@ export default function App() {
     });
   }, [activeModule, authBranding, canAccessApoioGestor, effectiveAllowedModuleKeys, effectiveHiddenModuleKeys]);
   if (!runtimeStatus.initialized) {
-    return (
-      <div className="page-shell">
-        <div className="loading-card surface-enter">
-          <div className="loading-brands">
-            <img className="loading-logo" src={logoImage} alt="Logo" />
-            <img className="loading-pm" src={pmImage} alt="PM" />
-          </div>
-          <p>Verificando disponibilidade...</p>
-        </div>
-      </div>
-    );
+    return <AppLoadingCard message="Verificando disponibilidade..." />;
   }
 
   if (runtimeStatus.maintenanceMode) {
-    return <MaintenancePage appHeading={authBranding.authCaption} />;
+    return (
+      <React.Suspense fallback={<AppLoadingCard message="Carregando manutenção..." />}>
+        <MaintenancePage appHeading={authBranding.authCaption} />
+      </React.Suspense>
+    );
   }
 
   if (loadingSession) {
-    return (
-      <div className="page-shell">
-        <div className="loading-card surface-enter">
-          <div className="loading-brands">
-            <img className="loading-logo" src={logoImage} alt="Logo" />
-            <img className="loading-pm" src={pmImage} alt="PM" />
-          </div>
-          <p>Carregando sessão...</p>
-        </div>
-      </div>
-    );
+    return <AppLoadingCard message="Carregando sessão..." />;
   }
 
   if (session && displayContext && !currentModuleAllowed) {
@@ -2657,7 +2657,8 @@ export default function App() {
       <div
         className={`app-shell${isModuleRoute ? " app-shell-module" : ""}${activeModule?.key === "indicadores" ? " app-shell-module-indicadores" : ""}`}
       >
-        <Routes>
+        <React.Suspense fallback={<AppLoadingCard message="Carregando módulo..." />}>
+          <Routes>
           <Route
             path="/inicio"
             element={
@@ -2974,8 +2975,9 @@ export default function App() {
               )
             }
           />
-          <Route path="*" element={<Navigate to="/inicio" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/inicio" replace />} />
+          </Routes>
+        </React.Suspense>
 
         {showLogoutConfirm && typeof document !== "undefined"
           ? createPortal(

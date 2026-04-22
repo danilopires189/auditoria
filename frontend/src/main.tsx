@@ -4,6 +4,8 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./styles.css";
 
+const SERVICE_WORKER_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
+
 const routerBasename = import.meta.env.BASE_URL.endsWith("/")
   ? import.meta.env.BASE_URL.slice(0, -1)
   : import.meta.env.BASE_URL;
@@ -22,9 +24,29 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     void navigator.serviceWorker
       .register(swUrl)
       .then((registration) => {
+        let lastUpdateAt = 0;
+        let updateInFlight = false;
+
         const promoteWaitingWorker = (worker: ServiceWorker | null) => {
           if (!worker) return;
           worker.postMessage({ type: "SKIP_WAITING" });
+        };
+
+        const requestRegistrationUpdate = () => {
+          const now = Date.now();
+          if (updateInFlight) return;
+          if (now - lastUpdateAt < SERVICE_WORKER_UPDATE_INTERVAL_MS) return;
+
+          updateInFlight = true;
+          lastUpdateAt = now;
+          void registration.update().finally(() => {
+            updateInFlight = false;
+          });
+        };
+
+        const handleVisibleUpdate = () => {
+          if (document.visibilityState !== "visible") return;
+          requestRegistrationUpdate();
         };
 
         promoteWaitingWorker(registration.waiting);
@@ -40,8 +62,10 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
         });
 
         window.setInterval(() => {
-          void registration.update();
-        }, 60_000);
+          requestRegistrationUpdate();
+        }, SERVICE_WORKER_UPDATE_INTERVAL_MS);
+        window.addEventListener("focus", requestRegistrationUpdate);
+        document.addEventListener("visibilitychange", handleVisibleUpdate);
       })
       .catch(() => {
         // Mantem o app funcional mesmo se o registro do SW falhar.
