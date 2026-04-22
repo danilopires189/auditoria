@@ -19,7 +19,7 @@
   --ag-neutral-soft: #f1f5f9;
   min-height: 100vh;
   background:
-    linear-gradient(180deg, #eff5fa 0, #eef3f8 180px, #e9f0f6 100%);
+    linear-gradient(180deg, #163e69 0, #1d527f 116px, #eff5fa 116px, #eef3f8 280px, #e9f0f6 100%);
   color: var(--ag-text);
 }
 
@@ -27,6 +27,7 @@
   background: linear-gradient(145deg, #0f4d82, #1b649f);
   border-color: rgba(255, 255, 255, 0.18);
   box-shadow: 0 14px 28px rgba(20, 85, 139, 0.18);
+  overflow: hidden;
 }
 
 .ag-page .module-home-btn {
@@ -46,6 +47,13 @@
 .ag-page .module-card.module-header-card {
   background: linear-gradient(145deg, #ffffff, #eef5fb);
   border-color: #d3e2ef;
+}
+
+@media (max-width: 720px) {
+  .ag-page .module-topbar {
+    border-bottom-left-radius: 18px;
+    border-bottom-right-radius: 18px;
+  }
 }
 
 .ag-content-shell {
