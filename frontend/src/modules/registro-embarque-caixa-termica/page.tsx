@@ -1301,6 +1301,21 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                       <span className={`caixa-feed-item-type ${c.tipo}`}>
                         {c.tipo === "expedicao" ? "🚚 Expedição" : "✅ Recebimento"}
                       </span>
+                      <div className="caixa-feed-item-details">
+                        <span className="caixa-feed-item-detail-line">
+                          Data: <strong>{formatDateTimeBrasilia(c.data_hr)}</strong>
+                        </span>
+                        {(c.mat_resp || c.nome_resp) && (
+                          <span className="caixa-feed-item-detail-line caixa-feed-item-detail-user">
+                            Responsável: <strong>{[c.mat_resp, c.nome_resp].filter(Boolean).join(" ")}</strong>
+                          </span>
+                        )}
+                        {c.pedido && (
+                          <span className="caixa-feed-item-detail-line">
+                            Pedido: <strong>{formatPedidoSemDv(c.pedido)}</strong>
+                          </span>
+                        )}
+                      </div>
                       <span className="caixa-feed-item-time">{formatDateTimeBrasilia(c.data_hr)}</span>
                       {(c.mat_resp || c.nome_resp) && (
                         <span className="caixa-feed-item-user">
