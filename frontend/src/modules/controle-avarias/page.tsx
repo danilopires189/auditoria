@@ -12,7 +12,10 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { formatDateTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
-import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
+import {
+  QUEUED_WRITE_FLUSH_INTERVAL_MS,
+  shouldTriggerQueuedBackgroundSync
+} from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import {
@@ -415,6 +418,12 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
   const refreshInFlightRef = useRef(false);
   const collectInFlightRef = useRef(false);
   const lastQuickSyncAtRef = useRef(0);
+  const queuedSyncStateRef = useRef({
+    lastAttemptAt: 0,
+    lastSuccessAt: 0,
+    lastMutationAt: 0,
+    lastSuccessfulMutationAt: 0
+  });
   const productLookupCacheRef = useRef<Map<string, DbBarrasCacheRow>>(new Map());
 
   const [localRows, setLocalRows] = useState<ControleAvariasRow[]>([]);
@@ -888,6 +897,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
   const runSync = useCallback(
     async (silent = false) => {
       if (!isOnline || syncInFlightRef.current) return;
+      queuedSyncStateRef.current.lastAttemptAt = Date.now();
       syncInFlightRef.current = true;
       if (!silent) {
         setBusySync(true);
@@ -901,6 +911,11 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
         const result = await syncPendingControleAvariasRows(profile.user_id);
         await refreshLocalState();
         await refreshSharedState();
+        if (result.failed === 0) {
+          const now = Date.now();
+          queuedSyncStateRef.current.lastSuccessAt = now;
+          queuedSyncStateRef.current.lastSuccessfulMutationAt = queuedSyncStateRef.current.lastMutationAt;
+        }
         if (!silent) {
           setStatusMessage(
             result.processed === 0
@@ -921,6 +936,32 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
       }
     },
     [isOnline, profile.user_id, refreshLocalState, refreshSharedState]
+  );
+
+  const requestQueuedSync = useCallback(
+    (reason: "mutation" | "online" | "focus" | "visibility" | "interval") => {
+      if (!shouldTriggerQueuedBackgroundSync({
+        isOnline,
+        pendingCount,
+        reason,
+        lastAttemptAt: queuedSyncStateRef.current.lastAttemptAt,
+        lastMutationAt: queuedSyncStateRef.current.lastMutationAt,
+        lastSuccessfulMutationAt: queuedSyncStateRef.current.lastSuccessfulMutationAt
+      })) {
+        return;
+      }
+
+      if (reason === "mutation") {
+        const now = Date.now();
+        if (now - lastQuickSyncAtRef.current < QUICK_SYNC_THROTTLE_MS) {
+          return;
+        }
+        lastQuickSyncAtRef.current = now;
+      }
+
+      void runSync(true);
+    },
+    [isOnline, pendingCount, runSync]
   );
 
   const runDbBarrasRefresh = useCallback(
@@ -1016,11 +1057,10 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
       };
       await upsertControleAvariasRow(nextRow);
       await refreshLocalState();
-      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
-        void runSync(true);
-      }
+      queuedSyncStateRef.current.lastMutationAt = Date.now();
+      requestQueuedSync("mutation");
     },
-    [isOnline, preferOfflineMode, refreshLocalState, runSync]
+    [preferOfflineMode, refreshLocalState, requestQueuedSync]
   );
 
   const saveRowEdit = useCallback(
@@ -1089,11 +1129,10 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
       }
 
       await refreshLocalState();
-      if (shouldTriggerQueuedBackgroundSync(isOnline)) {
-        void runSync(true);
-      }
+      queuedSyncStateRef.current.lastMutationAt = Date.now();
+      requestQueuedSync("mutation");
     },
-    [isOnline, preferOfflineMode, refreshLocalState, runSync]
+    [preferOfflineMode, refreshLocalState, requestQueuedSync]
   );
 
   const requestDeleteRow = useCallback((row: ControleAvariasRow) => {
@@ -1320,23 +1359,39 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
     if (!isOnline || pendingCount <= 0) return;
 
     let cancelled = false;
-    const retryEveryMs = 15000;
 
     const runAutoSync = async () => {
       if (cancelled) return;
-      await runSync(true);
+      requestQueuedSync("interval");
     };
 
     void runAutoSync();
+    const handleFocus = () => {
+      requestQueuedSync("focus");
+    };
+    const handleOnline = () => {
+      requestQueuedSync("online");
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        requestQueuedSync("visibility");
+      }
+    };
     const intervalId = window.setInterval(() => {
       void runAutoSync();
-    }, retryEveryMs);
+    }, QUEUED_WRITE_FLUSH_INTERVAL_MS);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isOnline, pendingCount, runSync]);
+  }, [isOnline, pendingCount, requestQueuedSync]);
 
   useEffect(() => {
     if (!showReport) return;
@@ -1471,6 +1526,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
 
       await upsertControleAvariasRow(row);
       void refreshLocalState();
+      queuedSyncStateRef.current.lastMutationAt = Date.now();
 
       setBarcodeInput("");
       setMultiploInput("1");
@@ -1481,11 +1537,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
       setExpandedRowId(row.local_id);
 
       if (shouldTriggerQueuedBackgroundSync(isOnline)) {
-        const nowMs = Date.now();
-        if (nowMs - lastQuickSyncAtRef.current >= QUICK_SYNC_THROTTLE_MS) {
-          lastQuickSyncAtRef.current = nowMs;
-          void runSync(true);
-        }
+        requestQueuedSync("mutation");
         setStatusMessage("Avaria registrada e enviada para sincronização.");
       } else {
         setStatusMessage("Avaria registrada localmente. Pendência será sincronizada quando houver internet.");
@@ -1517,7 +1569,7 @@ export default function ControleAvariasPage({ isOnline, profile }: ControleAvari
     profile.nome,
     profile.user_id,
     refreshLocalState,
-    runSync,
+    requestQueuedSync,
     showScanFeedback,
     readCachedProduct,
     writeCachedProduct,

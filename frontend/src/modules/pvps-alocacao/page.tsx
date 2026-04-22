@@ -15,7 +15,11 @@ import {
   todayIsoBrasilia
 } from "../../shared/brasilia-datetime";
 import { formatCountLabel } from "../../shared/inflection";
-import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
+import {
+  READS_SILENT_REFRESH_INTERVAL_MS,
+  shouldRunReadSilentRefresh,
+  shouldTriggerQueuedBackgroundSync
+} from "../../shared/offline/queue-policy";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -1321,6 +1325,7 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   const [editingPvpsCompleted, setEditingPvpsCompleted] = useState<PvpsCompletedRow | null>(null);
   const [editingAlocCompleted, setEditingAlocCompleted] = useState<AlocacaoCompletedRow | null>(null);
   const silentRefreshInFlightRef = useRef(false);
+  const lastSilentRefreshAtRef = useRef(0);
   const activeCd = profile.cd_default ?? null;
   const canUseAuditoriasReport = isAdmin && isDesktop;
   const currentPdfPreviewCacheKey = useMemo(() => {
@@ -2797,17 +2802,24 @@ export default function PvpsAlocacaoPage({ isOnline, profile }: PvpsAlocacaoPage
   useEffect(() => {
     if (!isOnline) return;
     const refreshSilently = () => {
-      if (document.visibilityState !== "visible") return;
+      if (!shouldRunReadSilentRefresh({
+        isOnline,
+        visibilityState: document.visibilityState,
+        lastRefreshAt: lastSilentRefreshAtRef.current
+      })) {
+        return;
+      }
       if (showPvpsPopup || showAlocPopup) return;
       if (silentRefreshInFlightRef.current) return;
       silentRefreshInFlightRef.current = true;
+      lastSilentRefreshAtRef.current = Date.now();
       void loadCurrent({ silent: true }).finally(() => {
         silentRefreshInFlightRef.current = false;
       });
     };
     const interval = window.setInterval(() => {
       refreshSilently();
-    }, 30000);
+    }, READS_SILENT_REFRESH_INTERVAL_MS);
     const onFocus = () => { refreshSilently(); };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {

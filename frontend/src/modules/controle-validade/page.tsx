@@ -7,6 +7,7 @@ import { getDbBarrasMeta } from "../../shared/db-barras/storage";
 import { normalizeBarcode, refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
 import { getDbEndMeta } from "../../shared/db-end/storage";
 import { refreshDbEndCacheSmart } from "../../shared/db-end/sync";
+import { QUEUED_WRITE_FLUSH_INTERVAL_MS } from "../../shared/offline/queue-policy";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { BackIcon, EyeIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
@@ -59,7 +60,6 @@ type MainTab = "linha" | "pulmao";
 type LinhaSubTab = "coleta" | "retirada";
 
 const MODULE_DEF = getModuleByKeyOrThrow("controle-validade");
-const OFFLINE_FLUSH_INTERVAL_MS = 15000;
 const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
@@ -1312,17 +1312,29 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   }, [loadRows]);
 
   useEffect(() => {
-    if (!isOnline || activeCd == null) return;
+    if (!isOnline || activeCd == null || pendingCount <= 0) return;
     const run = () => {
       void flushQueue(false);
     };
-    const intervalId = window.setInterval(run, OFFLINE_FLUSH_INTERVAL_MS);
+    const handleFocus = () => {
+      run();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        run();
+      }
+    };
+    const intervalId = window.setInterval(run, QUEUED_WRITE_FLUSH_INTERVAL_MS);
     window.addEventListener("online", run);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("online", run);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [activeCd, flushQueue, isOnline]);
+  }, [activeCd, flushQueue, isOnline, pendingCount]);
 
   useEffect(() => {
     if (mainTab !== "linha" || linhaSubTab !== "coleta") return;

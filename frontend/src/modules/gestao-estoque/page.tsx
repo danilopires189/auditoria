@@ -6,6 +6,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia, formatTimeBrasilia, todayIsoBrasilia } from "../../shared/brasilia-datetime";
 import { normalizeBarcode } from "../../shared/db-barras/sync";
+import { READS_SILENT_REFRESH_INTERVAL_MS } from "../../shared/offline/queue-policy";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { BackIcon, CalendarIcon, EyeIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -50,7 +51,7 @@ type GestaoEstoqueListViewMode = "operacional" | "nao_atendido" | "em_recebiment
 type GestaoEstoqueOperationalRecordsView = "ativos" | "excluidos";
 
 const MODULE_DEF = getModuleByKeyOrThrow("gestao-estoque");
-const REFRESH_INTERVAL_MS = 15000;
+const REFRESH_INTERVAL_MS = READS_SILENT_REFRESH_INTERVAL_MS;
 const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
 const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
@@ -1686,9 +1687,11 @@ export default function GestaoEstoquePage({ isOnline, profile }: GestaoEstoquePa
     };
 
     const timerId = window.setInterval(refreshIfVisible, REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", refreshIfVisible);
     document.addEventListener("visibilitychange", refreshIfVisible);
     return () => {
       window.clearInterval(timerId);
+      window.removeEventListener("focus", refreshIfVisible);
       document.removeEventListener("visibilitychange", refreshIfVisible);
     };
   }, [isHistorical, isOnline, listViewMode, refreshDayReviewState, refreshDeletedRows, refreshEmRecebimentoRows, refreshNaoAtendidoRows, refreshRows, refreshStockUpdatedAt]);

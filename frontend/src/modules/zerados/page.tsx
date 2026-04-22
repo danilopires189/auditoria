@@ -11,7 +11,11 @@ import {
   normalizeBarcode,
   refreshDbBarrasCacheSmart
 } from "../../shared/db-barras/sync";
-import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
+import {
+  OFFLINE_BASE_REFRESH_INTERVAL_MS,
+  shouldRunOfflineBaseRefresh,
+  shouldTriggerQueuedBackgroundSync
+} from "../../shared/offline/queue-policy";
 import type { DbBarrasCacheRow } from "../../shared/db-barras/types";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
@@ -837,6 +841,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
   const autoSyncDebounceTimerRef = useRef<number | null>(null);
   const backgroundPullTimerRef = useRef<number | null>(null);
   const backgroundPullRunningRef = useRef(false);
+  const lastAutoSyncAtRef = useRef(0);
   const offlineBaseAutoSyncKeyRef = useRef<string>("");
   const barrasValueRef = useRef("");
   const finalBarrasValueRef = useRef("");
@@ -1182,6 +1187,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
 
   const syncNow = useCallback(async (forceManifest = false) => {
     if (!isOnline || cd == null || syncRef.current) return;
+    lastAutoSyncAtRef.current = Date.now();
     syncRef.current = true;
     if (forceManifest) setBusy(true);
     setErr(null);
@@ -1254,6 +1260,7 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     }
     autoSyncDebounceTimerRef.current = window.setTimeout(() => {
       autoSyncDebounceTimerRef.current = null;
+      lastAutoSyncAtRef.current = Date.now();
       void syncNow(false);
     }, delayMs);
   }, [cd, isOnline, syncNow]);
@@ -1733,8 +1740,14 @@ export default function InventarioZeradosPage({ isOnline, profile }: InventarioP
     const id = window.setInterval(() => {
       const popupOpen = editorOpen || reportOpen || scannerOpen || adminEntryOpen || adminOpen || adminZonePickerOpen || adminConfirm != null || showZonePicker;
       if (popupOpen) return;
+      if (!shouldRunOfflineBaseRefresh({
+        isOnline,
+        lastRefreshAt: lastAutoSyncAtRef.current
+      })) {
+        return;
+      }
       requestAutoSync(450);
-    }, 30000);
+    }, OFFLINE_BASE_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [adminConfirm, adminEntryOpen, adminOpen, adminZonePickerOpen, cd, editorOpen, isOnline, reportOpen, requestAutoSync, scannerOpen, showZonePicker]);
   useEffect(() => {

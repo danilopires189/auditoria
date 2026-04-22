@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
 import { todayIsoBrasilia } from "../../shared/brasilia-datetime";
+import { READS_SILENT_REFRESH_INTERVAL_MS, shouldRunReadSilentRefresh } from "../../shared/offline/queue-policy";
 import { fetchApoioGestorDailySummary, fetchApoioGestorDayFlags } from "./sync";
 import type { ApoioGestorActivityRow, ApoioGestorDayFlags } from "./types";
 import "./apoio-gestor.css";
@@ -15,7 +16,7 @@ interface ApoioGestorPageProps {
 
 const BRAZIL_TZ = "America/Sao_Paulo";
 const MODULE_DEF = getModuleByKeyOrThrow("apoio-gestor");
-const REFRESH_INTERVAL_MS = 60_000;
+const REFRESH_INTERVAL_MS = READS_SILENT_REFRESH_INTERVAL_MS;
 
 function formatFullDate(): string {
   const raw = new Intl.DateTimeFormat("pt-BR", {
@@ -259,6 +260,7 @@ export default function ApoioGestorPage({
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastLoadAtRef = useRef(0);
 
   const cd = parseCdNumber(cdName);
   const today = todayIsoBrasilia();
@@ -269,6 +271,7 @@ export default function ApoioGestorPage({
   }, []);
 
   const load = useCallback(async () => {
+    lastLoadAtRef.current = Date.now();
     if (cd === null) {
       setError("CD não identificado. Verifique seu perfil.");
       setLoading(false);
@@ -290,17 +293,40 @@ export default function ApoioGestorPage({
     }
   }, [cd, today]);
 
+  const requestSilentLoad = useCallback(() => {
+    if (!shouldRunReadSilentRefresh({
+      isOnline,
+      visibilityState: typeof document === "undefined" ? "visible" : document.visibilityState,
+      lastRefreshAt: lastLoadAtRef.current
+    })) {
+      return;
+    }
+    void load();
+  }, [isOnline, load]);
+
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
     if (!isOnline) return;
-    intervalRef.current = setInterval(() => void load(), REFRESH_INTERVAL_MS);
+    const handleFocus = () => {
+      requestSilentLoad();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        requestSilentLoad();
+      }
+    };
+    intervalRef.current = setInterval(() => requestSilentLoad(), REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isOnline, load]);
+  }, [isOnline, requestSilentLoad]);
 
   const metaRows = [...rows]
     .filter((r) => r.has_meta)

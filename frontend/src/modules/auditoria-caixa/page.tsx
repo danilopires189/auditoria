@@ -14,7 +14,10 @@ import {
   monthStartIsoBrasilia,
   todayIsoBrasilia
 } from "../../shared/brasilia-datetime";
-import { shouldTriggerQueuedBackgroundSync } from "../../shared/offline/queue-policy";
+import {
+  QUEUED_WRITE_FLUSH_INTERVAL_MS,
+  shouldTriggerQueuedBackgroundSync
+} from "../../shared/offline/queue-policy";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
@@ -658,6 +661,12 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const collectInFlightRef = useRef(false);
   const lastQuickSyncAtRef = useRef(0);
+  const queuedSyncStateRef = useRef({
+    lastAttemptAt: 0,
+    lastSuccessAt: 0,
+    lastMutationAt: 0,
+    lastSuccessfulMutationAt: 0
+  });
   const lastRouteRefreshAtRef = useRef(0);
   const scannerInputStateRef = useRef<ScannerInputState>(createScannerInputState());
   const knappInputStateRef = useRef<ScannerInputState>(createScannerInputState());
@@ -1028,6 +1037,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
   const runSync = useCallback(async (quiet = false) => {
     if (!isOnline || busySync) return;
+    queuedSyncStateRef.current.lastAttemptAt = Date.now();
     setBusySync(true);
     if (!quiet) {
       setErrorMessage(null);
@@ -1038,6 +1048,11 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       const result = await syncPendingAuditoriaCaixaRows(profile.user_id);
       await refreshLocalState();
       await refreshSharedState();
+      if (result.failed === 0) {
+        const now = Date.now();
+        queuedSyncStateRef.current.lastSuccessAt = now;
+        queuedSyncStateRef.current.lastSuccessfulMutationAt = queuedSyncStateRef.current.lastMutationAt;
+      }
 
       if (!quiet) {
         if (result.discarded > 0) {
@@ -1060,6 +1075,32 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       setBusySync(false);
     }
   }, [busySync, isOnline, profile.user_id, refreshLocalState, refreshSharedState]);
+
+  const requestQueuedSync = useCallback(
+    (reason: "mutation" | "online" | "focus" | "visibility" | "interval") => {
+      if (!shouldTriggerQueuedBackgroundSync({
+        isOnline,
+        pendingCount,
+        reason,
+        lastAttemptAt: queuedSyncStateRef.current.lastAttemptAt,
+        lastMutationAt: queuedSyncStateRef.current.lastMutationAt,
+        lastSuccessfulMutationAt: queuedSyncStateRef.current.lastSuccessfulMutationAt
+      })) {
+        return;
+      }
+
+      if (reason === "mutation") {
+        const now = Date.now();
+        if (now - lastQuickSyncAtRef.current < QUICK_SYNC_THROTTLE_MS) {
+          return;
+        }
+        lastQuickSyncAtRef.current = now;
+      }
+
+      void runSync(true);
+    },
+    [isOnline, pendingCount, runSync]
+  );
 
   const runManualSync = useCallback(async () => {
     if (!isOnline || currentCd == null || busyRefresh || busySync) return;
@@ -1224,6 +1265,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
       await upsertAuditoriaCaixaRow(nextRow);
       await refreshLocalState();
+      queuedSyncStateRef.current.lastMutationAt = Date.now();
       setExpandedRowId(nextRow.local_id);
       setKnappModalState(null);
       if (isStoreContextCollect) {
@@ -1249,11 +1291,7 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
           : "Etiqueta registrada";
 
       if (shouldTriggerQueuedBackgroundSync(isOnline)) {
-        const nowMs = Date.now();
-        if (nowMs - lastQuickSyncAtRef.current >= QUICK_SYNC_THROTTLE_MS) {
-          lastQuickSyncAtRef.current = nowMs;
-          void runSync(true);
-        }
+        requestQueuedSync("mutation");
         setStatusMessage(`${statusPrefix} e enviada para sincronização.`);
       } else {
         setStatusMessage(`${statusPrefix} localmente. A pendência será enviada quando houver internet.`);
@@ -1326,8 +1364,8 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     profile.user_id,
     pendingStoreContextAction,
     refreshLocalState,
+    requestQueuedSync,
     resolveRouteData,
-    runSync,
     showScanFeedback,
     triggerScanErrorAlert
   ]);
@@ -1520,12 +1558,13 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
       setStatusMessage("Alterações salvas localmente.");
 
       if (shouldTriggerQueuedBackgroundSync(isOnline)) {
-        void runSync(true);
+        queuedSyncStateRef.current.lastMutationAt = Date.now();
+        requestQueuedSync("mutation");
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Falha ao salvar alterações.");
     }
-  }, [canOperate, editDraft, getDuplicateError, isOnline, refreshLocalState, resolveRouteData, runSync]);
+  }, [canOperate, editDraft, getDuplicateError, isOnline, refreshLocalState, requestQueuedSync, resolveRouteData]);
 
   const confirmDeleteRow = useCallback(async () => {
     if (!deleteTarget) return;
@@ -1562,9 +1601,10 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
     setStatusMessage("Registro marcado para exclusão.");
 
     if (shouldTriggerQueuedBackgroundSync(isOnline)) {
-      void runSync(true);
+      queuedSyncStateRef.current.lastMutationAt = Date.now();
+      requestQueuedSync("mutation");
     }
-  }, [canOperate, deleteTarget, isOnline, refreshLocalState, runSync]);
+  }, [canOperate, deleteTarget, isOnline, refreshLocalState, requestQueuedSync]);
 
   const runReportSearch = useCallback(async () => {
     if (!canSeeReportTools) return;
@@ -1756,15 +1796,32 @@ export default function AuditoriaCaixaPage({ isOnline, profile }: AuditoriaCaixa
 
   useEffect(() => {
     if (!isOnline || pendingCount <= 0) return;
+    const handleFocus = () => {
+      requestQueuedSync("focus");
+    };
+    const handleOnline = () => {
+      requestQueuedSync("online");
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        requestQueuedSync("visibility");
+      }
+    };
     const intervalId = window.setInterval(() => {
-      void runSync(true);
-    }, 15_000);
+      requestQueuedSync("interval");
+    }, QUEUED_WRITE_FLUSH_INTERVAL_MS);
 
-    void runSync(true);
+    requestQueuedSync("online");
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isOnline, pendingCount, runSync]);
+  }, [isOnline, pendingCount, requestQueuedSync]);
 
   useEffect(() => {
     if (!showReport) return;

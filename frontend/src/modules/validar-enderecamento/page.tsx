@@ -7,6 +7,7 @@ import { getDbBarrasMeta } from "../../shared/db-barras/storage";
 import { refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
 import { getDbEndMeta } from "../../shared/db-end/storage";
 import { enderecoMatchesForCompare, refreshDbEndCacheSmart } from "../../shared/db-end/sync";
+import { QUEUED_WRITE_FLUSH_INTERVAL_MS } from "../../shared/offline/queue-policy";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -58,7 +59,6 @@ const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const POPUP_SUCCESS_MS = 2600;
 const SUCCESS_CHIME_DURATION_MS = 420;
 const NOT_FOUND_CHIME_DURATION_MS = 420;
-const AUDIT_FLUSH_INTERVAL_MS = 15000;
 const STATUS_MESSAGE_AUTO_HIDE_MS = 2800;
 const BARCODE_DIGITS_PATTERN = /^\d+$/;
 const ADDRESS_BARCODE_LIKE_MIN_LENGTH = 8;
@@ -313,6 +313,7 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
   });
   const popupTimerRef = useRef<number | null>(null);
   const statusTimerRef = useRef<number | null>(null);
+  const pendingFlushRef = useRef(false);
   const resolveScanFeedbackAnchor = useCallback(() => produtoRef.current, []);
   const { triggerScanErrorAlert } = useScanFeedback(resolveScanFeedbackAnchor);
   const {
@@ -960,7 +961,13 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
 
   useEffect(() => {
     if (!isOnline) return;
-    void flushPendingValidarEnderecamentoAudits(profile.user_id).catch(() => undefined);
+    if (pendingFlushRef.current) return;
+    pendingFlushRef.current = true;
+    void flushPendingValidarEnderecamentoAudits(profile.user_id)
+      .catch(() => undefined)
+      .finally(() => {
+        pendingFlushRef.current = false;
+      });
   }, [isOnline, profile.user_id]);
 
   useEffect(() => {
@@ -969,15 +976,31 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     const silentFlush = () => {
       const browserOnline = typeof navigator === "undefined" ? true : navigator.onLine;
       if (!isOnline && !browserOnline) return;
-      void flushPendingValidarEnderecamentoAudits(profile.user_id).catch(() => undefined);
+      if (pendingFlushRef.current) return;
+      pendingFlushRef.current = true;
+      void flushPendingValidarEnderecamentoAudits(profile.user_id)
+        .catch(() => undefined)
+        .finally(() => {
+          pendingFlushRef.current = false;
+        });
     };
 
-    const intervalId = window.setInterval(silentFlush, AUDIT_FLUSH_INTERVAL_MS);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        silentFlush();
+      }
+    };
+
+    const intervalId = window.setInterval(silentFlush, QUEUED_WRITE_FLUSH_INTERVAL_MS);
     window.addEventListener("online", silentFlush);
+    window.addEventListener("focus", silentFlush);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("online", silentFlush);
+      window.removeEventListener("focus", silentFlush);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [isOnline, profile.user_id]);
 
