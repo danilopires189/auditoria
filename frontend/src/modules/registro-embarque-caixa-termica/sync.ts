@@ -575,7 +575,9 @@ export async function fetchCaixaTermicaFeedDiario(
           tipo: (c.tipo === "expedicao" ? "expedicao" : "recebimento") as CaixaTermicaTipoMov,
           data_hr: parseString(c.data_hr),
           pedido: parseNullableInteger(c.pedido),
-          data_pedido: parseNullableString(c.data_pedido)
+          data_pedido: parseNullableString(c.data_pedido),
+          mat_resp: parseNullableString(c.mat_resp),
+          nome_resp: parseNullableString(c.nome_resp)
         }))
       : [];
 

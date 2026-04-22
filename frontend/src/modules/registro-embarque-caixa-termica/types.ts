@@ -125,6 +125,8 @@ export interface CaixaTermicaFeedRow {
     data_hr: string;
     pedido: number | null;
     data_pedido: string | null;
+    mat_resp: string | null;
+    nome_resp: string | null;
   }[];
 }
 

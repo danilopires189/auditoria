@@ -19402,11 +19402,11 @@ small {
 
 .caixa-feed-item {
   display: grid;
-  grid-template-columns: minmax(88px, 0.8fr) minmax(118px, 1fr) minmax(130px, 1fr) minmax(112px, 0.9fr);
+  grid-template-columns: minmax(72px, 0.7fr) minmax(108px, 0.9fr) minmax(126px, 0.95fr) minmax(180px, 1.35fr) minmax(96px, 0.8fr);
   align-items: center;
-  gap: 8px 12px;
+  gap: 6px 8px;
   min-width: 0;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--text);
   padding: 9px 0;
   border-bottom: 1px solid #edf1f7;
@@ -19418,7 +19418,7 @@ small {
 
 .caixa-feed-item-codigo {
   font-family: "Sora", sans-serif;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 800;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -19451,12 +19451,22 @@ small {
 .caixa-feed-item-time {
   color: #4b5671;
   white-space: nowrap;
+  font-size: 0.76rem;
 }
 
 .caixa-feed-item-order {
   color: #30415d;
   font-weight: 700;
   white-space: nowrap;
+  font-size: 0.75rem;
+}
+
+.caixa-feed-item-user {
+  color: #4b5671;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.75rem;
 }
 
 .caixa-termica-shell .termo-actions-row {
@@ -19521,12 +19531,25 @@ small {
 }
 
 /* History timeline */
+.caixa-historico-dialog {
+  width: min(95vw, 520px);
+  max-width: min(calc(100vw - 24px), 520px);
+  max-height: min(calc(100vh - 24px), 760px);
+  overflow: hidden;
+}
+
+.caixa-historico-scroll {
+  max-height: min(68vh, 560px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
 .caixa-historico-timeline {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 60vh;
-  overflow-y: auto;
 }
 
 .caixa-historico-item {
@@ -20743,6 +20766,11 @@ small {
   }
 
   .caixa-feed-item-order {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+
+  .caixa-feed-item-user {
     grid-column: 1 / -1;
     white-space: normal;
   }

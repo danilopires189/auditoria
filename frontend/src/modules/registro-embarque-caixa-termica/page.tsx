@@ -174,6 +174,10 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   profile
 }: RegistroEmbarqueCaixaTermicaPageProps) {
   const displayUserName = useMemo(() => toDisplayName(profile.nome), [profile.nome]);
+  const isGlobalAdmin = useMemo(
+    () => profile.role === "admin" && profile.cd_default == null,
+    [profile.cd_default, profile.role]
+  );
 
   // ── CD resolution ──
   const [activeCd, setActiveCd] = useState<number | null>(null);
@@ -194,6 +198,7 @@ export default function RegistroEmbarqueCaixaTermicaPage({
   const [boxesError, setBoxesError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set());
+  const [expandedSection, setExpandedSection] = useState<"disponiveis" | "emTransito" | null>(null);
 
   // ── Search ──
   const [searchInput, setSearchInput] = useState("");
@@ -283,8 +288,21 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     () => filteredBoxes.filter((b) => b.status === "em_transito"),
     [filteredBoxes]
   );
-  const canAdminEdit = profile.role === "admin" && isOnline;
+  const canAdminEdit = useMemo(
+    () => (profile.role === "admin" || isGlobalAdmin) && isOnline,
+    [isGlobalAdmin, isOnline, profile.role]
+  );
   const offlineReady = preferOfflineMode && dbRotasCount > 0;
+  const anyOverlayOpen = Boolean(
+    scanActionBox ||
+    registerOpen ||
+    expedicaoOpen ||
+    recebimentoOpen ||
+    editDraft ||
+    deleteTarget ||
+    historicoOpen ||
+    scannerOpen
+  );
 
   // ── Load CD prefs ──
   useEffect(() => {
@@ -369,6 +387,28 @@ export default function RegistroEmbarqueCaixaTermicaPage({
     const interval = setInterval(() => { if (isOnline) void loadFeed(); }, FEED_REFRESH_INTERVAL_MS);
     return () => { cancelled = true; clearInterval(interval); };
   }, [view, currentCd, isOnline]);
+
+  useEffect(() => {
+    if (!anyOverlayOpen || typeof document === "undefined") return;
+
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyOverscroll = body.style.overscrollBehavior;
+    const previousHtmlOverflow = documentElement.style.overflow;
+    const previousHtmlOverscroll = documentElement.style.overscrollBehavior;
+
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    documentElement.style.overflow = "hidden";
+    documentElement.style.overscrollBehavior = "none";
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      body.style.overscrollBehavior = previousBodyOverscroll;
+      documentElement.style.overflow = previousHtmlOverflow;
+      documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+    };
+  }, [anyOverlayOpen]);
 
   // ── Success toast ──
   const showSuccess = useCallback((msg: string) => {
@@ -1139,59 +1179,79 @@ export default function RegistroEmbarqueCaixaTermicaPage({
 
             {/* DISPONÍVEL section */}
             <div className="caixa-section">
-              <p className="caixa-section-title">
-                ✅ Disponíveis
-                <span className="caixa-section-count">{disponiveisBoxes.length}</span>
-              </p>
-              {disponiveisBoxes.length === 0 ? (
-                <p className="caixa-sem-itens">
-                  {searchInput ? "Nenhuma caixa disponível para este filtro." : "Nenhuma caixa disponível."}
-                </p>
-              ) : (
-                <div className="caixa-cards-list">
-                  {disponiveisBoxes.map((box) => (
-                    <CaixaCard
-                      key={box.local_id}
-                      box={box}
-                      isExpanded={expandedBoxIds.has(box.local_id)}
-                      onToggleExpanded={() => toggleBoxExpanded(box.local_id)}
-                      onAction={() => openExpedicao(box)}
-                      onHistory={() => void openHistorico(box)}
-                      canAdminEdit={canAdminEdit}
-                      onEdit={() => openEditCaixa(box)}
-                      onDelete={() => openDeleteCaixa(box)}
-                    />
-                  ))}
-                </div>
+              <button
+                type="button"
+                className="caixa-section-title-btn"
+                onClick={() => setExpandedSection((prev) => prev === "disponiveis" ? null : "disponiveis")}
+                aria-expanded={expandedSection === "disponiveis"}
+              >
+                <span className="caixa-section-title">
+                  ✅ Disponíveis
+                  <span className="caixa-section-count">{disponiveisBoxes.length}</span>
+                </span>
+                <span className="caixa-section-chevron" aria-hidden="true">{expandedSection === "disponiveis" ? "▾" : "▸"}</span>
+              </button>
+              {expandedSection === "disponiveis" && (
+                disponiveisBoxes.length === 0 ? (
+                  <p className="caixa-sem-itens">
+                    {searchInput ? "Nenhuma caixa disponível para este filtro." : "Nenhuma caixa disponível."}
+                  </p>
+                ) : (
+                  <div className="caixa-cards-list">
+                    {disponiveisBoxes.map((box) => (
+                      <CaixaCard
+                        key={box.local_id}
+                        box={box}
+                        isExpanded={expandedBoxIds.has(box.local_id)}
+                        onToggleExpanded={() => toggleBoxExpanded(box.local_id)}
+                        onAction={() => openExpedicao(box)}
+                        onHistory={() => void openHistorico(box)}
+                        canAdminEdit={canAdminEdit}
+                        onEdit={() => openEditCaixa(box)}
+                        onDelete={() => openDeleteCaixa(box)}
+                      />
+                    ))}
+                  </div>
+                )
               )}
             </div>
 
             {/* EM TRÂNSITO section */}
             <div className="caixa-section">
-              <p className="caixa-section-title">
-                🚚 Em Trânsito
-                <span className="caixa-section-count">{emTransitoBoxes.length}</span>
-              </p>
-              {emTransitoBoxes.length === 0 ? (
-                <p className="caixa-sem-itens">
-                  {searchInput ? "Nenhuma caixa em trânsito para este filtro." : "Nenhuma caixa em trânsito."}
-                </p>
-              ) : (
-                <div className="caixa-cards-list">
-                  {emTransitoBoxes.map((box) => (
-                    <CaixaCard
-                      key={box.local_id}
-                      box={box}
-                      isExpanded={expandedBoxIds.has(box.local_id)}
-                      onToggleExpanded={() => toggleBoxExpanded(box.local_id)}
-                      onAction={() => openRecebimento(box)}
-                      onHistory={() => void openHistorico(box)}
-                      canAdminEdit={canAdminEdit}
-                      onEdit={() => openEditCaixa(box)}
-                      onDelete={() => openDeleteCaixa(box)}
-                    />
-                  ))}
-                </div>
+              <button
+                type="button"
+                className="caixa-section-title-btn"
+                onClick={() => setExpandedSection((prev) => prev === "emTransito" ? null : "emTransito")}
+                aria-expanded={expandedSection === "emTransito"}
+              >
+                <span className="caixa-section-title">
+                  🚚 Em Trânsito
+                  <span className="caixa-section-count">{emTransitoBoxes.length}</span>
+                </span>
+                <span className="caixa-section-chevron" aria-hidden="true">{expandedSection === "emTransito" ? "▾" : "▸"}</span>
+              </button>
+              {expandedSection === "emTransito" && (
+                emTransitoBoxes.length === 0 ? (
+                  <p className="caixa-sem-itens">
+                    {searchInput ? "Nenhuma caixa em trânsito para este filtro." : "Nenhuma caixa em trânsito."}
+                  </p>
+                ) : (
+                  <div className="caixa-cards-list">
+                    {emTransitoBoxes.map((box) => (
+                      <CaixaCard
+                        key={box.local_id}
+                        box={box}
+                        isExpanded={expandedBoxIds.has(box.local_id)}
+                        onToggleExpanded={() => toggleBoxExpanded(box.local_id)}
+                        onAction={() => openRecebimento(box)}
+                        onHistory={() => void openHistorico(box)}
+                        canAdminEdit={canAdminEdit}
+                        onEdit={() => openEditCaixa(box)}
+                        onDelete={() => openDeleteCaixa(box)}
+                      />
+                    ))}
+                  </div>
+                )
               )}
             </div>
           </>
@@ -1242,6 +1302,11 @@ export default function RegistroEmbarqueCaixaTermicaPage({
                         {c.tipo === "expedicao" ? "🚚 Expedição" : "✅ Recebimento"}
                       </span>
                       <span className="caixa-feed-item-time">{formatDateTimeBrasilia(c.data_hr)}</span>
+                      {(c.mat_resp || c.nome_resp) && (
+                        <span className="caixa-feed-item-user">
+                          {[c.mat_resp, c.nome_resp].filter(Boolean).join(" ")}
+                        </span>
+                      )}
                       {c.pedido && <span className="caixa-feed-item-order">Pedido {formatPedidoSemDv(c.pedido)}</span>}
                     </div>
                   ))}
@@ -1795,61 +1860,62 @@ export default function RegistroEmbarqueCaixaTermicaPage({
           onClick={() => setHistoricoOpen(false)}
         >
           <div
-            className="confirm-dialog surface-enter"
-            style={{ maxWidth: "520px", width: "95vw" }}
+            className="confirm-dialog surface-enter caixa-historico-dialog"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="historico-modal-title">Histórico — {historicoCaixa.codigo}</h3>
 
-            {historicoLoading && (
-              <p style={{ fontSize: "0.88rem", color: "#4b5671" }}>Carregando histórico...</p>
-            )}
-            {historicoError && <div className="alert error">{historicoError}</div>}
+            <div className="caixa-historico-scroll">
+              {historicoLoading && (
+                <p style={{ fontSize: "0.88rem", color: "#4b5671" }}>Carregando histórico...</p>
+              )}
+              {historicoError && <div className="alert error">{historicoError}</div>}
 
-            {!historicoLoading && !historicoError && historicoMovs.length === 0 && (
-              <p style={{ fontSize: "0.88rem", color: "#4b5671" }}>Nenhuma movimentação registrada.</p>
-            )}
+              {!historicoLoading && !historicoError && historicoMovs.length === 0 && (
+                <p style={{ fontSize: "0.88rem", color: "#4b5671" }}>Nenhuma movimentação registrada.</p>
+              )}
 
-            <div className="caixa-historico-timeline">
-              {historicoMovs.map((mov) => (
-                <div key={mov.id} className={`caixa-historico-item ${mov.tipo}`}>
-                  <span className="caixa-historico-tipo">
-                    {mov.tipo === "expedicao" ? "Expedição" : "Recebimento"}
-                  </span>
-                  <span className="caixa-historico-meta">
-                    {formatDateTimeBrasilia(mov.data_hr)}
-                  </span>
-                  {mov.transit_minutes != null && (
-                    <span className="caixa-historico-transit">
-                      Tempo em trânsito: {formatTransitTime(mov.transit_minutes)}
+              <div className="caixa-historico-timeline">
+                {historicoMovs.map((mov) => (
+                  <div key={mov.id} className={`caixa-historico-item ${mov.tipo}`}>
+                    <span className="caixa-historico-tipo">
+                      {mov.tipo === "expedicao" ? "Expedição" : "Recebimento"}
                     </span>
-                  )}
-                  {mov.placa && (
-                    <span className="caixa-historico-meta">Placa: {mov.placa}</span>
-                  )}
-                  {(mov.rota || mov.filial_nome || mov.filial) && (
                     <span className="caixa-historico-meta">
-                      Rota: {mov.rota ?? "—"}
-                      {mov.filial_nome && ` | ${mov.filial_nome}`}
-                      {!mov.filial_nome && mov.filial && ` | Filial ${mov.filial}`}
+                      {formatDateTimeBrasilia(mov.data_hr)}
                     </span>
-                  )}
-                  {(mov.pedido || mov.data_pedido) && (
+                    {mov.transit_minutes != null && (
+                      <span className="caixa-historico-transit">
+                        Tempo em trânsito: {formatTransitTime(mov.transit_minutes)}
+                      </span>
+                    )}
+                    {mov.placa && (
+                      <span className="caixa-historico-meta">Placa: {mov.placa}</span>
+                    )}
+                    {(mov.rota || mov.filial_nome || mov.filial) && (
+                      <span className="caixa-historico-meta">
+                        Rota: {mov.rota ?? "—"}
+                        {mov.filial_nome && ` | ${mov.filial_nome}`}
+                        {!mov.filial_nome && mov.filial && ` | Filial ${mov.filial}`}
+                      </span>
+                    )}
+                    {(mov.pedido || mov.data_pedido) && (
+                      <span className="caixa-historico-meta">
+                        Pedido: {formatPedidoSemDv(mov.pedido)}
+                        {mov.data_pedido && ` | ${formatDateOnlyPtBR(mov.data_pedido)}`}
+                      </span>
+                    )}
+                    {mov.obs_recebimento && (
+                      <span className="caixa-historico-obs">
+                        Avarias: {mov.obs_recebimento}
+                      </span>
+                    )}
                     <span className="caixa-historico-meta">
-                      Pedido: {formatPedidoSemDv(mov.pedido)}
-                      {mov.data_pedido && ` | ${formatDateOnlyPtBR(mov.data_pedido)}`}
+                      Responsável: {mov.nome_resp} ({mov.mat_resp})
                     </span>
-                  )}
-                  {mov.obs_recebimento && (
-                    <span className="caixa-historico-obs">
-                      Avarias: {mov.obs_recebimento}
-                    </span>
-                  )}
-                  <span className="caixa-historico-meta">
-                    Responsável: {mov.nome_resp} ({mov.mat_resp})
-                  </span>
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="confirm-actions" style={{ marginTop: "16px" }}>
