@@ -118,6 +118,13 @@ function formatMetric(value: number): string {
   return value.toLocaleString("pt-BR");
 }
 
+function bigNumberSizeClass(value: number): string {
+  const textLength = formatMetric(value).length;
+  if (textLength >= 12) return "ag-card__big-number--dense";
+  if (textLength >= 9) return "ag-card__big-number--compact";
+  return "";
+}
+
 function formatMonitoringLabel(count: number): string {
   return `${count} ${count === 1 ? "ind. com meta definida" : "inds. com metas definidas"}`;
 }
@@ -166,6 +173,7 @@ function ActivityCard({ row, noMetaReason }: ActivityCardProps) {
   const cardToneClass = row.has_meta ? `ag-card--${tone}` : "";
   const deltaLabel = describeDelta(row, tone);
   const toneSummary = toneSummaryLabel(tone);
+  const bigNumberClass = bigNumberSizeClass(row.actual_today);
 
   const badgeLabel =
     tone === "success"
@@ -226,7 +234,7 @@ function ActivityCard({ row, noMetaReason }: ActivityCardProps) {
         <span className="ag-card__badge ag-card__badge--simple">Sem meta</span>
       </div>
       <div className="ag-card__body ag-card__body--simple">
-        <div className="ag-card__big-number">
+        <div className={`ag-card__big-number ${bigNumberClass}`.trim()}>
           {formatMetric(row.actual_today)}
         </div>
         <div className="ag-card__unit-label">{row.unit_label}</div>
