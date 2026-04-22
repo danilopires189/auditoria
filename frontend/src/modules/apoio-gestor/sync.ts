@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-import type { ApoioGestorActivityRow } from "./types";
+import type { ApoioGestorActivityRow, ApoioGestorDayFlags } from "./types";
 
 function parseNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -16,8 +16,7 @@ function parseNullableNumber(value: unknown): number | null {
 }
 
 function parseBoolean(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  return false;
+  return value === true || value === "true" || value === 1 || value === "1";
 }
 
 function mapRow(row: Record<string, unknown>): ApoioGestorActivityRow {
@@ -47,4 +46,22 @@ export async function fetchApoioGestorDailySummary(
   return (data as Record<string, unknown>[])
     .map(mapRow)
     .sort((a, b) => a.sort_order - b.sort_order);
+}
+
+export async function fetchApoioGestorDayFlags(
+  cd: number,
+  date: string
+): Promise<ApoioGestorDayFlags> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_apoio_gestor_day_flags", {
+    p_cd: cd,
+    p_date: date,
+  });
+  if (error) throw new Error(error.message ?? "Erro ao carregar contexto diário.");
+  const row = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  return {
+    meta_defined_count: parseNumber(row?.meta_defined_count),
+    is_holiday: parseBoolean(row?.is_holiday),
+    is_sunday: parseBoolean(row?.is_sunday),
+  };
 }

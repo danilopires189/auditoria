@@ -8,3 +8,9 @@ export interface ApoioGestorActivityRow {
   has_meta: boolean;
   sort_order: number;
 }
+
+export interface ApoioGestorDayFlags {
+  meta_defined_count: number;
+  is_holiday: boolean;
+  is_sunday: boolean;
+}

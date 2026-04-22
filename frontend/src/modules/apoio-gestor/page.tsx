@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
 import { todayIsoBrasilia } from "../../shared/brasilia-datetime";
-import { fetchApoioGestorDailySummary } from "./sync";
-import type { ApoioGestorActivityRow } from "./types";
+import { fetchApoioGestorDailySummary, fetchApoioGestorDayFlags } from "./sync";
+import type { ApoioGestorActivityRow, ApoioGestorDayFlags } from "./types";
 import "./apoio-gestor.css";
 
 interface ApoioGestorPageProps {
@@ -115,6 +115,16 @@ function formatMetric(value: number): string {
   return value.toLocaleString("pt-BR");
 }
 
+function formatMonitoringLabel(count: number): string {
+  return `${count} ${count === 1 ? "ind. com meta definida" : "inds. com metas definidas"}`;
+}
+
+function dayStatusLabel(flags: ApoioGestorDayFlags): string | null {
+  if (flags.is_holiday) return "Feriado";
+  if (flags.is_sunday) return "Domingo";
+  return null;
+}
+
 function ActivityCard({ row }: ActivityCardProps) {
   const tone = pctTone(row.achievement_pct);
   const pctDisplay =
@@ -187,6 +197,11 @@ export default function ApoioGestorPage({
   cdName,
 }: ApoioGestorPageProps) {
   const [rows, setRows] = useState<ApoioGestorActivityRow[]>([]);
+  const [dayFlags, setDayFlags] = useState<ApoioGestorDayFlags>({
+    meta_defined_count: 0,
+    is_holiday: false,
+    is_sunday: false,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -207,8 +222,12 @@ export default function ApoioGestorPage({
       return;
     }
     try {
-      const data = await fetchApoioGestorDailySummary(cd, today);
+      const [data, flags] = await Promise.all([
+        fetchApoioGestorDailySummary(cd, today),
+        fetchApoioGestorDayFlags(cd, today),
+      ]);
       setRows(data);
+      setDayFlags(flags);
       setError(null);
       setLastRefresh(new Date());
     } catch (e) {
@@ -238,6 +257,7 @@ export default function ApoioGestorPage({
     .sort((a, b) => a.activity_label.localeCompare(b.activity_label, "pt-BR"));
   const hitCount = metaRows.filter((row) => pctTone(row.achievement_pct) === "success").length;
   const totalActual = rows.reduce((sum, row) => sum + row.actual_today, 0);
+  const currentDayStatus = dayStatusLabel(dayFlags);
 
   return (
     <div className="ag-page">
@@ -266,12 +286,17 @@ export default function ApoioGestorPage({
             <div className="ag-header__title-block">
               <span className="ag-header__eyebrow">Painel operacional do dia</span>
               <div className="ag-header__cd">{parseCityFromCdLabel(cdName) || cdName || "CD"}</div>
-              <div className="ag-header__date">{fullDate}</div>
+              <div className="ag-header__date-row">
+                <div className="ag-header__date">{fullDate}</div>
+                {currentDayStatus && (
+                  <span className="ag-header__day-status">{currentDayStatus}</span>
+                )}
+              </div>
             </div>
             <div className="ag-header__info-grid">
               <div className="ag-header__info-card">
                 <span className="ag-header__info-label">Monitoramento</span>
-                <strong className="ag-header__info-value">{metaRows.length} com meta</strong>
+                <strong className="ag-header__info-value">{formatMonitoringLabel(dayFlags.meta_defined_count)}</strong>
               </div>
               {lastRefresh && (
                 <div className="ag-header__info-card ag-header__info-card--refresh">
