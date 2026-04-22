@@ -629,7 +629,7 @@
   }
 
   .ag-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
@@ -653,10 +653,6 @@
 
 @media (max-width: 360px) {
   .ag-overview {
-    grid-template-columns: 1fr;
-  }
-
-  .ag-grid {
     grid-template-columns: 1fr;
   }
 }
