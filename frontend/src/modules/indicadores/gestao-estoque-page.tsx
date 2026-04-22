@@ -19,6 +19,7 @@ import {
   fetchIndicadoresGestaoEstoqueReportLossDimension,
   fetchIndicadoresGestaoEstoqueReportReentryItems,
   fetchIndicadoresGestaoEstoqueReportSummary,
+  fetchIndicadoresGestaoEstoqueReportZoneValues,
   fetchIndicadoresGestaoEstoqueReportTopItems,
   fetchIndicadoresGestaoEstoqueSummary,
   fetchIndicadoresGestaoEstoqueTopItems,
@@ -1073,6 +1074,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       const [
         reportSummary,
         reportDailySeries,
+        reportZoneValues,
         reportTopEntradas,
         reportTopSaidas,
         reportReentries,
@@ -1088,6 +1090,12 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           movementFilter: reportMovementFilter
         }),
         fetchIndicadoresGestaoEstoqueReportDailySeries({
+          cd: activeCd,
+          dtIni: reportDateStart,
+          dtFim: reportDateEnd,
+          movementFilter: reportMovementFilter
+        }),
+        fetchIndicadoresGestaoEstoqueReportZoneValues({
           cd: activeCd,
           dtIni: reportDateStart,
           dtFim: reportDateEnd,
@@ -1185,6 +1193,19 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
         { header: ["Data", "Entradas", "Saidas", "Perda"] }
       );
       setSheetWidths(serieDiariaSheet, [14, 16, 16, 16]);
+
+      const zonasSheet = XLSX.utils.json_to_sheet(
+        reportZoneValues.map((row) => ({
+          Zona: row.zona,
+          EntradaTotal: row.entrada_total,
+          SaidaTotal: row.saida_total,
+          ValorTotal: row.valor_total
+        })),
+        {
+          header: ["Zona", "EntradaTotal", "SaidaTotal", "ValorTotal"]
+        }
+      );
+      setSheetWidths(zonasSheet, [22, 16, 16, 16]);
 
       const reentradaSheet = XLSX.utils.json_to_sheet(
         reportReentries.map((row) => ({
@@ -1367,6 +1388,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       XLSX.utils.book_append_sheet(workbook, parametrosSheet, "Parametros");
       XLSX.utils.book_append_sheet(workbook, resumoSheet, "Resumo");
       XLSX.utils.book_append_sheet(workbook, serieDiariaSheet, "Serie Diaria");
+      XLSX.utils.book_append_sheet(workbook, zonasSheet, "Mov por Zona");
       XLSX.utils.book_append_sheet(workbook, reentradaSheet, "Reentrada");
       XLSX.utils.book_append_sheet(workbook, topEntradasSheet, "Top Entradas");
       XLSX.utils.book_append_sheet(workbook, topSaidasSheet, "Top Saidas");

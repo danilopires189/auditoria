@@ -446,6 +446,26 @@ export async function fetchIndicadoresGestaoEstoqueReportDailySeries(params: {
   return data.map((row) => mapDailyRow(row as Record<string, unknown>));
 }
 
+export async function fetchIndicadoresGestaoEstoqueReportZoneValues(params: {
+  cd: number | null;
+  dtIni: string;
+  dtFim: string;
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+}): Promise<IndicadoresGestaoEstoqueZoneValueRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_report_zone_values", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_movement_filter: params.movementFilter
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapZoneValueRow(row as Record<string, unknown>));
+}
+
 export async function fetchIndicadoresGestaoEstoqueReportTopItems(params: {
   cd: number | null;
   dtIni: string;
