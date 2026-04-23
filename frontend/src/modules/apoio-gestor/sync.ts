@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase";
+import { resolvePedidoDiretoLinkOriginFromWindow } from "../../shared/pedido-direto-link-origin";
 import type { ApoioGestorActivityRow, ApoioGestorDayFlags } from "./types";
 
 function parseNumber(value: unknown): number {
@@ -40,6 +41,7 @@ export async function fetchApoioGestorDailySummary(
   const { data, error } = await supabase.rpc("rpc_apoio_gestor_daily_summary", {
     p_cd: cd,
     p_date: date,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow(),
   });
   if (error) throw new Error(error.message ?? "Erro ao carregar resumo diário.");
   if (!Array.isArray(data)) return [];
@@ -56,6 +58,7 @@ export async function fetchApoioGestorDayFlags(
   const { data, error } = await supabase.rpc("rpc_apoio_gestor_day_flags", {
     p_cd: cd,
     p_date: date,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow(),
   });
   if (error) throw new Error(error.message ?? "Erro ao carregar contexto diário.");
   const row = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;

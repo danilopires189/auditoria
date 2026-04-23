@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase";
+import { resolvePedidoDiretoLinkOriginFromWindow } from "../../shared/pedido-direto-link-origin";
 import type {
   MetaMesActivityOption,
   MetaMesDailyRow,
@@ -159,7 +160,8 @@ export async function fetchMetaMesMonthOptions(cd: number | null): Promise<MetaM
   if (!supabase) throw new Error("Supabase não inicializado.");
 
   const { data, error } = await supabase.rpc("rpc_meta_mes_month_options", {
-    p_cd: cd
+    p_cd: cd,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow()
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -173,7 +175,8 @@ export async function fetchMetaMesSummary(cd: number | null, activityKey: string
   const { data, error } = await supabase.rpc("rpc_meta_mes_summary", {
     p_cd: cd,
     p_activity_key: activityKey,
-    p_month_start: monthStart
+    p_month_start: monthStart,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow()
   });
   if (error) throw new Error(toErrorMessage(error));
 
@@ -188,7 +191,8 @@ export async function fetchMetaMesDailyRows(cd: number | null, activityKey: stri
   const { data, error } = await supabase.rpc("rpc_meta_mes_daily_rows", {
     p_cd: cd,
     p_activity_key: activityKey,
-    p_month_start: monthStart
+    p_month_start: monthStart,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow()
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];

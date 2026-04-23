@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase";
+import { resolvePedidoDiretoLinkOriginFromWindow } from "../../shared/pedido-direto-link-origin";
 import type {
   ProdutividadeActivityTotalRow,
   ProdutividadeCollaboratorRow,
@@ -211,7 +212,8 @@ export async function fetchProdutividadeCollaborators(params: {
   const { data, error } = await supabase.rpc("rpc_produtividade_collaborators", {
     p_cd: params.cd,
     p_dt_ini: params.dtIni,
-    p_dt_fim: params.dtFim
+    p_dt_fim: params.dtFim,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow()
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -231,7 +233,8 @@ export async function fetchProdutividadeActivityTotals(params: {
     p_cd: params.cd,
     p_target_user_id: params.targetUserId,
     p_dt_ini: params.dtIni,
-    p_dt_fim: params.dtFim
+    p_dt_fim: params.dtFim,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow()
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -251,7 +254,8 @@ export async function fetchProdutividadeDaily(params: {
     p_cd: params.cd,
     p_target_user_id: params.targetUserId,
     p_dt_ini: params.dtIni,
-    p_dt_fim: params.dtFim
+    p_dt_fim: params.dtFim,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow()
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -275,7 +279,8 @@ export async function fetchProdutividadeEntries(params: {
     p_dt_ini: params.dtIni,
     p_dt_fim: params.dtFim,
     p_activity_key: params.activityKey,
-    p_limit: params.limit ?? 400
+    p_limit: params.limit ?? 400,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow()
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
@@ -293,7 +298,8 @@ export async function fetchProdutividadeRanking(params: {
   const { data, error } = await supabase.rpc("rpc_produtividade_ranking", {
     p_cd: params.cd,
     p_mes: params.mes,
-    p_ano: params.ano
+    p_ano: params.ano,
+    p_origem_link: resolvePedidoDiretoLinkOriginFromWindow()
   });
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
