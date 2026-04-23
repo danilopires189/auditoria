@@ -62,7 +62,7 @@ const PRODUTIVIDADE_ENTRIES_LIMIT = 200;
 let reportLogoDataUrlPromise: Promise<string | null> | null = null;
 const ALL_COLLABORATORS_VALUE = "__all__";
 
-const RANKING_METRICS: RankingMetricConfig[] = [
+const RANKING_METRICS: RankingMetricConfig[] = ([
   { label: "Coleta", pdfLabel: "Coleta", pointsKey: "coleta_pontos", qtyKey: "coleta_qtd", singular: "sku", plural: "skus" },
   { label: "PVPs", pdfLabel: "PVPs", pointsKey: "pvps_pontos", qtyKey: "pvps_qtd", singular: "end", plural: "ends" },
   { label: "Vol. Expedido", pdfLabel: "Vol. Expedido", pointsKey: "vol_pontos", qtyKey: "vol_qtd", singular: "Vol.", plural: "Vol." },
@@ -81,7 +81,7 @@ const RANKING_METRICS: RankingMetricConfig[] = [
   { label: "Caixa Térmica", pdfLabel: "Cx. Térmica", pointsKey: "caixa_termica_pontos", qtyKey: "caixa_termica_qtd", singular: "mov.", plural: "mov." },
   { label: "Ronda Qualidade", pdfLabel: "Ronda Qual.", pointsKey: "ronda_quality_pontos", qtyKey: "ronda_quality_qtd", singular: "aud.", plural: "aud." },
   { label: "Check List", pdfLabel: "Check List", pointsKey: "checklist_pontos", qtyKey: "checklist_qtd", singular: "checklist", plural: "checklists" }
-];
+] satisfies RankingMetricConfig[]).sort((left, right) => left.label.localeCompare(right.label, "pt-BR", { sensitivity: "base" }));
 
 function toDisplayName(value: string): string {
   const compact = value.trim().replace(/\s+/g, " ");
