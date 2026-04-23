@@ -64,6 +64,8 @@ export interface ProdutividadeRankingRow {
   mat: string;
   nome: string;
   posicao: number;
+  coleta_pontos: number;
+  coleta_qtd: number;
   pvps_pontos: number;
   pvps_qtd: number;
   vol_pontos: number;
@@ -82,6 +84,8 @@ export interface ProdutividadeRankingRow {
   conf_termo_qtd: number;
   conf_avulso_pontos: number;
   conf_avulso_qtd: number;
+  pedido_direto_pontos: number;
+  pedido_direto_qtd: number;
   conf_entrada_pontos: number;
   conf_entrada_qtd: number;
   conf_transferencia_cd_pontos: number;

@@ -63,6 +63,7 @@ let reportLogoDataUrlPromise: Promise<string | null> | null = null;
 const ALL_COLLABORATORS_VALUE = "__all__";
 
 const RANKING_METRICS: RankingMetricConfig[] = [
+  { label: "Coleta", pdfLabel: "Coleta", pointsKey: "coleta_pontos", qtyKey: "coleta_qtd", singular: "sku", plural: "skus" },
   { label: "PVPs", pdfLabel: "PVPs", pointsKey: "pvps_pontos", qtyKey: "pvps_qtd", singular: "end", plural: "ends" },
   { label: "Vol. Expedido", pdfLabel: "Vol. Expedido", pointsKey: "vol_pontos", qtyKey: "vol_qtd", singular: "Vol.", plural: "Vol." },
   { label: "Blitz", pdfLabel: "Blitz", pointsKey: "blitz_pontos", qtyKey: "blitz_qtd", singular: "un", plural: "un" },
@@ -72,6 +73,7 @@ const RANKING_METRICS: RankingMetricConfig[] = [
   { label: "Devolução", pdfLabel: "Devolução", pointsKey: "devolucao_pontos", qtyKey: "devolucao_qtd", singular: "devol.", plural: "devol." },
   { label: "Ter. Conf", pdfLabel: "Ter. Conf", pointsKey: "conf_termo_pontos", qtyKey: "conf_termo_qtd", singular: "sku", plural: "skus" },
   { label: "Avul. Conf", pdfLabel: "Avul. Conf", pointsKey: "conf_avulso_pontos", qtyKey: "conf_avulso_qtd", singular: "sku", plural: "skus" },
+  { label: "Pedido Direto", pdfLabel: "Pedido Direto", pointsKey: "pedido_direto_pontos", qtyKey: "pedido_direto_qtd", singular: "sku", plural: "skus" },
   { label: "Ent. Notas", pdfLabel: "Ent. Notas", pointsKey: "conf_entrada_pontos", qtyKey: "conf_entrada_qtd", singular: "sku", plural: "skus" },
   { label: "Transf. CD", pdfLabel: "Transf. CD", pointsKey: "conf_transferencia_cd_pontos", qtyKey: "conf_transferencia_cd_qtd", singular: "sku", plural: "skus" },
   { label: "Reg Lojas", pdfLabel: "Reg Lojas", pointsKey: "conf_lojas_pontos", qtyKey: "conf_lojas_qtd", singular: "loja", plural: "lojas" },
@@ -307,6 +309,31 @@ function buildPdfColumnStyles(
       }
     ])
   );
+}
+
+function buildRankingDetailsPdfColumnStyles(
+  doc: jsPDF,
+  headRow: string[],
+  bodyRows: string[][],
+  contentWidth: number
+): Record<number, { cellWidth: number; overflow?: "linebreak" | "ellipsize" }> {
+  const metricColumnIndexes = Array.from({ length: RANKING_METRICS.length }, (_, index) => index + 4);
+  const minWidths: Partial<Record<number, number>> = {
+    0: 24,
+    1: 92,
+    2: 42,
+    3: 44
+  };
+  const maxWidths: Partial<Record<number, number>> = {
+    1: 122
+  };
+
+  for (const columnIndex of metricColumnIndexes) {
+    minWidths[columnIndex] = 42;
+    maxWidths[columnIndex] = 56;
+  }
+
+  return buildPdfColumnStyles(doc, headRow, bodyRows, contentWidth, [1, ...metricColumnIndexes], minWidths, maxWidths);
 }
 
 function pdfIcon() {
@@ -785,54 +812,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
       alternateRowStyles: {
         fillColor: [248, 250, 253]
       },
-      columnStyles: buildPdfColumnStyles(
-        doc,
-        detailsHead[0],
-        detailsBody,
-        contentWidth,
-        [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-        {
-          0: 24,
-          1: 92,
-          2: 42,
-          3: 44,
-          4: 42,
-          5: 46,
-          6: 40,
-          7: 42,
-          8: 44,
-          9: 42,
-          10: 42,
-          11: 42,
-          12: 42,
-          13: 44,
-          14: 44,
-          15: 42,
-          16: 42,
-          17: 46,
-          18: 46,
-          19: 46
-        },
-        {
-          1: 122,
-          4: 50,
-          5: 54,
-          6: 46,
-          7: 50,
-          8: 54,
-          9: 50,
-          10: 50,
-          11: 50,
-          12: 50,
-          13: 54,
-          14: 54,
-          15: 50,
-          16: 50,
-          17: 56,
-          18: 56,
-          19: 56
-        }
-      )
+      columnStyles: buildRankingDetailsPdfColumnStyles(doc, detailsHead[0], detailsBody, contentWidth)
     });
 
     const totalPages = doc.getNumberOfPages();
