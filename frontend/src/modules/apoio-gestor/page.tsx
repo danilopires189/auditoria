@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { getModuleByKeyOrThrow } from "../registry";
@@ -17,6 +17,35 @@ interface ApoioGestorPageProps {
 const BRAZIL_TZ = "America/Sao_Paulo";
 const MODULE_DEF = getModuleByKeyOrThrow("apoio-gestor");
 const REFRESH_INTERVAL_MS = READS_SILENT_REFRESH_INTERVAL_MS;
+const COUNT_ANIMATION_DURATION_MS = 2400;
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+interface OverviewMetrics {
+  metaCount: number;
+  criticalCount: number;
+  warningCount: number;
+  hitCount: number;
+  exceededCount: number;
+  totalActual: number;
+}
+
+function createEmptyOverviewMetrics(): OverviewMetrics {
+  return {
+    metaCount: 0,
+    criticalCount: 0,
+    warningCount: 0,
+    hitCount: 0,
+    exceededCount: 0,
+    totalActual: 0,
+  };
+}
+
+interface AnimatedRevealProps {
+  revealKey: string;
+  children: ReactNode;
+  className?: string;
+  delayMs?: number;
+}
 
 function formatFullDate(): string {
   const raw = new Intl.DateTimeFormat("pt-BR", {
@@ -76,43 +105,81 @@ interface ArcGaugeProps {
 }
 
 function ArcGauge({ pct, tone }: ArcGaugeProps) {
-  const clamped = Math.min(pct, 100);
-  const r = 52;
-  const circumference = 2 * Math.PI * r;
-  const offset = circumference * (1 - clamped / 100);
+  const normalizedPct = Math.max(0, pct);
+  const innerPct = Math.min(normalizedPct, 100);
+  const overflowPct = normalizedPct > 100 ? normalizedPct % 100 : 0;
+  const overflowCycles = normalizedPct >= 200 ? Math.max(0, Math.floor(normalizedPct / 100) - 1) : 0;
+  const innerRadius = 52;
+  const overflowRadius = 64;
+  const innerCircumference = 2 * Math.PI * innerRadius;
+  const overflowCircumference = 2 * Math.PI * overflowRadius;
+  const innerOffset = innerCircumference * (1 - innerPct / 100);
+  const overflowOffset = overflowCircumference * (1 - overflowPct / 100);
   const arcColor = ARC_COLOR[tone];
 
   return (
-    <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
-      <circle
-        cx="66"
-        cy="66"
-        r={r}
-        fill="none"
-        className="ag-card__gauge-arc--track"
-        strokeWidth="14"
-        strokeLinecap="round"
-      />
-      <circle
-        cx="66"
-        cy="66"
-        r={r}
-        fill="none"
-        className="ag-card__gauge-arc--fill"
-        strokeWidth="14"
-        strokeLinecap="round"
-        stroke={arcColor}
-        strokeDasharray={`${circumference}`}
-        strokeDashoffset={`${offset}`}
-        transform="rotate(-90 66 66)"
-      />
-    </svg>
+    <>
+      <svg width="164" height="164" viewBox="0 0 164 164" aria-hidden="true">
+        <circle
+          cx="82"
+          cy="82"
+          r={overflowRadius}
+          fill="none"
+          className={`ag-card__gauge-overflow-track${normalizedPct > 100 ? " is-visible" : ""}`}
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+        <circle
+          cx="82"
+          cy="82"
+          r={overflowRadius}
+          fill="none"
+          className={`ag-card__gauge-overflow-fill${normalizedPct > 100 ? " is-visible" : ""}`}
+          strokeWidth="5"
+          strokeLinecap="round"
+          stroke={arcColor}
+          strokeDasharray={`${overflowCircumference}`}
+          strokeDashoffset={`${overflowOffset}`}
+          transform="rotate(-90 82 82)"
+        />
+        <circle
+          cx="82"
+          cy="82"
+          r={innerRadius}
+          fill="none"
+          className="ag-card__gauge-arc--track"
+          strokeWidth="12"
+          strokeLinecap="round"
+        />
+        <circle
+          cx="82"
+          cy="82"
+          r={innerRadius}
+          fill="none"
+          className="ag-card__gauge-arc--fill"
+          strokeWidth="12"
+          strokeLinecap="round"
+          stroke={arcColor}
+          strokeDasharray={`${innerCircumference}`}
+          strokeDashoffset={`${innerOffset}`}
+          transform="rotate(-90 82 82)"
+        />
+      </svg>
+      {overflowCycles > 0 && (
+        <span className={`ag-card__gauge-overflow-chip ag-card__gauge-overflow-chip--${tone}`}>
+          +{overflowCycles}x
+        </span>
+      )}
+    </>
   );
 }
 
 interface ActivityCardProps {
   row: ApoioGestorActivityRow;
   noMetaReason: string;
+  displayedActual: number;
+  displayedPct: number | null;
+  showFinalMetaTone: boolean;
 }
 
 function formatMetric(value: number): string {
@@ -128,6 +195,45 @@ function bigNumberSizeClass(value: number): string {
 
 function formatMonitoringLabel(count: number): string {
   return `${count} ${count === 1 ? "ind. com meta definida" : "inds. com metas definidas"}`;
+}
+
+function shouldAnimateCount(value: number): boolean {
+  return value > 0;
+}
+
+function shouldAnimatePct(value: number | null): value is number {
+  return value !== null && value > 0;
+}
+
+function easeOutCubic(progress: number): number {
+  return 1 - Math.pow(1 - progress, 3);
+}
+
+function animatedCountValue(target: number, easedProgress: number): number {
+  if (!shouldAnimateCount(target)) return target;
+  return Math.min(target, Math.round(target * easedProgress));
+}
+
+function animatedPctValue(target: number | null, easedProgress: number): number | null {
+  if (target === null) return null;
+  if (!shouldAnimatePct(target)) return target;
+  return Math.min(target, Math.round(target * easedProgress * 10) / 10);
+}
+
+function formatPct(value: number | null): string {
+  if (value === null) return "—";
+  return `${value.toFixed(1)}%`;
+}
+
+function pctSizeClass(value: number | null): string {
+  const textLength = formatPct(value).length;
+  if (textLength >= 7) return "ag-card__pct--dense";
+  if (textLength >= 6) return "ag-card__pct--compact";
+  return "";
+}
+
+function revealStyle(delayMs: number): CSSProperties {
+  return { ["--ag-reveal-delay" as string]: `${delayMs}ms` };
 }
 
 function dayStatusLabel(flags: ApoioGestorDayFlags): string | null {
@@ -167,17 +273,61 @@ function toneSummaryLabel(tone: ReturnType<typeof pctTone>): string {
   return "Sem meta";
 }
 
-function ActivityCard({ row, noMetaReason }: ActivityCardProps) {
+function AnimatedReveal({ revealKey, children, className = "", delayMs = 0 }: AnimatedRevealProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    if (visible) return;
+    if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      {
+        threshold: 0.01,
+        rootMargin: "0px 0px 18% 0px",
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [revealKey, visible]);
+
+  return (
+    <div
+      ref={ref}
+      className={`${className} ag-reveal${visible ? " is-visible" : ""}`.trim()}
+      style={revealStyle(delayMs)}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ActivityCard({ row, noMetaReason, displayedActual, displayedPct, showFinalMetaTone }: ActivityCardProps) {
   const tone = pctTone(row.achievement_pct);
-  const pctDisplay =
-    row.achievement_pct !== null ? `${row.achievement_pct.toFixed(1)}%` : "—";
-  const cardToneClass = row.has_meta ? `ag-card--${tone}` : "";
+  const pctDisplay = formatPct(displayedPct);
+  const visualTone = showFinalMetaTone ? tone : "neutral";
+  const cardToneClass = row.has_meta ? `ag-card--${visualTone}` : "";
   const deltaLabel = describeDelta(row, tone);
-  const toneSummary = toneSummaryLabel(tone);
-  const bigNumberClass = bigNumberSizeClass(row.actual_today);
+  const toneSummary = showFinalMetaTone ? toneSummaryLabel(tone) : "Indicador em apuração";
+  const bigNumberClass = bigNumberSizeClass(displayedActual);
+  const pctDensityClass = pctSizeClass(displayedPct);
 
   const badgeLabel =
-    tone === "success"
+    !showFinalMetaTone
+      ? "Apurando"
+      : tone === "success"
       ? "Meta atingida"
       : tone === "exceeded"
       ? "Meta superada"
@@ -189,27 +339,27 @@ function ActivityCard({ row, noMetaReason }: ActivityCardProps) {
 
   if (row.has_meta) {
     return (
-      <div className={`ag-card ag-card--meta ${cardToneClass}`}>
-        <div className={`ag-card__topbar ag-card__topbar--${tone}`}>
+      <div className={`ag-card ag-card--meta ${cardToneClass} ${showFinalMetaTone ? "" : "ag-card--neutral-state"}`.trim()}>
+        <div className={`ag-card__topbar ag-card__topbar--${visualTone}`}>
           <div className="ag-card__title-wrap">
             <span className="ag-card__label">{row.activity_label}</span>
             <span className="ag-card__summary">{toneSummary}</span>
           </div>
           {badgeLabel && (
-            <span className={`ag-card__badge ag-card__badge--${tone}`}>{badgeLabel}</span>
+            <span className={`ag-card__badge ag-card__badge--${visualTone}`}>{badgeLabel}</span>
           )}
         </div>
         <div className="ag-card__body">
           <div className="ag-card__gauge-panel">
             <div className="ag-card__gauge">
-              <ArcGauge pct={row.achievement_pct ?? 0} tone={tone} />
-              <div className={`ag-card__pct ag-card__pct--${tone}`}>{pctDisplay}</div>
+              <ArcGauge pct={displayedPct ?? 0} tone={visualTone} />
+              <div className={`ag-card__pct ag-card__pct--${visualTone} ${pctDensityClass}`.trim()}>{pctDisplay}</div>
             </div>
           </div>
           <div className="ag-card__metrics">
             <div className="ag-card__metric">
               <span className="ag-card__metric-label">Produzido hoje</span>
-              <strong className="ag-card__actual">{formatMetric(row.actual_today)}</strong>
+              <strong className="ag-card__actual">{formatMetric(displayedActual)}</strong>
             </div>
             <div className="ag-card__metric">
               <span className="ag-card__metric-label">Meta do dia</span>
@@ -217,7 +367,7 @@ function ActivityCard({ row, noMetaReason }: ActivityCardProps) {
                 {row.target_today != null ? formatMetric(row.target_today) : "—"}
               </strong>
             </div>
-            <div className={`ag-card__signal ag-card__signal--${tone}`}>{deltaLabel}</div>
+            <div className={`ag-card__signal ag-card__signal--${visualTone}`}>{deltaLabel}</div>
             <div className="ag-card__unit-row">{row.unit_label}</div>
           </div>
         </div>
@@ -236,7 +386,7 @@ function ActivityCard({ row, noMetaReason }: ActivityCardProps) {
       </div>
       <div className="ag-card__body ag-card__body--simple">
         <div className={`ag-card__big-number ${bigNumberClass}`.trim()}>
-          {formatMetric(row.actual_today)}
+          {formatMetric(displayedActual)}
         </div>
         <div className="ag-card__unit-label">{row.unit_label}</div>
         <div className="ag-card__simple-caption">{noMetaReason}</div>
@@ -259,8 +409,18 @@ export default function ApoioGestorPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [animatedOverview, setAnimatedOverview] = useState<OverviewMetrics>(createEmptyOverviewMetrics);
+  const [animatedActuals, setAnimatedActuals] = useState<Record<string, number>>({});
+  const [animatedPcts, setAnimatedPcts] = useState<Record<string, number | null>>({});
+  const [hasAnimatedIntro, setHasAnimatedIntro] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(REDUCED_MOTION_QUERY).matches
+      : false
+  );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastLoadAtRef = useRef(0);
+  const animationFrameRef = useRef<number | null>(null);
 
   const cd = parseCdNumber(cdName);
   const today = todayIsoBrasilia();
@@ -268,6 +428,21 @@ export default function ApoioGestorPage({
 
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mediaQuery = window.matchMedia(REDUCED_MOTION_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => {
+      setPrefersReducedMotion(event.matches);
+    };
+    setPrefersReducedMotion(mediaQuery.matches);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
   }, []);
 
   const load = useCallback(async () => {
@@ -350,6 +525,127 @@ export default function ApoioGestorPage({
   const noMetaReason = currentDayStatus
     ? `Dia classificado como ${currentDayStatus.toLowerCase()} no Meta Mês`
     : "Sem meta configurada para hoje";
+  const overviewMetrics: OverviewMetrics = {
+    metaCount: metaRows.length,
+    criticalCount,
+    warningCount,
+    hitCount,
+    exceededCount,
+    totalActual,
+  };
+  const isIntroAnimationActive = !loading && error === null && !hasAnimatedIntro && !prefersReducedMotion;
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (loading || error !== null) return;
+
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (prefersReducedMotion) {
+      setHasAnimatedIntro(true);
+      return;
+    }
+
+    if (hasAnimatedIntro) {
+      return;
+    }
+
+    const hasAnyAnimatedValue =
+      shouldAnimateCount(overviewMetrics.metaCount) ||
+      shouldAnimateCount(overviewMetrics.criticalCount) ||
+      shouldAnimateCount(overviewMetrics.warningCount) ||
+      shouldAnimateCount(overviewMetrics.hitCount) ||
+      shouldAnimateCount(overviewMetrics.exceededCount) ||
+      shouldAnimateCount(overviewMetrics.totalActual) ||
+      rows.some((row) => shouldAnimateCount(row.actual_today) || shouldAnimatePct(row.achievement_pct));
+
+    if (!hasAnyAnimatedValue) {
+      setHasAnimatedIntro(true);
+      return;
+    }
+
+    setAnimatedOverview(createEmptyOverviewMetrics());
+    setAnimatedActuals(
+      rows.reduce<Record<string, number>>((acc, row) => {
+        acc[row.activity_key] = shouldAnimateCount(row.actual_today) ? 0 : row.actual_today;
+        return acc;
+      }, {})
+    );
+    setAnimatedPcts(
+      rows.reduce<Record<string, number | null>>((acc, row) => {
+        acc[row.activity_key] = shouldAnimatePct(row.achievement_pct) ? 0 : row.achievement_pct;
+        return acc;
+      }, {})
+    );
+
+    const startedAt = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / COUNT_ANIMATION_DURATION_MS);
+      const easedProgress = easeOutCubic(progress);
+
+      setAnimatedOverview({
+        metaCount: animatedCountValue(overviewMetrics.metaCount, easedProgress),
+        criticalCount: animatedCountValue(overviewMetrics.criticalCount, easedProgress),
+        warningCount: animatedCountValue(overviewMetrics.warningCount, easedProgress),
+        hitCount: animatedCountValue(overviewMetrics.hitCount, easedProgress),
+        exceededCount: animatedCountValue(overviewMetrics.exceededCount, easedProgress),
+        totalActual: animatedCountValue(overviewMetrics.totalActual, easedProgress),
+      });
+
+      setAnimatedActuals(
+        rows.reduce<Record<string, number>>((acc, row) => {
+          acc[row.activity_key] = animatedCountValue(row.actual_today, easedProgress);
+          return acc;
+        }, {})
+      );
+      setAnimatedPcts(
+        rows.reduce<Record<string, number | null>>((acc, row) => {
+          acc[row.activity_key] = animatedPctValue(row.achievement_pct, easedProgress);
+          return acc;
+        }, {})
+      );
+
+      if (progress < 1) {
+        animationFrameRef.current = window.requestAnimationFrame(tick);
+        return;
+      }
+
+      animationFrameRef.current = null;
+      setHasAnimatedIntro(true);
+    };
+
+    animationFrameRef.current = window.requestAnimationFrame(tick);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [
+    error,
+    hasAnimatedIntro,
+    loading,
+    overviewMetrics.criticalCount,
+    overviewMetrics.exceededCount,
+    overviewMetrics.hitCount,
+    overviewMetrics.metaCount,
+    overviewMetrics.totalActual,
+    overviewMetrics.warningCount,
+    prefersReducedMotion,
+    rows,
+  ]);
 
   return (
     <div className="ag-page">
@@ -373,6 +669,7 @@ export default function ApoioGestorPage({
       </header>
 
       <div className="ag-content-shell">
+        <AnimatedReveal revealKey="apoio-gestor-header" className="ag-reveal--hero">
         <section className="ag-header">
           <div className="ag-header__main">
             <div className="ag-header__title-block">
@@ -407,39 +704,54 @@ export default function ApoioGestorPage({
             </div>
           </div>
         </section>
+        </AnimatedReveal>
 
+        <AnimatedReveal revealKey="apoio-gestor-overview" className="ag-reveal--overview" delayMs={60}>
         <section className="ag-overview">
           <article className="ag-overview__card ag-overview__card--strong">
             <span className="ag-overview__label">Com meta hoje</span>
-            <strong className="ag-overview__value">{metaRows.length}</strong>
+            <strong className="ag-overview__value">
+              {isIntroAnimationActive ? animatedOverview.metaCount : overviewMetrics.metaCount}
+            </strong>
             <span className="ag-overview__hint">Indicadores ativos no Meta Mês</span>
           </article>
           <article className="ag-overview__card ag-overview__card--danger">
             <span className="ag-overview__label">Abaixo da meta</span>
-            <strong className="ag-overview__value">{criticalCount}</strong>
+            <strong className="ag-overview__value">
+              {isIntroAnimationActive ? animatedOverview.criticalCount : overviewMetrics.criticalCount}
+            </strong>
             <span className="ag-overview__hint">Precisam de ação primeiro</span>
           </article>
           <article className="ag-overview__card ag-overview__card--warning">
             <span className="ag-overview__label">Em andamento</span>
-            <strong className="ag-overview__value">{warningCount}</strong>
+            <strong className="ag-overview__value">
+              {isIntroAnimationActive ? animatedOverview.warningCount : overviewMetrics.warningCount}
+            </strong>
             <span className="ag-overview__hint">Ainda abaixo da faixa ideal</span>
           </article>
           <article className="ag-overview__card ag-overview__card--accent">
             <span className="ag-overview__label">Meta batida</span>
-            <strong className="ag-overview__value">{hitCount}</strong>
+            <strong className="ag-overview__value">
+              {isIntroAnimationActive ? animatedOverview.hitCount : overviewMetrics.hitCount}
+            </strong>
             <span className="ag-overview__hint">Faixa de 100% a 119%</span>
           </article>
           <article className="ag-overview__card ag-overview__card--info">
             <span className="ag-overview__label">Meta superada</span>
-            <strong className="ag-overview__value">{exceededCount}</strong>
+            <strong className="ag-overview__value">
+              {isIntroAnimationActive ? animatedOverview.exceededCount : overviewMetrics.exceededCount}
+            </strong>
             <span className="ag-overview__hint">Acima de 120%</span>
           </article>
           <article className="ag-overview__card">
             <span className="ag-overview__label">Volume do dia</span>
-            <strong className="ag-overview__value">{formatMetric(totalActual)}</strong>
+            <strong className="ag-overview__value">
+              {formatMetric(isIntroAnimationActive ? animatedOverview.totalActual : overviewMetrics.totalActual)}
+            </strong>
             <span className="ag-overview__hint">Soma de todas as atividades</span>
           </article>
         </section>
+        </AnimatedReveal>
 
         {loading ? (
           <div className="ag-state ag-state--loading">
@@ -460,30 +772,75 @@ export default function ApoioGestorPage({
         ) : (
           <div className="ag-content">
             {metaRows.length > 0 && (
+              <AnimatedReveal revealKey="apoio-gestor-meta-section" className="ag-reveal--section" delayMs={120}>
               <section className="ag-section">
                 <div className="ag-section__header">
                   <h2 className="ag-section__title">Atividades com Meta</h2>
                   <span className="ag-section__count">{metaRows.length} cards</span>
                 </div>
                 <div className="ag-grid">
-                  {metaRows.map((r) => (
-                    <ActivityCard key={r.activity_key} row={r} noMetaReason={noMetaReason} />
+                  {metaRows.map((r, index) => (
+                    <AnimatedReveal
+                      key={r.activity_key}
+                      revealKey={`apoio-gestor-meta-card:${r.activity_key}`}
+                      className="ag-reveal--card"
+                      delayMs={160 + Math.min(index, 7) * 48}
+                    >
+                      <ActivityCard
+                        row={r}
+                        noMetaReason={noMetaReason}
+                        displayedActual={
+                          isIntroAnimationActive && shouldAnimateCount(r.actual_today)
+                            ? animatedActuals[r.activity_key] ?? 0
+                            : r.actual_today
+                        }
+                        displayedPct={
+                          isIntroAnimationActive && shouldAnimatePct(r.achievement_pct)
+                            ? animatedPcts[r.activity_key] ?? 0
+                            : r.achievement_pct
+                        }
+                        showFinalMetaTone={
+                          !isIntroAnimationActive ||
+                          (!shouldAnimateCount(r.actual_today) && !shouldAnimatePct(r.achievement_pct))
+                        }
+                      />
+                    </AnimatedReveal>
                   ))}
                 </div>
               </section>
+              </AnimatedReveal>
             )}
             {simpleRows.length > 0 && (
+              <AnimatedReveal revealKey="apoio-gestor-simple-section" className="ag-reveal--section" delayMs={180}>
               <section className="ag-section">
                 <div className="ag-section__header">
                   <h2 className="ag-section__title">Outras Atividades</h2>
                   <span className="ag-section__count">{simpleRows.length} cards</span>
                 </div>
                 <div className="ag-grid">
-                  {simpleRows.map((r) => (
-                    <ActivityCard key={r.activity_key} row={r} noMetaReason={noMetaReason} />
+                  {simpleRows.map((r, index) => (
+                    <AnimatedReveal
+                      key={r.activity_key}
+                      revealKey={`apoio-gestor-simple-card:${r.activity_key}`}
+                      className="ag-reveal--card"
+                      delayMs={220 + Math.min(index, 7) * 42}
+                    >
+                      <ActivityCard
+                        row={r}
+                        noMetaReason={noMetaReason}
+                        displayedActual={
+                          isIntroAnimationActive && shouldAnimateCount(r.actual_today)
+                            ? animatedActuals[r.activity_key] ?? 0
+                            : r.actual_today
+                        }
+                        displayedPct={r.achievement_pct}
+                        showFinalMetaTone
+                      />
+                    </AnimatedReveal>
                   ))}
                 </div>
               </section>
+              </AnimatedReveal>
             )}
           </div>
         )}
