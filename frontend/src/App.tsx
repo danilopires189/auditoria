@@ -161,7 +161,12 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   "www.indicadorescd.vercel.app": INDICADORES_AUTH_BRANDING
 };
 
-const APOIO_GESTOR_ALLOWED_HOSTS = new Set(["prevencaocd.vercel.app", "www.prevencaocd.vercel.app"]);
+const APOIO_GESTOR_ALLOWED_HOSTS = new Set([
+  "prevencaocd.vercel.app",
+  "www.prevencaocd.vercel.app",
+  "prevencaocds.vercel.app",
+  "www.prevencaocds.vercel.app"
+]);
 
 const ApoioGestorPage = React.lazy(() => import("./modules/apoio-gestor/page"));
 const ControleValidadePage = React.lazy(() => import("./modules/controle-validade/page"));

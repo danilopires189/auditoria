@@ -71,7 +71,12 @@ const DETAIL_ROWS_LIMIT = 100;
 const INSIGHT_ROWS_LIMIT = 10;
 const REENTRY_ROWS_LIMIT = 12;
 const MOBILE_ACCORDION_MEDIA_QUERY = "(max-width: 720px)";
-const INVENTARIO_SEED_ALLOWED_HOSTNAMES = new Set(["prevencaocd.vercel.app", "prevencaocds.vercel.app"]);
+const INVENTARIO_SEED_ALLOWED_HOSTNAMES = new Set([
+  "prevencaocd.vercel.app",
+  "www.prevencaocd.vercel.app",
+  "prevencaocds.vercel.app",
+  "www.prevencaocds.vercel.app"
+]);
 
 function parseCdFromLabel(label: string | null): number | null {
   if (!label) return null;
