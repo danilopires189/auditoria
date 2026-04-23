@@ -419,7 +419,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
   const [dailyRows, setDailyRows] = useState<ProdutividadeDailyRow[]>([]);
   const [entries, setEntries] = useState<ProdutividadeEntryRow[]>([]);
   const [activityFilter, setActivityFilter] = useState<string | null>(null);
-  const [expandedDailyDates, setExpandedDailyDates] = useState<Set<string>>(new Set());
+  const [selectedDailyDate, setSelectedDailyDate] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const isAllCollaboratorsSelected = selectedUserId === ALL_COLLABORATORS_VALUE;
 
@@ -474,6 +474,15 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         items: [...bucket.items].sort((a, b) => b.valor_total - a.valor_total)
       }));
   }, [dailyRows]);
+  const filteredEntries = useMemo(() => {
+    if (!activityFilter) return [];
+    if (!selectedDailyDate) return entries;
+    return entries.filter((entry) => entry.event_date === selectedDailyDate);
+  }, [activityFilter, entries, selectedDailyDate]);
+
+  const entriesPanelRef = useRef<HTMLDivElement | null>(null);
+  const panelRequestIdRef = useRef(0);
+  const detailRequestIdRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -488,33 +497,68 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     return () => media.removeListener(onChange);
   }, []);
 
+  const scrollEntriesPanelIntoView = useCallback(() => {
+    const panel = entriesPanelRef.current;
+    if (!panel) return;
+    panel.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+    if (typeof panel.focus === "function") {
+      window.setTimeout(() => {
+        panel.focus({ preventScroll: true });
+      }, 0);
+    }
+  }, []);
+
   const loadEntriesOnly = useCallback(async (targetUserId: string | null, nextActivityKey: string | null) => {
+    const detailRequestId = detailRequestIdRef.current + 1;
+    detailRequestIdRef.current = detailRequestId;
+    setLoadingDetail(true);
+    setErrorMessage(null);
     if (activeCd == null) {
-      setEntries([]);
+      if (detailRequestIdRef.current === detailRequestId) {
+        setEntries([]);
+        setLoadingDetail(false);
+      }
       return;
     }
-    const rows = await fetchProdutividadeEntries({
-      cd: activeCd,
-      targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
-      dtIni: dateStart,
-      dtFim: dateEnd,
-      activityKey: nextActivityKey,
-      limit: PRODUTIVIDADE_ENTRIES_LIMIT
-    });
-    setEntries(rows);
+
+    try {
+      const rows = await fetchProdutividadeEntries({
+        cd: activeCd,
+        targetUserId: targetUserId === ALL_COLLABORATORS_VALUE ? null : targetUserId,
+        dtIni: dateStart,
+        dtFim: dateEnd,
+        activityKey: nextActivityKey,
+        limit: PRODUTIVIDADE_ENTRIES_LIMIT
+      });
+
+      if (detailRequestIdRef.current !== detailRequestId) return;
+      setEntries(rows);
+    } catch (error) {
+      if (detailRequestIdRef.current !== detailRequestId) return;
+      setErrorMessage(asUnknownErrorMessage(error));
+    } finally {
+      if (detailRequestIdRef.current === detailRequestId) {
+        setLoadingDetail(false);
+      }
+    }
   }, [activeCd, dateEnd, dateStart]);
 
   const loadUserPanels = useCallback(async (targetUserId: string | null, nextActivityKey: string | null) => {
+    const panelRequestId = panelRequestIdRef.current + 1;
+    panelRequestIdRef.current = panelRequestId;
+    const detailRequestId = detailRequestIdRef.current + 1;
+    detailRequestIdRef.current = detailRequestId;
+
     if (activeCd == null) {
       setActivityTotals([]);
       setDailyRows([]);
       setEntries([]);
-      setExpandedDailyDates(new Set());
+      setSelectedDailyDate(null);
       return;
     }
 
     setLoadingDetail(true);
-    setExpandedDailyDates(new Set());
+    setSelectedDailyDate(null);
     setErrorMessage(null);
     try {
       const [totals, daily] = await Promise.all([
@@ -540,13 +584,19 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
         limit: PRODUTIVIDADE_ENTRIES_LIMIT
       });
 
+      if (panelRequestIdRef.current !== panelRequestId) return;
       setActivityTotals([...totals].sort((a, b) => a.activity_label.localeCompare(b.activity_label, "pt-BR")));
       setDailyRows(daily);
-      setEntries(entryRows);
+      if (detailRequestIdRef.current === detailRequestId) {
+        setEntries(entryRows);
+      }
     } catch (error) {
+      if (panelRequestIdRef.current !== panelRequestId && detailRequestIdRef.current !== detailRequestId) return;
       setErrorMessage(asUnknownErrorMessage(error));
     } finally {
-      setLoadingDetail(false);
+      if (detailRequestIdRef.current === detailRequestId) {
+        setLoadingDetail(false);
+      }
     }
   }, [activeCd, dateEnd, dateStart]);
 
@@ -877,38 +927,23 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
     if (targetUserId === selectedUserId) return;
     setSelectedUserId(targetUserId);
     setStatusMessage(null);
-    void loadUserPanels(targetUserId, activityFilter).catch((error) => {
-      setErrorMessage(asUnknownErrorMessage(error));
-    });
+    void loadUserPanels(targetUserId, activityFilter);
   }, [activityFilter, loadUserPanels, selectedUserId]);
 
   const onToggleActivityFilter = useCallback((nextActivityKey: string) => {
     const resolved = activityFilter === nextActivityKey ? null : nextActivityKey;
     setActivityFilter(resolved);
     setStatusMessage(null);
-    void loadEntriesOnly(selectedUserId, resolved).catch((error) => {
-      setErrorMessage(asUnknownErrorMessage(error));
-    });
-  }, [activityFilter, loadEntriesOnly, selectedUserId]);
-
-  const onClearActivityFilter = useCallback(() => {
-    setActivityFilter(null);
-    setStatusMessage(null);
-    void loadEntriesOnly(selectedUserId, null).catch((error) => {
-      setErrorMessage(asUnknownErrorMessage(error));
-    });
-  }, [loadEntriesOnly, selectedUserId]);
+    if (resolved == null) {
+      setSelectedDailyDate(null);
+    } else {
+      scrollEntriesPanelIntoView();
+    }
+    void loadEntriesOnly(selectedUserId, resolved);
+  }, [activityFilter, loadEntriesOnly, scrollEntriesPanelIntoView, selectedUserId]);
 
   const onToggleDailyDay = useCallback((dateRef: string) => {
-    setExpandedDailyDates((current) => {
-      const next = new Set(current);
-      if (next.has(dateRef)) {
-        next.delete(dateRef);
-      } else {
-        next.add(dateRef);
-      }
-      return next;
-    });
+    setSelectedDailyDate((current) => current === dateRef ? null : dateRef);
   }, []);
 
   const onToggleVisibility = useCallback(() => {
@@ -1216,7 +1251,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                           ) : (
                             <div className="produtividade-daily-list">
                               {dailyGroups.map((bucket) => {
-                                const isExpanded = expandedDailyDates.has(bucket.date);
+                                const isExpanded = selectedDailyDate === bucket.date;
                                 const visibleItems = isExpanded ? bucket.items : bucket.items.slice(0, 3);
                                 return (
                                   <button
@@ -1225,7 +1260,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                     className={`produtividade-day-card${isExpanded ? " is-expanded" : ""}`}
                                     onClick={() => onToggleDailyDay(bucket.date)}
                                     aria-expanded={isExpanded}
-                                    title={isExpanded ? "Clique para recolher" : "Clique para ver todas as atividades do dia"}
+                                    title={isExpanded ? "Clique para mostrar todos os dias nos detalhes" : "Clique para filtrar detalhes por este dia"}
                                   >
                                     <strong>{formatDate(bucket.date)}</strong>
                                     <span>{formatMetric(bucket.total, "")} pts bruto</span>
@@ -1239,7 +1274,7 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                                         <li className="is-more">{`+${bucket.items.length - 3} mais — clique para expandir`}</li>
                                       ) : null}
                                       {isExpanded && bucket.items.length > 3 ? (
-                                        <li className="is-more">Clique para recolher</li>
+                                        <li className="is-more">Detalhes filtrados por este dia — clique para limpar</li>
                                       ) : null}
                                     </ul>
                                   </button>
@@ -1250,54 +1285,47 @@ export default function ProdutividadePage({ isOnline, profile }: ProdutividadePa
                         </div>
                       </div>
 
-                      <div className="produtividade-panel produtividade-entries-block">
-                        <div className="produtividade-filter-line">
-                          <span>
-                            {activityFilter
-                              ? activityTotals.find((row) => row.activity_key === activityFilter)?.activity_label ?? activityFilter
-                              : "Todas as atividades"}
-                          </span>
-                          <button
-                            className="btn btn-muted"
-                            type="button"
-                            onClick={onClearActivityFilter}
-                            disabled={activityFilter == null}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true" style={{width:13,height:13,stroke:"currentColor",fill:"none",strokeWidth:2.5,strokeLinecap:"round",strokeLinejoin:"round",flexShrink:0}}>
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                            Limpar filtro
-                          </button>
-                        </div>
-                        <h4>Detalhes das atividades</h4>
-                        {loadingDetail ? <div className="coleta-empty">Carregando detalhes...</div> : null}
-                        {!loadingDetail && entries.length === 0 ? (
-                          <div className="coleta-empty">Nenhum detalhe para o filtro atual.</div>
-                        ) : null}
-                        {!loadingDetail ? (
-                          <div className="produtividade-entry-list">
-                            {entries.map((entry) => (
-                              <article key={entry.entry_id} className="produtividade-entry-card">
-                                <div className="produtividade-entry-head">
-                                  <strong>{entry.activity_label}</strong>
-                                  <span>{formatMetricWithUnit(entry.metric_value, entry.unit_label)}</span>
-                                </div>
-                                {isAllCollaboratorsSelected ? (
-                                  <div className="produtividade-entry-collaborator">
-                                    <span>{entry.mat} {entry.nome}</span>
-                                  </div>
-                                ) : null}
-                                <p>{entry.detail || "-"}</p>
-                                <div className="produtividade-entry-meta">
-                                  <span>Data: {formatDate(entry.event_date)}</span>
-                                  {entry.event_at ? <span>Registro: {formatDateTime(entry.event_at)}</span> : null}
-                                </div>
-                              </article>
-                            ))}
+                      {activityFilter ? (
+                        <div
+                          ref={entriesPanelRef}
+                          className="produtividade-panel produtividade-entries-block"
+                          tabIndex={-1}
+                        >
+                          <div className="produtividade-filter-line">
+                            <span>
+                              {activityTotals.find((row) => row.activity_key === activityFilter)?.activity_label ?? activityFilter}
+                              {selectedDailyDate ? ` · ${formatDate(selectedDailyDate)}` : ""}
+                            </span>
                           </div>
-                        ) : null}
-                      </div>
+                          <h4>Detalhes das atividades</h4>
+                          {loadingDetail ? <div className="coleta-empty">Carregando detalhes...</div> : null}
+                          {!loadingDetail && filteredEntries.length === 0 ? (
+                            <div className="coleta-empty">Nenhum detalhe para o filtro atual.</div>
+                          ) : null}
+                          {!loadingDetail ? (
+                            <div className="produtividade-entry-list">
+                              {filteredEntries.map((entry) => (
+                                <article key={entry.entry_id} className="produtividade-entry-card">
+                                  <div className="produtividade-entry-head">
+                                    <strong>{entry.activity_label}</strong>
+                                    <span>{formatMetricWithUnit(entry.metric_value, entry.unit_label)}</span>
+                                  </div>
+                                  {isAllCollaboratorsSelected ? (
+                                    <div className="produtividade-entry-collaborator">
+                                      <span>{entry.mat} {entry.nome}</span>
+                                    </div>
+                                  ) : null}
+                                  <p>{entry.detail || "-"}</p>
+                                  <div className="produtividade-entry-meta">
+                                    <span>Data: {formatDate(entry.event_date)}</span>
+                                    {entry.event_at ? <span>Registro: {formatDateTime(entry.event_at)}</span> : null}
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </section>
               </>
