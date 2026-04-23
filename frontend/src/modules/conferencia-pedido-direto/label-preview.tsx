@@ -135,6 +135,8 @@ body {
   background: #ffffff;
   padding: 3mm;
   display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: start;
   gap: 1mm;
   page-break-inside: avoid;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
@@ -194,6 +196,13 @@ body {
   margin: 0;
   font-weight: 700;
 }
+.pedido-direto-label-info dt.pedido-direto-label-info-emphasis,
+.pedido-direto-label-info dd.pedido-direto-label-info-emphasis {
+  font-family: "Arial", sans-serif;
+  font-size: 13pt;
+  line-height: 1.1;
+  font-weight: 800;
+}
 .pedido-direto-label-volume {
   border: 1px solid #111827;
   border-radius: 3mm;
@@ -217,11 +226,27 @@ body {
   font-weight: 700;
 }
 .pedido-direto-label-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6mm;
+  display: grid;
+  gap: 0.25mm;
+  margin-top: 0;
   font-size: 11pt;
   font-weight: 700;
+}
+.pedido-direto-label-meta-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3mm;
+  align-items: baseline;
+}
+.pedido-direto-label-meta-bottom {
+  display: block;
+  line-height: 1.05;
+}
+.pedido-direto-label-meta-date {
+  font-family: "Arial", sans-serif;
+  font-size: 11pt;
+  font-weight: 800;
+  line-height: 1.05;
 }
 .pedido-direto-label-meta strong {
   font-weight: 800;
@@ -241,6 +266,8 @@ body {
     display: grid;
     width: var(--pd-label-width);
     height: var(--pd-label-height);
+    grid-template-rows: auto auto auto;
+    align-content: start;
     margin: 0;
     border-radius: 0;
     box-shadow: none;
@@ -274,14 +301,14 @@ export function PedidoDiretoLabelSheet({ labels }: { labels: PedidoDiretoLabelDa
 
           <div className="pedido-direto-label-main">
             <dl className="pedido-direto-label-info">
-              <dt>LOJA:</dt>
-              <dd>{formatLoja(label)}</dd>
-              <dt>N° PEDIDO:</dt>
-              <dd>{`${formatPedido(label.pedido)}         SEQ: ${formatSeq(label.sq)}`}</dd>
-              <dt>DT PEDIDO:</dt>
-              <dd>{formatPedidoDate(label.pedido)}</dd>
-              <dt>ROTA:</dt>
-              <dd>{formatRota(label.rota)}</dd>
+              <dt className="pedido-direto-label-info-emphasis">LOJA:</dt>
+              <dd className="pedido-direto-label-info-emphasis">{formatLoja(label)}</dd>
+              <dt className="pedido-direto-label-info-emphasis">N° PEDIDO:</dt>
+              <dd className="pedido-direto-label-info-emphasis">{`${formatPedido(label.pedido)}         SEQ: ${formatSeq(label.sq)}`}</dd>
+              <dt className="pedido-direto-label-info-emphasis">DT PEDIDO:</dt>
+              <dd className="pedido-direto-label-info-emphasis">{formatPedidoDate(label.pedido)}</dd>
+              <dt className="pedido-direto-label-info-emphasis">ROTA:</dt>
+              <dd className="pedido-direto-label-info-emphasis">{formatRota(label.rota)}</dd>
             </dl>
 
             <div className="pedido-direto-label-volume">
@@ -296,9 +323,13 @@ export function PedidoDiretoLabelSheet({ labels }: { labels: PedidoDiretoLabelDa
           </div>
 
           <footer className="pedido-direto-label-meta">
-            <span><strong>{label.cd_nome || `CD ${label.cd}`}</strong></span>
-            {label.matricula ? <span>MATRÍCULA: <strong>{label.matricula}</strong></span> : null}
-            <span>SEPARADO EM: <strong>{formatGeneratedAt(label.generated_at)}</strong></span>
+            <div className="pedido-direto-label-meta-top">
+              <span><strong>{label.cd_nome || `CD ${label.cd}`}</strong></span>
+              {label.matricula ? <span>MATRÍCULA: <strong>{label.matricula}</strong></span> : null}
+            </div>
+            <div className="pedido-direto-label-meta-bottom">
+              SEPARADO EM: <strong className="pedido-direto-label-meta-date">{formatGeneratedAt(label.generated_at)}</strong>
+            </div>
           </footer>
         </article>
       ))}
