@@ -12335,7 +12335,9 @@ small {
 }
 
 .gestao-estq-fullscreen-trigger,
-.gestao-estq-fullscreen-close {
+.gestao-estq-fullscreen-close,
+.indicadores-fullscreen-trigger,
+.indicadores-fullscreen-close {
   appearance: none;
   width: 38px;
   height: 38px;
@@ -12351,7 +12353,9 @@ small {
 }
 
 .gestao-estq-fullscreen-trigger:hover,
-.gestao-estq-fullscreen-close:hover {
+.gestao-estq-fullscreen-close:hover,
+.indicadores-fullscreen-trigger:hover,
+.indicadores-fullscreen-close:hover {
   border-color: #9db9e2;
   background: linear-gradient(180deg, #ffffff 0%, #e8f1ff 100%);
   transform: translateY(-1px);
@@ -12359,7 +12363,9 @@ small {
 }
 
 .gestao-estq-fullscreen-trigger svg,
-.gestao-estq-fullscreen-close svg {
+.gestao-estq-fullscreen-close svg,
+.indicadores-fullscreen-trigger svg,
+.indicadores-fullscreen-close svg {
   width: 20px;
   height: 20px;
   fill: none;
@@ -12369,12 +12375,14 @@ small {
   stroke-linejoin: round;
 }
 
-.gestao-estq-fullscreen-overlay {
+.gestao-estq-fullscreen-overlay,
+.indicadores-fullscreen-overlay {
   padding: 18px;
   z-index: 2600;
 }
 
-.gestao-estq-fullscreen-dialog {
+.gestao-estq-fullscreen-dialog,
+.indicadores-fullscreen-dialog {
   width: min(1440px, 96vw);
   height: min(860px, 92vh);
   border-radius: 22px;
@@ -12387,20 +12395,23 @@ small {
   gap: 16px;
 }
 
-.gestao-estq-fullscreen-head {
+.gestao-estq-fullscreen-head,
+.indicadores-fullscreen-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
 
-.gestao-estq-fullscreen-head h3 {
+.gestao-estq-fullscreen-head h3,
+.indicadores-fullscreen-head h3 {
   margin: 0;
   color: #102b58;
   font-size: 1.18rem;
 }
 
-.gestao-estq-fullscreen-head span {
+.gestao-estq-fullscreen-head span,
+.indicadores-fullscreen-head span {
   display: block;
   margin-top: 4px;
   color: #536f98;
@@ -12408,7 +12419,8 @@ small {
   font-weight: 800;
 }
 
-.gestao-estq-fullscreen-body {
+.gestao-estq-fullscreen-body,
+.indicadores-fullscreen-body {
   min-height: 0;
   border: 1px solid #d7e2f4;
   border-radius: 18px;
@@ -12418,12 +12430,16 @@ small {
 }
 
 .gestao-estq-fullscreen-body .indicadores-chart-shell,
-.gestao-estq-fullscreen-body .indicadores-zone-chart {
+.gestao-estq-fullscreen-body .indicadores-zone-chart,
+.indicadores-fullscreen-body .indicadores-chart-shell,
+.indicadores-fullscreen-body .indicadores-zone-chart {
   height: 100%;
 }
 
 .gestao-estq-fullscreen-body .indicadores-chart-scroll,
-.gestao-estq-fullscreen-body .indicadores-zone-scroll {
+.gestao-estq-fullscreen-body .indicadores-zone-scroll,
+.indicadores-fullscreen-body .indicadores-chart-scroll,
+.indicadores-fullscreen-body .indicadores-zone-scroll {
   height: 100%;
 }
 

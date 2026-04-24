@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import pmImage from "../../../assets/pm.png";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
@@ -37,6 +38,8 @@ interface AnimatedDayRevealProps {
   children: ReactNode;
   rootRef?: RefObject<HTMLElement | null>;
 }
+
+type FullscreenPanel = "daily" | "zones" | null;
 
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
 const ZONA_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
@@ -190,6 +193,30 @@ function AnimatedDayReveal({ itemKey, className, children, rootRef }: AnimatedDa
   );
 }
 
+function expandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 4H4v4" />
+      <path d="M4 4l6 6" />
+      <path d="M16 4h4v4" />
+      <path d="M20 4l-6 6" />
+      <path d="M8 20H4v-4" />
+      <path d="M4 20l6-6" />
+      <path d="M16 20h4v-4" />
+      <path d="M20 20l-6-6" />
+    </svg>
+  );
+}
+
+function closeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
 function DailyChart({ rows }: { rows: IndicadoresBlitzDailyRow[] }) {
   const safeRows = Math.max(rows.length, 1);
   const horizontalPadding = 36;
@@ -323,6 +350,37 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fullscreenPanel, setFullscreenPanel] = useState<FullscreenPanel>(null);
+
+  useEffect(() => {
+    if (!fullscreenPanel) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFullscreenPanel(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [fullscreenPanel]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (!fullscreenPanel) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [fullscreenPanel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -582,8 +640,19 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
           <div className="indicadores-layout-grid">
             <section className="indicadores-panel indicadores-panel-wide indicadores-panel-conferencia">
               <div className="indicadores-panel-head">
-                <h3>Conferência do mês</h3>
-                <span>{loadingDashboard ? "Atualizando..." : "Barras de conferido e linha percentual"}</span>
+                <div className="indicadores-panel-head-copy">
+                  <h3>Conferência do mês</h3>
+                  <span>{loadingDashboard ? "Atualizando..." : "Barras de conferido e linha percentual"}</span>
+                </div>
+                <button
+                  type="button"
+                  className="indicadores-fullscreen-trigger"
+                  onClick={() => setFullscreenPanel("daily")}
+                  title="Ver Conferência do mês em tela cheia"
+                  aria-label="Ver Conferência do mês em tela cheia"
+                >
+                  {expandIcon()}
+                </button>
               </div>
               {loadingDashboard && !summary ? (
                 <div className="indicadores-empty-box"><p>Carregando dados do mês...</p></div>
@@ -680,8 +749,19 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
 
             <section className="indicadores-panel indicadores-panel-wide indicadores-panel-zonas">
               <div className="indicadores-panel-head">
-                <h3>Total de erros por zona</h3>
-                <span>Exibe zonas com pelo menos 1 erro no mês.</span>
+                <div className="indicadores-panel-head-copy">
+                  <h3>Total de erros por zona</h3>
+                  <span>Exibe zonas com pelo menos 1 erro no mês.</span>
+                </div>
+                <button
+                  type="button"
+                  className="indicadores-fullscreen-trigger"
+                  onClick={() => setFullscreenPanel("zones")}
+                  title="Ver Total de erros por zona em tela cheia"
+                  aria-label="Ver Total de erros por zona em tela cheia"
+                >
+                  {expandIcon()}
+                </button>
               </div>
               {loadingDashboard && zoneTotals.length === 0 ? (
                 <div className="indicadores-empty-box"><p>Carregando zonas...</p></div>
@@ -692,6 +772,57 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
           </div>
         </article>
       </section>
+      {fullscreenPanel && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay indicadores-fullscreen-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="indicadores-blitz-fullscreen-title"
+              onClick={() => setFullscreenPanel(null)}
+            >
+              <div className="indicadores-fullscreen-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="indicadores-fullscreen-head">
+                  <div>
+                    <h3 id="indicadores-blitz-fullscreen-title">
+                      {fullscreenPanel === "daily" ? "Conferência do mês" : "Total de erros por zona"}
+                    </h3>
+                    <span>
+                      {fullscreenPanel === "daily"
+                        ? loadingDashboard
+                          ? "Atualizando..."
+                          : "Barras de conferido e linha percentual"
+                        : "Exibe zonas com pelo menos 1 erro no mês."}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="indicadores-fullscreen-close"
+                    onClick={() => setFullscreenPanel(null)}
+                    title="Fechar tela cheia"
+                    aria-label="Fechar tela cheia"
+                  >
+                    {closeIcon()}
+                  </button>
+                </div>
+                <div className="indicadores-fullscreen-body">
+                  {fullscreenPanel === "daily" ? (
+                    loadingDashboard && !summary ? (
+                      <div className="indicadores-empty-box"><p>Carregando dados do mês...</p></div>
+                    ) : (
+                      <DailyChart rows={dailySeries} />
+                    )
+                  ) : loadingDashboard && zoneTotals.length === 0 ? (
+                    <div className="indicadores-empty-box"><p>Carregando zonas...</p></div>
+                  ) : (
+                    <ZoneChart rows={zoneTotals} />
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }
