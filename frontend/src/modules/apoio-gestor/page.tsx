@@ -47,6 +47,13 @@ interface AnimatedRevealProps {
   delayMs?: number;
 }
 
+interface ViewportAnimatedActivityCardProps {
+  row: ApoioGestorActivityRow;
+  noMetaReason: string;
+  prefersReducedMotion: boolean;
+  delayMs?: number;
+}
+
 function formatFullDate(): string {
   const raw = new Intl.DateTimeFormat("pt-BR", {
     timeZone: BRAZIL_TZ,
@@ -395,6 +402,173 @@ function ActivityCard({ row, noMetaReason, displayedActual, displayedPct, showFi
   );
 }
 
+function ViewportAnimatedActivityCard({
+  row,
+  noMetaReason,
+  prefersReducedMotion,
+  delayMs = 0,
+}: ViewportAnimatedActivityCardProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const [visible, setVisible] = useState(prefersReducedMotion);
+  const [hasEnteredViewport, setHasEnteredViewport] = useState(prefersReducedMotion);
+  const [hasCompletedAnimation, setHasCompletedAnimation] = useState(prefersReducedMotion);
+  const [displayedActual, setDisplayedActual] = useState(
+    prefersReducedMotion
+      ? row.actual_today
+      : shouldAnimateCount(row.actual_today)
+      ? 0
+      : row.actual_today
+  );
+  const [displayedPct, setDisplayedPct] = useState<number | null>(
+    prefersReducedMotion
+      ? row.achievement_pct
+      : shouldAnimatePct(row.achievement_pct)
+      ? 0
+      : row.achievement_pct
+  );
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      setVisible(true);
+      setHasEnteredViewport(true);
+      setHasCompletedAnimation(true);
+      setDisplayedActual(row.actual_today);
+      setDisplayedPct(row.achievement_pct);
+      return;
+    }
+
+    if (hasCompletedAnimation) {
+      setDisplayedActual(row.actual_today);
+      setDisplayedPct(row.achievement_pct);
+    }
+  }, [
+    hasCompletedAnimation,
+    prefersReducedMotion,
+    row.achievement_pct,
+    row.actual_today,
+  ]);
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    const node = ref.current;
+    if (!node) return;
+    if (hasEnteredViewport) return;
+    if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+      setVisible(true);
+      setHasEnteredViewport(true);
+      return;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          setHasEnteredViewport(true);
+          observer.disconnect();
+        }
+      },
+      {
+        threshold: 0.01,
+        rootMargin: "0px 0px 18% 0px",
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasEnteredViewport, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    if (!hasEnteredViewport) return;
+    if (hasCompletedAnimation) return;
+
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    const shouldAnimateActual = shouldAnimateCount(row.actual_today);
+    const shouldAnimatePercent = shouldAnimatePct(row.achievement_pct);
+
+    if (!shouldAnimateActual && !shouldAnimatePercent) {
+      setDisplayedActual(row.actual_today);
+      setDisplayedPct(row.achievement_pct);
+      setHasCompletedAnimation(true);
+      return;
+    }
+
+    setDisplayedActual(shouldAnimateActual ? 0 : row.actual_today);
+    setDisplayedPct(shouldAnimatePercent ? 0 : row.achievement_pct);
+
+    const startedAt = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / COUNT_ANIMATION_DURATION_MS);
+      const easedProgress = easeOutCubic(progress);
+
+      setDisplayedActual(animatedCountValue(row.actual_today, easedProgress));
+      setDisplayedPct(animatedPctValue(row.achievement_pct, easedProgress));
+
+      if (progress < 1) {
+        animationFrameRef.current = window.requestAnimationFrame(tick);
+        return;
+      }
+
+      animationFrameRef.current = null;
+      setHasCompletedAnimation(true);
+    };
+
+    animationFrameRef.current = window.requestAnimationFrame(tick);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [
+    hasCompletedAnimation,
+    hasEnteredViewport,
+    prefersReducedMotion,
+    row.achievement_pct,
+    row.actual_today,
+  ]);
+
+  const showFinalMetaTone =
+    prefersReducedMotion ||
+    hasCompletedAnimation ||
+    (!shouldAnimateCount(row.actual_today) && !shouldAnimatePct(row.achievement_pct));
+
+  return (
+    <div
+      ref={ref}
+      className={`ag-reveal ag-reveal--card${visible ? " is-visible" : ""}`}
+      style={revealStyle(delayMs)}
+    >
+      <ActivityCard
+        row={row}
+        noMetaReason={noMetaReason}
+        displayedActual={displayedActual}
+        displayedPct={displayedPct}
+        showFinalMetaTone={showFinalMetaTone}
+      />
+    </div>
+  );
+}
+
 export default function ApoioGestorPage({
   isOnline,
   userName,
@@ -410,9 +584,7 @@ export default function ApoioGestorPage({
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [animatedOverview, setAnimatedOverview] = useState<OverviewMetrics>(createEmptyOverviewMetrics);
-  const [animatedActuals, setAnimatedActuals] = useState<Record<string, number>>({});
-  const [animatedPcts, setAnimatedPcts] = useState<Record<string, number | null>>({});
-  const [hasAnimatedIntro, setHasAnimatedIntro] = useState(false);
+  const [hasAnimatedOverviewIntro, setHasAnimatedOverviewIntro] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
       ? window.matchMedia(REDUCED_MOTION_QUERY).matches
@@ -420,7 +592,7 @@ export default function ApoioGestorPage({
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastLoadAtRef = useRef(0);
-  const animationFrameRef = useRef<number | null>(null);
+  const overviewAnimationFrameRef = useRef<number | null>(null);
 
   const cd = parseCdNumber(cdName);
   const today = todayIsoBrasilia();
@@ -533,12 +705,13 @@ export default function ApoioGestorPage({
     exceededCount,
     totalActual,
   };
-  const isIntroAnimationActive = !loading && error === null && !hasAnimatedIntro && !prefersReducedMotion;
+  const isOverviewAnimationActive =
+    !loading && error === null && !hasAnimatedOverviewIntro && !prefersReducedMotion;
 
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current !== null) {
-        window.cancelAnimationFrame(animationFrameRef.current);
+      if (overviewAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(overviewAnimationFrameRef.current);
       }
     };
   }, []);
@@ -546,17 +719,17 @@ export default function ApoioGestorPage({
   useEffect(() => {
     if (loading || error !== null) return;
 
-    if (animationFrameRef.current !== null) {
-      window.cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
+    if (overviewAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(overviewAnimationFrameRef.current);
+      overviewAnimationFrameRef.current = null;
     }
 
     if (prefersReducedMotion) {
-      setHasAnimatedIntro(true);
+      setHasAnimatedOverviewIntro(true);
       return;
     }
 
-    if (hasAnimatedIntro) {
+    if (hasAnimatedOverviewIntro) {
       return;
     }
 
@@ -566,27 +739,14 @@ export default function ApoioGestorPage({
       shouldAnimateCount(overviewMetrics.warningCount) ||
       shouldAnimateCount(overviewMetrics.hitCount) ||
       shouldAnimateCount(overviewMetrics.exceededCount) ||
-      shouldAnimateCount(overviewMetrics.totalActual) ||
-      rows.some((row) => shouldAnimateCount(row.actual_today) || shouldAnimatePct(row.achievement_pct));
+      shouldAnimateCount(overviewMetrics.totalActual);
 
     if (!hasAnyAnimatedValue) {
-      setHasAnimatedIntro(true);
+      setHasAnimatedOverviewIntro(true);
       return;
     }
 
     setAnimatedOverview(createEmptyOverviewMetrics());
-    setAnimatedActuals(
-      rows.reduce<Record<string, number>>((acc, row) => {
-        acc[row.activity_key] = shouldAnimateCount(row.actual_today) ? 0 : row.actual_today;
-        return acc;
-      }, {})
-    );
-    setAnimatedPcts(
-      rows.reduce<Record<string, number | null>>((acc, row) => {
-        acc[row.activity_key] = shouldAnimatePct(row.achievement_pct) ? 0 : row.achievement_pct;
-        return acc;
-      }, {})
-    );
 
     const startedAt = performance.now();
 
@@ -603,39 +763,26 @@ export default function ApoioGestorPage({
         totalActual: animatedCountValue(overviewMetrics.totalActual, easedProgress),
       });
 
-      setAnimatedActuals(
-        rows.reduce<Record<string, number>>((acc, row) => {
-          acc[row.activity_key] = animatedCountValue(row.actual_today, easedProgress);
-          return acc;
-        }, {})
-      );
-      setAnimatedPcts(
-        rows.reduce<Record<string, number | null>>((acc, row) => {
-          acc[row.activity_key] = animatedPctValue(row.achievement_pct, easedProgress);
-          return acc;
-        }, {})
-      );
-
       if (progress < 1) {
-        animationFrameRef.current = window.requestAnimationFrame(tick);
+        overviewAnimationFrameRef.current = window.requestAnimationFrame(tick);
         return;
       }
 
-      animationFrameRef.current = null;
-      setHasAnimatedIntro(true);
+      overviewAnimationFrameRef.current = null;
+      setHasAnimatedOverviewIntro(true);
     };
 
-    animationFrameRef.current = window.requestAnimationFrame(tick);
+    overviewAnimationFrameRef.current = window.requestAnimationFrame(tick);
 
     return () => {
-      if (animationFrameRef.current !== null) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
+      if (overviewAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(overviewAnimationFrameRef.current);
+        overviewAnimationFrameRef.current = null;
       }
     };
   }, [
     error,
-    hasAnimatedIntro,
+    hasAnimatedOverviewIntro,
     loading,
     overviewMetrics.criticalCount,
     overviewMetrics.exceededCount,
@@ -644,7 +791,6 @@ export default function ApoioGestorPage({
     overviewMetrics.totalActual,
     overviewMetrics.warningCount,
     prefersReducedMotion,
-    rows,
   ]);
 
   return (
@@ -706,47 +852,47 @@ export default function ApoioGestorPage({
         </section>
         </AnimatedReveal>
 
-        <AnimatedReveal revealKey="apoio-gestor-overview" className="ag-reveal--overview" delayMs={60}>
+              <AnimatedReveal revealKey="apoio-gestor-overview" className="ag-reveal--overview" delayMs={60}>
         <section className="ag-overview">
           <article className="ag-overview__card ag-overview__card--strong">
             <span className="ag-overview__label">Com meta hoje</span>
             <strong className="ag-overview__value">
-              {isIntroAnimationActive ? animatedOverview.metaCount : overviewMetrics.metaCount}
+              {isOverviewAnimationActive ? animatedOverview.metaCount : overviewMetrics.metaCount}
             </strong>
             <span className="ag-overview__hint">Indicadores ativos no Meta Mês</span>
           </article>
           <article className="ag-overview__card ag-overview__card--danger">
             <span className="ag-overview__label">Abaixo da meta</span>
             <strong className="ag-overview__value">
-              {isIntroAnimationActive ? animatedOverview.criticalCount : overviewMetrics.criticalCount}
+              {isOverviewAnimationActive ? animatedOverview.criticalCount : overviewMetrics.criticalCount}
             </strong>
             <span className="ag-overview__hint">Precisam de ação primeiro</span>
           </article>
           <article className="ag-overview__card ag-overview__card--warning">
             <span className="ag-overview__label">Em andamento</span>
             <strong className="ag-overview__value">
-              {isIntroAnimationActive ? animatedOverview.warningCount : overviewMetrics.warningCount}
+              {isOverviewAnimationActive ? animatedOverview.warningCount : overviewMetrics.warningCount}
             </strong>
             <span className="ag-overview__hint">Ainda abaixo da faixa ideal</span>
           </article>
           <article className="ag-overview__card ag-overview__card--accent">
             <span className="ag-overview__label">Meta batida</span>
             <strong className="ag-overview__value">
-              {isIntroAnimationActive ? animatedOverview.hitCount : overviewMetrics.hitCount}
+              {isOverviewAnimationActive ? animatedOverview.hitCount : overviewMetrics.hitCount}
             </strong>
             <span className="ag-overview__hint">Faixa de 100% a 119%</span>
           </article>
           <article className="ag-overview__card ag-overview__card--info">
             <span className="ag-overview__label">Meta superada</span>
             <strong className="ag-overview__value">
-              {isIntroAnimationActive ? animatedOverview.exceededCount : overviewMetrics.exceededCount}
+              {isOverviewAnimationActive ? animatedOverview.exceededCount : overviewMetrics.exceededCount}
             </strong>
             <span className="ag-overview__hint">Acima de 120%</span>
           </article>
           <article className="ag-overview__card">
             <span className="ag-overview__label">Volume do dia</span>
             <strong className="ag-overview__value">
-              {formatMetric(isIntroAnimationActive ? animatedOverview.totalActual : overviewMetrics.totalActual)}
+              {formatMetric(isOverviewAnimationActive ? animatedOverview.totalActual : overviewMetrics.totalActual)}
             </strong>
             <span className="ag-overview__hint">Soma de todas as atividades</span>
           </article>
@@ -780,31 +926,13 @@ export default function ApoioGestorPage({
                 </div>
                 <div className="ag-grid">
                   {metaRows.map((r, index) => (
-                    <AnimatedReveal
+                    <ViewportAnimatedActivityCard
                       key={r.activity_key}
-                      revealKey={`apoio-gestor-meta-card:${r.activity_key}`}
-                      className="ag-reveal--card"
+                      row={r}
+                      noMetaReason={noMetaReason}
+                      prefersReducedMotion={prefersReducedMotion}
                       delayMs={160 + Math.min(index, 7) * 48}
-                    >
-                      <ActivityCard
-                        row={r}
-                        noMetaReason={noMetaReason}
-                        displayedActual={
-                          isIntroAnimationActive && shouldAnimateCount(r.actual_today)
-                            ? animatedActuals[r.activity_key] ?? 0
-                            : r.actual_today
-                        }
-                        displayedPct={
-                          isIntroAnimationActive && shouldAnimatePct(r.achievement_pct)
-                            ? animatedPcts[r.activity_key] ?? 0
-                            : r.achievement_pct
-                        }
-                        showFinalMetaTone={
-                          !isIntroAnimationActive ||
-                          (!shouldAnimateCount(r.actual_today) && !shouldAnimatePct(r.achievement_pct))
-                        }
-                      />
-                    </AnimatedReveal>
+                    />
                   ))}
                 </div>
               </section>
@@ -819,24 +947,13 @@ export default function ApoioGestorPage({
                 </div>
                 <div className="ag-grid">
                   {simpleRows.map((r, index) => (
-                    <AnimatedReveal
+                    <ViewportAnimatedActivityCard
                       key={r.activity_key}
-                      revealKey={`apoio-gestor-simple-card:${r.activity_key}`}
-                      className="ag-reveal--card"
+                      row={r}
+                      noMetaReason={noMetaReason}
+                      prefersReducedMotion={prefersReducedMotion}
                       delayMs={220 + Math.min(index, 7) * 42}
-                    >
-                      <ActivityCard
-                        row={r}
-                        noMetaReason={noMetaReason}
-                        displayedActual={
-                          isIntroAnimationActive && shouldAnimateCount(r.actual_today)
-                            ? animatedActuals[r.activity_key] ?? 0
-                            : r.actual_today
-                        }
-                        displayedPct={r.achievement_pct}
-                        showFinalMetaTone
-                      />
-                    </AnimatedReveal>
+                    />
                   ))}
                 </div>
               </section>
