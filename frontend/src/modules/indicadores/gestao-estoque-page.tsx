@@ -57,6 +57,7 @@ interface MetricCardDefinition {
 
 type MobileAccordionSection = "zoneValues" | "reentry" | "topEntradas" | "topSaidas" | "supplierLoss" | "categoryLoss" | "details";
 type InventarioStockTypeValue = IndicadoresGestaoEstoqueInventarioStockType | "";
+type FullscreenPanel = "daily" | "zoneValues" | null;
 
 interface MobileAccordionControl {
   enabled: boolean;
@@ -344,12 +345,16 @@ function AnimatedReveal({ revealKey, children, className = "", delayMs = 0 }: An
 
 function AnimatedMetricCard({ card, animationKey, delayMs = 0, prefersReducedMotion }: AnimatedMetricCardProps) {
   const animationFrameRef = useRef<number | null>(null);
+  const animationDelayRef = useRef<number | null>(null);
   const [displayedValue, setDisplayedValue] = useState(() => (prefersReducedMotion ? card.value : 0));
 
   useEffect(() => {
     return () => {
       if (animationFrameRef.current !== null) {
         window.cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (animationDelayRef.current !== null) {
+        window.clearTimeout(animationDelayRef.current);
       }
     };
   }, []);
@@ -359,6 +364,10 @@ function AnimatedMetricCard({ card, animationKey, delayMs = 0, prefersReducedMot
       window.cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    if (animationDelayRef.current !== null) {
+      window.clearTimeout(animationDelayRef.current);
+      animationDelayRef.current = null;
+    }
 
     if (prefersReducedMotion || !Number.isFinite(card.value) || Math.abs(card.value) < 0.000001) {
       setDisplayedValue(card.value);
@@ -366,53 +375,61 @@ function AnimatedMetricCard({ card, animationKey, delayMs = 0, prefersReducedMot
     }
 
     setDisplayedValue(0);
-    const startedAt = performance.now();
 
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - startedAt) / METRIC_ANIMATION_DURATION_MS);
-      const easedProgress = easeOutCubic(progress);
-      const nextValue =
-        card.kind === "integer"
-          ? animatedIntegerValue(card.value, easedProgress)
-          : animatedNumberValue(card.value, easedProgress);
+    const startAnimation = () => {
+      animationDelayRef.current = null;
+      const startedAt = performance.now();
 
-      setDisplayedValue(nextValue);
+      const tick = (now: number) => {
+        const progress = Math.min(1, (now - startedAt) / METRIC_ANIMATION_DURATION_MS);
+        const easedProgress = easeOutCubic(progress);
+        const nextValue =
+          card.kind === "integer"
+            ? animatedIntegerValue(card.value, easedProgress)
+            : animatedNumberValue(card.value, easedProgress);
 
-      if (progress < 1) {
-        animationFrameRef.current = window.requestAnimationFrame(tick);
-        return;
-      }
+        setDisplayedValue(nextValue);
 
-      animationFrameRef.current = null;
-      setDisplayedValue(card.value);
+        if (progress < 1) {
+          animationFrameRef.current = window.requestAnimationFrame(tick);
+          return;
+        }
+
+        animationFrameRef.current = null;
+        setDisplayedValue(card.value);
+      };
+
+      animationFrameRef.current = window.requestAnimationFrame(tick);
     };
 
-    animationFrameRef.current = window.requestAnimationFrame(tick);
+    animationDelayRef.current = window.setTimeout(startAnimation, delayMs);
 
     return () => {
       if (animationFrameRef.current !== null) {
         window.cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+      if (animationDelayRef.current !== null) {
+        window.clearTimeout(animationDelayRef.current);
+        animationDelayRef.current = null;
+      }
     };
-  }, [animationKey, card.kind, card.value, prefersReducedMotion]);
+  }, [animationKey, card.kind, card.value, delayMs, prefersReducedMotion]);
 
   return (
-    <AnimatedReveal revealKey={`${animationKey}:${card.label}`} delayMs={delayMs}>
-      <article
-        className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""} ${card.valueTone ? `gestao-estq-metric-tone-${card.valueTone}` : ""} ${card.natureBadge ? "gestao-estq-metric-card-has-badge" : ""}`}
-      >
-        {card.natureBadge ? (
-          <span className={`indicadores-status-badge gestao-estq-metric-badge ${natureClassName(card.natureBadge)}`}>
-            {card.natureBadge === "falta" ? "Falta" : "Sobra"}
-          </span>
-        ) : null}
-        <span>{card.label}</span>
-        {card.kind === "integer" ? <strong>{formatInteger(displayedValue)}</strong> : null}
-        {card.kind === "currency" ? <CurrencyMetricValue value={displayedValue} /> : null}
-        {card.kind === "signed-currency" ? <CurrencyMetricValue value={displayedValue} signed /> : null}
-      </article>
-    </AnimatedReveal>
+    <article
+      className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""} ${card.valueTone ? `gestao-estq-metric-tone-${card.valueTone}` : ""} ${card.natureBadge ? "gestao-estq-metric-card-has-badge" : ""}`}
+    >
+      {card.natureBadge ? (
+        <span className={`indicadores-status-badge gestao-estq-metric-badge ${natureClassName(card.natureBadge)}`}>
+          {card.natureBadge === "falta" ? "Falta" : "Sobra"}
+        </span>
+      ) : null}
+      <span>{card.label}</span>
+      {card.kind === "integer" ? <strong>{formatInteger(displayedValue)}</strong> : null}
+      {card.kind === "currency" ? <CurrencyMetricValue value={displayedValue} /> : null}
+      {card.kind === "signed-currency" ? <CurrencyMetricValue value={displayedValue} signed /> : null}
+    </article>
   );
 }
 
@@ -483,6 +500,30 @@ function inventorySendIcon() {
       <path d="M10 14 20 4" />
       <path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4" />
       <path d="M9 12h5v5" />
+    </svg>
+  );
+}
+
+function expandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 4H4v4" />
+      <path d="M4 4l6 6" />
+      <path d="M16 4h4v4" />
+      <path d="M20 4l-6 6" />
+      <path d="M8 20H4v-4" />
+      <path d="M4 20l6-6" />
+      <path d="M16 20h4v-4" />
+      <path d="M20 20l-6-6" />
+    </svg>
+  );
+}
+
+function closeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
     </svg>
   );
 }
@@ -884,6 +925,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       : false
   );
   const [expandedMobileSection, setExpandedMobileSection] = useState<MobileAccordionSection | null>(null);
+  const [fullscreenPanel, setFullscreenPanel] = useState<FullscreenPanel>(null);
   const inventarioHostAllowed = useMemo(
     () => isInventarioSeedAllowedHostname(typeof window === "undefined" ? undefined : window.location.hostname),
     []
@@ -931,6 +973,17 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       setInventarioDialogOpen(false);
     }
   }, [isMobileAccordion]);
+
+  useEffect(() => {
+    if (!fullscreenPanel) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFullscreenPanel(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [fullscreenPanel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1881,8 +1934,19 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
             <AnimatedReveal revealKey={`gestao-estq-chart:${dashboardAnimationKey}`} className="gestao-estq-panel-reveal gestao-estq-panel-chart" delayMs={140}>
               <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-chart">
                 <div className="indicadores-panel-head">
-                  <h3>Ritmo diário</h3>
-                  <span>{loadingDashboard ? "Atualizando..." : "Entradas, saídas e perda por dia do mês"}</span>
+                  <div className="indicadores-panel-head-copy">
+                    <h3>Ritmo diário</h3>
+                    <span>{loadingDashboard ? "Atualizando..." : "Entradas, saídas e perda por dia do mês"}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="gestao-estq-fullscreen-trigger"
+                    onClick={() => setFullscreenPanel("daily")}
+                    title="Ver Ritmo diário em tela cheia"
+                    aria-label="Ver Ritmo diário em tela cheia"
+                  >
+                    {expandIcon()}
+                  </button>
                 </div>
                 {loadingDashboard && !summary ? (
                   <div className="indicadores-empty-box"><p>Carregando série diária...</p></div>
@@ -1905,6 +1969,15 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                   }
                   mobileAccordion={mobileAccordionControl("zoneValues", "gestao-estq-zone-values-body")}
                 />
+                <button
+                  type="button"
+                  className="gestao-estq-fullscreen-trigger gestao-estq-fullscreen-trigger-floating"
+                  onClick={() => setFullscreenPanel("zoneValues")}
+                  title="Ver Valor de movimentação por zona em tela cheia"
+                  aria-label="Ver Valor de movimentação por zona em tela cheia"
+                >
+                  {expandIcon()}
+                </button>
                 {!isMobileAccordion || expandedMobileSection === "zoneValues" ? (
                   <div id="gestao-estq-zone-values-body">
                     {zoneValuesErrorMessage ? (
@@ -2076,6 +2149,63 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
           </div>
         </article>
       </section>
+      {fullscreenPanel && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay gestao-estq-fullscreen-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estq-fullscreen-title"
+              onClick={() => setFullscreenPanel(null)}
+            >
+              <div className="gestao-estq-fullscreen-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="gestao-estq-fullscreen-head">
+                  <div>
+                    <h3 id="gestao-estq-fullscreen-title">
+                      {fullscreenPanel === "daily" ? "Ritmo diário" : "Valor de movimentação por zona"}
+                    </h3>
+                    <span>
+                      {fullscreenPanel === "daily"
+                        ? loadingDashboard
+                          ? "Atualizando..."
+                          : "Entradas, saídas e perda por dia do mês"
+                        : loadingZoneValues
+                          ? "Atualizando zonas..."
+                          : selectedDay === ALL_DAYS_VALUE
+                            ? "Acumulado do mês no filtro ativo."
+                            : `Data ${formatDate(selectedDay)}`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="gestao-estq-fullscreen-close"
+                    onClick={() => setFullscreenPanel(null)}
+                    title="Fechar tela cheia"
+                    aria-label="Fechar tela cheia"
+                  >
+                    {closeIcon()}
+                  </button>
+                </div>
+                <div className="gestao-estq-fullscreen-body">
+                  {fullscreenPanel === "daily" ? (
+                    loadingDashboard && !summary ? (
+                      <div className="indicadores-empty-box"><p>Carregando série diária...</p></div>
+                    ) : (
+                      <DailyChart rows={dailySeries} />
+                    )
+                  ) : zoneValuesErrorMessage ? (
+                    <div className="indicadores-empty-box"><p>{zoneValuesErrorMessage}</p></div>
+                  ) : loadingZoneValues ? (
+                    <div className="indicadores-empty-box"><p>Carregando movimentações por zona...</p></div>
+                  ) : (
+                    <ZoneValueChart rows={zoneValueRows} movementFilter={movementFilter} />
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       {!isMobileAccordion && inventarioDialogOpen && typeof document !== "undefined"
         ? createPortal(
             <div
