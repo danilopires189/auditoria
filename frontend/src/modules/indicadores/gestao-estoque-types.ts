@@ -62,6 +62,10 @@ export interface IndicadoresGestaoEstoqueDetailRow {
   ocorrencias: number;
 }
 
+export interface IndicadoresGestaoEstoqueZoneProductRow extends IndicadoresGestaoEstoqueDetailRow {
+  zona: string;
+}
+
 export interface IndicadoresGestaoEstoqueReentryItem {
   coddv: number;
   descricao: string;

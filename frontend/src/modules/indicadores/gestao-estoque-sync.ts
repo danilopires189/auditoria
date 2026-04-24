@@ -15,6 +15,7 @@ import type {
   IndicadoresGestaoEstoqueReentryItem,
   IndicadoresGestaoEstoqueSummary,
   IndicadoresGestaoEstoqueTopItem,
+  IndicadoresGestaoEstoqueZoneProductRow,
   IndicadoresGestaoEstoqueZoneValueRow
 } from "./gestao-estoque-types";
 
@@ -146,6 +147,13 @@ function mapDetailRow(raw: Record<string, unknown>): IndicadoresGestaoEstoqueDet
     cargo: parseString(raw.cargo, "-"),
     quantidade: parseInteger(raw.quantidade, parseInteger(raw.ocorrencias)),
     ocorrencias: parseInteger(raw.ocorrencias)
+  };
+}
+
+function mapZoneProductRow(raw: Record<string, unknown>): IndicadoresGestaoEstoqueZoneProductRow {
+  return {
+    ...mapDetailRow(raw),
+    zona: parseString(raw.zona, "SEM ZONA")
   };
 }
 
@@ -363,6 +371,30 @@ export async function fetchIndicadoresGestaoEstoqueDetails(
   if (!Array.isArray(data)) return [];
 
   return data.map((row) => mapDetailRow(row as Record<string, unknown>));
+}
+
+export async function fetchIndicadoresGestaoEstoqueZoneProducts(params: {
+  cd: number | null;
+  monthStart: string;
+  day: string | null;
+  movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+  zona: string;
+  limit?: number;
+}): Promise<IndicadoresGestaoEstoqueZoneProductRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+
+  const { data, error } = await supabase.rpc("rpc_indicadores_gestao_estq_zone_products", {
+    p_cd: params.cd,
+    p_month_start: params.monthStart,
+    p_day: params.day,
+    p_movement_filter: params.movementFilter,
+    p_zona: params.zona,
+    p_limit: params.limit ?? 200
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+
+  return data.map((row) => mapZoneProductRow(row as Record<string, unknown>));
 }
 
 export async function fetchIndicadoresGestaoEstoqueYearReentryItems(

@@ -23,6 +23,7 @@ import {
   fetchIndicadoresGestaoEstoqueReportTopItems,
   fetchIndicadoresGestaoEstoqueSummary,
   fetchIndicadoresGestaoEstoqueTopItems,
+  fetchIndicadoresGestaoEstoqueZoneProducts,
   fetchIndicadoresGestaoEstoqueZoneValues,
   fetchIndicadoresGestaoEstoqueYearReentryItems
 } from "./gestao-estoque-sync";
@@ -38,6 +39,7 @@ import type {
   IndicadoresGestaoEstoqueReentryItem,
   IndicadoresGestaoEstoqueSummary,
   IndicadoresGestaoEstoqueTopItem,
+  IndicadoresGestaoEstoqueZoneProductRow,
   IndicadoresGestaoEstoqueZoneValueRow
 } from "./gestao-estoque-types";
 
@@ -531,11 +533,13 @@ function closeIcon() {
 function PanelHead({
   title,
   subtitle,
-  mobileAccordion
+  mobileAccordion,
+  action
 }: {
   title: string;
   subtitle: string;
   mobileAccordion?: MobileAccordionControl;
+  action?: ReactNode;
 }) {
   return (
     <div className={`indicadores-panel-head${mobileAccordion?.enabled ? " is-mobile-accordion" : ""}`}>
@@ -543,17 +547,20 @@ function PanelHead({
         <h3>{title}</h3>
         <span>{subtitle}</span>
       </div>
-      {mobileAccordion?.enabled ? (
-        <button
-          type="button"
-          className="gestao-estq-mobile-toggle"
-          aria-expanded={mobileAccordion.expanded}
-          aria-controls={mobileAccordion.bodyId}
-          onClick={mobileAccordion.onToggle}
-        >
-          {mobileAccordion.expanded ? "Recolher" : "Expandir"}
-        </button>
-      ) : null}
+      <div className="gestao-estq-panel-head-actions">
+        {action}
+        {mobileAccordion?.enabled ? (
+          <button
+            type="button"
+            className="gestao-estq-mobile-toggle"
+            aria-expanded={mobileAccordion.expanded}
+            aria-controls={mobileAccordion.bodyId}
+            onClick={mobileAccordion.onToggle}
+          >
+            {mobileAccordion.expanded ? "Recolher" : "Expandir"}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -748,10 +755,12 @@ function formatCompactSignedCurrency(value: number): string {
 
 function ZoneValueChart({
   rows,
-  movementFilter
+  movementFilter,
+  onZoneClick
 }: {
   rows: IndicadoresGestaoEstoqueZoneValueRow[];
   movementFilter: IndicadoresGestaoEstoqueMovementFilter;
+  onZoneClick?: (row: IndicadoresGestaoEstoqueZoneValueRow) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -793,7 +802,14 @@ function ZoneValueChart({
                 ? `${row.zona}: Saída ${formatCurrency(row.saida_total)}`
                 : `${row.zona}: Entrada ${formatCurrency(row.entrada_total)} · Saída ${formatCurrency(row.saida_total)} · Saldo ${formatSignedCurrency(balanceTotal)}`;
           return (
-            <div key={row.zona} className="indicadores-zone-column gestao-estq-zone-column">
+            <button
+              key={row.zona}
+              type="button"
+              className="indicadores-zone-column gestao-estq-zone-column gestao-estq-zone-button"
+              onClick={() => onZoneClick?.(row)}
+              title={`${valueTitle}. Clique para ver produtos.`}
+              aria-label={`Ver produtos da zona ${row.zona}`}
+            >
               <div className="indicadores-zone-stack" title={valueTitle}>
                 {(movementFilter === "todas" || movementFilter === "saida") && saidaHeight > 0 ? (
                   <div className="indicadores-zone-segment gestao-estq-zone-segment is-exit" style={{ height: `${saidaHeight}px` }} />
@@ -806,7 +822,7 @@ function ZoneValueChart({
               <span className={`gestao-estq-zone-value${displayValueClassName}`}>
                 {movementFilter === "todas" ? formatCompactSignedCurrency(displayValue) : formatCompactCurrency(displayValue)}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -889,6 +905,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [reentryRows, setReentryRows] = useState<IndicadoresGestaoEstoqueReentryItem[]>([]);
   const [supplierLossRows, setSupplierLossRows] = useState<IndicadoresGestaoEstoqueLossDimensionItem[]>([]);
   const [categoryLossRows, setCategoryLossRows] = useState<IndicadoresGestaoEstoqueLossDimensionItem[]>([]);
+  const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [zoneProductRows, setZoneProductRows] = useState<IndicadoresGestaoEstoqueZoneProductRow[]>([]);
 
   const [loadingMonths, setLoadingMonths] = useState(true);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
@@ -896,8 +914,10 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const [loadingTopLists, setLoadingTopLists] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [loadingZoneProducts, setLoadingZoneProducts] = useState(false);
   const [dashboardErrorMessage, setDashboardErrorMessage] = useState<string | null>(null);
   const [zoneValuesErrorMessage, setZoneValuesErrorMessage] = useState<string | null>(null);
+  const [zoneProductsErrorMessage, setZoneProductsErrorMessage] = useState<string | null>(null);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportErrorMessage, setReportErrorMessage] = useState<string | null>(null);
@@ -944,6 +964,17 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     };
   }
 
+  function openZoneProducts(zona: string) {
+    setSelectedZone(zona);
+    setZoneProductsErrorMessage(null);
+  }
+
+  function closeZoneProducts() {
+    setSelectedZone(null);
+    setZoneProductRows([]);
+    setZoneProductsErrorMessage(null);
+  }
+
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const mediaQuery = window.matchMedia(MOBILE_ACCORDION_MEDIA_QUERY);
@@ -984,6 +1015,17 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [fullscreenPanel]);
+
+  useEffect(() => {
+    if (!selectedZone) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeZoneProducts();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedZone]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1092,6 +1134,44 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
       cancelled = true;
     };
   }, [activeCd, movementFilter, selectedDay, selectedMonthStart]);
+
+  useEffect(() => {
+    if (!selectedZone || !selectedMonthStart) {
+      setZoneProductRows([]);
+      return;
+    }
+
+    let cancelled = false;
+    const activeZone = selectedZone;
+
+    async function loadZoneProducts() {
+      setLoadingZoneProducts(true);
+      setZoneProductsErrorMessage(null);
+      try {
+        const rows = await fetchIndicadoresGestaoEstoqueZoneProducts({
+          cd: activeCd,
+          monthStart: selectedMonthStart,
+          day: selectedDay === ALL_DAYS_VALUE ? null : selectedDay,
+          movementFilter,
+          zona: activeZone,
+          limit: 300
+        });
+        if (!cancelled) setZoneProductRows(rows);
+      } catch (error) {
+        if (!cancelled) {
+          setZoneProductRows([]);
+          setZoneProductsErrorMessage(asErrorMessage(error));
+        }
+      } finally {
+        if (!cancelled) setLoadingZoneProducts(false);
+      }
+    }
+
+    void loadZoneProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCd, movementFilter, selectedDay, selectedMonthStart, selectedZone]);
 
   useEffect(() => {
     if (!selectedMonthStart) {
@@ -1968,16 +2048,18 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                         : `Data ${formatDate(selectedDay)}`
                   }
                   mobileAccordion={mobileAccordionControl("zoneValues", "gestao-estq-zone-values-body")}
+                  action={
+                    <button
+                      type="button"
+                      className="gestao-estq-fullscreen-trigger"
+                      onClick={() => setFullscreenPanel("zoneValues")}
+                      title="Ver Valor de movimentação por zona em tela cheia"
+                      aria-label="Ver Valor de movimentação por zona em tela cheia"
+                    >
+                      {expandIcon()}
+                    </button>
+                  }
                 />
-                <button
-                  type="button"
-                  className="gestao-estq-fullscreen-trigger gestao-estq-fullscreen-trigger-floating"
-                  onClick={() => setFullscreenPanel("zoneValues")}
-                  title="Ver Valor de movimentação por zona em tela cheia"
-                  aria-label="Ver Valor de movimentação por zona em tela cheia"
-                >
-                  {expandIcon()}
-                </button>
                 {!isMobileAccordion || expandedMobileSection === "zoneValues" ? (
                   <div id="gestao-estq-zone-values-body">
                     {zoneValuesErrorMessage ? (
@@ -1985,7 +2067,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                     ) : loadingZoneValues ? (
                       <div className="indicadores-empty-box"><p>Carregando movimentações por zona...</p></div>
                     ) : (
-                      <ZoneValueChart rows={zoneValueRows} movementFilter={movementFilter} />
+                      <ZoneValueChart rows={zoneValueRows} movementFilter={movementFilter} onZoneClick={(row) => openZoneProducts(row.zona)} />
                     )}
                   </div>
                 ) : null}
@@ -2198,7 +2280,76 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                   ) : loadingZoneValues ? (
                     <div className="indicadores-empty-box"><p>Carregando movimentações por zona...</p></div>
                   ) : (
-                    <ZoneValueChart rows={zoneValueRows} movementFilter={movementFilter} />
+                    <ZoneValueChart rows={zoneValueRows} movementFilter={movementFilter} onZoneClick={(row) => openZoneProducts(row.zona)} />
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {selectedZone && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay gestao-estq-zone-products-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gestao-estq-zone-products-title"
+              onClick={closeZoneProducts}
+            >
+              <div className="gestao-estq-zone-products-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="gestao-estq-fullscreen-head">
+                  <div>
+                    <h3 id="gestao-estq-zone-products-title">{`Produtos da zona ${selectedZone}`}</h3>
+                    <span>
+                      {`${displayCdName} · mês ${selectedMonthLabel} · data ${selectedDay === ALL_DAYS_VALUE ? "Todos" : formatDate(selectedDay)} · movimentação ${formatMovementLabel(movementFilter)}`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="gestao-estq-fullscreen-close"
+                    onClick={closeZoneProducts}
+                    title="Fechar produtos da zona"
+                    aria-label="Fechar produtos da zona"
+                  >
+                    {closeIcon()}
+                  </button>
+                </div>
+                <div className="gestao-estq-zone-products-body">
+                  {zoneProductsErrorMessage ? (
+                    <div className="indicadores-empty-box"><p>{zoneProductsErrorMessage}</p></div>
+                  ) : loadingZoneProducts ? (
+                    <div className="indicadores-empty-box"><p>Carregando produtos da zona...</p></div>
+                  ) : zoneProductRows.length === 0 ? (
+                    <div className="indicadores-empty-box"><p>Nenhum produto encontrado para esta zona no filtro selecionado.</p></div>
+                  ) : (
+                    <div className="gestao-estq-details-wrap gestao-estq-zone-products-table-wrap">
+                      <table className="gestao-estq-details-table gestao-estq-zone-products-table">
+                        <thead>
+                          <tr>
+                            <th>Data</th>
+                            <th>Produto</th>
+                            <th>Tipo</th>
+                            <th>Mov.</th>
+                            <th>Natureza</th>
+                            <th>Quantidade</th>
+                            <th>Total (R$)</th>
+                            <th>Responsável</th>
+                            <th>Cargo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {zoneProductRows.map((row, index) => (
+                            <AnimatedDetailRow
+                              key={`${row.zona}:${row.data_mov}:${row.coddv}:${row.tipo_movimentacao}:${index}`}
+                              row={row}
+                              rowKey={`zone-products:${selectedZone}:${dashboardAnimationKey}:${row.data_mov}:${row.coddv}:${row.tipo_movimentacao}:${index}`}
+                              delayMs={Math.min(index, 8) * 18}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </div>

@@ -12294,6 +12294,14 @@ small {
   min-width: 0;
 }
 
+.gestao-estq-panel-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .indicadores-panel-head h3 {
   margin: 0;
   color: #102b58;
@@ -12361,17 +12369,6 @@ small {
   stroke-linejoin: round;
 }
 
-.gestao-estq-fullscreen-trigger-floating {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
-}
-
-.gestao-estq-panel-zone-values .indicadores-panel-head {
-  padding-right: 48px;
-}
-
 .gestao-estq-fullscreen-overlay {
   padding: 18px;
   z-index: 2600;
@@ -12428,6 +12425,42 @@ small {
 .gestao-estq-fullscreen-body .indicadores-chart-scroll,
 .gestao-estq-fullscreen-body .indicadores-zone-scroll {
   height: 100%;
+}
+
+.gestao-estq-zone-products-overlay {
+  padding: 18px;
+  z-index: 2700;
+}
+
+.gestao-estq-zone-products-dialog {
+  width: min(1180px, 96vw);
+  height: min(760px, 90vh);
+  border-radius: 22px;
+  border: 1px solid #c4d3eb;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+  box-shadow: 0 28px 80px rgba(12, 37, 77, 0.28);
+  padding: 18px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+}
+
+.gestao-estq-zone-products-body {
+  min-height: 0;
+  border: 1px solid #d7e2f4;
+  border-radius: 18px;
+  background: #f8fbff;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.gestao-estq-zone-products-table-wrap {
+  height: 100%;
+  overflow: auto;
+}
+
+.gestao-estq-zone-products-table {
+  min-width: 980px;
 }
 
 .indicadores-empty-box {
@@ -13198,6 +13231,31 @@ small {
 
   .gestao-estq-zone-column {
     min-width: 96px;
+  }
+
+  .gestao-estq-zone-button {
+    appearance: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    background: transparent;
+    border-radius: 16px;
+    transition: background 160ms ease, box-shadow 160ms ease, transform 140ms ease;
+  }
+
+  .gestao-estq-zone-button:hover,
+  .gestao-estq-zone-button:focus-visible {
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 12px 24px rgba(25, 71, 135, 0.1);
+    transform: translateY(-2px);
+    outline: none;
+  }
+
+  .gestao-estq-zone-button:focus-visible {
+    box-shadow:
+      0 0 0 3px rgba(31, 120, 209, 0.22),
+      0 12px 24px rgba(25, 71, 135, 0.1);
   }
 
   .gestao-estq-zone-value {
