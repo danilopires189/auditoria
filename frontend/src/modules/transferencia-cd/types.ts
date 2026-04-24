@@ -1,6 +1,7 @@
 export type TransferenciaCdConfStatus = "em_conferencia" | "finalizado_ok" | "finalizado_falta" | "finalizado_parcial";
 export type TransferenciaCdEtapa = "saida" | "entrada";
 export type TransferenciaCdDivergenciaTipo = "nao_conferido" | "falta" | "sobra" | "correto";
+export type TransferenciaCdLinkOrigin = "prevencaocd" | "logisticacd";
 
 export interface TransferenciaCdModuleProfile {
   user_id: string;
@@ -74,6 +75,7 @@ export interface TransferenciaCdManifestBarrasRow {
 export interface TransferenciaCdConferenceRow {
   conf_id: string;
   conf_date: string;
+  origem_link: TransferenciaCdLinkOrigin;
   dt_nf: string;
   nf_trf: number;
   sq_nf: number;
@@ -200,6 +202,7 @@ export interface TransferenciaCdReportFilters {
   dtIni: string;
   dtFim: string;
   cd: number;
+  origem_link: TransferenciaCdLinkOrigin;
 }
 
 export interface TransferenciaCdReportCount {
@@ -209,6 +212,7 @@ export interface TransferenciaCdReportCount {
 
 export interface TransferenciaCdReportRow {
   dt_nf: string;
+  origem_link: TransferenciaCdLinkOrigin;
   nf_trf: number;
   sq_nf: number;
   cd_ori: number;

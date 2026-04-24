@@ -6,8 +6,13 @@ import type {
   TransferenciaCdManifestMeta,
   TransferenciaCdNoteRow,
   TransferenciaCdPendingSummary,
-  TransferenciaCdPreferences
+  TransferenciaCdPreferences,
+  TransferenciaCdLinkOrigin
 } from "./types";
+import {
+  DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN,
+  normalizePedidoDiretoLinkOrigin
+} from "../../shared/pedido-direto-link-origin";
 
 const DB_NAME = "auditoria-transferencia-cd-v1";
 const DB_VERSION = 1;
@@ -110,9 +115,10 @@ export function buildTransferenciaCdConferenceKey(
   userId: string,
   cd: number,
   etapa: string,
-  note: Pick<TransferenciaCdNoteRow, "dt_nf" | "nf_trf" | "sq_nf" | "cd_ori" | "cd_des">
+  note: Pick<TransferenciaCdNoteRow, "dt_nf" | "nf_trf" | "sq_nf" | "cd_ori" | "cd_des">,
+  origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
 ): string {
-  return `transferencia:${userId}:${cd}:${etapa}:${buildTransferenciaCdNoteKey(note)}`;
+  return `transferencia:${userId}:${normalizePedidoDiretoLinkOrigin(origemLink)}:${cd}:${etapa}:${buildTransferenciaCdNoteKey(note)}`;
 }
 
 function prefsKey(userId: string): string {
@@ -235,6 +241,7 @@ function normalizeLocalConference(row: TransferenciaCdLocalConference | null | u
     : [];
   return {
     ...row,
+    origem_link: normalizePedidoDiretoLinkOrigin(row.origem_link),
     items: sortLocalItems(items),
     conference_mode: row.conference_mode === "batch" ? "batch" : "single",
     batch_notes: Array.isArray(row.batch_notes) ? row.batch_notes : [],
@@ -437,22 +444,26 @@ export async function getLocalConference(localKey: string): Promise<Transferenci
   return normalizeLocalConference((raw as TransferenciaCdLocalConference | undefined) ?? null);
 }
 
-export async function listUserLocalConferences(userId: string): Promise<TransferenciaCdLocalConference[]> {
+export async function listUserLocalConferences(userId: string, origemLink?: TransferenciaCdLinkOrigin): Promise<TransferenciaCdLocalConference[]> {
   const db = await getDb();
   const transaction = db.transaction(STORE_CONFERENCES, "readonly");
   const index = transaction.objectStore(STORE_CONFERENCES).index(INDEX_CONFERENCES_BY_USER);
   const rows = (await requestToPromise(index.getAll(IDBKeyRange.only(userId)))) as TransferenciaCdLocalConference[];
   await transactionDone(transaction);
-  return sortConferences(rows.map((row) => normalizeLocalConference(row)).filter((row): row is TransferenciaCdLocalConference => row != null));
+  const normalizedOrigin = origemLink ? normalizePedidoDiretoLinkOrigin(origemLink) : null;
+  return sortConferences(rows
+    .map((row) => normalizeLocalConference(row))
+    .filter((row): row is TransferenciaCdLocalConference => row != null)
+    .filter((row) => !normalizedOrigin || row.origem_link === normalizedOrigin));
 }
 
-export async function listPendingLocalConferences(userId: string): Promise<TransferenciaCdLocalConference[]> {
-  const rows = await listUserLocalConferences(userId);
+export async function listPendingLocalConferences(userId: string, origemLink?: TransferenciaCdLinkOrigin): Promise<TransferenciaCdLocalConference[]> {
+  const rows = await listUserLocalConferences(userId, origemLink);
   return rows.filter((row) => row.pending_snapshot || row.pending_finalize || row.pending_cancel || Boolean(row.sync_error));
 }
 
-export async function getPendingSummary(userId: string): Promise<TransferenciaCdPendingSummary> {
-  const rows = await listPendingLocalConferences(userId);
+export async function getPendingSummary(userId: string, origemLink?: TransferenciaCdLinkOrigin): Promise<TransferenciaCdPendingSummary> {
+  const rows = await listPendingLocalConferences(userId, origemLink);
   return {
     pending_count: rows.length,
     errors_count: rows.filter((row) => Boolean(row.sync_error)).length

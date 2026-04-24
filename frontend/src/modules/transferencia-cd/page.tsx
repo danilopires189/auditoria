@@ -11,6 +11,7 @@ import { getDbBarrasByBarcode, getDbBarrasMeta } from "../../shared/db-barras/st
 import { refreshDbBarrasCacheSmart } from "../../shared/db-barras/sync";
 import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
+import { resolvePedidoDiretoLinkOriginFromWindow } from "../../shared/pedido-direto-link-origin";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   buildTransferenciaCdNoteKey,
@@ -212,9 +213,9 @@ function isBatchConference(conf: TransferenciaCdLocalConference | null | undefin
   return Boolean(conf && (conf.batch_notes?.length ?? 0) > 1);
 }
 
-function buildBatchConferenceKey(userId: string, cd: number, etapa: TransferenciaCdEtapa, notes: TransferenciaCdBatchNoteRef[]): string {
+function buildBatchConferenceKey(userId: string, cd: number, etapa: TransferenciaCdEtapa, notes: TransferenciaCdBatchNoteRef[], origemLink = resolvePedidoDiretoLinkOriginFromWindow()): string {
   const keys = [...notes].map((note) => buildTransferenciaCdNoteKey(note)).sort();
-  return `transferencia-batch:${userId}:${cd}:${etapa}:${keys.join(",")}`;
+  return `transferencia-batch:${userId}:${origemLink}:${cd}:${etapa}:${keys.join(",")}`;
 }
 
 function sortBatchAllocationsBySelection(
@@ -371,7 +372,7 @@ function originObservation(conf: TransferenciaCdLocalConference): string {
 function localFromRemote(profile: TransferenciaCdModuleProfile, cd: number, conf: Omit<TransferenciaCdLocalConference, "local_key" | "user_id" | "cd" | "remote_conf_id" | "items" | "pending_snapshot" | "pending_finalize" | "pending_finalize_reason" | "pending_cancel" | "sync_error" | "last_synced_at">, items: TransferenciaCdItemRow[]): TransferenciaCdLocalConference {
   return {
     ...conf,
-    local_key: buildTransferenciaCdConferenceKey(profile.user_id, cd, conf.etapa, conf),
+    local_key: buildTransferenciaCdConferenceKey(profile.user_id, cd, conf.etapa, conf, conf.origem_link),
     user_id: profile.user_id,
     cd,
     remote_conf_id: conf.conf_id,
@@ -403,15 +404,16 @@ function localFromRemote(profile: TransferenciaCdModuleProfile, cd: number, conf
   };
 }
 
-function localFromManifest(profile: TransferenciaCdModuleProfile, cd: number, note: TransferenciaCdNoteRow, manifestItems: TransferenciaCdManifestItemRow[]): TransferenciaCdLocalConference {
+function localFromManifest(profile: TransferenciaCdModuleProfile, cd: number, note: TransferenciaCdNoteRow, manifestItems: TransferenciaCdManifestItemRow[], origemLink = resolvePedidoDiretoLinkOriginFromWindow()): TransferenciaCdLocalConference {
   const nowIso = new Date().toISOString();
   return {
-    local_key: buildTransferenciaCdConferenceKey(profile.user_id, cd, note.etapa, note),
+    local_key: buildTransferenciaCdConferenceKey(profile.user_id, cd, note.etapa, note, origemLink),
     user_id: profile.user_id,
     cd,
     remote_conf_id: null,
-    conf_id: buildTransferenciaCdConferenceKey(profile.user_id, cd, note.etapa, note),
+    conf_id: buildTransferenciaCdConferenceKey(profile.user_id, cd, note.etapa, note, origemLink),
     conf_date: todayIsoBrasilia(),
+    origem_link: origemLink,
     dt_nf: note.dt_nf,
     nf_trf: note.nf_trf,
     sq_nf: note.sq_nf,
@@ -501,7 +503,7 @@ function batchConferenceFromRemote(
   });
   return {
     ...first.conference,
-    local_key: buildBatchConferenceKey(profile.user_id, cd, first.conference.etapa, batchNotes),
+    local_key: buildBatchConferenceKey(profile.user_id, cd, first.conference.etapa, batchNotes, first.conference.origem_link),
     user_id: profile.user_id,
     cd,
     remote_conf_id: null,
@@ -606,6 +608,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
 
   const isGlobalAdmin = profile.role === "admin" && profile.cd_default == null;
+  const currentLinkOrigin = useMemo(() => resolvePedidoDiretoLinkOriginFromWindow(), []);
   const fixedCd = useMemo(() => fixedCdFromProfile(profile), [profile]);
   const currentCd = isGlobalAdmin ? cdAtivo : fixedCd;
   const currentCdLabel = useMemo(() => cdLabel(currentCd, cdOptions, profile.cd_nome), [cdOptions, currentCd, profile.cd_nome]);
@@ -694,16 +697,16 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [notes, overviewNotes]);
 
   const refreshPendingState = useCallback(async () => {
-    const pending = await getPendingSummary(profile.user_id);
+    const pending = await getPendingSummary(profile.user_id, currentLinkOrigin);
     setPendingCount(pending.pending_count);
     setPendingErrors(pending.errors_count);
-  }, [profile.user_id]);
+  }, [currentLinkOrigin, profile.user_id]);
 
   const loadPendingSyncRows = useCallback(async () => {
-    const rows = await listPendingLocalConferences(profile.user_id);
+    const rows = await listPendingLocalConferences(profile.user_id, currentLinkOrigin);
     setPendingSyncRows(rows);
     return rows;
-  }, [profile.user_id]);
+  }, [currentLinkOrigin, profile.user_id]);
 
   useEffect(() => {
     activeConferenceRef.current = activeConference;
@@ -804,7 +807,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   const discardAllPendingSyncRows = useCallback(async () => {
     setBusyPendingDiscard(true);
     try {
-      const rows = await listPendingLocalConferences(profile.user_id);
+      const rows = await listPendingLocalConferences(profile.user_id, currentLinkOrigin);
       for (const row of rows) {
         await removeLocalConference(row.local_key);
       }
@@ -818,11 +821,11 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusyPendingDiscard(false);
     }
-  }, [clearActiveConferenceView, profile.user_id, refreshPendingState]);
+  }, [clearActiveConferenceView, currentLinkOrigin, profile.user_id, refreshPendingState]);
 
   const cleanupAuthoritativeRemoteCache = useCallback(async () => {
     if (preferOfflineMode || !isOnline) return;
-    const rows = await listUserLocalConferences(profile.user_id);
+    const rows = await listUserLocalConferences(profile.user_id, currentLinkOrigin);
     let removedAny = false;
     for (const row of rows) {
       if (!row.local_key) continue;
@@ -832,7 +835,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       }
     }
     if (removedAny) await refreshPendingState();
-  }, [isOnline, preferOfflineMode, profile.user_id, refreshPendingState]);
+  }, [currentLinkOrigin, isOnline, preferOfflineMode, profile.user_id, refreshPendingState]);
 
   const activateConference = useCallback(async (
     next: TransferenciaCdLocalConference,
@@ -860,7 +863,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [cdAtivo, clearDismissedReadOnlyConference, isGlobalAdmin, persistPreferences, setAndSaveActiveConference]);
 
   const resumeLocalActiveConference = useCallback(async (silent = false): Promise<TransferenciaCdLocalConference | null> => {
-    const rows = await listUserLocalConferences(profile.user_id);
+    const rows = await listUserLocalConferences(profile.user_id, currentLinkOrigin);
     const openRows = rows.filter((row) => (
       row.status === "em_conferencia"
       && !row.pending_cancel
@@ -871,21 +874,21 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     const local = openRows[0] ?? null;
     if (!local) return null;
     return activateConference(local, { silent });
-  }, [activateConference, isOnline, preferOfflineMode, profile.user_id]);
+  }, [activateConference, currentLinkOrigin, isOnline, preferOfflineMode, profile.user_id]);
 
   const resumeRemoteActiveConference = useCallback(async (silent = false): Promise<TransferenciaCdLocalConference | null> => {
     if (preferOfflineMode || !isOnline) return null;
-    const remoteActive = await fetchActiveTransferenciaConference();
+    const remoteActive = await fetchActiveTransferenciaConference(currentLinkOrigin);
     if (!remoteActive || remoteActive.status !== "em_conferencia") return null;
     const remoteCd = deriveConferenceCd(remoteActive);
     const remoteItems = await fetchTransferenciaItems(remoteActive.conf_id);
     const local = localFromRemote(profile, remoteCd, remoteActive, remoteItems);
     if (isDismissedReadOnlyConference(local)) return null;
     return activateConference(local, { silent });
-  }, [activateConference, isDismissedReadOnlyConference, isOnline, preferOfflineMode, profile]);
+  }, [activateConference, currentLinkOrigin, isDismissedReadOnlyConference, isOnline, preferOfflineMode, profile]);
 
   const mergeNotesWithLocalState = useCallback(async (rows: TransferenciaCdNoteRow[], targetCd: number): Promise<TransferenciaCdNoteRow[]> => {
-    const localConferences = await listUserLocalConferences(profile.user_id);
+    const localConferences = await listUserLocalConferences(profile.user_id, currentLinkOrigin);
     const localByKey = new Map<string, TransferenciaCdLocalConference>();
     for (const row of localConferences.filter((candidate) => (
       !candidate.pending_cancel
@@ -910,7 +913,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       }
       return applyConferenceToNote(row, local);
     });
-  }, [isOnline, preferOfflineMode, profile.user_id]);
+  }, [currentLinkOrigin, isOnline, preferOfflineMode, profile.user_id]);
 
   const loadCurrentNotesSnapshot = useCallback(async (targetCd: number): Promise<TransferenciaCdNoteRow[]> => {
     if (preferOfflineMode || !isOnline) {
@@ -918,9 +921,9 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       return mergeNotesWithLocalState(localRows, targetCd);
     }
 
-    const remoteRows = await fetchManifestNotes(targetCd);
+    const remoteRows = await fetchManifestNotes(targetCd, currentLinkOrigin);
     return mergeNotesWithLocalState(remoteRows, targetCd);
-  }, [isOnline, mergeNotesWithLocalState, preferOfflineMode, profile.user_id]);
+  }, [currentLinkOrigin, isOnline, mergeNotesWithLocalState, preferOfflineMode, profile.user_id]);
 
   const queueModeFor = useCallback((conference: TransferenciaCdLocalConference) => (
     preferOfflineMode || !isOnline || !conference.remote_conf_id
@@ -934,7 +937,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       setErrorMessage(null);
     }
     try {
-      const result = await syncPendingTransferenciaCdConferences(profile.user_id);
+      const result = await syncPendingTransferenciaCdConferences(profile.user_id, currentLinkOrigin);
       await refreshPendingState();
       const currentActive = activeConferenceRef.current;
       if (currentActive) {
@@ -951,7 +954,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
             }
           }
         } else if (currentActive.remote_conf_id) {
-          const remoteActive = await fetchActiveTransferenciaConference();
+          const remoteActive = await fetchActiveTransferenciaConference(currentLinkOrigin);
           if (activeConferenceRef.current?.local_key === currentActive.local_key) {
             if (remoteActive?.conf_id === currentActive.remote_conf_id && remoteActive.status === "em_conferencia") {
               const remoteItems = await fetchTransferenciaItems(remoteActive.conf_id);
@@ -972,7 +975,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusySync(false);
     }
-  }, [busySync, isOnline, profile, refreshPendingState, shouldPersistConferenceLocally]);
+  }, [busySync, currentLinkOrigin, isOnline, profile, refreshPendingState, shouldPersistConferenceLocally]);
 
   const runManifestSync = useCallback(async () => {
     if (!isOnline || currentCd == null) {
@@ -984,7 +987,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setErrorMessage(null);
     try {
       await runPendingSync(true);
-      const bundle = await fetchManifestBundle(currentCd, (progress) => {
+      const bundle = await fetchManifestBundle(currentCd, currentLinkOrigin, (progress) => {
         const label = progress.step === "items" ? "itens" : progress.step === "barras" ? "barras" : "notas";
         setProgressMessage(`Sincronizando ${label}: ${progress.rows}/${progress.total || progress.rows} (${progress.percent}%).`);
       }, { includeBarras: false });
@@ -1003,7 +1006,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       setProgressMessage(null);
       setBusyManifest(false);
     }
-  }, [currentCd, isOnline, profile.user_id, refreshManifestInfo, runPendingSync]);
+  }, [currentCd, currentLinkOrigin, isOnline, profile.user_id, refreshManifestInfo, runPendingSync]);
 
   const handleToggleOffline = useCallback(async () => {
     const next = !preferOfflineMode;
@@ -1084,9 +1087,9 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      const localKey = buildTransferenciaCdConferenceKey(profile.user_id, currentCd, note.etapa, note);
+      const localKey = buildTransferenciaCdConferenceKey(profile.user_id, currentCd, note.etapa, note, currentLinkOrigin);
       const existing = await getLocalConference(localKey);
-      const openLocals = (await listUserLocalConferences(profile.user_id))
+      const openLocals = (await listUserLocalConferences(profile.user_id, currentLinkOrigin))
         .filter((row) => (
           row.status === "em_conferencia"
           && !row.pending_cancel
@@ -1113,16 +1116,16 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         } else {
           const manifestItems = await getManifestItemsByNote(profile.user_id, currentCd, note);
           if (!manifestItems.length) throw new Error("NF não encontrada na base local sincronizada.");
-          await activateConference(localFromManifest(profile, currentCd, note, manifestItems), { silent: true });
+          await activateConference(localFromManifest(profile, currentCd, note, manifestItems, currentLinkOrigin), { silent: true });
         }
       } else {
         try {
-          const remote = await openTransferenciaNote(currentCd, note);
+          const remote = await openTransferenciaNote(currentCd, note, currentLinkOrigin);
           const items = await fetchTransferenciaItems(remote.conf_id);
           if (remote.is_read_only) {
             const readOnlyConference = localFromRemote(profile, currentCd, remote, items);
             if (remote.status === "finalizado_parcial") {
-              const reopenInfo = await fetchTransferenciaPartialReopenInfo(currentCd, note);
+              const reopenInfo = await fetchTransferenciaPartialReopenInfo(currentCd, note, currentLinkOrigin);
               if (reopenInfo.can_reopen) {
                 setDialogState({
                   title: "Conferência parcialmente finalizada",
@@ -1138,7 +1141,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
                     setDialogState(null);
                     void (async () => {
                       try {
-                        const reopened = await reopenTransferenciaPartialConference(currentCd, note);
+                        const reopened = await reopenTransferenciaPartialConference(currentCd, note, currentLinkOrigin);
                         const reopenedItems = await fetchTransferenciaItems(reopened.conf_id);
                         await activateConference(localFromRemote(profile, currentCd, reopened, reopenedItems), {
                           silent: true
@@ -1193,6 +1196,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [
     activateConference,
     currentCd,
+    currentLinkOrigin,
     isOnline,
     manifestReady,
     preferOfflineMode,
@@ -1232,7 +1236,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     setStatusMessage(null);
     try {
       const targetNotes = selectedBatchNotes.map((note) => ({ ...note, conf_id: null } satisfies TransferenciaCdBatchNoteRef));
-      const openedConferences = await openTransferenciaNoteBatch(currentCd, targetNotes);
+      const openedConferences = await openTransferenciaNoteBatch(currentCd, targetNotes, currentLinkOrigin);
       const openedByKey = new Map(openedConferences.map((row) => [buildTransferenciaCdNoteKey(row), row] as const));
       const opened = await Promise.all(targetNotes.map(async (note) => {
         const conference = openedByKey.get(buildTransferenciaCdNoteKey(note));
@@ -1254,6 +1258,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [
     activateConference,
     currentCd,
+    currentLinkOrigin,
     hasOpenConference,
     isOnline,
     preferOfflineMode,
@@ -1279,7 +1284,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       const rows = await mergeNotesWithLocalState(
         (preferOfflineMode || !isOnline)
           ? (await listManifestNotesLocal(profile.user_id, currentCd)).filter((row) => row.nf_trf === nfTrf)
-          : await searchTransferenciaNotes(currentCd, nfTrf),
+          : await searchTransferenciaNotes(currentCd, nfTrf, currentLinkOrigin),
         currentCd
       );
       setNotes(rows);
@@ -1295,7 +1300,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusyOpen(false);
     }
-  }, [currentCd, isOnline, mergeNotesWithLocalState, openNote, preferOfflineMode, profile.user_id]);
+  }, [currentCd, currentLinkOrigin, isOnline, mergeNotesWithLocalState, openNote, preferOfflineMode, profile.user_id]);
 
   const runNoteSearch = useCallback((event?: FormEvent) => {
     event?.preventDefault();
@@ -1594,8 +1599,8 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     if (currentCd == null) { setReportError("Selecione um CD para gerar o relatório."); return null; }
     if (!reportDtIni || !reportDtFim) { setReportError("Informe o período do relatório."); return null; }
     if (reportDtFim < reportDtIni) { setReportError("Data final deve ser maior ou igual à data inicial."); return null; }
-    return { dtIni: reportDtIni, dtFim: reportDtFim, cd: currentCd };
-  }, [currentCd, reportDtFim, reportDtIni]);
+    return { dtIni: reportDtIni, dtFim: reportDtFim, cd: currentCd, origem_link: currentLinkOrigin };
+  }, [currentCd, currentLinkOrigin, reportDtFim, reportDtIni]);
 
   const runReportSearch = useCallback(async () => {
     if (!canSeeReportTools) return;

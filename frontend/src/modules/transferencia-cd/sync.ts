@@ -14,8 +14,13 @@ import type {
   TransferenciaCdNoteRow,
   TransferenciaCdReportCount,
   TransferenciaCdReportFilters,
-  TransferenciaCdReportRow
+  TransferenciaCdReportRow,
+  TransferenciaCdLinkOrigin
 } from "./types";
+import {
+  DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN,
+  normalizePedidoDiretoLinkOrigin
+} from "../../shared/pedido-direto-link-origin";
 
 const MANIFEST_ITEMS_PAGE_SIZE = 1200;
 const MANIFEST_BARRAS_PAGE_SIZE = 1500;
@@ -185,6 +190,7 @@ function mapConference(row: Record<string, unknown>): TransferenciaCdConferenceR
   return {
     conf_id: String(row.conf_id ?? ""),
     conf_date: String(row.conf_date ?? ""),
+    origem_link: normalizePedidoDiretoLinkOrigin(parseNullableString(row.origem_link)),
     dt_nf: String(row.dt_nf ?? ""),
     nf_trf: parseInteger(row.nf_trf),
     sq_nf: parseInteger(row.sq_nf),
@@ -244,6 +250,7 @@ function mapReportCount(row: Record<string, unknown>): TransferenciaCdReportCoun
 function mapReportRow(row: Record<string, unknown>): TransferenciaCdReportRow {
   return {
     dt_nf: String(row.dt_nf ?? ""),
+    origem_link: normalizePedidoDiretoLinkOrigin(parseNullableString(row.origem_link)),
     nf_trf: parseInteger(row.nf_trf),
     sq_nf: parseInteger(row.sq_nf),
     cd_ori: parseInteger(row.cd_ori),
@@ -327,9 +334,9 @@ export async function fetchManifestBarrasPage(
     .filter((row) => row.barras && row.coddv > 0);
 }
 
-export async function fetchManifestNotes(cd: number): Promise<TransferenciaCdNoteRow[]> {
+export async function fetchManifestNotes(cd: number, origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<TransferenciaCdNoteRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_manifest_notes", { p_cd: cd });
+  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_manifest_notes", { p_cd: cd, p_origem_link: origemLink });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapNote(row as Record<string, unknown>));
@@ -337,6 +344,7 @@ export async function fetchManifestNotes(cd: number): Promise<TransferenciaCdNot
 
 export async function fetchManifestBundle(
   cd: number,
+  origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN,
   onProgress?: (progress: { step: "items" | "barras" | "notes"; rows: number; total: number; percent: number }) => void,
   options?: { includeBarras?: boolean }
 ): Promise<{
@@ -406,24 +414,25 @@ export async function fetchManifestBundle(
     }
   }
 
-  const notes = await fetchManifestNotes(cd);
+  const notes = await fetchManifestNotes(cd, origemLink);
   onProgress?.({ step: "notes", rows: notes.length, total: notes.length, percent: 100 });
 
   return { meta, items, barras, notes };
 }
 
-export async function searchTransferenciaNotes(cd: number, nfTrf: number): Promise<TransferenciaCdNoteRow[]> {
+export async function searchTransferenciaNotes(cd: number, nfTrf: number, origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<TransferenciaCdNoteRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_note_search", {
     p_cd: cd,
-    p_nf_trf: nfTrf
+    p_nf_trf: nfTrf,
+    p_origem_link: origemLink
   });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapNote(row as Record<string, unknown>));
 }
 
-export async function openTransferenciaNote(cd: number, note: TransferenciaCdNoteRow): Promise<TransferenciaCdConferenceRow> {
+export async function openTransferenciaNote(cd: number, note: TransferenciaCdNoteRow, origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<TransferenciaCdConferenceRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_open_nf", {
     p_cd: cd,
@@ -431,7 +440,8 @@ export async function openTransferenciaNote(cd: number, note: TransferenciaCdNot
     p_sq_nf: note.sq_nf,
     p_dt_nf: note.dt_nf,
     p_cd_ori: note.cd_ori,
-    p_cd_des: note.cd_des
+    p_cd_des: note.cd_des,
+    p_origem_link: origemLink
   });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
@@ -441,7 +451,8 @@ export async function openTransferenciaNote(cd: number, note: TransferenciaCdNot
 
 export async function openTransferenciaNoteBatch(
   cd: number,
-  notes: TransferenciaCdBatchNoteRef[]
+  notes: TransferenciaCdBatchNoteRef[],
+  origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN
 ): Promise<TransferenciaCdConferenceRow[]> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const payload = notes.map((note) => ({
@@ -453,16 +464,17 @@ export async function openTransferenciaNoteBatch(
   }));
   const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_open_nf_batch", {
     p_cd: cd,
-    p_targets: payload
+    p_targets: payload,
+    p_origem_link: origemLink
   });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapConference(row as Record<string, unknown>));
 }
 
-export async function fetchActiveTransferenciaConference(): Promise<TransferenciaCdConferenceRow | null> {
+export async function fetchActiveTransferenciaConference(origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<TransferenciaCdConferenceRow | null> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_get_active_conference");
+  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_get_active_conference", { p_origem_link: origemLink });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) return null;
@@ -480,7 +492,7 @@ export interface TransferenciaCdPartialReopenInfo {
   can_reopen: boolean;
 }
 
-export async function fetchTransferenciaPartialReopenInfo(cd: number, note: TransferenciaCdNoteRow): Promise<TransferenciaCdPartialReopenInfo> {
+export async function fetchTransferenciaPartialReopenInfo(cd: number, note: TransferenciaCdNoteRow, origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<TransferenciaCdPartialReopenInfo> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_get_partial_reopen_info", {
     p_cd: cd,
@@ -488,7 +500,8 @@ export async function fetchTransferenciaPartialReopenInfo(cd: number, note: Tran
     p_sq_nf: note.sq_nf,
     p_dt_nf: note.dt_nf,
     p_cd_ori: note.cd_ori,
-    p_cd_des: note.cd_des
+    p_cd_des: note.cd_des,
+    p_origem_link: origemLink
   });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
@@ -505,7 +518,7 @@ export async function fetchTransferenciaPartialReopenInfo(cd: number, note: Tran
   };
 }
 
-export async function reopenTransferenciaPartialConference(cd: number, note: TransferenciaCdNoteRow): Promise<TransferenciaCdConferenceRow> {
+export async function reopenTransferenciaPartialConference(cd: number, note: TransferenciaCdNoteRow, origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<TransferenciaCdConferenceRow> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_reopen_partial_conference", {
     p_cd: cd,
@@ -513,7 +526,8 @@ export async function reopenTransferenciaPartialConference(cd: number, note: Tra
     p_sq_nf: note.sq_nf,
     p_dt_nf: note.dt_nf,
     p_cd_ori: note.cd_ori,
-    p_cd_des: note.cd_des
+    p_cd_des: note.cd_des,
+    p_origem_link: origemLink
   });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
@@ -611,12 +625,12 @@ export async function cancelTransferencia(confId: string): Promise<boolean> {
   return first?.cancelled === true;
 }
 
-export async function syncPendingTransferenciaCdConferences(userId: string): Promise<{
+export async function syncPendingTransferenciaCdConferences(userId: string, origemLink?: TransferenciaCdLinkOrigin): Promise<{
   processed: number;
   synced: number;
   failed: number;
 }> {
-  const pending = await listPendingLocalConferences(userId);
+  const pending = await listPendingLocalConferences(userId, origemLink);
   let synced = 0;
   let failed = 0;
 
@@ -654,7 +668,7 @@ export async function syncPendingTransferenciaCdConferences(userId: string): Pro
           entrada_started_nome: null,
           entrada_started_at: null,
           entrada_finalized_at: null
-        });
+        }, row.origem_link);
         remoteConfId = remoteOpen.conf_id;
         row.remote_conf_id = remoteConfId;
         row.conf_id = remoteConfId;
@@ -726,7 +740,8 @@ export async function countTransferenciaConciliacaoRows(filters: TransferenciaCd
   const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_conciliacao_count", {
     p_dt_ini: filters.dtIni,
     p_dt_fim: filters.dtFim,
-    p_cd: filters.cd
+    p_cd: filters.cd,
+    p_origem_link: filters.origem_link
   });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
@@ -743,6 +758,7 @@ export async function fetchTransferenciaConciliacaoRows(
     p_dt_ini: filters.dtIni,
     p_dt_fim: filters.dtFim,
     p_cd: filters.cd,
+    p_origem_link: filters.origem_link,
     p_offset: Math.max(offset, 0),
     p_limit: Math.max(1, limit)
   });
