@@ -11013,6 +11013,13 @@ small {
   max-width: 100%;
 }
 
+.gestao-op-segmented.controle-validade-subtabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 440px);
+  max-width: 100%;
+}
+
 .controle-validade-status-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11133,7 +11140,9 @@ small {
 }
 
 .controle-validade-mobile-search-wrap,
-.controle-validade-last-search-wrap {
+.controle-validade-last-search-wrap,
+.controle-validade-validade-wrap,
+.controle-validade-edit-validade-wrap {
   min-width: 0;
   max-width: 100%;
 }
@@ -11218,6 +11227,31 @@ small {
   stroke-linejoin: round;
 }
 
+.controle-validade-validade-wrap input,
+.controle-validade-edit-validade-wrap input {
+  padding-right: 44px;
+}
+
+.controle-validade-edit-validade-wrap {
+  width: min(100%, 180px);
+}
+
+.controle-validade-indeterminada-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.controle-validade-indeterminada-btn.is-active {
+  color: #1f8a57;
+  background: rgba(230, 247, 238, 0.98);
+  border-color: rgba(144, 213, 174, 0.92);
+}
+
 .controle-validade-section-title {
   color: #173b6f;
   font-size: 0.94rem;
@@ -11241,11 +11275,65 @@ small {
 .controle-validade-list-area {
   display: grid;
   gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
 }
 
 .controle-validade-list {
   display: grid;
   gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  justify-items: stretch;
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
+}
+
+.controle-validade-list > .pvps-zone-group,
+.controle-validade-list .controle-validade-row-card,
+.controle-validade-list .controle-validade-linha-details,
+.controle-validade-list .controle-validade-linha-detail-grid,
+.controle-validade-list .controle-validade-linha-detail-grid span {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.controle-validade-list > .pvps-zone-group,
+.controle-validade-list .controle-validade-row-card,
+.controle-validade-list .controle-validade-linha-details,
+.controle-validade-list .controle-validade-linha-detail-grid {
+  width: 100%;
+}
+
+.controle-validade-list .controle-validade-linha-detail-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.controle-validade-list .controle-validade-linha-detail-grid span {
+  overflow-wrap: anywhere;
+}
+
+.controle-validade-list > .pvps-zone-group {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  justify-items: stretch;
+  justify-self: stretch;
+  inline-size: 100%;
+  width: auto;
+}
+
+.controle-validade-list > .pvps-zone-group > .pvps-zone-divider {
+  justify-self: start;
+}
+
+.controle-validade-list > .pvps-zone-group > .controle-validade-row-card {
+  inline-size: 100%;
+  justify-self: stretch;
 }
 
 .controle-validade-row-card {
@@ -11532,6 +11620,10 @@ small {
 
 .controle-validade-inline-editor input {
   width: 120px;
+}
+
+.controle-validade-inline-editor .controle-validade-edit-validade-wrap input {
+  width: 100%;
 }
 
 .controle-validade-linha-actions {

@@ -65,6 +65,7 @@ const SCANNER_INPUT_MIN_BURST_CHARS = 5;
 const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
 const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
 const ALL_MONTHS_FILTER = "__all__";
+const VALIDADE_INDETERMINADA = "INDETERMINADA";
 
 type BarcodeValidationState = "idle" | "validating" | "valid" | "invalid";
 
@@ -139,12 +140,21 @@ function extractValidadeDigits(raw: string): string {
   return digits.slice(-4);
 }
 
+function isValidadeIndeterminada(value: string | null | undefined): boolean {
+  return String(value ?? "").trim().toUpperCase() === VALIDADE_INDETERMINADA;
+}
+
 function normalizeValidadeInput(raw: string): string {
+  if (isValidadeIndeterminada(raw)) return VALIDADE_INDETERMINADA;
   const digits = extractValidadeDigits(raw);
   if (digits.length !== 4) throw new Error("Validade deve estar no formato MMAA.");
   const month = Number.parseInt(digits.slice(0, 2), 10);
   if (!Number.isFinite(month) || month < 1 || month > 12) throw new Error("Mês da validade inválido.");
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function formatValidadeDisplay(value: string | null | undefined): string {
+  return isValidadeIndeterminada(value) ? "Indeterminada" : String(value ?? "-");
 }
 
 function formatDateTime(value: string | null): string {
@@ -424,6 +434,14 @@ function pencilIcon() {
   );
 }
 
+function infinityIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8.5 8.5c2.5 0 4.5 7 7 7a3.5 3.5 0 1 0 0-7c-2.5 0-4.5 7-7 7a3.5 3.5 0 1 1 0-7z" />
+    </svg>
+  );
+}
+
 export default function ControleValidadePage({ isOnline, profile }: ControleValidadePageProps) {
   const defaultMonthFilter = useMemo(() => currentValidadeMonthValue(), []);
   const barcodeRef = useRef<HTMLInputElement | null>(null);
@@ -505,6 +523,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
   const flushBusyRef = useRef(false);
   const isOfflineModeActive = preferOfflineMode || !isOnline;
+  const validadeIsIndeterminada = isValidadeIndeterminada(validadeInput);
+  const editingColetaIsIndeterminada = isValidadeIndeterminada(editingColetaValidade);
   const cameraSupported = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -1113,7 +1133,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         { label: "Endereco", value: selectedEnderecoSep },
         { label: "Produto", value: `${coletaLookup.coddv} - ${coletaLookup.descricao}` },
         { label: "Barras", value: coletaLookup.barras },
-        { label: "Validade", value: valMmaa }
+        { label: "Validade", value: formatValidadeDisplay(valMmaa) }
       ];
       await enqueueLinhaColeta({
         userId: profile.user_id,
@@ -1177,7 +1197,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       const popupLines: ActionPopupLine[] = [
         { label: "Endereco", value: row.endereco_sep },
         { label: "Produto", value: `${row.coddv} - ${row.descricao}` },
-        { label: "Validade", value: row.val_mmaa },
+        { label: "Validade", value: formatValidadeDisplay(row.val_mmaa) },
         { label: "Quantidade retirada", value: String(qtd) }
       ];
       if (isOnline) {
@@ -1244,7 +1264,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       const popupLines: ActionPopupLine[] = [
         { label: "Endereco", value: row.endereco_pul },
         { label: "Produto", value: `${row.coddv} - ${row.descricao}` },
-        { label: "Validade", value: row.val_mmaa },
+        { label: "Validade", value: formatValidadeDisplay(row.val_mmaa) },
         { label: "Quantidade retirada", value: String(qtd) }
       ];
       if (isOnline) {
@@ -1613,7 +1633,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
   const startEditingColeta = useCallback((row: LinhaColetaHistoryRow) => {
     setEditingColetaId(row.id);
-    setEditingColetaValidade(row.val_mmaa.replace(/\D/g, ""));
+    setEditingColetaValidade(isValidadeIndeterminada(row.val_mmaa) ? VALIDADE_INDETERMINADA : row.val_mmaa.replace(/\D/g, ""));
   }, []);
 
   const cancelEditingColeta = useCallback(() => {
@@ -2055,7 +2075,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                           <span>CODDV: {coletaLookup.coddv}</span>
                           <span>Barras: {coletaLookup.barras}</span>
                           <label>
-                            Endereço Linha (SEP)
+                            Endereço Linha
                             <select
                               value={selectedEnderecoSep}
                               onChange={(event) => setSelectedEnderecoSep(event.target.value)}
@@ -2073,18 +2093,33 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
 
                       <label>
                         Validade (MMAA)
-                        <input
-                          ref={validadeRef}
-                          type="text"
-                          inputMode={validadeInputMode}
-                          value={validadeInput}
-                          onChange={(event) => setValidadeInput(extractValidadeDigits(event.target.value))}
-                          onFocus={enableValidadeSoftKeyboard}
-                          onPointerDown={enableValidadeSoftKeyboard}
-                          onBlur={disableValidadeSoftKeyboard}
-                          placeholder="Ex.: 0426"
-                          required
-                        />
+                        <div className="input-icon-wrap with-action controle-validade-validade-wrap">
+                          <input
+                            ref={validadeRef}
+                            type="text"
+                            inputMode={validadeIsIndeterminada ? "text" : validadeInputMode}
+                            value={validadeInput}
+                            onChange={(event) => setValidadeInput(extractValidadeDigits(event.target.value))}
+                            onFocus={validadeIsIndeterminada ? undefined : enableValidadeSoftKeyboard}
+                            onPointerDown={validadeIsIndeterminada ? undefined : enableValidadeSoftKeyboard}
+                            onBlur={disableValidadeSoftKeyboard}
+                            placeholder={validadeIsIndeterminada ? "Indeterminada" : "Ex.: 0426"}
+                            readOnly={validadeIsIndeterminada}
+                            required
+                          />
+                          <button
+                            type="button"
+                            className={`input-action-btn controle-validade-indeterminada-btn${validadeIsIndeterminada ? " is-active" : ""}`}
+                            onClick={() => {
+                              disableValidadeSoftKeyboard();
+                              setValidadeInput((current) => (isValidadeIndeterminada(current) ? "" : VALIDADE_INDETERMINADA));
+                            }}
+                            aria-label={validadeIsIndeterminada ? "Remover validade indeterminada" : "Informar validade indeterminada"}
+                            title={validadeIsIndeterminada ? "Remover validade indeterminada" : "Validade indeterminada"}
+                          >
+                            {infinityIcon()}
+                          </button>
+                        </div>
                       </label>
 
                       <button
@@ -2171,7 +2206,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                               <div className="controle-validade-linha-details">
                                 <div className="controle-validade-linha-detail-grid">
                                   <span className="controle-validade-editable-line">
-                                    <b>Validade:</b> {lastColetaSearchResult.val_mmaa}
+                                    <b>Validade:</b> {formatValidadeDisplay(lastColetaSearchResult.val_mmaa)}
                                     {canEditColetaRow(lastColetaSearchResult) ? (
                                       <button
                                         type="button"
@@ -2191,13 +2226,26 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                 </div>
                                 {editingColetaId === lastColetaSearchResult.id ? (
                                   <div className="controle-validade-inline-editor">
-                                    <input
-                                      type="text"
-                                      inputMode="numeric"
-                                      value={editingColetaValidade}
-                                      onChange={(event) => setEditingColetaValidade(extractValidadeDigits(event.target.value))}
-                                      placeholder="MMAA"
-                                    />
+                                    <div className="input-icon-wrap with-action controle-validade-edit-validade-wrap">
+                                      <input
+                                        type="text"
+                                        inputMode={editingColetaIsIndeterminada ? "text" : "numeric"}
+                                        value={editingColetaValidade}
+                                        onChange={(event) => setEditingColetaValidade(extractValidadeDigits(event.target.value))}
+                                        placeholder={editingColetaIsIndeterminada ? "Indeterminada" : "MMAA"}
+                                        readOnly={editingColetaIsIndeterminada}
+                                      />
+                                      <button
+                                        type="button"
+                                        className={`input-action-btn controle-validade-indeterminada-btn${editingColetaIsIndeterminada ? " is-active" : ""}`}
+                                        onClick={() => setEditingColetaValidade((current) => (isValidadeIndeterminada(current) ? "" : VALIDADE_INDETERMINADA))}
+                                        aria-label={editingColetaIsIndeterminada ? "Remover validade indeterminada" : "Informar validade indeterminada"}
+                                        title={editingColetaIsIndeterminada ? "Remover validade indeterminada" : "Validade indeterminada"}
+                                        disabled={busyEdit}
+                                      >
+                                        {infinityIcon()}
+                                      </button>
+                                    </div>
                                     <button type="button" className="btn btn-primary" onClick={() => void saveEditingColeta(lastColetaSearchResult)} disabled={busyEdit}>
                                       Salvar
                                     </button>
@@ -2248,7 +2296,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                     <div className="controle-validade-linha-details">
                                       <div className="controle-validade-linha-detail-grid">
                                         <span className="controle-validade-editable-line">
-                                          <b>Validade:</b> {row.val_mmaa}
+                                          <b>Validade:</b> {formatValidadeDisplay(row.val_mmaa)}
                                           {canEditColetaRow(row) ? (
                                             <button
                                               type="button"
@@ -2268,13 +2316,26 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                                       </div>
                                       {editingColetaId === row.id ? (
                                         <div className="controle-validade-inline-editor">
-                                          <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            value={editingColetaValidade}
-                                            onChange={(event) => setEditingColetaValidade(extractValidadeDigits(event.target.value))}
-                                            placeholder="MMAA"
-                                          />
+                                          <div className="input-icon-wrap with-action controle-validade-edit-validade-wrap">
+                                            <input
+                                              type="text"
+                                              inputMode={editingColetaIsIndeterminada ? "text" : "numeric"}
+                                              value={editingColetaValidade}
+                                              onChange={(event) => setEditingColetaValidade(extractValidadeDigits(event.target.value))}
+                                              placeholder={editingColetaIsIndeterminada ? "Indeterminada" : "MMAA"}
+                                              readOnly={editingColetaIsIndeterminada}
+                                            />
+                                            <button
+                                              type="button"
+                                              className={`input-action-btn controle-validade-indeterminada-btn${editingColetaIsIndeterminada ? " is-active" : ""}`}
+                                              onClick={() => setEditingColetaValidade((current) => (isValidadeIndeterminada(current) ? "" : VALIDADE_INDETERMINADA))}
+                                              aria-label={editingColetaIsIndeterminada ? "Remover validade indeterminada" : "Informar validade indeterminada"}
+                                              title={editingColetaIsIndeterminada ? "Remover validade indeterminada" : "Validade indeterminada"}
+                                              disabled={busyEdit}
+                                            >
+                                              {infinityIcon()}
+                                            </button>
+                                          </div>
                                           <button type="button" className="btn btn-primary" onClick={() => void saveEditingColeta(row)} disabled={busyEdit}>
                                             Salvar
                                           </button>
@@ -2338,10 +2399,18 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                               {isExpanded ? (
                                   <div className="controle-validade-linha-details">
                                     <div className="controle-validade-linha-detail-grid">
-                                      <span><b>Validade:</b> {row.val_mmaa}</span>
+                                      <span><b>Validade:</b> {formatValidadeDisplay(row.val_mmaa)}</span>
                                       <span><b>Coleta:</b> {formatDateTime(row.dt_ultima_coleta)}</span>
                                       <span><b>Usuário coleta:</b> {formatLinhaCollector(row)}</span>
-                                      <span><b>Retirado:</b> {row.qtd_retirada}</span>
+                                      {!isPending ? (
+                                        <span><b>Retirado:</b> {row.qtd_retirada}</span>
+                                      ) : null}
+                                      {!isPending ? (
+                                        <span><b>Retirada:</b> {formatDateTime(row.dt_ultima_retirada)}</span>
+                                      ) : null}
+                                      {!isPending ? (
+                                        <span><b>Usuário retirada:</b> {row.auditor_nome_ultima_retirada ?? "Aguardando sincronizacao"}</span>
+                                      ) : null}
                                       {row.editable_retirada_qtd != null ? (
                                         <span className="controle-validade-editable-line">
                                           <b>Sua retirada:</b> {row.editable_retirada_qtd}
@@ -2483,7 +2552,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                           {isExpanded ? (
                             <div className="controle-validade-linha-details">
                               <div className="controle-validade-linha-detail-grid">
-                                <span><b>Validade:</b> {row.val_mmaa}</span>
+                                <span><b>Validade:</b> {formatValidadeDisplay(row.val_mmaa)}</span>
                                 <span><b>Andar:</b> {row.andar ?? "-"}</span>
                                 <span><b>Estoque disponível:</b> {row.qtd_est_disp}</span>
                                 <span><b>Retirado:</b> {row.qtd_retirada}</span>

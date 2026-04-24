@@ -145,7 +145,7 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("PRODUTO_NAO_ENCONTRADO")) return "Produto não encontrado.";
   if (normalized.includes("TERMO_BUSCA_OBRIGATORIO")) return "Informe endereço, CODDV ou barras para buscar.";
   if (normalized.includes("ENDERECO_SEP_INVALIDO")) return "Endereço de Linha inválido para este produto.";
-  if (normalized.includes("VALIDADE_INVALIDA")) return "Validade inválida. Use MMAA.";
+  if (normalized.includes("VALIDADE_INVALIDA")) return "Validade inválida. Use MMAA ou Indeterminada.";
   if (normalized.includes("ITEM_PUL_SEM_ESTOQUE")) return "Item do Pulmão sem estoque disponível (qtd_est_disp <= 0).";
   if (normalized.includes("ITEM_NAO_ELEGIVEL_RETIRADA")) return "Item não elegível para retirada.";
   if (normalized.includes("QTD_RETIRADA_EXCEDE_PENDENTE")) return "Quantidade retirada excede o pendente.";
@@ -208,6 +208,7 @@ function mapLinhaRow(raw: Record<string, unknown>): LinhaRetiradaRow {
     auditor_mat_ultima_coleta: parseNullableString(
       raw.auditor_mat_ultima_coleta ?? raw.created_mat ?? raw.mat_ultima_coleta
     ),
+    auditor_nome_ultima_retirada: parseNullableString(raw.auditor_nome_ultima_retirada),
     editable_retirada_id: parseNullableString(raw.editable_retirada_id),
     editable_retirada_qtd: raw.editable_retirada_qtd == null ? null : parseInteger(raw.editable_retirada_qtd)
   };
@@ -344,6 +345,7 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
         dt_ultima_retirada: current?.dt_ultima_retirada ?? null,
         auditor_nome_ultima_coleta: shouldReplaceActor ? payload.auditor_nome ?? current?.auditor_nome_ultima_coleta ?? null : current?.auditor_nome_ultima_coleta ?? null,
         auditor_mat_ultima_coleta: shouldReplaceActor ? payload.auditor_mat ?? current?.auditor_mat_ultima_coleta ?? null : current?.auditor_mat_ultima_coleta ?? null,
+        auditor_nome_ultima_retirada: current?.auditor_nome_ultima_retirada ?? null,
         editable_retirada_id: current?.editable_retirada_id ?? null,
         editable_retirada_qtd: current?.editable_retirada_qtd ?? null
       });
@@ -377,6 +379,7 @@ function applyPendingEventsToLinhaRows(rows: LinhaRetiradaRow[], events: Control
       qtd_retirada: qtdRetirada,
       status: "concluido",
       dt_ultima_retirada: dtUltimaRetirada,
+      auditor_nome_ultima_retirada: current.auditor_nome_ultima_retirada,
       editable_retirada_id: current.editable_retirada_id,
       editable_retirada_qtd: current.editable_retirada_qtd
     });

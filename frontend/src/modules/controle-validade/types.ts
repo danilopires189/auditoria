@@ -37,6 +37,7 @@ export interface LinhaRetiradaRow {
   dt_ultima_retirada: string | null;
   auditor_nome_ultima_coleta: string | null;
   auditor_mat_ultima_coleta: string | null;
+  auditor_nome_ultima_retirada: string | null;
   editable_retirada_id: string | null;
   editable_retirada_qtd: number | null;
 }
