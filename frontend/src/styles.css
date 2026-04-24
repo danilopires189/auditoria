@@ -12443,6 +12443,11 @@ small {
   height: 100%;
 }
 
+.indicadores-fullscreen-body-blitz-daily .indicadores-chart-scroll {
+  align-self: end;
+  height: auto;
+}
+
 .gestao-estq-zone-products-overlay {
   padding: 18px;
   z-index: 2700;

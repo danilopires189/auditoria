@@ -805,7 +805,7 @@ export default function IndicadoresBlitzPage({ isOnline, profile }: IndicadoresB
                     {closeIcon()}
                   </button>
                 </div>
-                <div className="indicadores-fullscreen-body">
+                <div className={`indicadores-fullscreen-body${fullscreenPanel === "daily" ? " indicadores-fullscreen-body-blitz-daily" : ""}`}>
                   {fullscreenPanel === "daily" ? (
                     loadingDashboard && !summary ? (
                       <div className="indicadores-empty-box"><p>Carregando dados do mês...</p></div>
