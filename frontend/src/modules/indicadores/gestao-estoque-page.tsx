@@ -1314,6 +1314,26 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
   const canExportReport = !isMobileAccordion && Boolean(selectedMonthStart);
   const canOpenInventarioDialog = !isMobileAccordion && Boolean(selectedMonthStart) && inventarioHostAllowed && profile.role === "admin";
   const inventarioPreviewHasItems = (inventarioPreview?.itens_qtd ?? 0) > 0;
+  const hasOpenModal = reportDialogOpen || inventarioDialogOpen || fullscreenPanel !== null || selectedZone !== null;
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (!hasOpenModal) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [hasOpenModal]);
 
   const openReportDialog = useCallback(() => {
     if (!canExportReport || reportBusy) return;
