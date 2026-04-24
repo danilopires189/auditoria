@@ -4218,35 +4218,106 @@ small {
 }
 
 .termo-routes-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
 .termo-routes-search input {
-  font-size: 0.92rem;
+  font-size: 1rem;
+  min-width: 0;
 }
 
-.termo-notes-batch-actions {
+.termo-notes-search-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  color: #1f4f9d;
+  background: #e8eef8;
+  box-shadow: 0 8px 18px rgba(31, 72, 130, 0.08);
+  cursor: pointer;
+}
+
+.termo-notes-search-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.termo-notes-search-action svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
+}
+
+.termo-notes-search-action svg path {
+  fill: none;
+  stroke: currentColor;
+}
+
+.termo-notes-search-action svg rect,
+.termo-notes-search-action svg circle {
+  fill: none;
+  stroke: currentColor;
+}
+
+.termo-notes-stage-choice {
   display: flex;
-  justify-content: flex-end;
+  gap: 8px;
   margin: -2px 0 10px;
 }
 
-.termo-notes-select-all-btn {
-  min-width: 0;
-  width: auto;
-  min-height: 38px;
-  padding: 8px 12px;
+.termo-notes-stage-choice-btn {
+  flex: 1 1 0;
+  min-height: 40px;
+  padding: 8px 10px;
   border-radius: 10px;
-  gap: 6px;
 }
 
-.termo-notes-select-all-btn svg {
+.termo-notes-footer-actions {
+  gap: 10px;
+}
+
+.termo-notes-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 12px;
+  gap: 8px;
+}
+
+.termo-notes-action-btn svg {
   width: 18px;
   height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
 }
 
-.termo-notes-select-all-btn svg path {
+.termo-notes-action-btn svg path,
+.termo-notes-action-btn svg circle {
   fill: none;
+  stroke: currentColor;
+}
+
+.termo-notes-action-btn svg polygon {
+  fill: currentColor;
+  stroke: none;
 }
 
 .termo-route-group {
