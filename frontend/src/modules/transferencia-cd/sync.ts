@@ -625,6 +625,14 @@ export async function cancelTransferencia(confId: string): Promise<boolean> {
   return first?.cancelled === true;
 }
 
+export async function cancelActiveTransferencias(cd: number, origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<number> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_cancel_active", { p_cd: cd, p_origem_link: origemLink });
+  if (error) throw new Error(toTransferenciaErrorMessage(error));
+  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  return parseInteger(first?.cancelled_count);
+}
+
 export async function syncPendingTransferenciaCdConferences(userId: string, origemLink?: TransferenciaCdLinkOrigin): Promise<{
   processed: number;
   synced: number;

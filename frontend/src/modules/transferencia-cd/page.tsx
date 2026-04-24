@@ -31,6 +31,7 @@ import {
   saveTransferenciaCdPreferences
 } from "./storage";
 import {
+  cancelActiveTransferencias,
   cancelTransferencia,
   countTransferenciaConciliacaoRows,
   fetchActiveTransferenciaConference,
@@ -347,6 +348,7 @@ function listIcon() { return icon(<><path d="M8 6h13" /><path d="M8 12h13" /><pa
 function reportIcon() { return icon(<><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" /><path d="M14 3v5h5" /><path d="M9 12h6" /><path d="M9 16h6" /></>); }
 function closeIcon() { return icon(<><path d="M6 6l12 12" /><path d="M18 6L6 18" /></>); }
 function checkIcon() { return icon(<path d="M5 12.5l4.2 4.2L19 7" />); }
+function selectAllIcon() { return icon(<><path d="M4 6h6v6H4z" /><path d="M4 14h6v6H4z" /><path d="M14 8h6" /><path d="M14 16h6" /><path d="M5.5 9l1.2 1.2L9 7.8" /><path d="M5.5 17l1.2 1.2L9 15.8" /></>); }
 function chevronIcon(open: boolean) { return icon(open ? <path d="M6 14l6-6 6 6" /> : <path d="M6 10l6 6 6-6" />); }
 function searchIcon() { return icon(<><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.7-3.7" /></>); }
 function startConferenceIcon() { return icon(<path d="M8 6v12l10-6z" />); }
@@ -672,6 +674,8 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       row.nf_trf,
       row.sq_nf,
       row.dt_nf,
+      formatReportDate(row.dt_nf),
+      formatReportDate(row.dt_nf).replace(/\D/g, ""),
       row.cd_ori_nome,
       row.cd_des_nome,
       formatEtapa(row.etapa),
@@ -687,6 +691,19 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     const etapas = [...new Set(selectedBatchNotes.map((note) => note.etapa))];
     return etapas.length === 1 ? etapas[0] : null;
   }, [selectedBatchNotes]);
+  const selectableFilteredNotes = useMemo(() => {
+    const eligible = filteredModalNotes.filter((note) => {
+      const status = noteStatus(note);
+      return status !== "finalizado_ok" && status !== "finalizado_falta" && status !== "finalizado_parcial";
+    });
+    const targetEtapa = selectedBatchEtapa ?? eligible[0]?.etapa ?? null;
+    if (targetEtapa == null) return [];
+    return eligible.filter((note) => note.etapa === targetEtapa);
+  }, [filteredModalNotes, selectedBatchEtapa]);
+  const allSelectableFilteredSelected = useMemo(() => (
+    selectableFilteredNotes.length > 0
+    && selectableFilteredNotes.every((note) => selectedBatchNoteKeys.includes(buildTransferenciaCdNoteKey(note)))
+  ), [selectableFilteredNotes, selectedBatchNoteKeys]);
   const completionStats = useMemo(() => {
     const rows = overviewNotes.length ? overviewNotes : notes;
     const completed = rows.filter((row) => {
@@ -1214,6 +1231,17 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
       : [...current, key]);
   }, []);
 
+  const toggleAllFilteredBatchSelection = useCallback(() => {
+    const keys = selectableFilteredNotes.map((note) => buildTransferenciaCdNoteKey(note));
+    if (keys.length === 0) return;
+    setSelectedBatchNoteKeys((current) => {
+      const keySet = new Set(keys);
+      const allSelected = keys.every((key) => current.includes(key));
+      if (allSelected) return current.filter((key) => !keySet.has(key));
+      return [...current, ...keys.filter((key) => !current.includes(key))];
+    });
+  }, [selectableFilteredNotes]);
+
   const openSelectedNotesBatch = useCallback(async () => {
     if (currentCd == null) return;
     if (selectedBatchNotes.length === 0) {
@@ -1503,15 +1531,17 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
           setBusyCancel(true);
           try {
             if (isBatchConference(activeConference)) {
-              const confIds = [...new Set((activeConference.batch_notes ?? []).map((note) => note.conf_id).filter((value): value is string => Boolean(value)))];
-              for (const confId of confIds) {
-                await cancelTransferencia(confId);
-              }
+              if (currentCd == null) throw new Error("CD não definido.");
+              await cancelActiveTransferencias(currentCd, currentLinkOrigin);
               await discardLocalConference(activeConference);
               setStatusMessage("Lote cancelado.");
             } else if (queueModeFor(activeConference)) {
               await setAndSaveActiveConference({ ...activeConference, pending_cancel: true, pending_snapshot: false, pending_finalize: false, updated_at: new Date().toISOString() });
               setStatusMessage("Cancelamento salvo localmente. A remoção no banco ocorrerá ao reconectar.");
+            } else if (currentCd != null) {
+              await cancelActiveTransferencias(currentCd, currentLinkOrigin);
+              await discardLocalConference(activeConference);
+              setStatusMessage("Conferências abertas canceladas.");
             } else if (activeConference.remote_conf_id) {
               await cancelTransferencia(activeConference.remote_conf_id);
               await discardLocalConference(activeConference);
@@ -1533,7 +1563,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         })();
       }
     });
-  }, [activeConference, canEditActiveConference, clearActiveConferenceView, discardLocalConference, queueModeFor, setAndSaveActiveConference]);
+  }, [activeConference, canEditActiveConference, clearActiveConferenceView, currentCd, currentLinkOrigin, discardLocalConference, queueModeFor, setAndSaveActiveConference]);
 
   const handleFinalizeConference = useCallback(async () => {
     if (!activeConference || !canEditActiveConference) return;
@@ -2009,7 +2039,26 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
         ) : <div className="coleta-empty">Nenhuma NF ativa. Informe uma NF para iniciar a conferência.</div>}
       </section>
 
-      {showNotesModal && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}><div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-notas-title">Notas</h3><div className="input-icon-wrap termo-routes-search"><span className="field-icon" aria-hidden="true">{searchIcon()}</span><input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD ou status..." /></div>{selectedBatchNoteKeys.length > 0 ? <p className="termo-inline-note">Selecionadas: {selectedBatchNoteKeys.length} NF(s){selectedBatchEtapa ? ` | ${formatEtapa(selectedBatchEtapa)}` : ""}</p> : null}{filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); const statusDetail = noteStatusDetail(note); const noteKey = buildTransferenciaCdNoteKey(note); const checked = selectedBatchNoteKeys.includes(noteKey); const etapaBloqueada = selectedBatchEtapa != null && selectedBatchEtapa !== note.etapa && !checked; return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><div className="termo-route-row-button termo-route-row-button-volume"><label style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}><input type="checkbox" checked={checked} onChange={() => toggleBatchSelection(note)} disabled={busyOpen || etapaBloqueada || status === "finalizado_ok" || status === "finalizado_falta" || status === "finalizado_parcial"} /><button type="button" className="termo-route-row-button termo-route-row-button-volume" style={{ flex: 1 }} disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span>{etapaBloqueada ? <span className="termo-route-sub">Seleção bloqueada: o lote atual já está em {formatEtapa(selectedBatchEtapa)}</span> : null}{statusDetail ? <span className="termo-route-sub">{statusDetail}</span> : null}</span><span className="termo-route-actions-row"><span className="termo-route-items-count">{formatItemCount(note.total_itens)}</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></label></div></div>; })}</div>}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button><button className="btn btn-primary" type="button" onClick={() => void openSelectedNotesBatch()} disabled={busyOpen || selectedBatchNoteKeys.length === 0 || selectedBatchEtapa == null}>{busyOpen ? "Abrindo..." : "Iniciar lote"}</button></div></div></div>, document.body) : null}
+      {showNotesModal && typeof document !== "undefined" ? createPortal(
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-notas-title" onClick={() => setShowNotesModal(false)}>
+          <div className="confirm-dialog termo-routes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+            <h3 id="transferencia-notas-title">Notas</h3>
+            <div className="input-icon-wrap termo-routes-search">
+              <span className="field-icon" aria-hidden="true">{searchIcon()}</span>
+              <input type="text" value={notesSearchInput} onChange={(event) => setNotesSearchInput(event.target.value)} placeholder="Buscar NF, SQ, CD, data ou status..." />
+            </div>
+            <div className="termo-notes-batch-actions">
+              <button className="btn btn-muted termo-notes-select-all-btn" type="button" onClick={toggleAllFilteredBatchSelection} disabled={busyOpen || selectableFilteredNotes.length === 0} title={allSelectableFilteredSelected ? "Desmarcar notas filtradas" : "Marcar notas filtradas"} aria-label={allSelectableFilteredSelected ? "Desmarcar notas filtradas" : "Marcar notas filtradas"}>
+                <span aria-hidden="true">{selectAllIcon()}</span>{allSelectableFilteredSelected ? "Desmarcar tudo" : "Marcar tudo"}
+              </button>
+            </div>
+            {selectedBatchNoteKeys.length > 0 ? <p className="termo-inline-note">Selecionadas: {selectedBatchNoteKeys.length} NF(s){selectedBatchEtapa ? ` | ${formatEtapa(selectedBatchEtapa)}` : ""}</p> : null}
+            {filteredModalNotes.length === 0 ? <p>Sem notas disponíveis para este CD.</p> : <div className="termo-routes-list">{filteredModalNotes.map((note) => { const status = noteStatus(note); const statusDetail = noteStatusDetail(note); const noteKey = buildTransferenciaCdNoteKey(note); const checked = selectedBatchNoteKeys.includes(noteKey); const etapaBloqueada = selectedBatchEtapa != null && selectedBatchEtapa !== note.etapa && !checked; return <div key={`${note.dt_nf}-${note.nf_trf}-${note.sq_nf}-${note.cd_ori}-${note.cd_des}`} className="termo-route-group"><div className="termo-route-row-button termo-route-row-button-volume"><label style={{ display: "flex", alignItems: "center", gap: 12, width: "100%" }}><input type="checkbox" checked={checked} onChange={() => toggleBatchSelection(note)} disabled={busyOpen || etapaBloqueada || status === "finalizado_ok" || status === "finalizado_falta" || status === "finalizado_parcial"} /><button type="button" className="termo-route-row-button termo-route-row-button-volume" style={{ flex: 1 }} disabled={busyOpen} onClick={() => void openNote(note)}><span className="termo-route-main"><span className="termo-route-info"><span className="termo-route-title">NF {note.nf_trf} | SQ {note.sq_nf}</span><span className="termo-route-sub">Origem: {note.cd_ori_nome}</span><span className="termo-route-sub">Destino: {note.cd_des_nome}</span><span className="termo-route-sub">Data NF: {formatReportDate(note.dt_nf)}</span><span className="termo-route-sub">{formatEtapa(note.etapa)}</span>{etapaBloqueada ? <span className="termo-route-sub">Seleção bloqueada: o lote atual já está em {formatEtapa(selectedBatchEtapa)}</span> : null}{statusDetail ? <span className="termo-route-sub">{statusDetail}</span> : null}</span><span className="termo-route-actions-row"><span className="termo-route-items-count">{formatItemCount(note.total_itens)}</span><span className={`termo-divergencia ${routeStatusClass(status)}`}>{routeStatusLabel(status)}</span><span className="termo-route-open-icon" aria-hidden="true">{status == null ? startConferenceIcon() : resumeConferenceIcon()}</span></span></span></button></label></div></div>; })}</div>}
+            <div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowNotesModal(false)}>Fechar</button><button className="btn btn-primary" type="button" onClick={() => void openSelectedNotesBatch()} disabled={busyOpen || selectedBatchNoteKeys.length === 0 || selectedBatchEtapa == null}>{busyOpen ? "Abrindo..." : "Iniciar lote"}</button></div>
+          </div>
+        </div>,
+        document.body
+      ) : null}
 
       {showFinalizeModal && activeConference && typeof document !== "undefined" ? createPortal(<div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="transferencia-finalizar-title" onClick={() => setShowFinalizeModal(false)}><div className="confirm-dialog termo-finalize-dialog surface-enter" onClick={(event) => event.stopPropagation()}><h3 id="transferencia-finalizar-title">Finalizar conferência</h3><p>Resumo: Não conferido {divergenciaTotals.nao_conferido} | Falta {divergenciaTotals.falta} | Sobra {divergenciaTotals.sobra} | Correto {divergenciaTotals.correto}</p>{isBatchConference(activeConference) ? <div className="termo-item-detail"><p>Prévia por NF:</p><div className="termo-routes-list termo-finalize-list">{batchNoteSummary(activeConference).map(({ note, nextStatus }) => <p key={`fim-lote-${note.dt_nf}-${note.nf_trf}-${note.sq_nf}`}>NF {note.nf_trf}/{note.sq_nf}: {nextStatus === "pendente" ? "Pendente" : nextStatus === "finalizado_ok" ? "Concluído" : "Finalizado parcial"}</p>)}</div></div> : null}{divergenciaTotals.falta > 0 || divergenciaTotals.sobra > 0 ? <div className="termo-item-detail"><p>Itens com divergência:</p><div className="termo-routes-list termo-finalize-list">{groupedItems.falta.map(({ item, qtd_falta }) => <p key={`fim-falta-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Falta {qtd_falta}</p>)}{groupedItems.sobra.map(({ item, qtd_sobra }) => <p key={`fim-sobra-${item.coddv}`}>{item.coddv} - {item.descricao || "Item sem descrição"}: Sobra {qtd_sobra}</p>)}</div></div> : null}{finalizeError ? <div className="alert error">{finalizeError}</div> : null}<div className="confirm-actions"><button className="btn btn-muted" type="button" onClick={() => setShowFinalizeModal(false)} disabled={busyFinalize}>Cancelar</button><button className="btn btn-primary" type="button" onClick={() => void handleFinalizeConference()} disabled={busyFinalize}>{busyFinalize ? "Finalizando..." : "Confirmar finalização"}</button></div></div></div>, document.body) : null}
 
