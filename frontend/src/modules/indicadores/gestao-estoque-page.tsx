@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import pmImage from "../../../assets/pm.png";
@@ -65,12 +65,34 @@ interface MobileAccordionControl {
   onToggle: () => void;
 }
 
+interface AnimatedRevealProps {
+  revealKey: string;
+  children: ReactNode;
+  className?: string;
+  delayMs?: number;
+}
+
+interface AnimatedMetricCardProps {
+  card: MetricCardDefinition;
+  animationKey: string;
+  delayMs?: number;
+  prefersReducedMotion: boolean;
+}
+
+interface AnimatedDetailRowProps {
+  row: IndicadoresGestaoEstoqueDetailRow;
+  rowKey: string;
+  delayMs?: number;
+}
+
 const MODULE_DEF = getModuleByKeyOrThrow("indicadores");
 const ALL_DAYS_VALUE = "__ALL_DAYS__";
 const DETAIL_ROWS_LIMIT = 100;
 const INSIGHT_ROWS_LIMIT = 10;
 const REENTRY_ROWS_LIMIT = 12;
 const MOBILE_ACCORDION_MEDIA_QUERY = "(max-width: 720px)";
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const METRIC_ANIMATION_DURATION_MS = 1400;
 const INVENTARIO_SEED_ALLOWED_HOSTNAMES = new Set([
   "prevencaocd.vercel.app",
   "www.prevencaocd.vercel.app",
@@ -179,6 +201,24 @@ function formatCompactValue(value: number): string {
   }).format(Math.abs(safe));
 }
 
+function easeOutCubic(progress: number): number {
+  return 1 - Math.pow(1 - progress, 3);
+}
+
+function animatedNumberValue(target: number, easedProgress: number): number {
+  if (!Number.isFinite(target) || Math.abs(target) < 0.000001) return target;
+  return target * easedProgress;
+}
+
+function animatedIntegerValue(target: number, easedProgress: number): number {
+  if (!Number.isFinite(target) || Math.abs(target) < 1) return target;
+  return Math.trunc(animatedNumberValue(target, easedProgress));
+}
+
+function revealStyle(delayMs: number): CSSProperties {
+  return { ["--indicadores-reveal-delay" as string]: `${delayMs}ms` };
+}
+
 function buildCalendarDays(monthStart: string, monthEnd: string): string[] {
   if (!monthStart || !monthEnd) return [];
   const current = new Date(`${monthStart}T00:00:00`);
@@ -254,6 +294,185 @@ function CurrencyMetricValue({ value, signed = false }: { value: number; signed?
       <small>{`${signal}R$`}</small>
       <span>{formatNumber(Math.abs(safe))}</span>
     </strong>
+  );
+}
+
+function AnimatedReveal({ revealKey, children, className = "", delayMs = 0 }: AnimatedRevealProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    setVisible(false);
+  }, [revealKey]);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    if (visible) return;
+    if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      {
+        threshold: 0.01,
+        rootMargin: "0px 0px 18% 0px"
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [revealKey, visible]);
+
+  return (
+    <div
+      ref={ref}
+      className={`${className} indicadores-scroll-reveal${visible ? " is-visible" : ""}`.trim()}
+      style={revealStyle(delayMs)}
+    >
+      {children}
+    </div>
+  );
+}
+
+function AnimatedMetricCard({ card, animationKey, delayMs = 0, prefersReducedMotion }: AnimatedMetricCardProps) {
+  const animationFrameRef = useRef<number | null>(null);
+  const [displayedValue, setDisplayedValue] = useState(() => (prefersReducedMotion ? card.value : 0));
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (prefersReducedMotion || !Number.isFinite(card.value) || Math.abs(card.value) < 0.000001) {
+      setDisplayedValue(card.value);
+      return;
+    }
+
+    setDisplayedValue(0);
+    const startedAt = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / METRIC_ANIMATION_DURATION_MS);
+      const easedProgress = easeOutCubic(progress);
+      const nextValue =
+        card.kind === "integer"
+          ? animatedIntegerValue(card.value, easedProgress)
+          : animatedNumberValue(card.value, easedProgress);
+
+      setDisplayedValue(nextValue);
+
+      if (progress < 1) {
+        animationFrameRef.current = window.requestAnimationFrame(tick);
+        return;
+      }
+
+      animationFrameRef.current = null;
+      setDisplayedValue(card.value);
+    };
+
+    animationFrameRef.current = window.requestAnimationFrame(tick);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [animationKey, card.kind, card.value, prefersReducedMotion]);
+
+  return (
+    <AnimatedReveal revealKey={`${animationKey}:${card.label}`} delayMs={delayMs}>
+      <article
+        className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""} ${card.valueTone ? `gestao-estq-metric-tone-${card.valueTone}` : ""} ${card.natureBadge ? "gestao-estq-metric-card-has-badge" : ""}`}
+      >
+        {card.natureBadge ? (
+          <span className={`indicadores-status-badge gestao-estq-metric-badge ${natureClassName(card.natureBadge)}`}>
+            {card.natureBadge === "falta" ? "Falta" : "Sobra"}
+          </span>
+        ) : null}
+        <span>{card.label}</span>
+        {card.kind === "integer" ? <strong>{formatInteger(displayedValue)}</strong> : null}
+        {card.kind === "currency" ? <CurrencyMetricValue value={displayedValue} /> : null}
+        {card.kind === "signed-currency" ? <CurrencyMetricValue value={displayedValue} signed /> : null}
+      </article>
+    </AnimatedReveal>
+  );
+}
+
+function AnimatedDetailRow({ row, rowKey, delayMs = 0 }: AnimatedDetailRowProps) {
+  const ref = useRef<HTMLTableRowElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    setVisible(false);
+  }, [rowKey]);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    if (visible) return;
+    if (typeof window === "undefined" || typeof window.IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      {
+        threshold: 0.01,
+        rootMargin: "0px 0px 16% 0px"
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [rowKey, visible]);
+
+  return (
+    <tr
+      ref={ref}
+      className={`indicadores-table-reveal${visible ? " is-visible" : ""}`}
+      style={revealStyle(delayMs)}
+    >
+      <td>{formatDate(row.data_mov)}</td>
+      <td>
+        <div className="gestao-estq-product-cell">
+          <strong>{row.descricao}</strong>
+          <small>CODDV {formatInteger(row.coddv)}</small>
+        </div>
+      </td>
+      <td>{row.tipo_movimentacao}</td>
+      <td className="gestao-estq-capitalize">{row.movement_group}</td>
+      <td>
+        <span className={`indicadores-status-badge ${natureClassName(row.natureza)}`}>{row.natureza}</span>
+      </td>
+      <td>{formatInteger(row.quantidade)}</td>
+      <td>{formatCurrency(row.valor_total)}</td>
+      <td>{row.responsavel}</td>
+      <td>{row.cargo}</td>
+    </tr>
   );
 }
 
@@ -419,7 +638,8 @@ function TopList({
   rows,
   emptyMessage,
   className,
-  mobileAccordion
+  mobileAccordion,
+  revealBaseKey = title
 }: {
   title: string;
   subtitle: string;
@@ -427,6 +647,7 @@ function TopList({
   emptyMessage: string;
   className?: string;
   mobileAccordion?: MobileAccordionControl;
+  revealBaseKey?: string;
 }) {
   return (
     <section className={`indicadores-panel gestao-estq-panel ${className ?? ""}`}>
@@ -438,17 +659,24 @@ function TopList({
           ) : (
             <div className="gestao-estq-top-list">
               {rows.map((row, index) => (
-                <article key={`${row.movement_group}:${row.coddv}:${index}`} className="gestao-estq-top-item">
-                  <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
-                  <div className="gestao-estq-top-main">
-                    <strong>{row.descricao}</strong>
-                    <small>CODDV {formatInteger(row.coddv)} · {row.movimentacoes} mov. · {row.dias_distintos} dias</small>
-                  </div>
-                  <div className="gestao-estq-top-value">
-                    <strong>{formatCurrency(row.total_valor)}</strong>
-                    <small>{row.last_date ? formatDate(row.last_date) : "-"}</small>
-                  </div>
-                </article>
+                <AnimatedReveal
+                  key={`${row.movement_group}:${row.coddv}:${index}`}
+                  revealKey={`${revealBaseKey}:${row.movement_group}:${row.coddv}:${index}`}
+                  className="gestao-estq-list-reveal"
+                  delayMs={Math.min(index, 8) * 35}
+                >
+                  <article className="gestao-estq-top-item">
+                    <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
+                    <div className="gestao-estq-top-main">
+                      <strong>{row.descricao}</strong>
+                      <small>CODDV {formatInteger(row.coddv)} · {row.movimentacoes} mov. · {row.dias_distintos} dias</small>
+                    </div>
+                    <div className="gestao-estq-top-value">
+                      <strong>{formatCurrency(row.total_valor)}</strong>
+                      <small>{row.last_date ? formatDate(row.last_date) : "-"}</small>
+                    </div>
+                  </article>
+                </AnimatedReveal>
               ))}
             </div>
           )}
@@ -554,13 +782,15 @@ function LossDimensionList({
   subtitle,
   rows,
   emptyMessage,
-  mobileAccordion
+  mobileAccordion,
+  revealBaseKey = title
 }: {
   title: string;
   subtitle: string;
   rows: IndicadoresGestaoEstoqueLossDimensionItem[];
   emptyMessage: string;
   mobileAccordion?: MobileAccordionControl;
+  revealBaseKey?: string;
 }) {
   return (
     <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-loss">
@@ -572,17 +802,24 @@ function LossDimensionList({
           ) : (
             <div className="gestao-estq-loss-list">
               {rows.map((row, index) => (
-                <article key={`${row.dimension_key}:${index}`} className="gestao-estq-loss-item">
-                  <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
-                  <div className="gestao-estq-loss-main">
-                    <strong>{row.dimension_key}</strong>
-                    <small>{row.produtos_distintos_mes} prod. no mês · {row.produtos_distintos_ano} no ano</small>
-                  </div>
-                  <div className="gestao-estq-loss-metrics">
-                    <strong>{formatSignedCurrency(row.perda_acumulada_ano)}</strong>
-                    <small>Mês {formatSignedCurrency(row.perda_mes)}</small>
-                  </div>
-                </article>
+                <AnimatedReveal
+                  key={`${row.dimension_key}:${index}`}
+                  revealKey={`${revealBaseKey}:${row.dimension_key}:${index}`}
+                  className="gestao-estq-list-reveal"
+                  delayMs={Math.min(index, 8) * 35}
+                >
+                  <article className="gestao-estq-loss-item">
+                    <div className="gestao-estq-top-rank">{String(index + 1).padStart(2, "0")}</div>
+                    <div className="gestao-estq-loss-main">
+                      <strong>{row.dimension_key}</strong>
+                      <small>{row.produtos_distintos_mes} prod. no mês · {row.produtos_distintos_ano} no ano</small>
+                    </div>
+                    <div className="gestao-estq-loss-metrics">
+                      <strong>{formatSignedCurrency(row.perda_acumulada_ano)}</strong>
+                      <small>Mês {formatSignedCurrency(row.perda_mes)}</small>
+                    </div>
+                  </article>
+                </AnimatedReveal>
               ))}
             </div>
           )}
@@ -641,6 +878,11 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     if (typeof window === "undefined") return false;
     return window.matchMedia(MOBILE_ACCORDION_MEDIA_QUERY).matches;
   });
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(REDUCED_MOTION_QUERY).matches
+      : false
+  );
   const [expandedMobileSection, setExpandedMobileSection] = useState<MobileAccordionSection | null>(null);
   const inventarioHostAllowed = useMemo(
     () => isInventarioSeedAllowedHostname(typeof window === "undefined" ? undefined : window.location.hostname),
@@ -664,6 +906,17 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     if (typeof window === "undefined") return undefined;
     const mediaQuery = window.matchMedia(MOBILE_ACCORDION_MEDIA_QUERY);
     const sync = () => setIsMobileAccordion(mediaQuery.matches);
+    sync();
+    mediaQuery.addEventListener("change", sync);
+    return () => {
+      mediaQuery.removeEventListener("change", sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const mediaQuery = window.matchMedia(REDUCED_MOTION_QUERY);
+    const sync = () => setPrefersReducedMotion(mediaQuery.matches);
     sync();
     mediaQuery.addEventListener("change", sync);
     return () => {
@@ -1424,6 +1677,7 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
     () => monthOptions.find((option) => option.month_start === selectedMonthStart)?.month_label ?? "-",
     [monthOptions, selectedMonthStart]
   );
+  const dashboardAnimationKey = `${selectedMonthStart}:${selectedDay}:${movementFilter}:${summary?.updated_at ?? "pending"}`;
 
   useEffect(() => {
     if (!inventarioDialogOpen) return;
@@ -1515,227 +1769,262 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
 
       <section className="modules-shell indicadores-shell">
         <article className="module-screen surface-enter indicadores-screen indicadores-screen-blitz gestao-estq-screen">
-          <div className="module-screen-header">
-            <div className="module-screen-title-row">
-              <div className="module-screen-title indicadores-title-stack">
-                <img className="indicadores-screen-logo" src={pmImage} alt="PM" />
-                <div>
-                  <h2>Dashboard Gestão de Estoque</h2>
-                  <span className="module-status">
-                    {displayCdName} · mês {selectedMonthLabel} · filtro {formatMovementLabel(movementFilter)} · atualizado em {formatDateTime(summary?.updated_at ?? null)}
-                  </span>
+          <AnimatedReveal revealKey={`gestao-estq-header:${dashboardAnimationKey}`} delayMs={0}>
+            <div className="module-screen-header">
+              <div className="module-screen-title-row">
+                <div className="module-screen-title indicadores-title-stack">
+                  <img className="indicadores-screen-logo" src={pmImage} alt="PM" />
+                  <div>
+                    <h2>Dashboard Gestão de Estoque</h2>
+                    <span className="module-status">
+                      {displayCdName} · mês {selectedMonthLabel} · filtro {formatMovementLabel(movementFilter)} · atualizado em {formatDateTime(summary?.updated_at ?? null)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="indicadores-filters">
-                <label>
-                  <span>Mês/Ano</span>
-                  <select value={selectedMonthStart} onChange={(event) => setSelectedMonthStart(event.target.value)} disabled={loadingMonths || monthOptions.length === 0}>
-                    {monthOptions.length === 0 ? <option value="">Sem meses</option> : null}
-                    {monthOptions.map((option) => (
-                      <option key={option.month_start} value={option.month_start}>
-                        {option.month_label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>Data</span>
-                  <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)} disabled={!summary || dayOptions.length === 0}>
-                    {dayOptions.length === 0 ? <option value="">Sem datas</option> : null}
-                    {dayOptions.length > 0 ? <option value={ALL_DAYS_VALUE}>Todos</option> : null}
-                    {dayOptions.map((day) => (
-                      <option key={day} value={day}>
-                        {formatDate(day)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>Movimentação</span>
-                  <select value={movementFilter} onChange={(event) => setMovementFilter(event.target.value as IndicadoresGestaoEstoqueMovementFilter)}>
-                    <option value="todas">Todas</option>
-                    <option value="entrada">Entrada</option>
-                    <option value="saida">Saída</option>
-                  </select>
-                </label>
-                {!isMobileAccordion ? (
-                  <div className="indicadores-filters-actions">
-                    {canOpenInventarioDialog ? (
+                <div className="indicadores-filters">
+                  <label>
+                    <span>Mês/Ano</span>
+                    <select value={selectedMonthStart} onChange={(event) => setSelectedMonthStart(event.target.value)} disabled={loadingMonths || monthOptions.length === 0}>
+                      {monthOptions.length === 0 ? <option value="">Sem meses</option> : null}
+                      {monthOptions.map((option) => (
+                        <option key={option.month_start} value={option.month_start}>
+                          {option.month_label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Data</span>
+                    <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)} disabled={!summary || dayOptions.length === 0}>
+                      {dayOptions.length === 0 ? <option value="">Sem datas</option> : null}
+                      {dayOptions.length > 0 ? <option value={ALL_DAYS_VALUE}>Todos</option> : null}
+                      {dayOptions.map((day) => (
+                        <option key={day} value={day}>
+                          {formatDate(day)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Movimentação</span>
+                    <select value={movementFilter} onChange={(event) => setMovementFilter(event.target.value as IndicadoresGestaoEstoqueMovementFilter)}>
+                      <option value="todas">Todas</option>
+                      <option value="entrada">Entrada</option>
+                      <option value="saida">Saída</option>
+                    </select>
+                  </label>
+                  {!isMobileAccordion ? (
+                    <div className="indicadores-filters-actions">
+                      {canOpenInventarioDialog ? (
+                        <button
+                          type="button"
+                          className="btn btn-muted gestao-estq-inventario-trigger"
+                          onClick={openInventarioDialog}
+                          disabled={inventarioBusy}
+                          title="Enviar produtos de saída para auditoria no Inventário (zerados)"
+                        >
+                          <span className="gestao-estq-action-icon" aria-hidden="true">
+                            {inventorySendIcon()}
+                          </span>
+                          <span>{inventarioBusy ? "Processando..." : "Enviar para Inventário"}</span>
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className="btn btn-muted gestao-estq-inventario-trigger"
-                        onClick={openInventarioDialog}
-                        disabled={inventarioBusy}
-                        title="Enviar produtos de saída para auditoria no Inventário (zerados)"
+                        className="btn btn-primary gestao-estq-report-export-trigger"
+                        onClick={openReportDialog}
+                        disabled={!canExportReport || reportBusy}
                       >
-                        <span className="gestao-estq-action-icon" aria-hidden="true">
-                          {inventorySendIcon()}
-                        </span>
-                        <span>{inventarioBusy ? "Processando..." : "Enviar para Inventário"}</span>
+                        {reportBusy ? "Gerando Excel..." : "Exportar Excel"}
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn btn-primary gestao-estq-report-export-trigger"
-                      onClick={openReportDialog}
-                      disabled={!canExportReport || reportBusy}
-                    >
-                      {reportBusy ? "Gerando Excel..." : "Exportar Excel"}
-                    </button>
-                  </div>
-                ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
+          </AnimatedReveal>
 
-          {dashboardErrorMessage ? <div className="indicadores-feedback is-error">{dashboardErrorMessage}</div> : null}
-          {inventarioStatusMessage ? <div className="module-inline-message">{inventarioStatusMessage}</div> : null}
-          {inventarioApplySummary && inventarioApplyActorLabel ? (
-            <div className="module-inline-message">{`Base atualizada por ${inventarioApplyActorLabel}`}</div>
+          {dashboardErrorMessage ? (
+            <AnimatedReveal revealKey={`gestao-estq-dashboard-error:${dashboardErrorMessage}`} delayMs={40}>
+              <div className="indicadores-feedback is-error">{dashboardErrorMessage}</div>
+            </AnimatedReveal>
           ) : null}
-          {reportStatusMessage ? <div className="module-inline-message">{reportStatusMessage}</div> : null}
+          {inventarioStatusMessage ? (
+            <AnimatedReveal revealKey={`gestao-estq-inventario-status:${inventarioStatusMessage}`} delayMs={40}>
+              <div className="module-inline-message">{inventarioStatusMessage}</div>
+            </AnimatedReveal>
+          ) : null}
+          {inventarioApplySummary && inventarioApplyActorLabel ? (
+            <AnimatedReveal revealKey={`gestao-estq-inventario-actor:${inventarioApplyActorLabel}`} delayMs={40}>
+              <div className="module-inline-message">{`Base atualizada por ${inventarioApplyActorLabel}`}</div>
+            </AnimatedReveal>
+          ) : null}
+          {reportStatusMessage ? (
+            <AnimatedReveal revealKey={`gestao-estq-report-status:${reportStatusMessage}`} delayMs={40}>
+              <div className="module-inline-message">{reportStatusMessage}</div>
+            </AnimatedReveal>
+          ) : null}
 
           <div className="indicadores-metrics-grid gestao-estq-metrics-grid">
-            {metricCards.map((card) => (
-              <article
+            {metricCards.map((card, index) => (
+              <AnimatedMetricCard
                 key={card.label}
-                className={`indicadores-metric-card ${card.accent ? `accent-${card.accent}` : ""} ${card.valueTone ? `gestao-estq-metric-tone-${card.valueTone}` : ""} ${card.natureBadge ? "gestao-estq-metric-card-has-badge" : ""}`}
-              >
-                {card.natureBadge ? (
-                  <span className={`indicadores-status-badge gestao-estq-metric-badge ${natureClassName(card.natureBadge)}`}>
-                    {card.natureBadge === "falta" ? "Falta" : "Sobra"}
-                  </span>
-                ) : null}
-                <span>{card.label}</span>
-                {card.kind === "integer" ? <strong>{formatInteger(card.value)}</strong> : null}
-                {card.kind === "currency" ? <CurrencyMetricValue value={card.value} /> : null}
-                {card.kind === "signed-currency" ? <CurrencyMetricValue value={card.value} signed /> : null}
-              </article>
+                card={card}
+                animationKey={dashboardAnimationKey}
+                delayMs={80 + index * 45}
+                prefersReducedMotion={prefersReducedMotion}
+              />
             ))}
           </div>
 
           <div className="gestao-estq-layout-grid">
-            <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-chart">
-              <div className="indicadores-panel-head">
-                <h3>Ritmo diário</h3>
-                <span>{loadingDashboard ? "Atualizando..." : "Entradas, saídas e perda por dia do mês"}</span>
-              </div>
-              {loadingDashboard && !summary ? (
-                <div className="indicadores-empty-box"><p>Carregando série diária...</p></div>
-              ) : (
-                <DailyChart rows={dailySeries} />
-              )}
-            </section>
-
-            <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-zone-values">
-              <PanelHead
-                title="Valor de movimentação por zona"
-                subtitle={
-                  loadingZoneValues
-                    ? "Atualizando zonas..."
-                    : selectedDay === ALL_DAYS_VALUE
-                      ? "Acumulado do mês no filtro ativo."
-                      : `Data ${formatDate(selectedDay)}`
-                }
-                mobileAccordion={mobileAccordionControl("zoneValues", "gestao-estq-zone-values-body")}
-              />
-              {!isMobileAccordion || expandedMobileSection === "zoneValues" ? (
-                <div id="gestao-estq-zone-values-body">
-                  {zoneValuesErrorMessage ? (
-                    <div className="indicadores-empty-box"><p>{zoneValuesErrorMessage}</p></div>
-                  ) : loadingZoneValues ? (
-                    <div className="indicadores-empty-box"><p>Carregando movimentações por zona...</p></div>
-                  ) : (
-                    <ZoneValueChart rows={zoneValueRows} movementFilter={movementFilter} />
-                  )}
+            <AnimatedReveal revealKey={`gestao-estq-chart:${dashboardAnimationKey}`} className="gestao-estq-panel-reveal gestao-estq-panel-chart" delayMs={140}>
+              <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-chart">
+                <div className="indicadores-panel-head">
+                  <h3>Ritmo diário</h3>
+                  <span>{loadingDashboard ? "Atualizando..." : "Entradas, saídas e perda por dia do mês"}</span>
                 </div>
-              ) : null}
-            </section>
+                {loadingDashboard && !summary ? (
+                  <div className="indicadores-empty-box"><p>Carregando série diária...</p></div>
+                ) : (
+                  <DailyChart rows={dailySeries} />
+                )}
+              </section>
+            </AnimatedReveal>
 
-            <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-reentry">
-              <PanelHead
-                title="Saída seguida de entrada"
-                subtitle="Acumulado do ano."
-                mobileAccordion={mobileAccordionControl("reentry", "gestao-estq-reentry-body")}
+            <AnimatedReveal revealKey={`gestao-estq-zones:${dashboardAnimationKey}`} className="gestao-estq-panel-reveal gestao-estq-panel-zone-values" delayMs={200}>
+              <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-zone-values">
+                <PanelHead
+                  title="Valor de movimentação por zona"
+                  subtitle={
+                    loadingZoneValues
+                      ? "Atualizando zonas..."
+                      : selectedDay === ALL_DAYS_VALUE
+                        ? "Acumulado do mês no filtro ativo."
+                        : `Data ${formatDate(selectedDay)}`
+                  }
+                  mobileAccordion={mobileAccordionControl("zoneValues", "gestao-estq-zone-values-body")}
+                />
+                {!isMobileAccordion || expandedMobileSection === "zoneValues" ? (
+                  <div id="gestao-estq-zone-values-body">
+                    {zoneValuesErrorMessage ? (
+                      <div className="indicadores-empty-box"><p>{zoneValuesErrorMessage}</p></div>
+                    ) : loadingZoneValues ? (
+                      <div className="indicadores-empty-box"><p>Carregando movimentações por zona...</p></div>
+                    ) : (
+                      <ZoneValueChart rows={zoneValueRows} movementFilter={movementFilter} />
+                    )}
+                  </div>
+                ) : null}
+              </section>
+            </AnimatedReveal>
+
+            <AnimatedReveal revealKey={`gestao-estq-reentry:${dashboardAnimationKey}:${expandedMobileSection ?? "closed"}`} className="gestao-estq-panel-reveal gestao-estq-panel-reentry" delayMs={260}>
+              <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-reentry">
+                <PanelHead
+                  title="Saída seguida de entrada"
+                  subtitle="Acumulado do ano."
+                  mobileAccordion={mobileAccordionControl("reentry", "gestao-estq-reentry-body")}
+                />
+                {!isMobileAccordion || expandedMobileSection === "reentry" ? (
+                  <div id="gestao-estq-reentry-body">
+                    {loadingInsights && reentryRows.length === 0 ? (
+                      <div className="indicadores-empty-box"><p>Carregando insights do ano...</p></div>
+                    ) : reentryRows.length === 0 ? (
+                      <div className="indicadores-empty-box"><p>Nenhum produto com saída seguida de entrada encontrado no ano.</p></div>
+                    ) : (
+                      <div className="gestao-estq-reentry-list">
+                        {reentryRows.map((row, index) => (
+                          <AnimatedReveal
+                            key={`${row.coddv}:${index}`}
+                            revealKey={`gestao-estq-reentry-row:${dashboardAnimationKey}:${row.coddv}:${index}`}
+                            className="gestao-estq-list-reveal"
+                            delayMs={Math.min(index, 8) * 35}
+                          >
+                            <article className="gestao-estq-reentry-item">
+                              <div className="gestao-estq-reentry-main">
+                                <strong className="gestao-estq-reentry-title">
+                                  <span className="gestao-estq-reentry-coddv">CODDV {formatPlainInteger(row.coddv)}</span>
+                                  <span className="gestao-estq-reentry-description">{row.descricao}</span>
+                                </strong>
+                              </div>
+                              <div className="gestao-estq-reentry-stats">
+                                <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-saida">
+                                  <span className="gestao-estq-reentry-stat-label">Saída</span>
+                                  <strong>{formatCurrency(row.total_saida_ano)}</strong>
+                                  <small>Data {formatDate(row.first_saida_date)}</small>
+                                </section>
+                                <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-entrada">
+                                  <span className="gestao-estq-reentry-stat-label">Entrada</span>
+                                  <strong>{formatCurrency(row.total_entrada_ano)}</strong>
+                                  <small>Data {formatDate(row.first_entrada_after_saida_date)}</small>
+                                </section>
+                                <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-diff">
+                                  <span className="gestao-estq-reentry-stat-label">Diferença</span>
+                                  <strong className={row.saldo_ano >= 0 ? "gestao-estq-value-positive" : "gestao-estq-value-negative"}>
+                                    {formatSignedCurrency(row.saldo_ano)}
+                                  </strong>
+                                  <small>Entrada - saída</small>
+                                </section>
+                              </div>
+                            </article>
+                          </AnimatedReveal>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </section>
+            </AnimatedReveal>
+
+            <AnimatedReveal revealKey={`gestao-estq-top-entradas:${dashboardAnimationKey}:${expandedMobileSection ?? "closed"}`} className="gestao-estq-panel-reveal gestao-estq-panel-top" delayMs={300}>
+              <TopList
+                title="Top 30 Entradas"
+                subtitle={loadingTopLists ? "Atualizando ranking..." : selectedDay === ALL_DAYS_VALUE ? "Acumulado do mês no filtro ativo." : `Data ${formatDate(selectedDay)}`}
+                rows={topEntradas}
+                emptyMessage="Nenhuma entrada encontrada para o filtro selecionado."
+                className="gestao-estq-panel-top"
+                mobileAccordion={mobileAccordionControl("topEntradas", "gestao-estq-top-entradas-body")}
+                revealBaseKey={`gestao-estq-top-entradas:${dashboardAnimationKey}`}
               />
-              {!isMobileAccordion || expandedMobileSection === "reentry" ? (
-                <div id="gestao-estq-reentry-body">
-                  {loadingInsights && reentryRows.length === 0 ? (
-                    <div className="indicadores-empty-box"><p>Carregando insights do ano...</p></div>
-                  ) : reentryRows.length === 0 ? (
-                    <div className="indicadores-empty-box"><p>Nenhum produto com saída seguida de entrada encontrado no ano.</p></div>
-                  ) : (
-                    <div className="gestao-estq-reentry-list">
-                      {reentryRows.map((row, index) => (
-                        <article key={`${row.coddv}:${index}`} className="gestao-estq-reentry-item">
-                          <div className="gestao-estq-reentry-main">
-                            <strong className="gestao-estq-reentry-title">
-                              <span className="gestao-estq-reentry-coddv">CODDV {formatPlainInteger(row.coddv)}</span>
-                              <span className="gestao-estq-reentry-description">{row.descricao}</span>
-                            </strong>
-                          </div>
-                          <div className="gestao-estq-reentry-stats">
-                            <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-saida">
-                              <span className="gestao-estq-reentry-stat-label">Saída</span>
-                              <strong>{formatCurrency(row.total_saida_ano)}</strong>
-                              <small>Data {formatDate(row.first_saida_date)}</small>
-                            </section>
-                            <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-entrada">
-                              <span className="gestao-estq-reentry-stat-label">Entrada</span>
-                              <strong>{formatCurrency(row.total_entrada_ano)}</strong>
-                              <small>Data {formatDate(row.first_entrada_after_saida_date)}</small>
-                            </section>
-                            <section className="gestao-estq-reentry-stat gestao-estq-reentry-stat-diff">
-                              <span className="gestao-estq-reentry-stat-label">Diferença</span>
-                              <strong className={row.saldo_ano >= 0 ? "gestao-estq-value-positive" : "gestao-estq-value-negative"}>
-                                {formatSignedCurrency(row.saldo_ano)}
-                              </strong>
-                              <small>Entrada - saída</small>
-                            </section>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </section>
+            </AnimatedReveal>
 
-            <TopList
-              title="Top 30 Entradas"
-              subtitle={loadingTopLists ? "Atualizando ranking..." : selectedDay === ALL_DAYS_VALUE ? "Acumulado do mês no filtro ativo." : `Data ${formatDate(selectedDay)}`}
-              rows={topEntradas}
-              emptyMessage="Nenhuma entrada encontrada para o filtro selecionado."
-              className="gestao-estq-panel-top"
-              mobileAccordion={mobileAccordionControl("topEntradas", "gestao-estq-top-entradas-body")}
-            />
+            <AnimatedReveal revealKey={`gestao-estq-top-saidas:${dashboardAnimationKey}:${expandedMobileSection ?? "closed"}`} className="gestao-estq-panel-reveal gestao-estq-panel-top" delayMs={340}>
+              <TopList
+                title="Top 30 Saídas"
+                subtitle={loadingTopLists ? "Atualizando ranking..." : selectedDay === ALL_DAYS_VALUE ? "Acumulado do mês no filtro ativo." : `Data ${formatDate(selectedDay)}`}
+                rows={topSaidas}
+                emptyMessage="Nenhuma saída encontrada para o filtro selecionado."
+                className="gestao-estq-panel-top"
+                mobileAccordion={mobileAccordionControl("topSaidas", "gestao-estq-top-saidas-body")}
+                revealBaseKey={`gestao-estq-top-saidas:${dashboardAnimationKey}`}
+              />
+            </AnimatedReveal>
 
-            <TopList
-              title="Top 30 Saídas"
-              subtitle={loadingTopLists ? "Atualizando ranking..." : selectedDay === ALL_DAYS_VALUE ? "Acumulado do mês no filtro ativo." : `Data ${formatDate(selectedDay)}`}
-              rows={topSaidas}
-              emptyMessage="Nenhuma saída encontrada para o filtro selecionado."
-              className="gestao-estq-panel-top"
-              mobileAccordion={mobileAccordionControl("topSaidas", "gestao-estq-top-saidas-body")}
-            />
+            <AnimatedReveal revealKey={`gestao-estq-loss-supplier:${dashboardAnimationKey}:${expandedMobileSection ?? "closed"}`} className="gestao-estq-panel-reveal gestao-estq-panel-loss" delayMs={380}>
+              <LossDimensionList
+                title="Maiores perdas por fornecedor"
+                subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
+                rows={supplierLossRows}
+                emptyMessage="Nenhuma perda positiva por fornecedor encontrada no filtro selecionado."
+                mobileAccordion={mobileAccordionControl("supplierLoss", "gestao-estq-supplier-loss-body")}
+                revealBaseKey={`gestao-estq-loss-supplier:${dashboardAnimationKey}`}
+              />
+            </AnimatedReveal>
 
-            <LossDimensionList
-              title="Maiores perdas por fornecedor"
-              subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
-              rows={supplierLossRows}
-              emptyMessage="Nenhuma perda positiva por fornecedor encontrada no filtro selecionado."
-              mobileAccordion={mobileAccordionControl("supplierLoss", "gestao-estq-supplier-loss-body")}
-            />
+            <AnimatedReveal revealKey={`gestao-estq-loss-category:${dashboardAnimationKey}:${expandedMobileSection ?? "closed"}`} className="gestao-estq-panel-reveal gestao-estq-panel-loss" delayMs={420}>
+              <LossDimensionList
+                title="Maiores perdas por categoria N2"
+                subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
+                rows={categoryLossRows}
+                emptyMessage="Nenhuma perda positiva por categoria encontrada no filtro selecionado."
+                mobileAccordion={mobileAccordionControl("categoryLoss", "gestao-estq-category-loss-body")}
+                revealBaseKey={`gestao-estq-loss-category:${dashboardAnimationKey}`}
+              />
+            </AnimatedReveal>
 
-            <LossDimensionList
-              title="Maiores perdas por categoria N2"
-              subtitle={loadingInsights ? "Atualizando perdas..." : "Perda do mês e acumulado do ano."}
-              rows={categoryLossRows}
-              emptyMessage="Nenhuma perda positiva por categoria encontrada no filtro selecionado."
-              mobileAccordion={mobileAccordionControl("categoryLoss", "gestao-estq-category-loss-body")}
-            />
-
-            <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-details">
+            <AnimatedReveal revealKey={`gestao-estq-details:${dashboardAnimationKey}:${expandedMobileSection ?? "closed"}`} className="gestao-estq-panel-reveal gestao-estq-panel-details" delayMs={460}>
+              <section className="indicadores-panel gestao-estq-panel gestao-estq-panel-details">
               <PanelHead
                 title={selectedDay === ALL_DAYS_VALUE ? "Movimentações do mês" : "Movimentações do dia"}
                 subtitle={
@@ -1769,24 +2058,12 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                         </thead>
                         <tbody>
                           {detailRows.map((row, index) => (
-                            <tr key={`${row.data_mov}:${row.coddv}:${row.tipo_movimentacao}:${index}`}>
-                              <td>{formatDate(row.data_mov)}</td>
-                              <td>
-                                <div className="gestao-estq-product-cell">
-                                  <strong>{row.descricao}</strong>
-                                  <small>CODDV {formatInteger(row.coddv)}</small>
-                                </div>
-                              </td>
-                              <td>{row.tipo_movimentacao}</td>
-                              <td className="gestao-estq-capitalize">{row.movement_group}</td>
-                              <td>
-                                <span className={`indicadores-status-badge ${natureClassName(row.natureza)}`}>{row.natureza}</span>
-                              </td>
-                              <td>{formatInteger(row.quantidade)}</td>
-                              <td>{formatCurrency(row.valor_total)}</td>
-                              <td>{row.responsavel}</td>
-                              <td>{row.cargo}</td>
-                            </tr>
+                            <AnimatedDetailRow
+                              key={`${row.data_mov}:${row.coddv}:${row.tipo_movimentacao}:${index}`}
+                              row={row}
+                              rowKey={`${dashboardAnimationKey}:${row.data_mov}:${row.coddv}:${row.tipo_movimentacao}:${index}`}
+                              delayMs={Math.min(index, 6) * 20}
+                            />
                           ))}
                         </tbody>
                       </table>
@@ -1794,7 +2071,8 @@ export default function IndicadoresGestaoEstoquePage({ isOnline, profile }: Indi
                   )}
                 </div>
               ) : null}
-            </section>
+              </section>
+            </AnimatedReveal>
           </div>
         </article>
       </section>

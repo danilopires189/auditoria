@@ -12092,6 +12092,13 @@ small {
   gap: 10px;
   min-height: 118px;
   box-shadow: 0 16px 30px rgba(27, 67, 129, 0.08);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.indicadores-metric-card:hover {
+  transform: translateY(-2px);
+  border-color: #b9ccec;
+  box-shadow: 0 20px 36px rgba(27, 67, 129, 0.12);
 }
 
 @media (max-width: 560px) {
@@ -12246,6 +12253,12 @@ small {
   gap: 14px;
   min-height: 0;
   box-shadow: 0 18px 38px rgba(17, 61, 125, 0.08);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.indicadores-panel:hover {
+  border-color: #c3d3eb;
+  box-shadow: 0 20px 42px rgba(17, 61, 125, 0.1);
 }
 
 .indicadores-panel-wide {
@@ -12577,13 +12590,37 @@ small {
 }
 
 .indicadores-scroll-reveal {
+  --indicadores-reveal-delay: 0ms;
   opacity: 0;
   transform: translateY(18px) scale(0.985);
   will-change: opacity, transform;
 }
 
 .indicadores-scroll-reveal.is-visible {
-  animation: pvps-card-appear 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: indicadores-reveal-up 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--indicadores-reveal-delay);
+}
+
+.indicadores-table-reveal.is-visible {
+  animation: indicadores-reveal-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--indicadores-reveal-delay);
+}
+
+.indicadores-table-reveal:not(.is-visible) {
+  opacity: 0;
+  transform: translateY(14px) scale(0.99);
+}
+
+@keyframes indicadores-reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .indicadores-zone-divider-row {
@@ -12953,16 +12990,34 @@ small {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .indicadores-scroll-reveal {
+  .indicadores-scroll-reveal,
+  .indicadores-table-reveal {
     opacity: 1;
     transform: none;
     will-change: auto;
   }
 
-  .indicadores-scroll-reveal.is-visible {
-      animation: none;
-    }
+  .indicadores-scroll-reveal.is-visible,
+  .indicadores-table-reveal.is-visible {
+    animation: none;
   }
+
+  .indicadores-metric-card,
+  .indicadores-panel,
+  .gestao-estq-top-item,
+  .gestao-estq-reentry-item,
+  .gestao-estq-loss-item {
+    transition: none;
+  }
+
+  .indicadores-metric-card:hover,
+  .indicadores-panel:hover,
+  .gestao-estq-top-item:hover,
+  .gestao-estq-reentry-item:hover,
+  .gestao-estq-loss-item:hover {
+    transform: none;
+  }
+}
 
   .gestao-estq-screen {
     gap: 16px;
@@ -13190,6 +13245,28 @@ small {
   border-radius: 16px;
   padding: 12px 14px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.96));
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.gestao-estq-top-item:hover,
+.gestao-estq-reentry-item:hover,
+.gestao-estq-loss-item:hover {
+  transform: translateY(-1px);
+  border-color: #c2d4ef;
+  box-shadow: 0 12px 24px rgba(25, 71, 135, 0.08);
+}
+
+.gestao-estq-panel-reveal,
+.gestao-estq-list-reveal {
+  min-width: 0;
+}
+
+.gestao-estq-panel-reveal {
+  height: 100%;
+}
+
+.gestao-estq-panel-reveal > .gestao-estq-panel {
+  height: 100%;
 }
 
 .gestao-estq-reentry-item {
