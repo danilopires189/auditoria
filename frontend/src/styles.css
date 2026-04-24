@@ -2201,6 +2201,26 @@ small {
   font-weight: 700;
 }
 
+.controle-validade-report-panel {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.controle-validade-report-panel .coleta-report-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.controle-validade-report-panel label {
+  min-width: 0;
+}
+
+.controle-validade-report-panel input,
+.controle-validade-report-panel select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .coleta-submit {
   width: 100%;
 }

@@ -27,8 +27,11 @@ import {
   enqueueLinhaRetirada,
   enqueuePulRetirada,
   fetchLinhaColetaHistoryList,
+  fetchLinhaColetaReportRows,
   fetchLinhaRetiradaList,
+  fetchLinhaRetiradaReportRows,
   fetchPulRetiradaList,
+  fetchPulRetiradaReportRows,
   flushControleValidadeOfflineQueue,
   getOfflineQueueStats,
   loadProjectedOfflineRows,
@@ -58,6 +61,9 @@ interface ControleValidadePageProps {
 
 type MainTab = "linha" | "pulmao";
 type LinhaSubTab = "coleta" | "retirada";
+type ReportArea = "separacao" | "pulmao";
+type ReportTipo = "coleta" | "retirada" | "ambos";
+type ReportStatusFilter = "pendente" | "concluido" | "ambos";
 
 const MODULE_DEF = getModuleByKeyOrThrow("controle-validade");
 const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
@@ -159,6 +165,22 @@ function formatValidadeDisplay(value: string | null | undefined): string {
 
 function formatDateTime(value: string | null): string {
   return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "value" });
+}
+
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function firstDayOfCurrentMonthValue(): string {
+  const now = new Date();
+  return toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1));
+}
+
+function todayDateInputValue(): string {
+  return toDateInputValue(new Date());
 }
 
 const MONTH_LABELS_PT_BR = [
@@ -442,6 +464,17 @@ function infinityIcon() {
   );
 }
 
+function fileExcelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13l4 4" />
+      <path d="M12 13l-4 4" />
+    </svg>
+  );
+}
+
 export default function ControleValidadePage({ isOnline, profile }: ControleValidadePageProps) {
   const defaultMonthFilter = useMemo(() => currentValidadeMonthValue(), []);
   const barcodeRef = useRef<HTMLInputElement | null>(null);
@@ -485,6 +518,20 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [busyOfflineBase, setBusyOfflineBase] = useState(false);
   const [busyFlush, setBusyFlush] = useState(false);
   const [busyLoadRows, setBusyLoadRows] = useState(false);
+  const [isDesktopReport, setIsDesktopReport] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 980px)").matches;
+  });
+  const [showReportPanel, setShowReportPanel] = useState(false);
+  const [reportArea, setReportArea] = useState<ReportArea>("separacao");
+  const [reportTipo, setReportTipo] = useState<ReportTipo>("ambos");
+  const [reportLinhaStatus, setReportLinhaStatus] = useState<ReportStatusFilter>("ambos");
+  const [reportPulStatus, setReportPulStatus] = useState<ReportStatusFilter>("ambos");
+  const [reportDtIni, setReportDtIni] = useState(() => firstDayOfCurrentMonthValue());
+  const [reportDtFim, setReportDtFim] = useState(() => todayDateInputValue());
+  const [busyReportExport, setBusyReportExport] = useState(false);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -1301,6 +1348,117 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     }
   }, [activeCd, defaultMonthFilter, isOnline, loadRows, persistSnapshotDraft, profile.user_id, pulQtyInputs, pulRows, refreshQueueStats]);
 
+  const runReportExport = useCallback(async () => {
+    if (activeCd == null) {
+      setReportError("CD não identificado para gerar relatório.");
+      return;
+    }
+    if (!reportDtIni || !reportDtFim) {
+      setReportError("Informe data inicial e final.");
+      return;
+    }
+    if (reportDtIni > reportDtFim) {
+      setReportError("Data inicial não pode ser maior que data final.");
+      return;
+    }
+
+    setBusyReportExport(true);
+    setReportError(null);
+    setReportMessage(null);
+    try {
+      const includeSeparacao = reportArea === "separacao";
+      const includePulmao = reportArea === "pulmao";
+      const includeColeta = includeSeparacao && (reportTipo === "coleta" || reportTipo === "ambos");
+      const includeLinhaRetirada = includeSeparacao && (reportTipo === "retirada" || reportTipo === "ambos");
+      const [coletaRows, linhaRetiradaRows, pulRetiradaRows] = await Promise.all([
+        includeColeta
+          ? fetchLinhaColetaReportRows({ cd: activeCd, dtIni: reportDtIni, dtFim: reportDtFim })
+          : Promise.resolve([] as LinhaColetaHistoryRow[]),
+        includeLinhaRetirada
+          ? fetchLinhaRetiradaReportRows({ cd: activeCd, status: reportLinhaStatus, dtIni: reportDtIni, dtFim: reportDtFim })
+          : Promise.resolve([] as LinhaRetiradaRow[]),
+        includePulmao
+          ? fetchPulRetiradaReportRows({ cd: activeCd, status: reportPulStatus, dtIni: reportDtIni, dtFim: reportDtFim })
+          : Promise.resolve([] as PulRetiradaRow[])
+      ]);
+      const totalRows = coletaRows.length + linhaRetiradaRows.length + pulRetiradaRows.length;
+      if (totalRows <= 0) {
+        setReportMessage("Nenhum registro encontrado no período.");
+        return;
+      }
+
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+      if (includeColeta) {
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(coletaRows.map((row) => ({
+          "Data/hora coleta": formatDateTime(row.data_coleta),
+          CD: row.cd,
+          Zona: row.zona,
+          "Endereço separação": row.endereco_sep,
+          CODDV: row.coddv,
+          Descrição: row.descricao,
+          Barras: row.barras,
+          Validade: formatValidadeDisplay(row.val_mmaa),
+          "Matrícula coleta": row.auditor_mat ?? "",
+          "Usuário coleta": row.auditor_nome ?? ""
+        }))), "Coletas");
+      }
+      if (includeLinhaRetirada) {
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(linhaRetiradaRows.map((row) => ({
+          Status: row.status === "concluido" ? "Concluído" : "Pendente",
+          "Endereço separação": row.endereco_sep,
+          Validade: formatValidadeDisplay(row.val_mmaa),
+          "Referência coleta": row.ref_coleta_mes,
+          CODDV: row.coddv,
+          Descrição: row.descricao,
+          "Data/hora coleta": formatDateTime(row.dt_ultima_coleta),
+          "Matrícula coleta": row.auditor_mat_ultima_coleta ?? "",
+          "Usuário coleta": row.auditor_nome_ultima_coleta ?? "",
+          "Qtd coletada": row.qtd_coletada,
+          "Qtd retirada": row.qtd_retirada,
+          "Data/hora retirada": formatDateTime(row.dt_ultima_retirada),
+          "Usuário retirada": row.auditor_nome_ultima_retirada ?? ""
+        }))), "Retirada Separacao");
+      }
+      if (includePulmao) {
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pulRetiradaRows.map((row) => ({
+          Status: row.status === "concluido" ? "Concluído" : "Pendente",
+          Zona: row.zona,
+          "Endereço pulmão": row.endereco_pul,
+          Andar: row.andar ?? "",
+          Validade: formatValidadeDisplay(row.val_mmaa),
+          CODDV: row.coddv,
+          Descrição: row.descricao,
+          "Estoque disponível": row.qtd_est_disp,
+          "Qtd retirada": row.qtd_retirada,
+          "Data/hora retirada": formatDateTime(row.dt_ultima_retirada),
+          "Usuário retirada": row.auditor_nome_ultima_retirada ?? ""
+        }))), "Retirada Pulmao");
+      }
+
+      const fileCd = String(activeCd).padStart(2, "0");
+      XLSX.writeFile(workbook, `controle-validade-${reportArea}-cd${fileCd}-${reportDtIni}-${reportDtFim}.xlsx`);
+      setReportMessage(`${totalRows} registros exportados.`);
+    } catch (error) {
+      setReportError(normalizeControleValidadeError(error));
+    } finally {
+      setBusyReportExport(false);
+    }
+  }, [activeCd, reportArea, reportDtFim, reportDtIni, reportLinhaStatus, reportPulStatus, reportTipo]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(min-width: 980px)");
+    const update = () => {
+      const next = media.matches;
+      setIsDesktopReport(next);
+      if (!next) setShowReportPanel(false);
+    };
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
   useEffect(() => {
     if (activeCd == null) return;
     const bootstrap = async () => {
@@ -1896,6 +2054,16 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 </div>
               </div>
               <div className="controle-validade-head-actions">
+                {isDesktopReport ? (
+                  <button
+                    type="button"
+                    className={`btn btn-muted coleta-export-btn${showReportPanel ? " is-active" : ""}`}
+                    onClick={() => setShowReportPanel((current) => !current)}
+                  >
+                    {fileExcelIcon()}
+                    Relatório Excel
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={`btn btn-muted${preferOfflineMode ? " is-active" : ""}`}
@@ -1920,8 +2088,107 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
             {progressMessage ? <div className="alert success">{progressMessage}</div> : null}
+            {reportError ? <div className="alert error">{reportError}</div> : null}
+            {reportMessage ? <div className="alert success">{reportMessage}</div> : null}
             {preferOfflineMode && !offlineSnapshotReady ? (
               <div className="alert error">Modo offline ativo sem snapshot de retirada. Use "Trabalhar offline".</div>
+            ) : null}
+
+            {isDesktopReport && showReportPanel ? (
+              <section className="coleta-report-panel controle-validade-report-panel" aria-label="Relatório Excel controle de validade">
+                <div className="coleta-report-head">
+                  <h3>Relatório Excel</h3>
+                  <p>Período padrão: início do mês até hoje.</p>
+                </div>
+                <div className="coleta-report-grid">
+                  <label>
+                    Relatório
+                    <select
+                      value={reportArea}
+                      onChange={(event) => {
+                        const nextArea = event.target.value as ReportArea;
+                        setReportArea(nextArea);
+                        if (nextArea === "pulmao") setReportTipo("retirada");
+                      }}
+                    >
+                      <option value="separacao">Separação</option>
+                      <option value="pulmao">Pulmão</option>
+                    </select>
+                  </label>
+                  <label>
+                    Data inicial
+                    <input
+                      type="date"
+                      value={reportDtIni}
+                      onChange={(event) => setReportDtIni(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Data final
+                    <input
+                      type="date"
+                      value={reportDtFim}
+                      onChange={(event) => setReportDtFim(event.target.value)}
+                    />
+                  </label>
+                  {reportArea === "separacao" ? (
+                    <>
+                      <label>
+                        Tipo
+                        <select value={reportTipo} onChange={(event) => setReportTipo(event.target.value as ReportTipo)}>
+                          <option value="ambos">Coleta e retirada</option>
+                          <option value="coleta">Coleta</option>
+                          <option value="retirada">Retirada</option>
+                        </select>
+                      </label>
+                      {reportTipo !== "coleta" ? (
+                        <label>
+                          Retirada separação
+                          <select
+                            value={reportLinhaStatus}
+                            onChange={(event) => setReportLinhaStatus(event.target.value as ReportStatusFilter)}
+                          >
+                            <option value="ambos">Pendentes e concluídos</option>
+                            <option value="pendente">Pendentes</option>
+                            <option value="concluido">Concluídos</option>
+                          </select>
+                        </label>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <label>
+                        Tipo
+                        <select value="retirada" disabled>
+                          <option value="retirada">Retirada</option>
+                        </select>
+                      </label>
+                      <label>
+                        Retirada pulmão
+                        <select
+                          value={reportPulStatus}
+                          onChange={(event) => setReportPulStatus(event.target.value as ReportStatusFilter)}
+                        >
+                          <option value="ambos">Pendentes e concluídos</option>
+                          <option value="pendente">Pendentes</option>
+                          <option value="concluido">Concluídos</option>
+                        </select>
+                      </label>
+                    </>
+                  )}
+                </div>
+                <div className="coleta-report-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary coleta-export-btn"
+                    onClick={() => void runReportExport()}
+                    disabled={busyReportExport}
+                  >
+                    {fileExcelIcon()}
+                    {busyReportExport ? "Gerando..." : "Gerar Excel"}
+                  </button>
+                </div>
+              </section>
             ) : null}
 
             <div className={`controle-validade-filters-row${showMonthFilter ? "" : " is-single"}`}>

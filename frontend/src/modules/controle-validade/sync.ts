@@ -609,6 +609,67 @@ export async function fetchPulRetiradaList(params: {
   return sortPulRows(data.map((row) => mapPulRow(row as Record<string, unknown>)));
 }
 
+export async function fetchLinhaColetaReportRows(params: {
+  cd: number;
+  dtIni: string;
+  dtFim: string;
+  limit?: number;
+}): Promise<LinhaColetaHistoryRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_linha_coleta_report", {
+    p_cd: params.cd,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_limit: params.limit ?? 50000,
+    p_offset: 0
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return sortLinhaColetaHistoryRows(data.map((row) => mapLinhaColetaHistoryRow(row as Record<string, unknown>)));
+}
+
+export async function fetchLinhaRetiradaReportRows(params: {
+  cd: number;
+  status: "pendente" | "concluido" | "ambos";
+  dtIni: string;
+  dtFim: string;
+  limit?: number;
+}): Promise<LinhaRetiradaRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_linha_retirada_report", {
+    p_cd: params.cd,
+    p_status: params.status,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_limit: params.limit ?? 50000,
+    p_offset: 0
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return sortLinhaRows(data.map((row) => mapLinhaRow(row as Record<string, unknown>)));
+}
+
+export async function fetchPulRetiradaReportRows(params: {
+  cd: number;
+  status: "pendente" | "concluido" | "ambos";
+  dtIni: string;
+  dtFim: string;
+  limit?: number;
+}): Promise<PulRetiradaRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_pul_retirada_report", {
+    p_cd: params.cd,
+    p_status: params.status,
+    p_dt_ini: params.dtIni,
+    p_dt_fim: params.dtFim,
+    p_limit: params.limit ?? 50000,
+    p_offset: 0
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return sortPulRows(data.map((row) => mapPulRow(row as Record<string, unknown>)));
+}
+
 export async function sendLinhaColetaOnline(payload: LinhaColetaPayload): Promise<void> {
   if (!supabase) throw new Error("Supabase não inicializado.");
   const normalized = normalizeOfflinePayload(payload);
