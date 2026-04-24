@@ -472,9 +472,9 @@ export async function openTransferenciaNoteBatch(
   return data.map((row) => mapConference(row as Record<string, unknown>));
 }
 
-export async function fetchActiveTransferenciaConference(origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<TransferenciaCdConferenceRow | null> {
+export async function fetchActiveTransferenciaConference(cd: number, origemLink: TransferenciaCdLinkOrigin = DEFAULT_PEDIDO_DIRETO_LINK_ORIGIN): Promise<TransferenciaCdConferenceRow | null> {
   if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_get_active_conference", { p_origem_link: origemLink });
+  const { data, error } = await supabase.rpc("rpc_conf_transferencia_cd_get_active_conference", { p_cd: cd, p_origem_link: origemLink });
   if (error) throw new Error(toTransferenciaErrorMessage(error));
   const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
   if (!first) return null;

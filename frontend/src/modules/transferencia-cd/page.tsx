@@ -863,29 +863,31 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
   }, [cdAtivo, clearDismissedReadOnlyConference, isGlobalAdmin, persistPreferences, setAndSaveActiveConference]);
 
   const resumeLocalActiveConference = useCallback(async (silent = false): Promise<TransferenciaCdLocalConference | null> => {
+    if (currentCd == null) return null;
     const rows = await listUserLocalConferences(profile.user_id, currentLinkOrigin);
     const openRows = rows.filter((row) => (
       row.status === "em_conferencia"
       && !row.pending_cancel
       && !row.is_read_only
       && row.started_by === profile.user_id
+      && deriveConferenceCd(row) === currentCd
       && (preferOfflineMode || !isOnline || hasPendingLocalState(row) || (!row.remote_conf_id && !isBatchConference(row)))
     ));
     const local = openRows[0] ?? null;
     if (!local) return null;
     return activateConference(local, { silent });
-  }, [activateConference, currentLinkOrigin, isOnline, preferOfflineMode, profile.user_id]);
+  }, [activateConference, currentCd, currentLinkOrigin, isOnline, preferOfflineMode, profile.user_id]);
 
   const resumeRemoteActiveConference = useCallback(async (silent = false): Promise<TransferenciaCdLocalConference | null> => {
-    if (preferOfflineMode || !isOnline) return null;
-    const remoteActive = await fetchActiveTransferenciaConference(currentLinkOrigin);
+    if (currentCd == null || preferOfflineMode || !isOnline) return null;
+    const remoteActive = await fetchActiveTransferenciaConference(currentCd, currentLinkOrigin);
     if (!remoteActive || remoteActive.status !== "em_conferencia") return null;
     const remoteCd = deriveConferenceCd(remoteActive);
     const remoteItems = await fetchTransferenciaItems(remoteActive.conf_id);
     const local = localFromRemote(profile, remoteCd, remoteActive, remoteItems);
     if (isDismissedReadOnlyConference(local)) return null;
     return activateConference(local, { silent });
-  }, [activateConference, currentLinkOrigin, isDismissedReadOnlyConference, isOnline, preferOfflineMode, profile]);
+  }, [activateConference, currentCd, currentLinkOrigin, isDismissedReadOnlyConference, isOnline, preferOfflineMode, profile]);
 
   const mergeNotesWithLocalState = useCallback(async (rows: TransferenciaCdNoteRow[], targetCd: number): Promise<TransferenciaCdNoteRow[]> => {
     const localConferences = await listUserLocalConferences(profile.user_id, currentLinkOrigin);
@@ -953,8 +955,8 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
               setNfInput("");
             }
           }
-        } else if (currentActive.remote_conf_id) {
-          const remoteActive = await fetchActiveTransferenciaConference(currentLinkOrigin);
+        } else if (currentActive.remote_conf_id && currentCd != null) {
+          const remoteActive = await fetchActiveTransferenciaConference(currentCd, currentLinkOrigin);
           if (activeConferenceRef.current?.local_key === currentActive.local_key) {
             if (remoteActive?.conf_id === currentActive.remote_conf_id && remoteActive.status === "em_conferencia") {
               const remoteItems = await fetchTransferenciaItems(remoteActive.conf_id);
@@ -975,7 +977,7 @@ export default function TransferenciaCdPage({ isOnline, profile }: Transferencia
     } finally {
       setBusySync(false);
     }
-  }, [busySync, currentLinkOrigin, isOnline, profile, refreshPendingState, shouldPersistConferenceLocally]);
+  }, [busySync, currentCd, currentLinkOrigin, isOnline, profile, refreshPendingState, shouldPersistConferenceLocally]);
 
   const runManifestSync = useCallback(async () => {
     if (!isOnline || currentCd == null) {
