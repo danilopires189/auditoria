@@ -111,8 +111,8 @@ const INDICADORES_AUTH_BRANDING: AuthBranding = {
 };
 
 const CARGOSOFT_HOSTS = new Set([
-  "paracargosoft.vercel.app",
-  "www.paracargosoft.vercel.app"
+  "cargosoft.vercel.app",
+  "www.cargosoft.vercel.app"
 ]);
 
 const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
@@ -167,7 +167,7 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     allowedIndicatorKeys: ["gestao-estoque"],
     defaultRoute: null
   },
-  "paracargosoft.vercel.app": {
+  "cargosoft.vercel.app": {
     appLabel: "CargoSoft",
     authCaption: "Controle Logístico de Volume",
     hiddenModuleKeys: [],
@@ -176,7 +176,7 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     defaultRoute: "/modulos/controle-logistico-volume",
     brandVariant: "cargosoft"
   },
-  "www.paracargosoft.vercel.app": {
+  "www.cargosoft.vercel.app": {
     appLabel: "CargoSoft",
     authCaption: "Controle Logístico de Volume",
     hiddenModuleKeys: [],
