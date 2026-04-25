@@ -5145,13 +5145,22 @@ small {
 
 .auth-card-cargosoft .auth-top {
   justify-content: center;
+  flex-direction: column;
+  gap: 8px;
   padding-top: 8px;
 }
 
-.brand-logo-cargosoft {
-  width: min(220px, 72%);
-  height: 82px;
+.brand-logo-cargosoft,
+.brand-logo-cargosoft-main {
+  width: 78px;
+  height: 78px;
   filter: drop-shadow(0 12px 18px rgba(6, 45, 29, 0.16));
+}
+
+.brand-stamp-cargosoft {
+  width: min(210px, 78%);
+  max-width: none;
+  filter: drop-shadow(0 10px 16px rgba(6, 45, 29, 0.14));
 }
 
 .auth-card-cargosoft .auth-brand-caption {
@@ -21552,45 +21561,172 @@ small {
   gap: 10px;
 }
 
-.clv-stage-card {
-  display: grid;
-  grid-template-columns: 34px 1fr;
-  align-items: center;
-  gap: 10px;
-  min-height: 72px;
-  padding: 12px;
-  border: 1px solid rgba(31, 122, 77, 0.18);
-  border-radius: 8px;
+.clv-stage-modal-backdrop {
+  z-index: 1450;
+}
+
+.clv-stage-modal {
+  width: min(920px, 100%);
+  max-width: min(calc(100vw - 24px), 920px);
+  background:
+    radial-gradient(circle at top right, rgba(31, 122, 77, 0.11), transparent 32%),
+    linear-gradient(150deg, #ffffff, #f4f9f6 72%);
+  border-color: rgba(31, 122, 77, 0.2);
+  gap: 14px;
+}
+
+.clv-stage-modal .clv-stage-picker {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.clv-stage-modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.clv-stage-modal-head h3 {
+  margin: 0;
+}
+
+.clv-stage-modal-head p {
+  margin: 4px 0 0;
+  color: var(--muted, #66756a);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.clv-stage-modal-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(31, 122, 77, 0.2);
+  border-radius: 10px;
   background: #fff;
+  color: #1f7a4d;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.clv-module-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.clv-module-title > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clv-header-stage-change {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(31, 122, 77, 0.22);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: rgba(31, 122, 77, 0.08);
+  color: #1f7a4d;
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.clv-header-stage-change:hover,
+.clv-header-stage-change:focus-visible {
+  background: rgba(31, 122, 77, 0.15);
+  border-color: rgba(31, 122, 77, 0.42);
+}
+
+.clv-stage-card {
+  --tone: #1f7a4d;
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  align-items: center;
+  gap: 12px;
+  min-height: 122px;
+  padding: 18px 16px 16px;
+  border: 1px solid color-mix(in srgb, var(--tone) 20%, #d8dfd9);
+  border-radius: 8px;
+  background: linear-gradient(145deg, #ffffff, color-mix(in srgb, var(--tone) 6%, #ffffff));
   color: #203326;
   text-align: left;
-  box-shadow: 0 10px 28px rgba(20, 45, 30, 0.06);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--tone) 9%, transparent);
   cursor: pointer;
   transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  overflow: hidden;
+}
+
+.clv-stage-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--tone);
+  opacity: 0.85;
+}
+
+.clv-stage-card-index {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  margin: 0;
+  color: color-mix(in srgb, var(--tone) 68%, #203326);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 
 .clv-stage-card:hover,
 .clv-stage-card.is-active {
-  border-color: rgba(31, 122, 77, 0.62);
-  box-shadow: 0 14px 34px rgba(31, 122, 77, 0.13);
+  border-color: color-mix(in srgb, var(--tone) 62%, #d8dfd9);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--tone) 16%, transparent);
   transform: translateY(-1px);
 }
 
-.clv-stage-card svg {
-  width: 22px;
-  height: 22px;
-  color: #1f7a4d;
+.clv-stage-card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 17px;
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--tone) 78%, #14233d);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.9), transparent 46%),
+    color-mix(in srgb, var(--tone) 14%, #eef7f2);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 18%, #ffffff),
+    0 8px 18px color-mix(in srgb, var(--tone) 10%, transparent);
+  align-self: center;
+  justify-self: center;
 }
 
-.clv-stage-card strong,
-.clv-stage-tab strong {
+.clv-stage-card-icon svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+}
+
+.clv-stage-card strong {
   display: block;
   font-size: 0.88rem;
   line-height: 1.2;
 }
 
-.clv-stage-card span,
-.clv-stage-tab span {
+.clv-stage-card span {
   display: block;
   margin-top: 3px;
   color: var(--muted, #66756a);
@@ -21598,37 +21734,32 @@ small {
   line-height: 1.25;
 }
 
-.clv-stage-tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+.clv-stage-card .clv-stage-card-icon,
+.clv-stage-card .clv-stage-card-copy {
+  margin-top: 0;
 }
 
-.clv-stage-tab {
-  display: grid;
-  grid-template-columns: 24px minmax(110px, 1fr);
-  align-items: center;
-  gap: 8px;
-  min-width: 178px;
-  border: 1px solid rgba(31, 122, 77, 0.18);
-  border-radius: 8px;
-  padding: 9px 10px;
-  background: #fff;
-  color: #203326;
-  text-align: left;
-  cursor: pointer;
+.clv-stage-card-copy small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted, #66756a);
+  font-size: 0.78rem;
+  line-height: 1.32;
 }
 
-.clv-stage-tab.is-active {
-  border-color: rgba(31, 122, 77, 0.72);
-  background: rgba(31, 122, 77, 0.08);
+.clv-stage-card-copy .clv-stage-card-tag {
+  width: fit-content;
+  margin: 0 0 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 10%, #ffffff);
+  color: color-mix(in srgb, var(--tone) 74%, #203326);
+  font-size: 0.7rem;
+  font-weight: 800;
 }
 
-.clv-stage-tab svg {
-  width: 18px;
-  height: 18px;
-  color: #1f7a4d;
+.clv-stage-empty {
+  margin-top: 0;
 }
 
 .clv-summary-grid {
@@ -21916,8 +22047,17 @@ small {
     grid-template-columns: 1fr;
   }
 
+  .clv-stage-modal .clv-stage-picker {
+    grid-template-columns: 1fr;
+  }
+
   .clv-stage-card {
     min-height: 62px;
+  }
+
+  .clv-stage-modal {
+    align-self: start;
+    margin-top: 8px;
   }
 
   .clv-mov-item {

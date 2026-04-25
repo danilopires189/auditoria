@@ -3195,12 +3195,17 @@ export default function App() {
     >
       <div className={`auth-card surface-enter${isCargoSoftBranding ? " auth-card-cargosoft" : ""}`}>
         <div className="auth-top">
-          <img
-            className={`brand-logo${isCargoSoftBranding ? " brand-logo-cargosoft" : ""}`}
-            src={isCargoSoftBranding ? cargoSoftLogoImage : logoImage}
-            alt={isCargoSoftBranding ? "CargoSoft" : "Logo Auditoria"}
-          />
-          {!isCargoSoftBranding ? <img className="brand-stamp" src={pmImage} alt="Marca interna" /> : null}
+          {isCargoSoftBranding ? (
+            <>
+              <img className="brand-logo brand-logo-cargosoft-main" src={logoImage} alt="Logo Auditoria" />
+              <img className="brand-stamp brand-stamp-cargosoft" src={cargoSoftLogoImage} alt="CargoSoft" />
+            </>
+          ) : (
+            <>
+              <img className="brand-logo" src={logoImage} alt="Logo Auditoria" />
+              <img className="brand-stamp" src={pmImage} alt="Marca interna" />
+            </>
+          )}
         </div>
         <p className="auth-brand-caption">{authBranding.authCaption}</p>
 

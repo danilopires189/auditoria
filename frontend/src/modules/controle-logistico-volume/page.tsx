@@ -49,6 +49,7 @@ import type {
   ClvStageEtapa,
   ControleLogisticoVolumeModuleProfile
 } from "./types";
+import type { ModuleIconName, ModuleTone } from "../types";
 
 interface ControleLogisticoVolumePageProps {
   isOnline: boolean;
@@ -57,6 +58,39 @@ interface ControleLogisticoVolumePageProps {
 
 const MODULE_DEF = getModuleByKeyOrThrow("controle-logistico-volume");
 const SYNC_INTERVAL_MS = 45_000;
+
+const CLV_STAGE_META: Record<ClvEtapa, { title: string; description: string; icon: ModuleIconName; tone: ModuleTone; tag: string }> = {
+  recebimento_cd: {
+    title: "Recebimento CD",
+    description: "Bipe o primeiro volume da loja e informe o total.",
+    icon: "volume",
+    tone: "green",
+    tag: "Início da loja"
+  },
+  entrada_galpao: {
+    title: "Entrada no galpão",
+    description: "Confirme volumes recebidos para entrada operacional.",
+    icon: "barcode",
+    tone: "teal",
+    tag: "Conferência interna"
+  },
+  saida_galpao: {
+    title: "Saída do galpão",
+    description: "Registre volumes liberados para rota.",
+    icon: "truck",
+    tone: "amber",
+    tag: "Expedição"
+  },
+  entrega_filial: {
+    title: "Entrega na filial",
+    description: "Confirme a entrega dos volumes na filial.",
+    icon: "location",
+    tone: "blue",
+    tag: "Finalização"
+  }
+};
+
+const CLV_STAGE_ORDER = Object.keys(CLV_STAGE_META) as ClvEtapa[];
 
 function safeUuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -234,6 +268,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingErrors, setPendingErrors] = useState(0);
   const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
+  const [showStagePicker, setShowStagePicker] = useState(true);
   const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [busyRefresh, setBusyRefresh] = useState(false);
   const [busySync, setBusySync] = useState(false);
@@ -410,6 +445,23 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     setFracionadoTipo("pedido_direto");
     window.requestAnimationFrame(() => etiquetaRef.current?.focus({ preventScroll: true }));
   }, []);
+
+  const chooseStage = useCallback((nextEtapa: ClvEtapa) => {
+    setEtapa(nextEtapa);
+    setShowStagePicker(false);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setLoadedPedido(null);
+    setManifestRows([]);
+    setActiveDeliveryRow(null);
+    setActiveReceiptRow(null);
+    setReceiptArmed(false);
+    setPedidoInput("");
+    setVolumeTotalInput("");
+    setFeedSearch("");
+    setExpandedLoteId(null);
+    clearScanInputs();
+  }, [clearScanInputs]);
 
   const loadPedidoManifest = useCallback(async () => {
     if (!etapa || etapa === "recebimento_cd") return;
@@ -647,26 +699,56 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     }
   }, [loadPending, pendingOps]);
 
+  const currentStageMeta = etapa ? CLV_STAGE_META[etapa] : null;
+  const moduleHeader = (
+    <header className="module-topbar module-topbar-fixed">
+      <div className="module-topbar-line1">
+        <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
+          <span className="module-back-icon" aria-hidden="true">
+            <BackIcon />
+          </span>
+          <span>Início</span>
+        </Link>
+
+        <div className="module-topbar-user-side">
+          <PendingSyncBadge
+            pendingCount={pendingCount}
+            errorCount={pendingErrors}
+            title="Pendências locais"
+            onClick={pendingCount > 0 || pendingErrors > 0 ? () => setShowPendingSyncModal(true) : undefined}
+          />
+          <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
+            {isOnline ? "🟢 Online" : "🔴 Offline"}
+          </span>
+        </div>
+      </div>
+
+      <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
+        <span className="module-icon" aria-hidden="true">
+          <ModuleIcon name={currentStageMeta?.icon ?? MODULE_DEF.icon} />
+        </span>
+        <span className="module-title clv-module-title">
+          <span>{currentStageMeta?.title ?? MODULE_DEF.title}</span>
+          {allowed && currentStageMeta ? (
+            <button
+              type="button"
+              className="clv-header-stage-change"
+              onClick={() => setShowStagePicker(true)}
+              aria-label="Trocar etapa"
+              title="Trocar etapa"
+            >
+              🔄
+            </button>
+          ) : null}
+        </span>
+      </div>
+    </header>
+  );
+
   if (!allowed) {
     return (
       <>
-        <header className="module-topbar">
-          <div className="module-topbar-line1">
-            <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
-              <span className="module-back-icon" aria-hidden="true">
-                <BackIcon />
-              </span>
-              <span>Início</span>
-            </Link>
-          </div>
-
-          <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
-            <span className="module-icon" aria-hidden="true">
-              <ModuleIcon name={MODULE_DEF.icon} />
-            </span>
-            <span className="module-title">{MODULE_DEF.title}</span>
-          </div>
-        </header>
+        {moduleHeader}
 
         <section className="modules-shell clv-shell">
           <div className="coleta-head">
@@ -688,23 +770,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
   return (
     <>
-      <header className="module-topbar">
-        <div className="module-topbar-line1">
-          <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
-            <span className="module-back-icon" aria-hidden="true">
-              <BackIcon />
-            </span>
-            <span>Início</span>
-          </Link>
-        </div>
-
-        <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
-          <span className="module-icon" aria-hidden="true">
-            <ModuleIcon name={MODULE_DEF.icon} />
-          </span>
-          <span className="module-title">{MODULE_DEF.title}</span>
-        </div>
-      </header>
+      {moduleHeader}
 
       <section className="modules-shell clv-shell">
         <div className="coleta-head">
@@ -713,24 +779,16 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
         </div>
 
         <div className="coleta-actions-row clv-toolbar">
-          <PendingSyncBadge
-            pendingCount={pendingCount}
-            errorCount={pendingErrors}
-            title="Pendências locais"
-            onClick={() => setShowPendingSyncModal(true)}
-          />
-          <button className="btn btn-muted coleta-sync-btn" type="button" onClick={() => void runSync(false)} disabled={!isOnline || busySync}>
-            {busySync ? "Subindo..." : "Subir pendentes"}
-          </button>
           <button className="btn btn-muted coleta-sync-btn" type="button" onClick={() => void refreshFeed()} disabled={!isOnline || busyRefresh}>
             {busyRefresh ? "Atualizando..." : "Atualizar"}
           </button>
           <button
-            className={`btn btn-muted coleta-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
+            className={`btn btn-muted termo-offline-toggle${preferOfflineMode ? " is-active" : ""}`}
             type="button"
             onClick={() => setPreferOfflineMode((value) => !value)}
+            title={preferOfflineMode ? "Desativar modo offline local" : "Ativar modo offline local"}
           >
-            {preferOfflineMode ? "Offline ligado" : "Trabalhar offline"}
+            {preferOfflineMode ? "📦 Offline ativo" : "📶 Trabalhar offline"}
           </button>
         </div>
 
@@ -748,38 +806,8 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
           </div>
         ) : null}
 
-        {!etapa ? (
-          <div className="clv-stage-picker" aria-label="Etapas do controle logístico">
-            {(Object.keys(CLV_ETAPA_LABELS) as ClvEtapa[]).map((item) => (
-              <button key={item} type="button" className="clv-stage-card" onClick={() => setEtapa(item)}>
-                <span aria-hidden="true"><ModuleIcon name={item === "recebimento_cd" ? "volume" : "truck"} /></span>
-                <strong>{CLV_ETAPA_LABELS[item]}</strong>
-              </button>
-            ))}
-          </div>
-        ) : (
+        {etapa && currentStageMeta ? (
           <>
-            <div className="clv-stage-tabs" role="tablist" aria-label="Etapas">
-              {(Object.keys(CLV_ETAPA_LABELS) as ClvEtapa[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`clv-stage-tab${etapa === item ? " is-active" : ""}`}
-                  onClick={() => {
-                    setEtapa(item);
-                    setErrorMessage(null);
-                    setStatusMessage(null);
-                    setLoadedPedido(null);
-                    setManifestRows([]);
-                    setActiveDeliveryRow(null);
-                    setReceiptArmed(false);
-                  }}
-                >
-                  {CLV_ETAPA_LABELS[item]}
-                </button>
-              ))}
-            </div>
-
             <div className="clv-summary-grid">
               <div className="clv-summary-card"><span>Informado</span><strong>{totals.informado}</strong></div>
               <div className="clv-summary-card"><span>Bipado etapa</span><strong>{totals.etapa}</strong></div>
@@ -1000,8 +1028,56 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
               })}
             </div>
           </>
+        ) : (
+          <div className="coleta-empty clv-stage-empty">
+            Escolha uma etapa para iniciar o controle logístico.
+          </div>
         )}
       </section>
+
+      {showStagePicker ? (
+        <div className="confirm-overlay clv-stage-modal-backdrop" role="presentation">
+          <div
+            className="confirm-dialog clv-stage-modal surface-enter"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clv-stage-modal-title"
+          >
+            <div className="clv-stage-modal-head">
+              <div>
+                <h3 id="clv-stage-modal-title">Personalize a etapa</h3>
+                <p>Escolha o ponto do fluxo logístico que o funcionário vai operar agora.</p>
+              </div>
+              {etapa ? (
+                <button type="button" className="clv-stage-modal-close" onClick={() => setShowStagePicker(false)} aria-label="Fechar escolha de etapa">
+                  x
+                </button>
+              ) : null}
+            </div>
+            <div className="clv-stage-picker" aria-label="Etapas do controle logístico">
+              {CLV_STAGE_ORDER.map((item, index) => {
+                const meta = CLV_STAGE_META[item];
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`clv-stage-card tone-${meta.tone}${etapa === item ? " is-active" : ""}`}
+                    onClick={() => chooseStage(item)}
+                  >
+                    <span className="clv-stage-card-index">0{index + 1}</span>
+                    <span className="clv-stage-card-icon" aria-hidden="true"><ModuleIcon name={meta.icon} /></span>
+                    <span className="clv-stage-card-copy">
+                      <small className="clv-stage-card-tag">{meta.tag}</small>
+                      <strong>{meta.title}</strong>
+                      <small>{meta.description}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <PendingSyncDialog
         isOpen={showPendingSyncModal}
