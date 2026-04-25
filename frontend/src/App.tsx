@@ -5,6 +5,8 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import type { Session } from "@supabase/supabase-js";
 import logoImage from "../assets/logo.png";
 import pmImage from "../assets/pm.png";
+import cargoSoftLogoImage from "../assets/cargosoft-logo.jpeg";
+import cargoSoftBackgroundImage from "../assets/cargosoft-fundo.jpeg";
 import { supabase, supabaseInitError } from "./lib/supabase";
 import { findModuleByPath } from "./modules/registry";
 import type { DashboardModuleKey } from "./modules/types";
@@ -16,6 +18,8 @@ import type { ControleAvariasModuleProfile } from "./modules/controle-avarias/ty
 import { clearUserControleAvariasSessionCache } from "./modules/controle-avarias/storage";
 import type { AuditoriaCaixaModuleProfile } from "./modules/auditoria-caixa/types";
 import { clearUserAuditoriaCaixaSessionCache } from "./modules/auditoria-caixa/storage";
+import type { ControleLogisticoVolumeModuleProfile } from "./modules/controle-logistico-volume/types";
+import { clearUserClvSessionCache } from "./modules/controle-logistico-volume/storage";
 import type { CheckListModuleProfile } from "./modules/check-list/types";
 import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/types";
 import { fetchAtividadeExtraPendingEntries } from "./modules/atividade-extra/sync";
@@ -84,6 +88,7 @@ interface AuthBranding {
   allowedModuleKeys?: DashboardModuleKey[] | null;
   allowedIndicatorKeys?: Array<"blitz" | "gestao-estoque" | "pvps-alocacao"> | null;
   defaultRoute?: string | null;
+  brandVariant?: "default" | "cargosoft";
 }
 
 const DEFAULT_AUTH_BRANDING: AuthBranding = {
@@ -91,7 +96,8 @@ const DEFAULT_AUTH_BRANDING: AuthBranding = {
   authCaption: "Prevenção de Perdas CDs",
   hiddenModuleKeys: [],
   allowedIndicatorKeys: null,
-  defaultRoute: null
+  defaultRoute: null,
+  brandVariant: "default"
 };
 
 const INDICADORES_AUTH_BRANDING: AuthBranding = {
@@ -100,8 +106,14 @@ const INDICADORES_AUTH_BRANDING: AuthBranding = {
   hiddenModuleKeys: [],
   allowedModuleKeys: ["indicadores"],
   allowedIndicatorKeys: ["blitz", "gestao-estoque", "pvps-alocacao"],
-  defaultRoute: null
+  defaultRoute: null,
+  brandVariant: "default"
 };
+
+const CARGOSOFT_HOSTS = new Set([
+  "paracargosoft.vercel.app",
+  "www.paracargosoft.vercel.app"
+]);
 
 const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   "prevencaocd.vercel.app": {
@@ -155,6 +167,24 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     allowedIndicatorKeys: ["gestao-estoque"],
     defaultRoute: null
   },
+  "paracargosoft.vercel.app": {
+    appLabel: "CargoSoft",
+    authCaption: "Controle Logístico de Volume",
+    hiddenModuleKeys: [],
+    allowedModuleKeys: ["controle-logistico-volume"],
+    allowedIndicatorKeys: null,
+    defaultRoute: "/modulos/controle-logistico-volume",
+    brandVariant: "cargosoft"
+  },
+  "www.paracargosoft.vercel.app": {
+    appLabel: "CargoSoft",
+    authCaption: "Controle Logístico de Volume",
+    hiddenModuleKeys: [],
+    allowedModuleKeys: ["controle-logistico-volume"],
+    allowedIndicatorKeys: null,
+    defaultRoute: "/modulos/controle-logistico-volume",
+    brandVariant: "cargosoft"
+  },
   "indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
   "www.indicadores.vercel.app": INDICADORES_AUTH_BRANDING,
   "indicadorescd.vercel.app": INDICADORES_AUTH_BRANDING,
@@ -181,6 +211,7 @@ const BuscaProdutoPage = React.lazy(() => import("./modules/busca-produto/page")
 const ValidarEnderecamentoPage = React.lazy(() => import("./modules/validar-enderecamento/page"));
 const ValidarEtiquetaPulmaoPage = React.lazy(() => import("./modules/validar-etiqueta-pulmao/page"));
 const AuditoriaCaixaPage = React.lazy(() => import("./modules/auditoria-caixa/page"));
+const ControleLogisticoVolumePage = React.lazy(() => import("./modules/controle-logistico-volume/page"));
 const CheckListPage = React.lazy(() => import("./modules/check-list/page"));
 const ColetaMercadoriaPage = React.lazy(() => import("./modules/coleta-mercadoria/page"));
 const ConferenciaTermoPage = React.lazy(() => import("./modules/conferencia-termo/page"));
@@ -207,6 +238,11 @@ function isLocalNetworkHostname(hostname: string): boolean {
   if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(normalized)) return true;
   if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(normalized)) return true;
   return /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(normalized);
+}
+
+function isCargoSoftHostname(hostname: string | undefined): boolean {
+  if (!hostname) return false;
+  return CARGOSOFT_HOSTS.has(hostname.trim().toLowerCase());
 }
 
 function resolveAuthBranding(hostname: string | undefined): AuthBranding {
@@ -683,12 +719,16 @@ async function probeInternetConnection(timeoutMs = 3500): Promise<boolean> {
 }
 
 function AppLoadingCard({ message }: { message: string }) {
+  const cargoSoft = typeof window !== "undefined" && isCargoSoftHostname(window.location.hostname);
   return (
-    <div className="page-shell">
+    <div
+      className={`page-shell${cargoSoft ? " page-shell-cargosoft" : ""}`}
+      style={cargoSoft ? { backgroundImage: `linear-gradient(90deg, rgba(8, 48, 35, 0.64), rgba(8, 48, 35, 0.18)), url(${cargoSoftBackgroundImage})` } : undefined}
+    >
       <div className="loading-card surface-enter">
         <div className="loading-brands">
-          <img className="loading-logo" src={logoImage} alt="Logo" />
-          <img className="loading-pm" src={pmImage} alt="PM" />
+          <img className="loading-logo" src={cargoSoft ? cargoSoftLogoImage : logoImage} alt="Logo" />
+          {!cargoSoft ? <img className="loading-pm" src={pmImage} alt="PM" /> : null}
         </div>
         <p>{message}</p>
       </div>
@@ -1239,6 +1279,7 @@ export default function App() {
     () => (typeof window === "undefined" ? "" : window.location.hostname.trim().toLowerCase()),
     []
   );
+  const isCargoSoftBranding = authBranding.brandVariant === "cargosoft";
 
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [session, setSession] = useState<Session | null>(null);
@@ -1886,6 +1927,11 @@ export default function App() {
           // Ignore local cleanup failures and proceed with logout.
         }
         try {
+          await clearUserClvSessionCache(currentUserId);
+        } catch {
+          // Ignore local cleanup failures and proceed with logout.
+        }
+        try {
           await clearUserControleValidadeCache(currentUserId);
         } catch {
           // Ignore local cleanup failures and proceed with logout.
@@ -2285,6 +2331,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const controleLogisticoVolumeProfile = useMemo<ControleLogisticoVolumeModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const checkListProfile = useMemo<CheckListModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2599,12 +2657,22 @@ export default function App() {
       && (APOIO_GESTOR_ALLOWED_HOSTS.has(currentHostname) || isLocalNetworkHostname(currentHostname)),
     [currentHostname, effectiveProfileWithCd]
   );
+  const canAccessControleLogisticoVolume = useMemo(
+    () =>
+      normalizeMat(effectiveProfileWithCd?.mat ?? "") === "88885"
+      && (isCargoSoftHostname(currentHostname) || isLocalNetworkHostname(currentHostname)),
+    [currentHostname, effectiveProfileWithCd?.mat]
+  );
   const effectiveHiddenModuleKeys = useMemo<DashboardModuleKey[]>(() => {
-    if (!canAccessApoioGestor && !authBranding.hiddenModuleKeys.includes("apoio-gestor")) {
-      return [...authBranding.hiddenModuleKeys, "apoio-gestor"];
+    const hidden = [...authBranding.hiddenModuleKeys];
+    if (!canAccessApoioGestor && !hidden.includes("apoio-gestor")) {
+      hidden.push("apoio-gestor");
     }
-    return authBranding.hiddenModuleKeys;
-  }, [authBranding.hiddenModuleKeys, canAccessApoioGestor]);
+    if (!canAccessControleLogisticoVolume && !hidden.includes("controle-logistico-volume")) {
+      hidden.push("controle-logistico-volume");
+    }
+    return hidden;
+  }, [authBranding.hiddenModuleKeys, canAccessApoioGestor, canAccessControleLogisticoVolume]);
   const hiddenModuleKeySet = useMemo(() => new Set(effectiveHiddenModuleKeys), [effectiveHiddenModuleKeys]);
   const effectiveAllowedModuleKeys = useMemo<DashboardModuleKey[] | null>(() => {
     const baseAllowed = authBranding.allowedModuleKeys ?? null;
@@ -2625,18 +2693,20 @@ export default function App() {
     if (!candidate) return null;
     const moduleDef = findModuleByPath(candidate);
     if (!moduleDef) return null;
+    if (moduleDef.key === "controle-logistico-volume" && !canAccessControleLogisticoVolume) return null;
     if (!isModuleAccessible(moduleDef.key, authBranding)) return null;
     return moduleDef.path;
-  }, [authBranding]);
+  }, [authBranding, canAccessControleLogisticoVolume]);
   const currentModuleAllowed = useMemo(() => {
     if (!activeModule) return true;
     if (activeModule.key === "apoio-gestor") return canAccessApoioGestor;
+    if (activeModule.key === "controle-logistico-volume") return canAccessControleLogisticoVolume;
     return isModuleAccessible(activeModule.key, {
       ...authBranding,
       hiddenModuleKeys: effectiveHiddenModuleKeys,
       allowedModuleKeys: effectiveAllowedModuleKeys
     });
-  }, [activeModule, authBranding, canAccessApoioGestor, effectiveAllowedModuleKeys, effectiveHiddenModuleKeys]);
+  }, [activeModule, authBranding, canAccessApoioGestor, canAccessControleLogisticoVolume, effectiveAllowedModuleKeys, effectiveHiddenModuleKeys]);
   if (!runtimeStatus.initialized) {
     return <AppLoadingCard message="Verificando disponibilidade..." />;
   }
@@ -2660,7 +2730,7 @@ export default function App() {
   if (session && displayContext) {
     return (
       <div
-        className={`app-shell${isModuleRoute ? " app-shell-module" : ""}${activeModule?.key === "indicadores" ? " app-shell-module-indicadores" : ""}`}
+        className={`app-shell${isModuleRoute ? " app-shell-module" : ""}${activeModule?.key === "indicadores" ? " app-shell-module-indicadores" : ""}${isCargoSoftBranding ? " app-shell-cargosoft" : ""}`}
       >
         <React.Suspense fallback={<AppLoadingCard message="Carregando módulo..." />}>
           <Routes>
@@ -2681,6 +2751,8 @@ export default function App() {
                   modulesViewMode={homeModulesViewMode}
                   onToggleModulesViewMode={handleHomeModulesViewModeChange}
                   showCdSwitcher={canUseRuntimeCdSwitcher}
+                  brandLogoSrc={authBranding.brandVariant === "cargosoft" ? cargoSoftLogoImage : pmImage}
+                  brandLogoAlt={authBranding.brandVariant === "cargosoft" ? "CargoSoft" : "PM"}
                   onRequestCdSwitcher={() => {
                     setPendingGlobalCdSelection(globalCdSelection ?? runtimeCdOptions[0]?.cd ?? null);
                     setShowGlobalCdSwitcher(true);
@@ -2820,6 +2892,16 @@ export default function App() {
             element={
               auditoriaCaixaProfile ? (
                 <AuditoriaCaixaPage isOnline={isOnline} profile={auditoriaCaixaProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/controle-logistico-volume"
+            element={
+              controleLogisticoVolumeProfile && canAccessControleLogisticoVolume ? (
+                <ControleLogisticoVolumePage isOnline={isOnline} profile={controleLogisticoVolumeProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )
@@ -3107,11 +3189,18 @@ export default function App() {
   }
 
   return (
-    <div className="page-shell">
-      <div className="auth-card surface-enter">
+    <div
+      className={`page-shell${isCargoSoftBranding ? " page-shell-cargosoft" : ""}`}
+      style={isCargoSoftBranding ? { backgroundImage: `linear-gradient(90deg, rgba(8, 48, 35, 0.64), rgba(8, 48, 35, 0.18)), url(${cargoSoftBackgroundImage})` } : undefined}
+    >
+      <div className={`auth-card surface-enter${isCargoSoftBranding ? " auth-card-cargosoft" : ""}`}>
         <div className="auth-top">
-          <img className="brand-logo" src={logoImage} alt="Logo Auditoria" />
-          <img className="brand-stamp" src={pmImage} alt="Marca interna" />
+          <img
+            className={`brand-logo${isCargoSoftBranding ? " brand-logo-cargosoft" : ""}`}
+            src={isCargoSoftBranding ? cargoSoftLogoImage : logoImage}
+            alt={isCargoSoftBranding ? "CargoSoft" : "Logo Auditoria"}
+          />
+          {!isCargoSoftBranding ? <img className="brand-stamp" src={pmImage} alt="Marca interna" /> : null}
         </div>
         <p className="auth-brand-caption">{authBranding.authCaption}</p>
 

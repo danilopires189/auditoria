@@ -18,6 +18,7 @@ const AVAILABLE_MODULE_KEYS = new Set([
   "conferencia-termo",
   "conferencia-volume-avulso",
   "controle-avarias",
+  "controle-logistico-volume",
   "controle-validade",
   "devolucao-mercadoria",
   "gestao-estoque",
@@ -46,6 +47,8 @@ interface HomePageProps {
   onToggleModulesViewMode: (nextMode: HomeModulesViewMode) => void;
   showCdSwitcher?: boolean;
   onRequestCdSwitcher?: () => void;
+  brandLogoSrc?: string;
+  brandLogoAlt?: string;
 }
 
 function InfoIcon() {
@@ -87,7 +90,9 @@ export default function HomePage({
   modulesViewMode,
   onToggleModulesViewMode,
   showCdSwitcher = false,
-  onRequestCdSwitcher
+  onRequestCdSwitcher,
+  brandLogoSrc = pmImage,
+  brandLogoAlt = "PM"
 }: HomePageProps) {
   const hiddenModuleSet = new Set(hiddenModuleKeys);
   const allowedModuleSet = allowedModuleKeys ? new Set(allowedModuleKeys) : null;
@@ -109,7 +114,7 @@ export default function HomePage({
     <>
       <header className="app-topbar">
         <div className="topbar-id">
-          <img src={pmImage} alt="PM" />
+          <img src={brandLogoSrc} alt={brandLogoAlt} />
           <div className="topbar-user">
             <div className="topbar-user-row">
               <strong>{displayContext.nome}</strong>

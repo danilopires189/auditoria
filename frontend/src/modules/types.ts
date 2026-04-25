@@ -30,7 +30,7 @@ export type ModuleIconName =
   | "zero"
   | "damage";
 
-export type ModuleTone = "blue" | "red" | "teal" | "amber" | "graphite";
+export type ModuleTone = "blue" | "red" | "teal" | "amber" | "graphite" | "green";
 
 export type DashboardModuleKey =
   | "apoio-gestor"
@@ -42,6 +42,7 @@ export type DashboardModuleKey =
   | "conferencia-entrada-notas"
   | "conferencia-pedido-direto"
   | "controle-avarias"
+  | "controle-logistico-volume"
   | "conferencia-termo"
   | "conferencia-volume-avulso"
   | "controle-validade"
