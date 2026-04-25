@@ -5,7 +5,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import type { Session } from "@supabase/supabase-js";
 import logoImage from "../assets/logo.png";
 import pmImage from "../assets/pm.png";
-import cargoSoftLogoImage from "../assets/cargosoft-logo.jpeg";
+import cargoSoftLogoImage from "../assets/cargosoft-logo.png";
 import cargoSoftBackgroundImage from "../assets/cargosoft-fundo.jpeg";
 import { supabase, supabaseInitError } from "./lib/supabase";
 import { findModuleByPath } from "./modules/registry";
@@ -169,20 +169,20 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
   },
   "cargosoft.vercel.app": {
     appLabel: "CargoSoft",
-    authCaption: "Controle Logístico de Volume",
+    authCaption: "Controle Logístico",
     hiddenModuleKeys: [],
     allowedModuleKeys: ["controle-logistico-volume"],
     allowedIndicatorKeys: null,
-    defaultRoute: "/modulos/controle-logistico-volume",
+    defaultRoute: "/inicio",
     brandVariant: "cargosoft"
   },
   "www.cargosoft.vercel.app": {
     appLabel: "CargoSoft",
-    authCaption: "Controle Logístico de Volume",
+    authCaption: "Controle Logístico",
     hiddenModuleKeys: [],
     allowedModuleKeys: ["controle-logistico-volume"],
     allowedIndicatorKeys: null,
-    defaultRoute: "/modulos/controle-logistico-volume",
+    defaultRoute: "/inicio",
     brandVariant: "cargosoft"
   },
   "indicadores.vercel.app": INDICADORES_AUTH_BRANDING,

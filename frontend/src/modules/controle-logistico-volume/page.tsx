@@ -649,17 +649,32 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
   if (!allowed) {
     return (
-      <section className="modules-shell clv-shell">
-        <div className="module-topbar">
-          <Link to="/inicio" className="back-link" aria-label="Voltar">
-            <BackIcon />
-          </Link>
-          <div>
-            <h2>{MODULE_DEF.title}</h2>
+      <>
+        <header className="module-topbar">
+          <div className="module-topbar-line1">
+            <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
+              <span className="module-back-icon" aria-hidden="true">
+                <BackIcon />
+              </span>
+              <span>Início</span>
+            </Link>
+          </div>
+
+          <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
+            <span className="module-icon" aria-hidden="true">
+              <ModuleIcon name={MODULE_DEF.icon} />
+            </span>
+            <span className="module-title">{MODULE_DEF.title}</span>
+          </div>
+        </header>
+
+        <section className="modules-shell clv-shell">
+          <div className="coleta-head">
+            <h2>Acesso indisponível</h2>
             <p>Módulo disponível apenas para a matrícula 88885.</p>
           </div>
-        </div>
-      </section>
+        </section>
+      </>
     );
   }
 
@@ -673,15 +688,28 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
   return (
     <>
-      <section className="modules-shell clv-shell">
-        <div className="module-topbar">
-          <Link to="/inicio" className="back-link" aria-label="Voltar">
-            <BackIcon />
+      <header className="module-topbar">
+        <div className="module-topbar-line1">
+          <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
+            <span className="module-back-icon" aria-hidden="true">
+              <BackIcon />
+            </span>
+            <span>Início</span>
           </Link>
-          <div>
-            <h2>{MODULE_DEF.title}</h2>
-            <p>Fluxo de volumes por loja, pedido e etapa logística.</p>
-          </div>
+        </div>
+
+        <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
+          <span className="module-icon" aria-hidden="true">
+            <ModuleIcon name={MODULE_DEF.icon} />
+          </span>
+          <span className="module-title">{MODULE_DEF.title}</span>
+        </div>
+      </header>
+
+      <section className="modules-shell clv-shell">
+        <div className="coleta-head">
+          <h2>Controle Logístico</h2>
+          <p>Fluxo de volumes por loja, pedido e etapa logística.</p>
         </div>
 
         <div className="coleta-actions-row clv-toolbar">

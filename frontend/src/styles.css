@@ -5165,8 +5165,31 @@ small {
   box-shadow: 0 12px 22px rgba(22, 111, 68, 0.22);
 }
 
+.auth-card-cargosoft .btn-primary:hover:not(:disabled),
+.auth-card-cargosoft .btn-primary:focus-visible,
+.auth-card-cargosoft .btn-primary:active:not(:disabled) {
+  background: linear-gradient(145deg, #17623e, #0f4c30);
+  box-shadow: 0 14px 24px rgba(22, 111, 68, 0.28);
+}
+
+.auth-card-cargosoft input:focus,
+.auth-card-cargosoft select:focus {
+  outline: 2px solid rgba(31, 122, 77, 0.24);
+  border-color: #1f7a4d;
+}
+
+.auth-card-cargosoft .input-icon-wrap:focus-within {
+  outline: 2px solid rgba(31, 122, 77, 0.24);
+  border-color: #1f7a4d;
+}
+
 .auth-card-cargosoft .text-link {
   color: #17623e;
+}
+
+.auth-card-cargosoft .text-link:hover,
+.auth-card-cargosoft .text-link:focus-visible {
+  color: #0f4c30;
 }
 
 .app-shell-cargosoft .app-topbar {
@@ -5175,7 +5198,9 @@ small {
 
 .app-shell-cargosoft .topbar-id img {
   width: 72px;
+  height: 42px;
   padding: 5px 8px;
+  object-fit: contain;
 }
 
 @keyframes surface-enter {
