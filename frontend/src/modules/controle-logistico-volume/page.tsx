@@ -1045,7 +1045,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
           >
             <div className="clv-stage-modal-head">
               <div>
-                <h3 id="clv-stage-modal-title">Personalize a etapa</h3>
+                <h3 id="clv-stage-modal-title">Escolha a etapa</h3>
                 <p>Escolha o ponto do fluxo logístico que o funcionário vai operar agora.</p>
               </div>
               {etapa ? (
@@ -1065,7 +1065,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                     onClick={() => chooseStage(item)}
                   >
                     <span className="clv-stage-card-index">0{index + 1}</span>
-                    <span className="clv-stage-card-icon" aria-hidden="true"><ModuleIcon name={meta.icon} /></span>
+                    <span className={`clv-stage-card-icon clv-stage-card-icon--${item}`} aria-hidden="true"><ModuleIcon name={meta.icon} /></span>
                     <span className="clv-stage-card-copy">
                       <small className="clv-stage-card-tag">{meta.tag}</small>
                       <strong>{meta.title}</strong>
