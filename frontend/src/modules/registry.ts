@@ -13,7 +13,7 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "conferencia-pedido-direto", path: "/modulos/conferencia-pedido-direto", title: "Conferência de Pedido Direto", icon: "direct", tone: "blue" },
   { key: "conferencia-termo", path: "/modulos/conferencia-termo", title: "Conferência de Termo", icon: "cold", tone: "blue" },
   { key: "conferencia-volume-avulso", path: "/modulos/conferencia-volume-avulso", title: "Conferência de Volume Avulso", icon: "carton-meds", tone: "teal" },
-  { key: "controle-logistico-volume", path: "/modulos/controle-logistico-volume", title: "Controle Logístico de Volume", icon: "volume", tone: "green" },
+  { key: "controle-logistico-volume", path: "/modulos/controle-logistico-volume", title: "Controle de Volumes", icon: "volume", tone: "green" },
   { key: "controle-validade", path: "/modulos/controle-validade", title: "Controle de Validade", icon: "expiry", tone: "blue" },
   { key: "devolucao-mercadoria", path: "/modulos/devolucao-mercadoria", title: "Devolução de Mercadoria", icon: "return", tone: "red" },
   { key: "gestao-estoque", path: "/modulos/gestao-estoque", title: "Gestão de Estoque", icon: "audit", tone: "blue" },

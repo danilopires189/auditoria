@@ -5159,8 +5159,10 @@ small {
 }
 
 .brand-stamp-cargosoft {
-  width: min(220px, 62%);
-  max-width: 220px;
+  width: min(190px, 54%);
+  max-width: 190px;
+  max-height: 54px;
+  object-fit: contain;
   filter: drop-shadow(0 10px 16px rgba(6, 45, 29, 0.14));
 }
 
