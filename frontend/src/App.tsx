@@ -1281,6 +1281,13 @@ export default function App() {
   );
   const isCargoSoftBranding = authBranding.brandVariant === "cargosoft";
 
+  useEffect(() => {
+    if (isCargoSoftBranding && typeof document !== "undefined") {
+      document.body.style.background = "#0d4f35";
+      return () => { document.body.style.background = ""; };
+    }
+  }, [isCargoSoftBranding]);
+
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileContext | null>(null);

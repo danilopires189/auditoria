@@ -5129,6 +5129,11 @@ small {
   animation: clv-bg-reveal 2s ease forwards;
 }
 
+.page-shell-cargosoft ~ body,
+body:has(.page-shell-cargosoft) {
+  background: #0d4f35;
+}
+
 @keyframes clv-bg-reveal {
   0%   { opacity: 0; background-color: #0d4f35; }
   100% { opacity: 1; background-color: #0d4f35; }
@@ -5162,9 +5167,14 @@ small {
 .auth-card-cargosoft {
   position: relative;
   z-index: 1;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(31, 122, 77, 0.22);
-  box-shadow: 0 24px 70px rgba(4, 42, 27, 0.28);
+  background: rgba(255, 255, 255, 0.52);
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 8px 32px rgba(4, 42, 27, 0.18),
+    0 1.5px 0 rgba(255, 255, 255, 0.7) inset,
+    0 -1px 0 rgba(31, 122, 77, 0.12) inset;
 }
 
 .auth-top-cargosoft {
