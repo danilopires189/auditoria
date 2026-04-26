@@ -5126,17 +5126,17 @@ small {
   background-position: center;
   background-attachment: fixed;
   background-color: #0d4f35;
-  animation: clv-bg-reveal 3s ease forwards;
+  animation: clv-bg-reveal 2s ease forwards;
 }
 
 @keyframes clv-bg-reveal {
-  0%   { opacity: 0; }
-  100% { opacity: 1; }
+  0%   { opacity: 0; background-color: #0d4f35; }
+  100% { opacity: 1; background-color: #0d4f35; }
 }
 
 .page-shell-cargosoft .auth-card {
   animation: clv-card-enter 600ms ease both;
-  animation-delay: 3.6s;
+  animation-delay: 3s;
   opacity: 0;
 }
 
@@ -5238,6 +5238,20 @@ small {
 .auth-card-cargosoft .field-icon {
   color: #1f7a4d;
   background: rgba(31, 122, 77, 0.1);
+}
+
+.auth-card-cargosoft .password-toggle {
+  color: #1f7a4d;
+  background: rgba(31, 122, 77, 0.1);
+}
+
+.auth-card-cargosoft .password-toggle:hover {
+  color: #125d39;
+  background: rgba(31, 122, 77, 0.18);
+}
+
+.auth-card-cargosoft .password-toggle.active {
+  color: #125d39;
 }
 
 .auth-card-cargosoft input:focus,
