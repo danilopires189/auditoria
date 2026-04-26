@@ -194,6 +194,12 @@ export async function scanClvStage(payload: ClvStagePayload): Promise<ClvFeedRow
   return mapFeedRow(first);
 }
 
+export async function deleteClvMovimento(movId: string): Promise<void> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { error } = await supabase.rpc("rpc_clv_delete_movimento", { p_mov_id: movId });
+  if (error) throw new Error(toClvErrorMessage(error));
+}
+
 function patchOperationError(operation: ClvPendingOperation, message: string): ClvPendingOperation {
   return {
     ...operation,

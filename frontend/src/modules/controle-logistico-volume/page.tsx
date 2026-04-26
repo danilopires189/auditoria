@@ -39,6 +39,7 @@ import {
   saveClvPreferences
 } from "./storage";
 import {
+  deleteClvMovimento,
   fetchCdOptions,
   fetchClvPedidoManifest,
   fetchClvTodayFeed,
@@ -128,6 +129,12 @@ interface FractionModalDraft {
   tipo: ClvFracionadoTipo;
 }
 
+interface DeleteMovimentoConfirm {
+  movId: string;
+  etiqueta: string;
+  volume: string | null;
+}
+
 function createScannerInputState(): ScannerInputState {
   return {
     lastInputAt: 0,
@@ -180,12 +187,32 @@ function TypeIcon() {
   );
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={open ? "is-open" : ""}>
+      <path d="M8 10l4 4 4-4" />
+    </svg>
+  );
+}
+
 function SplitIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M7 18L17 6" />
       <text x="8" y="10" textAnchor="middle" fontSize="7" fontWeight="800" fill="currentColor" stroke="none">1</text>
       <text x="16" y="19" textAnchor="middle" fontSize="7" fontWeight="800" fill="currentColor" stroke="none">2</text>
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4h6v2" />
     </svg>
   );
 }
@@ -253,12 +280,36 @@ function playNotFoundChime(): void {
   });
 }
 
+function getEtiquetaTipoLabel(etiqueta: string): string {
+  const length = etiqueta.length;
+  if (length === 17 || length === 18) return "Knapp";
+  if (length === 23) return "Termolábeis/Alimentos";
+  if (length === 25) return "Pedido direto";
+  if (length === 26) return "Pulmão";
+  if (length === 27) return "Separação";
+  return "-";
+}
+
 function isInvalidEtiquetaMessage(message: string): boolean {
   return /etiqueta inválida|etiqueta invalida|tamanho inválido|tamanho invalido/i.test(message);
 }
 
 function isDuplicateEtiquetaMessage(message: string): boolean {
   return /repetid|já foi informado|ja foi informado|já foi confirmado|ja foi confirmado|duplic/i.test(message);
+}
+
+function compareMovimentoAsc(a: ClvMovimento, b: ClvMovimento): number {
+  const aTime = Date.parse(a.data_hr || "");
+  const bTime = Date.parse(b.data_hr || "");
+  if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return aTime - bTime;
+  return (a.mov_id || "").localeCompare(b.mov_id || "");
+}
+
+function formatMovimentoOperador(row: ClvFeedRow): string | null {
+  const mov = [...row.movimentos].sort(compareMovimentoAsc).find((item) => item.nome_operador || item.mat_operador);
+  if (!mov) return null;
+  const name = mov.nome_operador ? toDisplayName(mov.nome_operador) : "Operador";
+  return mov.mat_operador ? `${name} (${mov.mat_operador})` : name;
 }
 
 function formatDateTime(value: string | null | undefined): string {
@@ -381,6 +432,7 @@ function applyPendingOperations(rows: ClvFeedRow[], operations: ClvPendingOperat
   }
 
   return Array.from(map.values()).sort((a, b) => {
+    if (a.volume_total_informado !== b.volume_total_informado) return a.volume_total_informado - b.volume_total_informado;
     if (a.filial !== b.filial) return a.filial - b.filial;
     if (a.pedido !== b.pedido) return a.pedido - b.pedido;
     return (a.filial_nome ?? "").localeCompare(b.filial_nome ?? "", "pt-BR");
@@ -391,6 +443,7 @@ function mergeRow(rows: ClvFeedRow[], nextRow: ClvFeedRow): ClvFeedRow[] {
   const replaced = rows.some((row) => row.lote_id === nextRow.lote_id);
   const next = replaced ? rows.map((row) => (row.lote_id === nextRow.lote_id ? nextRow : row)) : [nextRow, ...rows];
   return next.sort((a, b) => {
+    if (a.volume_total_informado !== b.volume_total_informado) return a.volume_total_informado - b.volume_total_informado;
     if (a.filial !== b.filial) return a.filial - b.filial;
     if (a.pedido !== b.pedido) return a.pedido - b.pedido;
     return (a.filial_nome ?? "").localeCompare(b.filial_nome ?? "", "pt-BR");
@@ -463,6 +516,8 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const [fractionModalDraft, setFractionModalDraft] = useState<FractionModalDraft | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [deleteMovConfirm, setDeleteMovConfirm] = useState<DeleteMovimentoConfirm | null>(null);
+  const [busyDeleteMov, setBusyDeleteMov] = useState(false);
 
   const currentCd = globalAdmin ? cdAtivo : fixedCd;
 
@@ -1081,6 +1136,21 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     }
   }, [loadPending, pendingOps]);
 
+  const confirmDeleteMovimento = useCallback(async () => {
+    if (!deleteMovConfirm) return;
+    setBusyDeleteMov(true);
+    try {
+      await deleteClvMovimento(deleteMovConfirm.movId);
+      setDeleteMovConfirm(null);
+      await refreshFeed();
+    } catch (error) {
+      setErrorMessage(toClvErrorMessage(error));
+      setDeleteMovConfirm(null);
+    } finally {
+      setBusyDeleteMov(false);
+    }
+  }, [deleteMovConfirm, refreshFeed]);
+
   useEffect(() => {
     if (!knappModalState) return;
     const frameId = window.requestAnimationFrame(() => {
@@ -1475,6 +1545,19 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                 const countKey = etapaCountKey(etapa);
                 const pendingKey = etapaPendingKey(etapa);
                 const expanded = expandedLoteId === row.lote_id;
+                const fracionados = row.movimentos.filter((mov) => mov.fracionado);
+                const progressDone = row[countKey];
+                const progressTotal = etapa === "recebimento_cd" ? row.volume_total_informado : row.recebido_count;
+                const progressComplete = progressTotal > 0 && progressDone >= progressTotal;
+                const rowOperador = formatMovimentoOperador(row);
+                const movimentosDaEtapa = row.movimentos
+                  .filter((mov) => mov.etapa === etapa)
+                  .sort((a, b) => {
+                    const aVol = Number(a.volume ?? Number.MAX_SAFE_INTEGER);
+                    const bVol = Number(b.volume ?? Number.MAX_SAFE_INTEGER);
+                    if (aVol !== bVol) return aVol - bVol;
+                    return compareMovimentoAsc(a, b);
+                  });
                 return (
                   <article key={row.lote_id} className={`coleta-row-card clv-row-card${row[pendingKey] > 0 ? " has-pending" : ""}`}>
                     <button
@@ -1484,34 +1567,41 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                     >
                       <div className="coleta-row-line-main">
                         <strong>Filial {row.filial}{row.filial_nome ? ` · ${row.filial_nome}` : ""}</strong>
-                        <p>Pedido {row.pedido} · {row.rota ?? "Sem rota"}</p>
+                        <p>Pedido {row.pedido}{row.data_pedido ? ` · ${formatDateOnlyPtBR(row.data_pedido)}` : ""} · {row.rota ?? "Sem rota"}</p>
+                        {rowOperador ? <small className="clv-row-operator">{rowOperador}</small> : null}
                       </div>
-                      <div className="clv-row-counts">
-                        <span>{row[countKey]}/{etapa === "recebimento_cd" ? row.volume_total_informado : row.recebido_count}</span>
-                        <strong>{row[pendingKey]} pend.</strong>
+                      <div className={`clv-row-progress${progressComplete ? " is-complete" : ""}`}>
+                        <ModuleIcon name="volume" />
+                        <span>{progressDone} de {progressTotal}</span>
+                      </div>
+                      <div className="clv-row-expand" aria-label={expanded ? "Recolher volumes" : "Expandir volumes"}>
+                        <ChevronIcon open={expanded} />
                       </div>
                     </button>
                     {expanded ? (
                       <div className="coleta-row-edit-card">
-                        <div className="coleta-row-detail-grid">
-                          <div className="coleta-row-detail"><span>Informado</span><strong>{row.volume_total_informado}</strong></div>
-                          <div className="coleta-row-detail"><span>{etapa === "recebimento_cd" ? "Bipado" : "Bipado etapa"}</span><strong>{row[countKey]}</strong></div>
-                          <div className="coleta-row-detail"><span>Pendente</span><strong>{row[pendingKey]}</strong></div>
-                          <div className="coleta-row-detail"><span>{etapa === "recebimento_cd" ? "Bipado" : "Recebido"}</span><strong>{row.recebido_count}</strong></div>
-                          <div className="coleta-row-detail"><span>Entrada</span><strong>{row.entrada_count}</strong></div>
-                          <div className="coleta-row-detail"><span>Saida</span><strong>{row.saida_count}</strong></div>
-                          <div className="coleta-row-detail"><span>Entrega</span><strong>{row.entrega_count}</strong></div>
-                          <div className="coleta-row-detail"><span>Data pedido</span><strong>{formatDateOnlyPtBR(row.data_pedido)}</strong></div>
-                        </div>
                         <div className="clv-mov-list">
-                          {row.movimentos.map((mov) => (
-                            <div key={`${mov.mov_id}:${mov.etapa}`} className={`clv-mov-item${mov.is_local ? " is-local" : ""}`}>
-                              <strong>{CLV_ETAPA_LABELS[mov.etapa]}</strong>
-                              <span>{mov.etiqueta} · Vol {mov.volume ?? "-"}</span>
-                              <span>
-                                {mov.fracionado ? `Fracionado ${mov.fracionado_qtd ?? "-"} · ${mov.fracionado_tipo ? CLV_FRACIONADO_TIPO_LABELS[mov.fracionado_tipo] : "-"}` : "Inteiro"}
-                              </span>
-                              <small>{mov.is_local ? "Pendente local" : `${toDisplayName(mov.nome_operador)} · ${formatDateTime(mov.data_hr)}`}</small>
+                          {movimentosDaEtapa.map((mov) => (
+                            <div key={`${mov.mov_id}:${mov.etapa}`} className={`clv-mov-item${mov.is_local ? " is-local" : ""}${mov.fracionado ? " is-fracionado" : ""}`}>
+                              <div className="clv-mov-item-header">
+                                <strong>{mov.etiqueta} · Vol {mov.volume ?? "-"}</strong>
+                                {!mov.is_local && mov.mat_operador === profile.mat ? (
+                                  <button
+                                    type="button"
+                                    className="clv-mov-delete-btn"
+                                    aria-label="Excluir leitura"
+                                    title="Excluir leitura"
+                                    onClick={() => setDeleteMovConfirm({ movId: mov.mov_id, etiqueta: mov.etiqueta, volume: mov.volume })}
+                                  >
+                                    <TrashIcon />
+                                  </button>
+                                ) : null}
+                              </div>
+                              <span className="clv-mov-tipo">{getEtiquetaTipoLabel(mov.etiqueta)}</span>
+                              {mov.fracionado ? (
+                                <span className="clv-badge-fracionado">Fracionado · qtd {mov.fracionado_qtd ?? "-"} · {mov.fracionado_tipo ? CLV_FRACIONADO_TIPO_LABELS[mov.fracionado_tipo] : "-"}</span>
+                              ) : null}
+                              <small>{mov.is_local ? "Pendente local" : formatDateTime(mov.data_hr)}</small>
                             </div>
                           ))}
                         </div>
@@ -1809,6 +1899,36 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                 </div>
                 <p className="scanner-hint">Aponte a câmera para leitura automática.</p>
                 {scannerError ? <div className="alert error">{scannerError}</div> : null}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {deleteMovConfirm && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clv-delete-mov-title"
+              onClick={() => setDeleteMovConfirm(null)}
+            >
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="clv-delete-mov-title">Excluir leitura?</h3>
+                <p>
+                  A etiqueta <strong>{deleteMovConfirm.etiqueta}</strong>
+                  {deleteMovConfirm.volume ? ` · Vol ${deleteMovConfirm.volume}` : ""} será removida permanentemente desta etapa.
+                  Esta ação não pode ser desfeita.
+                </p>
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" disabled={busyDeleteMov} onClick={() => setDeleteMovConfirm(null)}>
+                    Cancelar
+                  </button>
+                  <button className="btn btn-danger" type="button" disabled={busyDeleteMov} onClick={() => void confirmDeleteMovimento()}>
+                    {busyDeleteMov ? "Excluindo..." : "Sim, excluir"}
+                  </button>
+                </div>
               </div>
             </div>,
             document.body
