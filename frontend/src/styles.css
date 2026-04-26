@@ -5159,10 +5159,10 @@ small {
 }
 
 .auth-card-cargosoft .auth-top {
-  justify-content: center;
+  justify-content: space-between;
   flex-direction: row;
   align-items: center;
-  gap: 18px;
+  gap: 0;
   padding-top: 8px;
   margin-bottom: 6px;
 }
