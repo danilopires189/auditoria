@@ -22270,6 +22270,53 @@ small {
   height: 14px;
 }
 
+
+.clv-pedido-panel .input-icon-wrap input {
+  padding-left: 42px;
+}
+
+.clv-pedido-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.clv-pedido-label-icon {
+  display: flex;
+  align-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--muted, #66756a);
+}
+
+.clv-pedido-label-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.clv-search-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(22, 163, 74, 0.3);
+  border-top-color: #16a34a;
+  border-radius: 50%;
+  animation: clv-spin 0.7s linear infinite;
+}
+
+@keyframes clv-spin {
+  to { transform: rotate(360deg); }
+}
+
+.clv-input-action-clear {
+  color: #b91c1c;
+  opacity: 1 !important;
+}
+
+.clv-input-action-clear:hover {
+  background: rgba(185, 28, 28, 0.08);
+}
+
 .clv-input-action-validate {
   color: #16a34a;
   opacity: 1 !important;

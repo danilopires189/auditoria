@@ -213,6 +213,26 @@ function CheckIcon() {
   );
 }
 
+function ClipboardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M9 12h6" />
+      <path d="M9 16h4" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.35-4.35" />
+    </svg>
+  );
+}
+
 function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -527,6 +547,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const [deleteMovConfirm, setDeleteMovConfirm] = useState<DeleteMovimentoConfirm | null>(null);
   const [busyDeleteMov, setBusyDeleteMov] = useState(false);
   const [manualTyping, setManualTyping] = useState(false);
+  const [pedidoSearchError, setPedidoSearchError] = useState(false);
 
   const currentCd = globalAdmin ? cdAtivo : fixedCd;
 
@@ -732,9 +753,16 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
       setErrorMessage("Selecione o CD antes de carregar o pedido.");
       return;
     }
-    const pedido = Number.parseInt(pedidoInput.replace(/\D/g, ""), 10);
-    if (!Number.isFinite(pedido)) {
+    const rawPedido = pedidoInput.replace(/\D/g, "");
+    const pedido = Number.parseInt(rawPedido, 10);
+    if (!Number.isFinite(pedido) || pedido <= 0) {
       setErrorMessage("Informe o número do pedido.");
+      return;
+    }
+    const pedidoNoRecebimento = recebimentoRows.some((row) => row.pedido === pedido);
+    if (!pedidoNoRecebimento) {
+      setErrorMessage(`Pedido ${pedido} não encontrado no Recebimento CD. Verifique e tente novamente.`);
+      setPedidoSearchError(true);
       return;
     }
     if (!isOnline) {
@@ -748,6 +776,8 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
       const rows = await fetchClvPedidoManifest(currentCd, pedido, etapa);
       setManifestRows(rows);
       setLoadedPedido(pedido);
+      setPedidoInput("");
+      setPedidoSearchError(false);
       setActiveDeliveryRow(null);
       setStatusMessage(rows.length > 0 ? `${rows.length} ${rows.length === 1 ? "loja carregada" : "lojas carregadas"} para o pedido ${pedido}.` : "Nenhum volume recebido para este pedido.");
     } catch (error) {
@@ -1365,18 +1395,48 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
             {stageNeedsPedido ? (
               <div className="coleta-form clv-pedido-panel">
                 <label>
-                  Pedido
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={pedidoInput}
-                    onChange={(event) => setPedidoInput(event.target.value.replace(/\D/g, ""))}
-                    placeholder="Número do pedido"
-                  />
+                  {loadedPedido ? `Pedido ${loadedPedido} carregado` : "Pedido"}
+                  <div className="input-icon-wrap with-action">
+                    <span className="field-icon" aria-hidden="true"><ClipboardIcon /></span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={pedidoInput}
+                      onChange={(event) => { setPedidoInput(event.target.value.replace(/\D/g, "")); setPedidoSearchError(false); }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && pedidoInput) void loadPedidoManifest();
+                      }}
+                      placeholder={loadedPedido ? "Buscar outro pedido..." : "Digite o número do pedido"}
+                      disabled={currentCd == null}
+                    />
+                    {pedidoInput ? (
+                      <div className="clv-input-actions">
+                        {pedidoSearchError ? (
+                          <button
+                            className="input-action-btn clv-input-action clv-input-action-clear"
+                            type="button"
+                            onClick={() => { setPedidoInput(""); setPedidoSearchError(false); setErrorMessage(null); }}
+                            aria-label="Limpar pedido"
+                            title="Limpar"
+                          >
+                            <CloseIcon />
+                          </button>
+                        ) : (
+                          <button
+                            className="input-action-btn clv-input-action clv-input-action-validate"
+                            type="button"
+                            onClick={() => void loadPedidoManifest()}
+                            disabled={currentCd == null || busyRefresh}
+                            aria-label="Buscar pedido"
+                            title="Buscar pedido"
+                          >
+                            {busyRefresh ? <span className="clv-search-spinner" /> : <SearchIcon />}
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                 </label>
-                <button className="btn btn-primary" type="button" onClick={() => void loadPedidoManifest()} disabled={currentCd == null || busyRefresh}>
-                  {busyRefresh ? "Carregando..." : "Carregar pedido"}
-                </button>
               </div>
             ) : null}
 
@@ -1421,7 +1481,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
               </div>
             ) : null}
 
-            {etapa !== "recebimento_cd" || receiptArmed ? (
+            {(etapa !== "recebimento_cd" && loadedPedido != null) || (etapa === "recebimento_cd" && receiptArmed) ? (
               <form className="coleta-form clv-scan-form" onSubmit={onSubmit}>
                 <div className="coleta-form-grid aud-caixa-form-grid">
                   <label>
