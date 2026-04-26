@@ -5186,6 +5186,7 @@ small {
   height: 84px;
   max-height: 84px;
   object-fit: contain;
+  object-position: right center;
   align-self: center;
   transform: translateY(4px);
   filter: drop-shadow(0 10px 16px rgba(6, 45, 29, 0.14));
