@@ -77,7 +77,7 @@ body {
 
 .auth-card,
 .loading-card {
-  width: min(100%, 470px);
+  width: min(100%, 301px);
 }
 
 .auth-card-cargosoft {
