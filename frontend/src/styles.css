@@ -5235,6 +5235,11 @@ small {
   box-shadow: 0 14px 24px rgba(22, 111, 68, 0.28);
 }
 
+.auth-card-cargosoft .field-icon {
+  color: #1f7a4d;
+  background: rgba(31, 122, 77, 0.1);
+}
+
 .auth-card-cargosoft input:focus,
 .auth-card-cargosoft select:focus {
   outline: 2px solid rgba(31, 122, 77, 0.24);
