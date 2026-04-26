@@ -3194,20 +3194,21 @@ export default function App() {
       style={isCargoSoftBranding ? { backgroundImage: `linear-gradient(90deg, rgba(8, 48, 35, 0.64), rgba(8, 48, 35, 0.18)), url(${cargoSoftBackgroundImage})` } : undefined}
     >
       <div className={`auth-card surface-enter${isCargoSoftBranding ? " auth-card-cargosoft" : ""}`}>
-        <div className="auth-top">
-          {isCargoSoftBranding ? (
-            <>
-              <img className="brand-logo brand-logo-cargosoft-main" src={logoImage} alt="Logo Auditoria" />
-              <img className="brand-stamp brand-stamp-cargosoft" src={cargoSoftLogoImage} alt="CargoSoft" />
-            </>
-          ) : (
-            <>
+        {isCargoSoftBranding ? (
+          <div className="auth-top auth-top-cargosoft">
+            <img className="brand-logo brand-logo-cargosoft-main" src={logoImage} alt="Logo Auditoria" />
+            <p className="auth-brand-caption">{authBranding.authCaption}</p>
+            <img className="brand-stamp brand-stamp-cargosoft" src={cargoSoftLogoImage} alt="CargoSoft" />
+          </div>
+        ) : (
+          <>
+            <div className="auth-top">
               <img className="brand-logo" src={logoImage} alt="Logo Auditoria" />
               <img className="brand-stamp" src={pmImage} alt="Marca interna" />
-            </>
-          )}
-        </div>
-        <p className="auth-brand-caption">{authBranding.authCaption}</p>
+            </div>
+            <p className="auth-brand-caption">{authBranding.authCaption}</p>
+          </>
+        )}
 
         <section key={authMode} className="auth-panel panel-enter">
           <h1>{authMode === "login" ? "Login" : authMode === "register" ? "Cadastro" : "Redefinir senha"}</h1>

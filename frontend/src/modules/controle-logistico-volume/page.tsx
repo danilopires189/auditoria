@@ -205,6 +205,14 @@ function SplitIcon() {
   );
 }
 
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -518,6 +526,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [deleteMovConfirm, setDeleteMovConfirm] = useState<DeleteMovimentoConfirm | null>(null);
   const [busyDeleteMov, setBusyDeleteMov] = useState(false);
+  const [manualTyping, setManualTyping] = useState(false);
 
   const currentCd = globalAdmin ? cdAtivo : fixedCd;
 
@@ -669,6 +678,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     setFracionado(false);
     setFracionadoQtd("");
     setFracionadoTipo("pedido_direto");
+    setManualTyping(false);
     window.requestAnimationFrame(() => etiquetaRef.current?.focus({ preventScroll: true }));
   }, []);
 
@@ -739,7 +749,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
       setManifestRows(rows);
       setLoadedPedido(pedido);
       setActiveDeliveryRow(null);
-      setStatusMessage(rows.length > 0 ? `${rows.length} loja(s) carregada(s) para o pedido ${pedido}.` : "Nenhum volume recebido para este pedido.");
+      setStatusMessage(rows.length > 0 ? `${rows.length} ${rows.length === 1 ? "loja carregada" : "lojas carregadas"} para o pedido ${pedido}.` : "Nenhum volume recebido para este pedido.");
     } catch (error) {
       setErrorMessage(toClvErrorMessage(error));
     } finally {
@@ -1443,15 +1453,18 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
                           if (!nextValue) {
                             state.burstChars = 0;
+                            setManualTyping(false);
                             clearScannerInputTimer();
                             return;
                           }
 
                           if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+                            setManualTyping(false);
                             scheduleScannerInputAutoSubmit(nextValue);
                             return;
                           }
 
+                          setManualTyping(true);
                           clearScannerInputTimer();
                         }}
                         onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -1479,28 +1492,42 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                         autoComplete="off"
                       />
                       <div className="clv-input-actions">
-                        {etapa === "recebimento_cd" ? (
+                        {manualTyping ? (
                           <button
-                            className={`input-action-btn clv-input-action${fracionado ? " is-active" : ""}`}
-                            type="button"
-                            onClick={fracionado ? clearFractionState : openFractionModal}
-                            disabled={scanDisabled}
-                            aria-label={fracionado ? "Limpar volume fracionado" : "Marcar próximo volume como fracionado"}
-                            title={fracionado ? "Limpar volume fracionado" : "Volume fracionado"}
+                            className="input-action-btn clv-input-action clv-input-action-validate"
+                            type="submit"
+                            disabled={scanDisabled || busySubmit}
+                            aria-label="Validar etiqueta"
+                            title="Validar etiqueta"
                           >
-                            <SplitIcon />
+                            <CheckIcon />
                           </button>
-                        ) : null}
-                        <button
-                          className="input-action-btn clv-input-action"
-                          type="button"
-                          onClick={() => setScannerOpen(true)}
-                          disabled={scanDisabled}
-                          aria-label="Ler etiqueta pela câmera"
-                          title="Ler etiqueta pela câmera"
-                        >
-                          <CameraIcon />
-                        </button>
+                        ) : (
+                          <>
+                            {etapa === "recebimento_cd" ? (
+                              <button
+                                className={`input-action-btn clv-input-action${fracionado ? " is-active" : ""}`}
+                                type="button"
+                                onClick={fracionado ? clearFractionState : openFractionModal}
+                                disabled={scanDisabled}
+                                aria-label={fracionado ? "Limpar volume fracionado" : "Marcar próximo volume como fracionado"}
+                                title={fracionado ? "Limpar volume fracionado" : "Volume fracionado"}
+                              >
+                                <SplitIcon />
+                              </button>
+                            ) : null}
+                            <button
+                              className="input-action-btn clv-input-action"
+                              type="button"
+                              onClick={() => setScannerOpen(true)}
+                              disabled={scanDisabled}
+                              aria-label="Ler etiqueta pela câmera"
+                              title="Ler etiqueta pela câmera"
+                            >
+                              <CameraIcon />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                     {fracionado && etapa === "recebimento_cd" ? (
@@ -1511,9 +1538,6 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                   </label>
                 </div>
 
-                <button className="btn btn-primary coleta-submit" type="submit" disabled={scanDisabled}>
-                  {busySubmit ? "Salvando..." : etapa === "recebimento_cd" ? "Registrar recebimento" : "Confirmar volume"}
-                </button>
               </form>
             ) : null}
 
@@ -1522,7 +1546,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
             <div className="coleta-list-head">
               <h3>{etapa === "recebimento_cd" ? "Feed de recebimento" : loadedPedido ? `Pedido ${loadedPedido}` : "Volumes do pedido"}</h3>
-              <span>{filteredRows.length} loja(s)</span>
+              <span>{filteredRows.length} {filteredRows.length === 1 ? "loja" : "lojas"}</span>
             </div>
 
             <div className="input-icon-wrap aud-caixa-feed-search">
@@ -1545,8 +1569,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                 const countKey = etapaCountKey(etapa);
                 const pendingKey = etapaPendingKey(etapa);
                 const expanded = expandedLoteId === row.lote_id;
-                const fracionados = row.movimentos.filter((mov) => mov.fracionado);
-                const progressDone = row[countKey];
+const progressDone = row[countKey];
                 const progressTotal = etapa === "recebimento_cd" ? row.volume_total_informado : row.recebido_count;
                 const progressComplete = progressTotal > 0 && progressDone >= progressTotal;
                 const rowOperador = formatMovimentoOperador(row);

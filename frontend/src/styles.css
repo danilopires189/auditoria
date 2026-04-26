@@ -5143,6 +5143,21 @@ small {
   box-shadow: 0 24px 70px rgba(4, 42, 27, 0.28);
 }
 
+.auth-top-cargosoft {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+.auth-top-cargosoft .auth-brand-caption {
+  flex: 1;
+  text-align: center;
+  margin: 0;
+}
+
 .auth-card-cargosoft .auth-top {
   justify-content: center;
   flex-direction: row;
@@ -22253,6 +22268,16 @@ small {
 .clv-mov-delete-btn svg {
   width: 14px;
   height: 14px;
+}
+
+.clv-input-action-validate {
+  color: #16a34a;
+  opacity: 1 !important;
+}
+
+.clv-input-action-validate:hover {
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
 }
 
 .clv-mov-tipo {
