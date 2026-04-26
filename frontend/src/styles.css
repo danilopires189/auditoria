@@ -77,7 +77,7 @@ body {
 
 .auth-card,
 .loading-card {
-  width: min(100%, 301px);
+  width: min(100%, 391px);
   border-radius: 24px;
   background: var(--card);
   box-shadow: var(--shadow);
@@ -6321,12 +6321,12 @@ small {
   }
 
   .auth-card:not(.auth-card-cargosoft) {
-    width: 301px;
+    width: 391px;
     padding: 10px 26px 26px;
   }
 
   .auth-card-cargosoft {
-    width: 300px;
+    width: 390px;
   }
 }
 
