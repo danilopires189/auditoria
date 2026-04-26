@@ -21544,17 +21544,20 @@ small {
 
 .clv-shell .module-icon,
 .clv-shell .field-icon,
+.confirm-dialog:has(#clv-knapp-title) .field-icon,
 .clv-context-dialog .field-icon {
   color: #1f7a4d;
   background: rgba(31, 122, 77, 0.12);
 }
 
 .clv-shell .field-icon svg,
+.confirm-dialog:has(#clv-knapp-title) .field-icon svg,
 .clv-context-dialog .field-icon svg {
   stroke: currentColor;
 }
 
 .clv-shell .input-icon-wrap:focus-within,
+.confirm-dialog:has(#clv-knapp-title) .input-icon-wrap:focus-within,
 .clv-context-dialog .input-icon-wrap:focus-within {
   outline-color: rgba(31, 122, 77, 0.25);
   border-color: #1f7a4d;
@@ -21573,14 +21576,17 @@ small {
 }
 
 .clv-shell .btn-primary,
+.confirm-dialog:has(#clv-knapp-title) .btn-primary,
 .clv-context-dialog .btn-primary {
   background: linear-gradient(145deg, #1f7a4d, #125d39);
   box-shadow: 0 12px 22px rgba(22, 111, 68, 0.22);
 }
 
 .clv-shell .btn-primary:hover:not(:disabled),
+.confirm-dialog:has(#clv-knapp-title) .btn-primary:hover:not(:disabled),
 .clv-context-dialog .btn-primary:hover:not(:disabled),
 .clv-shell .btn-primary:focus-visible,
+.confirm-dialog:has(#clv-knapp-title) .btn-primary:focus-visible,
 .clv-context-dialog .btn-primary:focus-visible {
   background: linear-gradient(145deg, #17623e, #0f4c30);
   box-shadow: 0 14px 24px rgba(22, 111, 68, 0.28);
