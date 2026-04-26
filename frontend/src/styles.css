@@ -5125,6 +5125,7 @@ small {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
+  background-color: #0d4f35;
   animation: clv-bg-reveal 3s ease forwards;
 }
 
@@ -5135,7 +5136,7 @@ small {
 
 .page-shell-cargosoft .auth-card {
   animation: clv-card-enter 600ms ease both;
-  animation-delay: 2.6s;
+  animation-delay: 3.6s;
   opacity: 0;
 }
 
