@@ -78,10 +78,6 @@ body {
 .auth-card,
 .loading-card {
   width: min(100%, 301px);
-}
-
-.auth-card-cargosoft {
-  width: min(100%, 300px);
   border-radius: 24px;
   background: var(--card);
   box-shadow: var(--shadow);
@@ -5133,10 +5129,6 @@ small {
   animation: clv-bg-reveal 2s ease forwards;
 }
 
-.page-shell-cargosoft ~ body,
-body:has(.page-shell-cargosoft) {
-  background: #0d4f35;
-}
 
 @keyframes clv-bg-reveal {
   0%   { opacity: 0; background-color: #0d4f35; }
@@ -6328,9 +6320,13 @@ body:has(.page-shell-cargosoft) {
     padding-inline: 0;
   }
 
-  .auth-card {
-    width: 470px;
+  .auth-card:not(.auth-card-cargosoft) {
+    width: 301px;
     padding: 10px 26px 26px;
+  }
+
+  .auth-card-cargosoft {
+    width: 300px;
   }
 }
 
