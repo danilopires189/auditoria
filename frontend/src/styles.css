@@ -81,7 +81,7 @@ body {
 }
 
 .auth-card-cargosoft {
-  width: min(100%, 376px);
+  width: min(100%, 300px);
   border-radius: 24px;
   background: var(--card);
   box-shadow: var(--shadow);
@@ -5181,9 +5181,15 @@ body:has(.page-shell-cargosoft) {
     0 -1px 0 rgba(31, 122, 77, 0.1) inset;
 }
 
-.auth-card-cargosoft .input-icon-wrap {
+.auth-card-cargosoft .input-icon-wrap,
+.auth-card-cargosoft .password-wrap {
   background: rgba(255, 255, 255, 0.38);
-  border-color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+}
+
+.auth-card-cargosoft .password-wrap input {
+  background: transparent;
 }
 
 .auth-card-cargosoft .coleta-form,
