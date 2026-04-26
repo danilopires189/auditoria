@@ -5125,6 +5125,29 @@ small {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
+  animation: clv-bg-reveal 3s ease forwards;
+}
+
+@keyframes clv-bg-reveal {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.page-shell-cargosoft .auth-card {
+  animation: clv-card-enter 600ms ease both;
+  animation-delay: 2.6s;
+  opacity: 0;
+}
+
+@keyframes clv-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .page-shell-cargosoft::before {
