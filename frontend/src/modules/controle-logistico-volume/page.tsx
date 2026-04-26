@@ -1,21 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type {
+  ChangeEvent as ReactChangeEvent,
+  FormEvent,
+  KeyboardEvent as ReactKeyboardEvent
+} from "react";
+import type { IScannerControls } from "@zxing/browser";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { BackIcon, ModuleIcon } from "../../ui/icons";
 import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia } from "../../shared/brasilia-datetime";
+import { useScanFeedback } from "../../shared/use-scan-feedback";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   CLV_ETAPA_LABELS,
   CLV_FRACIONADO_TIPO_LABELS,
   CLV_INVALID_KNAPP_MESSAGE,
   CLV_MAX_LENGTH,
-  CLV_STAGE_ETAPAS,
   canAccessClv,
   clampEtiquetaInput,
   etapaCountKey,
   etapaPendingKey,
+  isAllowedEtiquetaLength,
+  normalizeEtiquetaInput,
   normalizeFracionadoTipo,
   normalizeSearchText,
   parseClvEtiqueta,
@@ -58,6 +66,12 @@ interface ControleLogisticoVolumePageProps {
 
 const MODULE_DEF = getModuleByKeyOrThrow("controle-logistico-volume");
 const SYNC_INTERVAL_MS = 45_000;
+const SCANNER_INPUT_MAX_INTERVAL_MS = 45;
+const SCANNER_INPUT_MIN_BURST_CHARS = 5;
+const SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS = 90;
+const SCANNER_INPUT_SUBMIT_COOLDOWN_MS = 600;
+const NOT_FOUND_CHIME_DURATION_MS = 420;
+let sharedClvAudioContext: AudioContext | null = null;
 
 const CLV_STAGE_META: Record<ClvEtapa, { title: string; description: string; icon: ModuleIconName; tone: ModuleTone; tag: string }> = {
   recebimento_cd: {
@@ -92,9 +106,159 @@ const CLV_STAGE_META: Record<ClvEtapa, { title: string; description: string; ico
 
 const CLV_STAGE_ORDER = Object.keys(CLV_STAGE_META) as ClvEtapa[];
 
+interface ScannerInputState {
+  lastInputAt: number;
+  lastLength: number;
+  burstChars: number;
+  timerId: number | null;
+  lastSubmittedValue: string;
+  lastSubmittedAt: number;
+}
+
+interface KnappModalState {
+  etiqueta: string;
+}
+
+interface ReceiptContextModalState {
+  action: "start" | "switch";
+}
+
+interface FractionModalDraft {
+  quantidade: string;
+  tipo: ClvFracionadoTipo;
+}
+
+function createScannerInputState(): ScannerInputState {
+  return {
+    lastInputAt: 0,
+    lastLength: 0,
+    burstChars: 0,
+    timerId: null,
+    lastSubmittedValue: "",
+    lastSubmittedAt: 0
+  };
+}
+
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 7h3l1.4-2h4.2L15 7h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" />
+      <circle cx="12" cy="13" r="3.2" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
+function TagIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 8l8-4 8 4-8 4-8-4z" />
+      <path d="M4 8v8l8 4 8-4V8" />
+      <path d="M12 12v8" />
+    </svg>
+  );
+}
+
+function TypeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 7h12" />
+      <path d="M6 12h12" />
+      <path d="M6 17h12" />
+      <path d="M4 7h.01" />
+      <path d="M4 12h.01" />
+      <path d="M4 17h.01" />
+    </svg>
+  );
+}
+
+function SplitIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 18L17 6" />
+      <text x="8" y="10" textAnchor="middle" fontSize="7" fontWeight="800" fill="currentColor" stroke="none">1</text>
+      <text x="16" y="19" textAnchor="middle" fontSize="7" fontWeight="800" fill="currentColor" stroke="none">2</text>
+    </svg>
+  );
+}
+
 function safeUuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const audioCtor = window.AudioContext
+    ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!audioCtor) return null;
+  if (!sharedClvAudioContext) {
+    sharedClvAudioContext = new audioCtor();
+  }
+  return sharedClvAudioContext;
+}
+
+function runWithAudioContext(play: (ctx: AudioContext) => void): void {
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+  const run = () => {
+    try {
+      play(ctx);
+    } catch {
+      // Browser pode bloquear audio programatico.
+    }
+  };
+  if (ctx.state === "suspended") {
+    void ctx.resume().then(run).catch(() => undefined);
+    return;
+  }
+  run();
+}
+
+function playNotFoundChime(): void {
+  runWithAudioContext((ctx) => {
+    const start = ctx.currentTime + 0.005;
+    const end = start + (NOT_FOUND_CHIME_DURATION_MS / 1000);
+    const mid = start + ((NOT_FOUND_CHIME_DURATION_MS / 1000) * 0.52);
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, start);
+    master.gain.exponentialRampToValueAtTime(0.28, start + 0.025);
+    master.gain.exponentialRampToValueAtTime(0.2, mid);
+    master.gain.exponentialRampToValueAtTime(0.0001, end);
+    master.connect(ctx.destination);
+
+    const toneA = ctx.createOscillator();
+    toneA.type = "triangle";
+    toneA.frequency.setValueAtTime(700, start);
+    toneA.frequency.exponentialRampToValueAtTime(560, mid);
+    toneA.connect(master);
+    toneA.start(start);
+    toneA.stop(mid + 0.03);
+
+    const toneB = ctx.createOscillator();
+    toneB.type = "sawtooth";
+    toneB.frequency.setValueAtTime(430, mid);
+    toneB.frequency.exponentialRampToValueAtTime(310, end);
+    toneB.connect(master);
+    toneB.start(mid);
+    toneB.stop(end);
+  });
+}
+
+function isInvalidEtiquetaMessage(message: string): boolean {
+  return /etiqueta inválida|etiqueta invalida|tamanho inválido|tamanho invalido/i.test(message);
+}
+
+function isDuplicateEtiquetaMessage(message: string): boolean {
+  return /repetid|já foi informado|ja foi informado|já foi confirmado|ja foi confirmado|duplic/i.test(message);
 }
 
 function formatDateTime(value: string | null | undefined): string {
@@ -256,7 +420,13 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const globalAdmin = isGlobalAdmin(profile);
   const fixedCd = fixedCdFromProfile(profile);
   const etiquetaRef = useRef<HTMLInputElement | null>(null);
+  const knappInputRef = useRef<HTMLInputElement | null>(null);
   const syncTimerRef = useRef<number | null>(null);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerInputStateRef = useRef<ScannerInputState>(createScannerInputState());
+  const knappInputStateRef = useRef<ScannerInputState>(createScannerInputState());
+  const { triggerScanErrorAlert } = useScanFeedback(() => etiquetaRef.current);
 
   const [etapa, setEtapa] = useState<ClvEtapa | null>(null);
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
@@ -288,10 +458,19 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const [expandedLoteId, setExpandedLoteId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [knappModalState, setKnappModalState] = useState<KnappModalState | null>(null);
+  const [receiptContextModalState, setReceiptContextModalState] = useState<ReceiptContextModalState | null>(null);
+  const [fractionModalDraft, setFractionModalDraft] = useState<FractionModalDraft | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
 
   const currentCd = globalAdmin ? cdAtivo : fixedCd;
 
   const visibleBaseRows = etapa === "recebimento_cd" ? feedRows : manifestRows;
+  const recebimentoRows = useMemo(
+    () => applyPendingOperations(feedRows, pendingOps, currentCd),
+    [currentCd, feedRows, pendingOps]
+  );
   const visibleRows = useMemo(
     () => applyPendingOperations(visibleBaseRows, pendingOps, currentCd),
     [currentCd, pendingOps, visibleBaseRows]
@@ -311,18 +490,10 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     });
   }, [feedSearch, visibleRows]);
 
-  const totals = useMemo(() => {
-    const rows = visibleRows;
-    const etapaAtual = etapa ?? "recebimento_cd";
-    const countKey = etapaCountKey(etapaAtual);
-    const pendingKey = etapaPendingKey(etapaAtual);
-    return {
-      informado: rows.reduce((sum, row) => sum + row.volume_total_informado, 0),
-      recebido: rows.reduce((sum, row) => sum + row.recebido_count, 0),
-      etapa: rows.reduce((sum, row) => sum + row[countKey], 0),
-      pendente: rows.reduce((sum, row) => sum + row[pendingKey], 0)
-    };
-  }, [etapa, visibleRows]);
+  const hasRecebimentoForCurrentCd = useMemo(
+    () => recebimentoRows.some((row) => row.recebido_count > 0 || row.volume_total_informado > 0),
+    [recebimentoRows]
+  );
 
   const loadPending = useCallback(async () => {
     const [ops, summary] = await Promise.all([
@@ -446,7 +617,27 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     window.requestAnimationFrame(() => etiquetaRef.current?.focus({ preventScroll: true }));
   }, []);
 
+  const playScanErrorByMessage = useCallback((message: string) => {
+    if (isDuplicateEtiquetaMessage(message)) {
+      triggerScanErrorAlert(message);
+      return;
+    }
+    if (isInvalidEtiquetaMessage(message)) {
+      playNotFoundChime();
+    }
+  }, [triggerScanErrorAlert]);
+
+  const reportScanError = useCallback((error: unknown) => {
+    const message = toClvErrorMessage(error);
+    setErrorMessage(message);
+    playScanErrorByMessage(message);
+  }, [playScanErrorByMessage]);
+
   const chooseStage = useCallback((nextEtapa: ClvEtapa) => {
+    if (nextEtapa !== "recebimento_cd" && !hasRecebimentoForCurrentCd) {
+      setErrorMessage("Recebimento CD precisa acontecer primeiro para liberar as demais etapas.");
+      return;
+    }
     setEtapa(nextEtapa);
     setShowStagePicker(false);
     setErrorMessage(null);
@@ -460,11 +651,18 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     setVolumeTotalInput("");
     setFeedSearch("");
     setExpandedLoteId(null);
+    setKnappModalState(null);
+    setReceiptContextModalState(null);
+    setFractionModalDraft(null);
     clearScanInputs();
-  }, [clearScanInputs]);
+  }, [clearScanInputs, hasRecebimentoForCurrentCd]);
 
   const loadPedidoManifest = useCallback(async () => {
     if (!etapa || etapa === "recebimento_cd") return;
+    if (!hasRecebimentoForCurrentCd) {
+      setErrorMessage("Recebimento CD precisa acontecer primeiro para liberar as demais etapas.");
+      return;
+    }
     if (currentCd == null) {
       setErrorMessage("Selecione o CD antes de carregar o pedido.");
       return;
@@ -492,22 +690,22 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     } finally {
       setBusyRefresh(false);
     }
-  }, [currentCd, etapa, isOnline, pedidoInput]);
+  }, [currentCd, etapa, hasRecebimentoForCurrentCd, isOnline, pedidoInput]);
 
-  const validateCommonScan = useCallback(() => {
+  const validateCommonScan = useCallback((rawEtiqueta: string, rawKnappId?: string | null) => {
     if (!etapa) throw new Error("Selecione uma etapa.");
     if (currentCd == null) throw new Error("Selecione o CD antes de continuar.");
-    const parsed = parseClvEtiqueta(etiquetaInput, idKnappInput, { currentCd });
+    const parsed = parseClvEtiqueta(rawEtiqueta, rawKnappId, { currentCd });
     if (requiresKnappId(parsed.length) && !parsed.id_knapp) throw new Error(CLV_INVALID_KNAPP_MESSAGE);
     return { parsed, cd: currentCd };
-  }, [currentCd, etapa, etiquetaInput, idKnappInput]);
+  }, [currentCd, etapa]);
 
-  const submitRecebimento = useCallback(async () => {
+  const submitRecebimento = useCallback(async (rawEtiqueta: string, rawKnappId?: string | null) => {
     if (!receiptArmed) {
       setErrorMessage("Clique em Iniciar loja ou Trocar loja antes de bipar.");
       return;
     }
-    const { parsed, cd } = validateCommonScan();
+    const { parsed, cd } = validateCommonScan(rawEtiqueta, rawKnappId);
     const total = Number.parseInt(volumeTotalInput.replace(/\D/g, ""), 10);
     if (!Number.isFinite(total) || total <= 0) throw new Error("Informe a quantidade total de volumes da loja.");
     if (activeReceiptRow && (activeReceiptRow.pedido !== parsed.pedido || activeReceiptRow.filial !== parsed.filial)) {
@@ -592,9 +790,12 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     volumeTotalInput
   ]);
 
-  const submitStage = useCallback(async () => {
+  const submitStage = useCallback(async (rawEtiqueta: string, rawKnappId?: string | null) => {
     if (!etapa || etapa === "recebimento_cd") return;
-    const { parsed, cd } = validateCommonScan();
+    if (!hasRecebimentoForCurrentCd) {
+      throw new Error("Recebimento CD precisa acontecer primeiro para liberar as demais etapas.");
+    }
+    const { parsed, cd } = validateCommonScan(rawEtiqueta, rawKnappId);
     if (loadedPedido == null || parsed.pedido !== loadedPedido) {
       throw new Error("Carregue o pedido antes de confirmar volumes.");
     }
@@ -648,6 +849,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     activeDeliveryRow,
     clearScanInputs,
     etapa,
+    hasRecebimentoForCurrentCd,
     isOnline,
     loadedPedido,
     preferOfflineMode,
@@ -657,6 +859,31 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     visibleRows
   ]);
 
+  const submitScanByValues = useCallback(async (rawEtiqueta: string, rawKnappId?: string | null) => {
+    const normalizedEtiqueta = clampEtiquetaInput(rawEtiqueta);
+    const normalizedKnapp = String(rawKnappId ?? "").replace(/\D/g, "");
+
+    if (!normalizedEtiqueta) {
+      throw new Error("Informe a etiqueta para continuar.");
+    }
+    if (!isAllowedEtiquetaLength(normalizedEtiqueta.length)) {
+      throw new Error("Etiqueta inválida, revise e tente novamente!");
+    }
+    if (requiresKnappId(normalizedEtiqueta) && !normalizedKnapp) {
+      setEtiquetaInput(normalizedEtiqueta);
+      setIdKnappInput("");
+      setKnappModalState({ etiqueta: normalizedEtiqueta });
+      setStatusMessage("Informe o ID Knapp para concluir a leitura.");
+      return;
+    }
+
+    if (etapa === "recebimento_cd") {
+      await submitRecebimento(normalizedEtiqueta, normalizedKnapp);
+      return;
+    }
+    await submitStage(normalizedEtiqueta, normalizedKnapp);
+  }, [etapa, submitRecebimento, submitStage]);
+
   const onSubmit = useCallback(async (event: FormEvent) => {
     event.preventDefault();
     if (busySubmit) return;
@@ -664,17 +891,172 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      if (etapa === "recebimento_cd") {
-        await submitRecebimento();
-      } else {
-        await submitStage();
-      }
+      await submitScanByValues(etiquetaInput, idKnappInput);
     } catch (error) {
-      setErrorMessage(toClvErrorMessage(error));
+      reportScanError(error);
     } finally {
       setBusySubmit(false);
     }
-  }, [busySubmit, etapa, submitRecebimento, submitStage]);
+  }, [busySubmit, etiquetaInput, idKnappInput, reportScanError, submitScanByValues]);
+
+  const clearScannerInputTimer = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current;
+    if (state.timerId != null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+  }, []);
+
+  const clearKnappInputTimer = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const state = knappInputStateRef.current;
+    if (state.timerId != null) {
+      window.clearTimeout(state.timerId);
+      state.timerId = null;
+    }
+  }, []);
+
+  const commitScannerInput = useCallback(async (rawValue: string) => {
+    const normalized = clampEtiquetaInput(rawValue);
+    if (!normalized) return;
+
+    const state = scannerInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (state.lastSubmittedValue === normalized && now - state.lastSubmittedAt < SCANNER_INPUT_SUBMIT_COOLDOWN_MS) {
+      return;
+    }
+
+    clearScannerInputTimer();
+    state.lastSubmittedValue = normalized;
+    state.lastSubmittedAt = now;
+    state.lastInputAt = 0;
+    state.lastLength = 0;
+    state.burstChars = 0;
+
+    setEtiquetaInput(normalized);
+    setBusySubmit(true);
+    setErrorMessage(null);
+    setStatusMessage(null);
+    try {
+      await submitScanByValues(normalized);
+    } catch (error) {
+      reportScanError(error);
+    } finally {
+      setBusySubmit(false);
+    }
+  }, [clearScannerInputTimer, reportScanError, submitScanByValues]);
+
+  const scheduleScannerInputAutoSubmit = useCallback((value: string) => {
+    if (typeof window === "undefined") return;
+    const state = scannerInputStateRef.current;
+    clearScannerInputTimer();
+    state.timerId = window.setTimeout(() => {
+      state.timerId = null;
+      void commitScannerInput(value);
+    }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+  }, [clearScannerInputTimer, commitScannerInput]);
+
+  const commitKnappInput = useCallback(async (rawValue: string) => {
+    const normalized = rawValue.replace(/\D/g, "");
+    if (!normalized) return;
+
+    const state = knappInputStateRef.current;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (state.lastSubmittedValue === normalized && now - state.lastSubmittedAt < SCANNER_INPUT_SUBMIT_COOLDOWN_MS) {
+      return;
+    }
+
+    clearKnappInputTimer();
+    state.lastSubmittedValue = normalized;
+    state.lastSubmittedAt = now;
+    state.lastInputAt = 0;
+    state.lastLength = 0;
+    state.burstChars = 0;
+
+    setIdKnappInput(normalized);
+    if (!knappModalState) return;
+
+    setBusySubmit(true);
+    setErrorMessage(null);
+    try {
+      await submitScanByValues(knappModalState.etiqueta, normalized);
+      setKnappModalState(null);
+    } catch (error) {
+      reportScanError(error);
+    } finally {
+      setBusySubmit(false);
+    }
+  }, [clearKnappInputTimer, knappModalState, reportScanError, submitScanByValues]);
+
+  const scheduleKnappInputAutoSubmit = useCallback((value: string) => {
+    if (typeof window === "undefined") return;
+    const state = knappInputStateRef.current;
+    clearKnappInputTimer();
+    state.timerId = window.setTimeout(() => {
+      state.timerId = null;
+      void commitKnappInput(value);
+    }, SCANNER_INPUT_AUTO_SUBMIT_DELAY_MS);
+  }, [clearKnappInputTimer, commitKnappInput]);
+
+  const closeScanner = useCallback(() => {
+    setScannerOpen(false);
+    setScannerError(null);
+  }, []);
+
+  const openReceiptContextModal = useCallback((action: "start" | "switch") => {
+    setReceiptContextModalState({ action });
+    setErrorMessage(null);
+    setStatusMessage(null);
+  }, []);
+
+  const submitReceiptContextModal = useCallback(() => {
+    const total = Number.parseInt(volumeTotalInput.replace(/\D/g, ""), 10);
+    if (!Number.isFinite(total) || total <= 0) {
+      setErrorMessage("Informe a quantidade total de volumes da loja.");
+      return;
+    }
+
+    setReceiptArmed(true);
+    setActiveReceiptRow(null);
+    setReceiptContextModalState(null);
+    clearScanInputs();
+    setStatusMessage("Loja armada. Bipe o primeiro volume para iniciar o recebimento.");
+  }, [clearScanInputs, volumeTotalInput]);
+
+  const openFractionModal = useCallback(() => {
+    if (etapa !== "recebimento_cd") return;
+    setFractionModalDraft({
+      quantidade: fracionadoQtd,
+      tipo: fracionadoTipo
+    });
+  }, [etapa, fracionadoQtd, fracionadoTipo]);
+
+  const confirmFractionModal = useCallback(() => {
+    if (!fractionModalDraft) return;
+    const qty = fractionModalDraft.quantidade.replace(/\D/g, "");
+    const type = normalizeFracionadoTipo(fractionModalDraft.tipo);
+    if (!qty || Number.parseInt(qty, 10) <= 0) {
+      setErrorMessage("Informe a quantidade fracionada.");
+      return;
+    }
+    if (!type) {
+      setErrorMessage("Selecione Pedido Direto ou Termolábeis.");
+      return;
+    }
+    setFracionado(true);
+    setFracionadoQtd(qty);
+    setFracionadoTipo(type);
+    setFractionModalDraft(null);
+    window.requestAnimationFrame(() => etiquetaRef.current?.focus({ preventScroll: true }));
+  }, [fractionModalDraft]);
+
+  const clearFractionState = useCallback(() => {
+    setFracionado(false);
+    setFracionadoQtd("");
+    setFracionadoTipo("pedido_direto");
+    setFractionModalDraft(null);
+  }, []);
 
   const discardPending = useCallback(async (localId: string) => {
     setBusyPendingDiscard(true);
@@ -698,6 +1080,97 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
       setBusyPendingDiscard(false);
     }
   }, [loadPending, pendingOps]);
+
+  useEffect(() => {
+    if (!knappModalState) return;
+    const frameId = window.requestAnimationFrame(() => {
+      knappInputRef.current?.focus({ preventScroll: true });
+      knappInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [knappModalState]);
+
+  useEffect(() => {
+    if (!scannerError) return undefined;
+    const timerId = window.setTimeout(() => setScannerError(null), 3200);
+    return () => window.clearTimeout(timerId);
+  }, [scannerError]);
+
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+    let cancelled = false;
+    setScannerError(null);
+
+    const start = async () => {
+      const videoEl = scannerVideoRef.current;
+      if (!videoEl) return;
+
+      try {
+        const zxing = await import("@zxing/browser");
+        const reader = new zxing.BrowserMultiFormatReader();
+        const controls = await reader.decodeFromConstraints(
+          { audio: false, video: { facingMode: { ideal: "environment" } } },
+          videoEl,
+          (result, error) => {
+            if (cancelled) return;
+
+            if (result) {
+              const scanned = normalizeEtiquetaInput(result.getText() ?? "");
+              if (!scanned) return;
+              controls.stop();
+              scannerControlsRef.current = null;
+              setScannerOpen(false);
+              setScannerError(null);
+              void commitScannerInput(scanned);
+              return;
+            }
+
+            const errorName = (error as { name?: string } | null)?.name;
+            if (
+              error
+              && errorName !== "NotFoundException"
+              && errorName !== "ChecksumException"
+              && errorName !== "FormatException"
+            ) {
+              setScannerError("Nao foi possivel ler a etiqueta. Ajuste foco ou distancia e tente novamente.");
+            }
+          }
+        );
+
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+
+        scannerControlsRef.current = controls;
+      } catch (error) {
+        setScannerError(error instanceof Error ? error.message : "Falha ao iniciar câmera.");
+      }
+    };
+
+    void start();
+    return () => {
+      cancelled = true;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+    };
+  }, [commitScannerInput, scannerOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === "undefined") return;
+      const scannerState = scannerInputStateRef.current;
+      if (scannerState.timerId != null) {
+        window.clearTimeout(scannerState.timerId);
+        scannerState.timerId = null;
+      }
+      const knappState = knappInputStateRef.current;
+      if (knappState.timerId != null) {
+        window.clearTimeout(knappState.timerId);
+        knappState.timerId = null;
+      }
+    };
+  }, []);
 
   const currentStageMeta = etapa ? CLV_STAGE_META[etapa] : null;
   const moduleHeader = (
@@ -780,6 +1253,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
         <div className="coleta-actions-row clv-toolbar">
           <button className="btn btn-muted coleta-sync-btn" type="button" onClick={() => void refreshFeed()} disabled={!isOnline || busyRefresh}>
+            <span aria-hidden="true">🔄</span>
             {busyRefresh ? "Atualizando..." : "Atualizar"}
           </button>
           <button
@@ -808,13 +1282,6 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
         {etapa && currentStageMeta ? (
           <>
-            <div className="clv-summary-grid">
-              <div className="clv-summary-card"><span>Informado</span><strong>{totals.informado}</strong></div>
-              <div className="clv-summary-card"><span>Bipado etapa</span><strong>{totals.etapa}</strong></div>
-              <div className="clv-summary-card is-pending"><span>Pendente</span><strong>{totals.pendente}</strong></div>
-              <div className="clv-summary-card"><span>Recebido</span><strong>{totals.recebido}</strong></div>
-            </div>
-
             {stageNeedsPedido ? (
               <div className="coleta-form clv-pedido-panel">
                 <label>
@@ -838,13 +1305,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                 <button
                   type="button"
                   className={`aud-caixa-store-context-btn${receiptArmed ? " is-active" : ""}`}
-                  onClick={() => {
-                    setReceiptArmed(true);
-                    setActiveReceiptRow(null);
-                    setVolumeTotalInput("");
-                    clearScanInputs();
-                    setStatusMessage("Loja armada. Bipe o primeiro volume e informe o total.");
-                  }}
+                  onClick={() => openReceiptContextModal(receiptArmed || activeReceiptRow ? "switch" : "start")}
                   disabled={currentCd == null}
                 >
                   <span aria-hidden="true"><ModuleIcon name="volume" /></span>
@@ -852,9 +1313,9 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                 </button>
                 <span className={`aud-caixa-store-context-pill${receiptArmed || activeReceiptRow ? " is-active" : ""}`}>
                   {receiptArmed && activeReceiptRow
-                    ? `Loja ativa: filial ${activeReceiptRow.filial} | pedido ${activeReceiptRow.pedido}`
+                    ? `Loja ativa: filial ${activeReceiptRow.filial} | pedido ${activeReceiptRow.pedido} | informado ${activeReceiptRow.volume_total_informado}`
                     : receiptArmed
-                    ? "Aguardando primeiro bip da loja"
+                    ? `Aguardando primeiro bip da loja | total ${volumeTotalInput || "-"}`
                     : activeReceiptRow
                     ? `Última loja: filial ${activeReceiptRow.filial} | pedido ${activeReceiptRow.pedido}`
                     : "Nenhuma loja iniciada"}
@@ -880,80 +1341,111 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
               </div>
             ) : null}
 
-            <form className="coleta-form clv-scan-form" onSubmit={onSubmit}>
-              <div className="coleta-form-grid aud-caixa-form-grid">
-                <label>
-                  Etiqueta de volume
-                  <input
-                    ref={etiquetaRef}
-                    type="text"
-                    inputMode="numeric"
-                    value={etiquetaInput}
-                    onChange={(event) => setEtiquetaInput(clampEtiquetaInput(event.target.value))}
-                    maxLength={CLV_MAX_LENGTH}
-                    placeholder="Bipe ou digite a etiqueta"
-                    disabled={scanDisabled}
-                    autoComplete="off"
-                  />
-                </label>
-                <label>
-                  ID Knapp
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={idKnappInput}
-                    onChange={(event) => setIdKnappInput(event.target.value.replace(/\D/g, "").slice(0, 8))}
-                    placeholder="Obrigatório para Knapp"
-                    disabled={scanDisabled}
-                    autoComplete="off"
-                  />
-                </label>
-                {etapa === "recebimento_cd" ? (
+            {etapa !== "recebimento_cd" || receiptArmed ? (
+              <form className="coleta-form clv-scan-form" onSubmit={onSubmit}>
+                <div className="coleta-form-grid aud-caixa-form-grid">
                   <label>
-                    Total de volumes
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={volumeTotalInput}
-                      onChange={(event) => setVolumeTotalInput(event.target.value.replace(/\D/g, ""))}
-                      placeholder="Quantidade total"
-                      disabled={currentCd == null || busySubmit || !receiptArmed}
-                    />
-                  </label>
-                ) : null}
-              </div>
+                    Etiqueta de volume
+                    <div className={`input-icon-wrap with-action clv-input-wrap${etapa === "recebimento_cd" ? " clv-input-wrap-has-dual" : ""}`}>
+                      <span className="field-icon" aria-hidden="true"><ModuleIcon name="volume" /></span>
+                      <input
+                        ref={etiquetaRef}
+                        type="text"
+                        inputMode="numeric"
+                        value={etiquetaInput}
+                        onChange={(event: ReactChangeEvent<HTMLInputElement>) => {
+                          const nextValue = clampEtiquetaInput(event.target.value);
+                          setEtiquetaInput(nextValue);
 
-              {etapa === "recebimento_cd" ? (
-                <div className="clv-fraction-row">
-                  <label className="clv-check-row">
-                    <input type="checkbox" checked={fracionado} onChange={(event) => setFracionado(event.target.checked)} disabled={scanDisabled} />
-                    Volume fracionado
-                  </label>
-                  <label>
-                    Quantidade
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={fracionadoQtd}
-                      onChange={(event) => setFracionadoQtd(event.target.value.replace(/\D/g, ""))}
-                      disabled={scanDisabled || !fracionado}
-                    />
-                  </label>
-                  <label>
-                    Tipo
-                    <select value={fracionadoTipo} onChange={(event) => setFracionadoTipo(event.target.value as ClvFracionadoTipo)} disabled={scanDisabled || !fracionado}>
-                      {Object.entries(CLV_FRACIONADO_TIPO_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
+                          const state = scannerInputStateRef.current;
+                          const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+                          const elapsed = state.lastInputAt > 0 ? now - state.lastInputAt : Number.POSITIVE_INFINITY;
+                          const lengthDelta = Math.max(nextValue.length - state.lastLength, 0);
+
+                          if (lengthDelta > 0 && elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+                            state.burstChars += lengthDelta;
+                          } else {
+                            state.burstChars = lengthDelta;
+                          }
+
+                          state.lastInputAt = now;
+                          state.lastLength = nextValue.length;
+
+                          if (!nextValue) {
+                            state.burstChars = 0;
+                            clearScannerInputTimer();
+                            return;
+                          }
+
+                          if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+                            scheduleScannerInputAutoSubmit(nextValue);
+                            return;
+                          }
+
+                          clearScannerInputTimer();
+                        }}
+                        onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
+                          if (event.key === "Escape") {
+                            clearScanInputs();
+                            return;
+                          }
+                          if (event.key !== "Enter" && event.key !== "Tab") return;
+                          event.preventDefault();
+                          if (busySubmit || scanDisabled) return;
+                          setBusySubmit(true);
+                          setErrorMessage(null);
+                          setStatusMessage(null);
+                          void submitScanByValues(etiquetaInput, idKnappInput)
+                            .catch((error) => {
+                              reportScanError(error);
+                            })
+                            .finally(() => {
+                              setBusySubmit(false);
+                            });
+                        }}
+                        maxLength={CLV_MAX_LENGTH}
+                        placeholder="Bipe, digite ou use a câmera"
+                        disabled={scanDisabled}
+                        autoComplete="off"
+                      />
+                      <div className="clv-input-actions">
+                        {etapa === "recebimento_cd" ? (
+                          <button
+                            className={`input-action-btn clv-input-action${fracionado ? " is-active" : ""}`}
+                            type="button"
+                            onClick={fracionado ? clearFractionState : openFractionModal}
+                            disabled={scanDisabled}
+                            aria-label={fracionado ? "Limpar volume fracionado" : "Marcar próximo volume como fracionado"}
+                            title={fracionado ? "Limpar volume fracionado" : "Volume fracionado"}
+                          >
+                            <SplitIcon />
+                          </button>
+                        ) : null}
+                        <button
+                          className="input-action-btn clv-input-action"
+                          type="button"
+                          onClick={() => setScannerOpen(true)}
+                          disabled={scanDisabled}
+                          aria-label="Ler etiqueta pela câmera"
+                          title="Ler etiqueta pela câmera"
+                        >
+                          <CameraIcon />
+                        </button>
+                      </div>
+                    </div>
+                    {fracionado && etapa === "recebimento_cd" ? (
+                      <small className="clv-inline-hint">
+                        Próximo volume fracionado: {fracionadoQtd} - {CLV_FRACIONADO_TIPO_LABELS[fracionadoTipo]}
+                      </small>
+                    ) : null}
                   </label>
                 </div>
-              ) : null}
 
-              <button className="btn btn-primary coleta-submit" type="submit" disabled={scanDisabled}>
-                {busySubmit ? "Salvando..." : etapa === "recebimento_cd" ? "Registrar recebimento" : "Confirmar volume"}
-              </button>
-            </form>
+                <button className="btn btn-primary coleta-submit" type="submit" disabled={scanDisabled}>
+                  {busySubmit ? "Salvando..." : etapa === "recebimento_cd" ? "Registrar recebimento" : "Confirmar volume"}
+                </button>
+              </form>
+            ) : null}
 
             {errorMessage ? <div className="alert error">{errorMessage}</div> : null}
             {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
@@ -1002,10 +1494,12 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                     {expanded ? (
                       <div className="coleta-row-edit-card">
                         <div className="coleta-row-detail-grid">
-                          <div className="coleta-row-detail"><span>Volume informado</span><strong>{row.volume_total_informado}</strong></div>
-                          <div className="coleta-row-detail"><span>Recebido</span><strong>{row.recebido_count}</strong></div>
+                          <div className="coleta-row-detail"><span>Informado</span><strong>{row.volume_total_informado}</strong></div>
+                          <div className="coleta-row-detail"><span>{etapa === "recebimento_cd" ? "Bipado" : "Bipado etapa"}</span><strong>{row[countKey]}</strong></div>
+                          <div className="coleta-row-detail"><span>Pendente</span><strong>{row[pendingKey]}</strong></div>
+                          <div className="coleta-row-detail"><span>{etapa === "recebimento_cd" ? "Bipado" : "Recebido"}</span><strong>{row.recebido_count}</strong></div>
                           <div className="coleta-row-detail"><span>Entrada</span><strong>{row.entrada_count}</strong></div>
-                          <div className="coleta-row-detail"><span>Saída</span><strong>{row.saida_count}</strong></div>
+                          <div className="coleta-row-detail"><span>Saida</span><strong>{row.saida_count}</strong></div>
                           <div className="coleta-row-detail"><span>Entrega</span><strong>{row.entrega_count}</strong></div>
                           <div className="coleta-row-detail"><span>Data pedido</span><strong>{formatDateOnlyPtBR(row.data_pedido)}</strong></div>
                         </div>
@@ -1057,19 +1551,21 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
             <div className="clv-stage-picker" aria-label="Etapas do controle logístico">
               {CLV_STAGE_ORDER.map((item, index) => {
                 const meta = CLV_STAGE_META[item];
+                const disabled = item !== "recebimento_cd" && !hasRecebimentoForCurrentCd;
                 return (
                   <button
                     key={item}
                     type="button"
-                    className={`clv-stage-card tone-${meta.tone}${etapa === item ? " is-active" : ""}`}
+                    className={`clv-stage-card tone-${meta.tone}${etapa === item ? " is-active" : ""}${disabled ? " is-disabled" : ""}`}
                     onClick={() => chooseStage(item)}
+                    disabled={disabled}
                   >
                     <span className="clv-stage-card-index">0{index + 1}</span>
                     <span className={`clv-stage-card-icon clv-stage-card-icon--${item}`} aria-hidden="true"><ModuleIcon name={meta.icon} /></span>
                     <span className="clv-stage-card-copy">
                       <small className="clv-stage-card-tag">{meta.tag}</small>
                       <strong>{meta.title}</strong>
-                      <small>{meta.description}</small>
+                      <small>{disabled ? "Liberado somente apos o Recebimento CD." : meta.description}</small>
                     </span>
                   </button>
                 );
@@ -1078,6 +1574,246 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
           </div>
         </div>
       ) : null}
+
+      {knappModalState && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clv-knapp-title"
+              onClick={() => {
+                setKnappModalState(null);
+                setIdKnappInput("");
+                window.requestAnimationFrame(() => etiquetaRef.current?.focus({ preventScroll: true }));
+              }}
+            >
+              <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="clv-knapp-title">Informe o ID Knapp</h3>
+                <p>Etiqueta {knappModalState.etiqueta}. Informe o ID Knapp para concluir e voltar ao próximo bip.</p>
+                <label>
+                  ID Knapp
+                  <div className="input-icon-wrap">
+                    <span className="field-icon" aria-hidden="true">
+                      <TagIcon />
+                    </span>
+                    <input
+                      ref={knappInputRef}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="off"
+                      value={idKnappInput}
+                      onChange={(event: ReactChangeEvent<HTMLInputElement>) => {
+                        const nextValue = event.target.value.replace(/\D/g, "");
+                        setIdKnappInput(nextValue);
+
+                        const state = knappInputStateRef.current;
+                        const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+                        const elapsed = state.lastInputAt > 0 ? now - state.lastInputAt : Number.POSITIVE_INFINITY;
+                        const lengthDelta = Math.max(nextValue.length - state.lastLength, 0);
+
+                        if (lengthDelta > 0 && elapsed <= SCANNER_INPUT_MAX_INTERVAL_MS) {
+                          state.burstChars += lengthDelta;
+                        } else {
+                          state.burstChars = lengthDelta;
+                        }
+
+                        state.lastInputAt = now;
+                        state.lastLength = nextValue.length;
+
+                        if (!nextValue) {
+                          state.burstChars = 0;
+                          clearKnappInputTimer();
+                          return;
+                        }
+
+                        if (state.burstChars >= SCANNER_INPUT_MIN_BURST_CHARS) {
+                          scheduleKnappInputAutoSubmit(nextValue);
+                          return;
+                        }
+
+                        clearKnappInputTimer();
+                      }}
+                      onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setKnappModalState(null);
+                          setIdKnappInput("");
+                          return;
+                        }
+                        if (event.key !== "Enter" && event.key !== "Tab") return;
+                        event.preventDefault();
+                        void commitKnappInput(idKnappInput);
+                      }}
+                      placeholder="8 dígitos"
+                    />
+                  </div>
+                </label>
+                <div className="confirm-actions">
+                  <button
+                    className="btn btn-muted"
+                    type="button"
+                    onClick={() => {
+                      setKnappModalState(null);
+                      setIdKnappInput("");
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={() => void commitKnappInput(idKnappInput)}>
+                    Validar ID Knapp
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {receiptContextModalState && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clv-receipt-context-title"
+              onClick={() => setReceiptContextModalState(null)}
+            >
+              <div className="confirm-dialog clv-context-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="clv-receipt-context-title">
+                  {receiptContextModalState.action === "switch" ? "Trocar loja" : "Iniciar loja"}
+                </h3>
+                <p>Informe a quantidade total de volumes da filial. Esse total será a referência das próximas etapas.</p>
+                <label>
+                  Total de volumes
+                  <div className="input-icon-wrap">
+                    <span className="field-icon" aria-hidden="true">
+                      <ModuleIcon name="volume" />
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={volumeTotalInput}
+                      onChange={(event) => setVolumeTotalInput(event.target.value.replace(/\D/g, ""))}
+                      placeholder="Quantidade total"
+                      autoFocus
+                    />
+                  </div>
+                </label>
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setReceiptContextModalState(null)}>
+                    Cancelar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={submitReceiptContextModal}>
+                    Confirmar total
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {fractionModalDraft && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clv-fracionado-title"
+              onClick={() => setFractionModalDraft(null)}
+            >
+              <div className="confirm-dialog clv-context-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <h3 id="clv-fracionado-title">Volume fracionado</h3>
+                <p>Personalize apenas o próximo volume antes de informar a etiqueta.</p>
+                <div className="coleta-form-grid">
+                  <label>
+                    Quantidade
+                    <div className="input-icon-wrap">
+                      <span className="field-icon" aria-hidden="true">
+                        <SplitIcon />
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={fractionModalDraft.quantidade}
+                        onChange={(event) => setFractionModalDraft((current) => (
+                          current ? { ...current, quantidade: event.target.value.replace(/\D/g, "") } : current
+                        ))}
+                        placeholder="Qtd. fracionada"
+                        autoFocus
+                      />
+                    </div>
+                  </label>
+                  <label>
+                    Tipo
+                    <div className="input-icon-wrap">
+                      <span className="field-icon" aria-hidden="true">
+                        <TypeIcon />
+                      </span>
+                      <select
+                        value={fractionModalDraft.tipo}
+                        onChange={(event) => setFractionModalDraft((current) => (
+                          current ? { ...current, tipo: event.target.value as ClvFracionadoTipo } : current
+                        ))}
+                      >
+                        {Object.entries(CLV_FRACIONADO_TIPO_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+                </div>
+                <div className="confirm-actions">
+                  <button className="btn btn-muted" type="button" onClick={() => setFractionModalDraft(null)}>
+                    Cancelar
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={confirmFractionModal}>
+                    Aplicar ao próximo volume
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {scannerOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="scanner-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="clv-scanner-title"
+              onClick={closeScanner}
+            >
+              <div className="scanner-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="scanner-head">
+                  <h3 id="clv-scanner-title">Scanner de etiqueta</h3>
+                  <div className="scanner-head-actions">
+                    <button className="scanner-close-btn" type="button" onClick={closeScanner} aria-label="Fechar scanner">
+                      <CloseIcon />
+                    </button>
+                  </div>
+                </div>
+                <div className="scanner-video-wrap">
+                  <video ref={scannerVideoRef} className="scanner-video" autoPlay muted playsInline />
+                  <div className="scanner-frame" aria-hidden="true">
+                    <div className="scanner-frame-corner top-left" />
+                    <div className="scanner-frame-corner top-right" />
+                    <div className="scanner-frame-corner bottom-left" />
+                    <div className="scanner-frame-corner bottom-right" />
+                    <div className="scanner-frame-line" />
+                  </div>
+                </div>
+                <p className="scanner-hint">Aponte a câmera para leitura automática.</p>
+                {scannerError ? <div className="alert error">{scannerError}</div> : null}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       <PendingSyncDialog
         isOpen={showPendingSyncModal}
