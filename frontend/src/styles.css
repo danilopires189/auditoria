@@ -5125,7 +5125,7 @@ small {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
-  background-color: #2e6045;
+  background-color: #1c3147;
 }
 
 @media (min-width: 768px) {
@@ -5141,8 +5141,8 @@ small {
 }
 
 @keyframes clv-bg-reveal {
-  0%   { opacity: 0; background-color: #2e6045; }
-  100% { opacity: 1; background-color: #2e6045; }
+  0%   { opacity: 0; background-color: #1c3147; }
+  100% { opacity: 1; background-color: #1c3147; }
 }
 
 @keyframes clv-card-enter {
@@ -5301,8 +5301,21 @@ small {
 }
 
 .app-shell-cargosoft {
-  background: #2e6045;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(42, 78, 130, 0.45) 0%, transparent 52%),
+    radial-gradient(circle at 82% 5%, rgba(30, 60, 110, 0.35) 0%, transparent 45%),
+    linear-gradient(150deg, #3a5a7a, #243d58 55%, #1c3147);
   min-height: 100dvh;
+}
+
+.app-shell-cargosoft .module-card {
+  background: linear-gradient(145deg, #ffffff, #eef5f0 75%);
+  border-color: rgba(31, 122, 77, 0.22);
+}
+
+.app-shell-cargosoft .module-card:hover {
+  border-color: rgba(31, 122, 77, 0.45);
+  box-shadow: 0 6px 20px rgba(31, 122, 77, 0.14);
 }
 
 .app-shell-cargosoft .topbar-id img {
