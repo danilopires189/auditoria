@@ -1284,7 +1284,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isCargoSoftBranding || typeof document === "undefined") return;
-    document.body.style.background = "#1c3147";
+    document.body.style.background = "#1e4a30";
     const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
     const touch = document.querySelector<HTMLLinkElement>("link[rel='apple-touch-icon']");
     const prevHref = link?.href ?? "";
