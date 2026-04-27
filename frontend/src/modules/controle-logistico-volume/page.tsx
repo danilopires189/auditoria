@@ -720,10 +720,6 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   }, [playScanErrorByMessage]);
 
   const chooseStage = useCallback((nextEtapa: ClvEtapa) => {
-    if (nextEtapa !== "recebimento_cd" && !hasRecebimentoForCurrentCd) {
-      setErrorMessage("Recebimento CD precisa acontecer primeiro para liberar as demais etapas.");
-      return;
-    }
     setEtapa(nextEtapa);
     setShowStagePicker(false);
     setErrorMessage(null);
@@ -741,14 +737,10 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     setReceiptContextModalState(null);
     setFractionModalDraft(null);
     clearScanInputs();
-  }, [clearScanInputs, hasRecebimentoForCurrentCd]);
+  }, [clearScanInputs]);
 
   const loadPedidoManifest = useCallback(async () => {
     if (!etapa || etapa === "recebimento_cd") return;
-    if (!hasRecebimentoForCurrentCd) {
-      setErrorMessage("Recebimento CD precisa acontecer primeiro para liberar as demais etapas.");
-      return;
-    }
     if (currentCd == null) {
       setErrorMessage("Selecione o CD antes de carregar o pedido.");
       return;
@@ -887,9 +879,6 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
   const submitStage = useCallback(async (rawEtiqueta: string, rawKnappId?: string | null) => {
     if (!etapa || etapa === "recebimento_cd") return;
-    if (!hasRecebimentoForCurrentCd) {
-      throw new Error("Recebimento CD precisa acontecer primeiro para liberar as demais etapas.");
-    }
     const { parsed, cd } = validateCommonScan(rawEtiqueta, rawKnappId);
     if (loadedPedido == null || parsed.pedido !== loadedPedido) {
       throw new Error("Carregue o pedido antes de confirmar volumes.");
@@ -1724,21 +1713,19 @@ const progressDone = row[countKey];
             <div className="clv-stage-picker" aria-label="Etapas do controle logístico">
               {CLV_STAGE_ORDER.map((item, index) => {
                 const meta = CLV_STAGE_META[item];
-                const disabled = item !== "recebimento_cd" && !hasRecebimentoForCurrentCd;
                 return (
                   <button
                     key={item}
                     type="button"
-                    className={`clv-stage-card tone-${meta.tone}${etapa === item ? " is-active" : ""}${disabled ? " is-disabled" : ""}`}
+                    className={`clv-stage-card tone-${meta.tone}${etapa === item ? " is-active" : ""}`}
                     onClick={() => chooseStage(item)}
-                    disabled={disabled}
                   >
                     <span className="clv-stage-card-index">0{index + 1}</span>
                     <span className={`clv-stage-card-icon clv-stage-card-icon--${item}`} aria-hidden="true"><ModuleIcon name={meta.icon} /></span>
                     <span className="clv-stage-card-copy">
                       <small className="clv-stage-card-tag">{meta.tag}</small>
                       <strong>{meta.title}</strong>
-                      <small>{disabled ? "Liberado somente apos o Recebimento CD." : meta.description}</small>
+                      <small>{meta.description}</small>
                     </span>
                   </button>
                 );
