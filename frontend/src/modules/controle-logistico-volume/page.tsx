@@ -12,6 +12,7 @@ import { PendingSyncBadge } from "../../ui/pending-sync-badge";
 import { PendingSyncDialog } from "../../ui/pending-sync-dialog";
 import { formatDateOnlyPtBR, formatDateTimeBrasilia } from "../../shared/brasilia-datetime";
 import { useScanFeedback } from "../../shared/use-scan-feedback";
+import { useOnDemandSoftKeyboard } from "../../shared/use-on-demand-soft-keyboard";
 import { getModuleByKeyOrThrow } from "../registry";
 import {
   CLV_ETAPA_LABELS,
@@ -541,6 +542,11 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const scannerInputStateRef = useRef<ScannerInputState>(createScannerInputState());
   const knappInputStateRef = useRef<ScannerInputState>(createScannerInputState());
   const { triggerScanErrorAlert } = useScanFeedback(() => etiquetaRef.current);
+  const {
+    inputMode: etiquetaInputMode,
+    enableSoftKeyboard: enableEtiquetaSoftKeyboard,
+    disableSoftKeyboard: disableEtiquetaSoftKeyboard
+  } = useOnDemandSoftKeyboard("numeric");
 
   const _session = readClvSession();
   const [etapa, setEtapa] = useState<ClvEtapa | null>(_session.etapa ?? null);
@@ -1449,9 +1455,11 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                       <input
                         type="text"
                         inputMode="none"
+                        onPointerDown={(e) => { (e.target as HTMLInputElement).inputMode = "numeric"; }}
                         onFocus={(e) => { (e.target as HTMLInputElement).inputMode = "numeric"; }}
                         onBlur={(e) => { (e.target as HTMLInputElement).inputMode = "none"; }}
                         style={{ fontSize: "16px" }}
+                        autoComplete="off"
                         value={pedidoInput}
                         onChange={(event) => { setPedidoInput(event.target.value.replace(/\D/g, "")); setPedidoSearchError(false); }}
                         onKeyDown={(event) => {
@@ -1544,10 +1552,15 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                       <input
                         ref={etiquetaRef}
                         type="text"
-                        inputMode="none"
-                        onFocus={(e) => { (e.target as HTMLInputElement).inputMode = "numeric"; }}
-                        onBlur={(e) => { (e.target as HTMLInputElement).inputMode = "none"; }}
+                        inputMode={etiquetaInputMode}
+                        onFocus={enableEtiquetaSoftKeyboard}
+                        onPointerDown={enableEtiquetaSoftKeyboard}
+                        onBlur={disableEtiquetaSoftKeyboard}
                         style={{ fontSize: "16px" }}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         value={etiquetaInput}
                         onChange={(event: ReactChangeEvent<HTMLInputElement>) => {
                           const nextValue = clampEtiquetaInput(event.target.value);
