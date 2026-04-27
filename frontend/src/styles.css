@@ -5126,19 +5126,23 @@ small {
   background-position: center;
   background-attachment: fixed;
   background-color: #0d4f35;
-  animation: clv-bg-reveal 2s ease forwards;
 }
 
+@media (min-width: 768px) {
+  .page-shell-cargosoft {
+    animation: clv-bg-reveal 2s ease forwards;
+  }
+
+  .page-shell-cargosoft .auth-card {
+    animation: clv-card-enter 600ms ease both;
+    animation-delay: 3s;
+    opacity: 0;
+  }
+}
 
 @keyframes clv-bg-reveal {
   0%   { opacity: 0; background-color: #0d4f35; }
   100% { opacity: 1; background-color: #0d4f35; }
-}
-
-.page-shell-cargosoft .auth-card {
-  animation: clv-card-enter 600ms ease both;
-  animation-delay: 3s;
-  opacity: 0;
 }
 
 @keyframes clv-card-enter {

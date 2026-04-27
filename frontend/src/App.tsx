@@ -727,8 +727,8 @@ function AppLoadingCard({ message }: { message: string }) {
     >
       <div className="loading-card surface-enter">
         <div className="loading-brands">
-          <img className="loading-logo" src={cargoSoft ? cargoSoftLogoImage : logoImage} alt="Logo" />
-          {!cargoSoft ? <img className="loading-pm" src={pmImage} alt="PM" /> : null}
+          <img className="loading-logo" src={logoImage} alt="Logo" />
+          <img className="loading-pm" src={cargoSoft ? cargoSoftLogoImage : pmImage} alt={cargoSoft ? "CargoSoft" : "PM"} />
         </div>
         <p>{message}</p>
       </div>
