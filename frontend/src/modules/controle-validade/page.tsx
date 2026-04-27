@@ -822,7 +822,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         try {
           await operation();
         } catch (firstError) {
-          setProgressMessage(`${label}: falhou na 1a tentativa, tentando novamente...`);
+          setProgressMessage(`${label}: falhou, tentando novamente...`);
           await wait(900);
           try {
             await operation();
@@ -833,20 +833,34 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
         }
       };
 
-      await runStepWithRetry("db_barras", async () => {
-        await refreshDbBarrasCacheSmart((progress) => {
-          setProgressMessage(`db_barras: ${progress.rowsFetched} registros (${progress.percent}%)`);
-        }, { allowFullReconcile: true });
-      });
+      const barrasProgress = { text: "aguardando..." };
+      const endProgress = { text: "aguardando..." };
+      const updateCacheProgress = () => {
+        setProgressMessage(`Caches: barras ${barrasProgress.text} | end ${endProgress.text}`);
+      };
+      updateCacheProgress();
 
-      await runStepWithRetry("db_end", async () => {
-        await refreshDbEndCacheSmart(activeCd, (progress) => {
-          setProgressMessage(`db_end: ${progress.rowsFetched} registros (${progress.percent}%)`);
-        }, { allowFullReconcile: true });
-      });
+      await Promise.all([
+        runStepWithRetry("db_barras", async () => {
+          await refreshDbBarrasCacheSmart((progress) => {
+            barrasProgress.text = `${progress.rowsFetched}reg (${progress.percent}%)`;
+            updateCacheProgress();
+          }, { allowFullReconcile: true });
+          barrasProgress.text = "ok";
+          updateCacheProgress();
+        }),
+        runStepWithRetry("db_end", async () => {
+          await refreshDbEndCacheSmart(activeCd, (progress) => {
+            endProgress.text = `${progress.rowsFetched}reg (${progress.percent}%)`;
+            updateCacheProgress();
+          }, { allowFullReconcile: true });
+          endProgress.text = "ok";
+          updateCacheProgress();
+        })
+      ]);
 
       await runStepWithRetry("snapshot offline", async () => {
-        setProgressMessage("Atualizando snapshot de coletas e retiradas...");
+        setProgressMessage("Baixando snapshot de coletas e retiradas...");
         await downloadOfflineSnapshot(profile.user_id, activeCd);
       });
       setOfflineSnapshotReady(true);
