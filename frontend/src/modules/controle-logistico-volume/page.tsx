@@ -323,7 +323,7 @@ function isInvalidEtiquetaMessage(message: string): boolean {
 }
 
 function isDuplicateEtiquetaMessage(message: string): boolean {
-  return /repetid|já foi informado|ja foi informado|já foi confirmado|ja foi confirmado|duplic/i.test(message);
+  return /repetid|já foi informado|ja foi informado|já foi confirmado|ja foi confirmado|duplic|outra loja|outra filial/i.test(message);
 }
 
 function compareMovimentoAsc(a: ClvMovimento, b: ClvMovimento): number {
@@ -548,6 +548,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const [busyDeleteMov, setBusyDeleteMov] = useState(false);
   const [manualTyping, setManualTyping] = useState(false);
   const [pedidoSearchError, setPedidoSearchError] = useState(false);
+  const [scanHasError, setScanHasError] = useState(false);
 
   const currentCd = globalAdmin ? cdAtivo : fixedCd;
 
@@ -700,6 +701,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
     setFracionadoQtd("");
     setFracionadoTipo("pedido_direto");
     setManualTyping(false);
+    setScanHasError(false);
     window.requestAnimationFrame(() => etiquetaRef.current?.focus({ preventScroll: true }));
   }, []);
 
@@ -716,6 +718,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const reportScanError = useCallback((error: unknown) => {
     const message = toClvErrorMessage(error);
     setErrorMessage(message);
+    setScanHasError(true);
     playScanErrorByMessage(message);
   }, [playScanErrorByMessage]);
 
@@ -1090,6 +1093,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
 
   const openReceiptContextModal = useCallback((action: "start" | "switch") => {
     setReceiptContextModalState({ action });
+    setVolumeTotalInput("");
     setErrorMessage(null);
     setStatusMessage(null);
   }, []);
@@ -1389,7 +1393,10 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                     <span className="field-icon" aria-hidden="true"><ClipboardIcon /></span>
                     <input
                       type="text"
-                      inputMode="numeric"
+                      inputMode="none"
+                      onFocus={(e) => { (e.target as HTMLInputElement).inputMode = "numeric"; }}
+                      onBlur={(e) => { (e.target as HTMLInputElement).inputMode = "none"; }}
+                      style={{ fontSize: "16px" }}
                       value={pedidoInput}
                       onChange={(event) => { setPedidoInput(event.target.value.replace(/\D/g, "")); setPedidoSearchError(false); }}
                       onKeyDown={(event) => {
@@ -1480,7 +1487,10 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                       <input
                         ref={etiquetaRef}
                         type="text"
-                        inputMode="numeric"
+                        inputMode="none"
+                        onFocus={(e) => { (e.target as HTMLInputElement).inputMode = "numeric"; }}
+                        onBlur={(e) => { (e.target as HTMLInputElement).inputMode = "none"; }}
+                        style={{ fontSize: "16px" }}
                         value={etiquetaInput}
                         onChange={(event: ReactChangeEvent<HTMLInputElement>) => {
                           const nextValue = clampEtiquetaInput(event.target.value);
@@ -1536,12 +1546,22 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                             });
                         }}
                         maxLength={CLV_MAX_LENGTH}
-                        placeholder="Bipe, digite ou use a câmera"
+                        placeholder="Bipe ou use a câmera"
                         disabled={scanDisabled}
                         autoComplete="off"
                       />
                       <div className="clv-input-actions">
-                        {manualTyping ? (
+                        {scanHasError ? (
+                          <button
+                            className="input-action-btn clv-input-action clv-input-action-clear"
+                            type="button"
+                            onClick={() => { clearScanInputs(); setErrorMessage(null); }}
+                            aria-label="Limpar"
+                            title="Limpar"
+                          >
+                            <CloseIcon />
+                          </button>
+                        ) : manualTyping ? (
                           <button
                             className="input-action-btn clv-input-action clv-input-action-validate"
                             type="submit"
