@@ -5325,8 +5325,8 @@ small {
 .app-shell-cargosoft .topbar-id img {
   width: 72px;
   height: 42px;
-  padding: 5px 15px;
-  object-fit: cover;
+  padding: 2px 4px;
+  object-fit: contain;
   object-position: center;
 }
 
