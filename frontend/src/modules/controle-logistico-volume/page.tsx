@@ -1618,7 +1618,6 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
                         maxLength={CLV_MAX_LENGTH}
                         placeholder="Bipe ou use a câmera"
                         disabled={scanDisabled}
-                        autoComplete="off"
                       />
                       <div className="clv-input-actions">
                         {scanHasError ? (
