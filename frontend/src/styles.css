@@ -21705,18 +21705,6 @@ small {
   box-shadow: 0 14px 24px rgba(22, 111, 68, 0.28);
 }
 
-.clv-shell .coleta-sync-btn {
-  border-color: rgba(31, 122, 77, 0.18);
-  color: #17623e;
-  background: rgba(31, 122, 77, 0.08);
-}
-
-.clv-shell .coleta-sync-btn:hover:not(:disabled),
-.clv-shell .coleta-sync-btn:focus-visible {
-  border-color: rgba(31, 122, 77, 0.34);
-  color: #125d39;
-  background: rgba(31, 122, 77, 0.14);
-}
 
 .clv-cd-panel,
 .clv-pedido-panel {
