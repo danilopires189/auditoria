@@ -5301,7 +5301,7 @@ small {
 }
 
 .app-shell-cargosoft {
-  background: linear-gradient(160deg, #2a5a3e 0%, #1e4a30 60%, #1a3f28 100%);
+  background: #e8f5ee;
   min-height: 100dvh;
   width: 100%;
 }
