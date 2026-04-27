@@ -548,6 +548,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const [busyDeleteMov, setBusyDeleteMov] = useState(false);
   const [manualTyping, setManualTyping] = useState(false);
   const [pedidoSearchError, setPedidoSearchError] = useState(false);
+  const [pedidoTrocando, setPedidoTrocando] = useState(false);
   const [scanHasError, setScanHasError] = useState(false);
 
   const currentCd = globalAdmin ? cdAtivo : fixedCd;
@@ -773,6 +774,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
       setLoadedPedido(pedido);
       setPedidoInput("");
       setPedidoSearchError(false);
+      setPedidoTrocando(false);
       setActiveDeliveryRow(null);
       setStatusMessage(rows.length > 0 ? `${rows.length} ${rows.length === 1 ? "loja carregada" : "lojas carregadas"} para o pedido ${pedido}.` : "Nenhum volume recebido para este pedido.");
     } catch (error) {
@@ -1387,52 +1389,69 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
           <>
             {stageNeedsPedido ? (
               <div className="coleta-form clv-pedido-panel">
-                <label>
-                  {loadedPedido ? `Pedido ${loadedPedido} carregado` : "Pedido"}
-                  <div className="input-icon-wrap with-action">
-                    <span className="field-icon" aria-hidden="true"><ClipboardIcon /></span>
-                    <input
-                      type="text"
-                      inputMode="none"
-                      onFocus={(e) => { (e.target as HTMLInputElement).inputMode = "numeric"; }}
-                      onBlur={(e) => { (e.target as HTMLInputElement).inputMode = "none"; }}
-                      style={{ fontSize: "16px" }}
-                      value={pedidoInput}
-                      onChange={(event) => { setPedidoInput(event.target.value.replace(/\D/g, "")); setPedidoSearchError(false); }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && pedidoInput) void loadPedidoManifest();
-                      }}
-                      placeholder={loadedPedido ? "Buscar outro pedido..." : "Digite o número do pedido"}
-                      disabled={currentCd == null}
-                    />
-                    {pedidoInput ? (
-                      <div className="clv-input-actions">
-                        {pedidoSearchError ? (
-                          <button
-                            className="input-action-btn clv-input-action clv-input-action-clear"
-                            type="button"
-                            onClick={() => { setPedidoInput(""); setPedidoSearchError(false); setErrorMessage(null); }}
-                            aria-label="Limpar pedido"
-                            title="Limpar"
-                          >
-                            <CloseIcon />
-                          </button>
-                        ) : (
-                          <button
-                            className="input-action-btn clv-input-action clv-input-action-validate"
-                            type="button"
-                            onClick={() => void loadPedidoManifest()}
-                            disabled={currentCd == null || busyRefresh}
-                            aria-label="Buscar pedido"
-                            title="Buscar pedido"
-                          >
-                            {busyRefresh ? <span className="clv-search-spinner" /> : <SearchIcon />}
-                          </button>
-                        )}
-                      </div>
-                    ) : null}
+                {loadedPedido && !pedidoTrocando ? (
+                  <div className="clv-pedido-display">
+                    <span className="clv-pedido-display-icon" aria-hidden="true"><ClipboardIcon /></span>
+                    <span className="clv-pedido-display-text">Pedido <strong>{loadedPedido}</strong></span>
+                    <button
+                      type="button"
+                      className="input-action-btn clv-input-action"
+                      onClick={() => { setPedidoTrocando(true); setPedidoInput(""); setPedidoSearchError(false); setErrorMessage(null); }}
+                      aria-label="Trocar pedido"
+                      title="Trocar pedido"
+                    >
+                      <CloseIcon />
+                    </button>
                   </div>
-                </label>
+                ) : (
+                  <label>
+                    {loadedPedido ? "Trocar pedido" : "Pedido"}
+                    <div className="input-icon-wrap with-action">
+                      <span className="field-icon" aria-hidden="true"><ClipboardIcon /></span>
+                      <input
+                        type="text"
+                        inputMode="none"
+                        onFocus={(e) => { (e.target as HTMLInputElement).inputMode = "numeric"; }}
+                        onBlur={(e) => { (e.target as HTMLInputElement).inputMode = "none"; }}
+                        style={{ fontSize: "16px" }}
+                        value={pedidoInput}
+                        onChange={(event) => { setPedidoInput(event.target.value.replace(/\D/g, "")); setPedidoSearchError(false); }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && pedidoInput) void loadPedidoManifest();
+                        }}
+                        placeholder="Digite o número do pedido"
+                        disabled={currentCd == null}
+                        autoFocus={pedidoTrocando}
+                      />
+                      {pedidoInput ? (
+                        <div className="clv-input-actions">
+                          {pedidoSearchError ? (
+                            <button
+                              className="input-action-btn clv-input-action clv-input-action-clear"
+                              type="button"
+                              onClick={() => { setPedidoInput(""); setPedidoSearchError(false); setErrorMessage(null); }}
+                              aria-label="Limpar pedido"
+                              title="Limpar"
+                            >
+                              <CloseIcon />
+                            </button>
+                          ) : (
+                            <button
+                              className="input-action-btn clv-input-action clv-input-action-validate"
+                              type="button"
+                              onClick={() => void loadPedidoManifest()}
+                              disabled={currentCd == null || busyRefresh}
+                              aria-label="Buscar pedido"
+                              title="Buscar pedido"
+                            >
+                              {busyRefresh ? <span className="clv-search-spinner" /> : <SearchIcon />}
+                            </button>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </label>
+                )}
               </div>
             ) : null}
 
