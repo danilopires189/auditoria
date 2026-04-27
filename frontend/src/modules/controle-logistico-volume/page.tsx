@@ -245,6 +245,39 @@ function TrashIcon() {
   );
 }
 
+const CLV_SESSION_KEY = "clv_session";
+
+interface ClvSession {
+  etapa: ClvEtapa | null;
+  loadedPedido: number | null;
+  receiptArmed: boolean;
+  activeReceiptRow: ClvFeedRow | null;
+  activeDeliveryRow: ClvFeedRow | null;
+  volumeTotalInput: string;
+}
+
+function readClvSession(): Partial<ClvSession> {
+  try {
+    const raw = sessionStorage.getItem(CLV_SESSION_KEY);
+    return raw ? (JSON.parse(raw) as Partial<ClvSession>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeClvSession(patch: Partial<ClvSession>): void {
+  try {
+    const current = readClvSession();
+    sessionStorage.setItem(CLV_SESSION_KEY, JSON.stringify({ ...current, ...patch }));
+  } catch {
+    // sessionStorage indisponível
+  }
+}
+
+function clearClvSession(): void {
+  try { sessionStorage.removeItem(CLV_SESSION_KEY); } catch { /* noop */ }
+}
+
 function safeUuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -509,7 +542,8 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const knappInputStateRef = useRef<ScannerInputState>(createScannerInputState());
   const { triggerScanErrorAlert } = useScanFeedback(() => etiquetaRef.current);
 
-  const [etapa, setEtapa] = useState<ClvEtapa | null>(null);
+  const _session = readClvSession();
+  const [etapa, setEtapa] = useState<ClvEtapa | null>(_session.etapa ?? null);
   const [cdOptions, setCdOptions] = useState<CdOption[]>([]);
   const [cdAtivo, setCdAtivo] = useState<number | null>(fixedCd);
   const [preferOfflineMode, setPreferOfflineMode] = useState(false);
@@ -519,19 +553,19 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingErrors, setPendingErrors] = useState(0);
   const [showPendingSyncModal, setShowPendingSyncModal] = useState(false);
-  const [showStagePicker, setShowStagePicker] = useState(true);
+  const [showStagePicker, setShowStagePicker] = useState(!_session.etapa);
   const [busyPendingDiscard, setBusyPendingDiscard] = useState(false);
   const [busyRefresh, setBusyRefresh] = useState(false);
   const [busySync, setBusySync] = useState(false);
   const [busySubmit, setBusySubmit] = useState(false);
-  const [receiptArmed, setReceiptArmed] = useState(false);
-  const [activeReceiptRow, setActiveReceiptRow] = useState<ClvFeedRow | null>(null);
-  const [activeDeliveryRow, setActiveDeliveryRow] = useState<ClvFeedRow | null>(null);
+  const [receiptArmed, setReceiptArmed] = useState(_session.receiptArmed ?? false);
+  const [activeReceiptRow, setActiveReceiptRow] = useState<ClvFeedRow | null>(_session.activeReceiptRow ?? null);
+  const [activeDeliveryRow, setActiveDeliveryRow] = useState<ClvFeedRow | null>(_session.activeDeliveryRow ?? null);
   const [pedidoInput, setPedidoInput] = useState("");
-  const [loadedPedido, setLoadedPedido] = useState<number | null>(null);
+  const [loadedPedido, setLoadedPedido] = useState<number | null>(_session.loadedPedido ?? null);
   const [etiquetaInput, setEtiquetaInput] = useState("");
   const [idKnappInput, setIdKnappInput] = useState("");
-  const [volumeTotalInput, setVolumeTotalInput] = useState("");
+  const [volumeTotalInput, setVolumeTotalInput] = useState(_session.volumeTotalInput ?? "");
   const [fracionado, setFracionado] = useState(false);
   const [fracionadoQtd, setFracionadoQtd] = useState("");
   const [fracionadoTipo, setFracionadoTipo] = useState<ClvFracionadoTipo>("pedido_direto");
@@ -612,6 +646,10 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   useEffect(() => {
     void loadPending();
   }, [loadPending]);
+
+  useEffect(() => {
+    writeClvSession({ etapa, loadedPedido, receiptArmed, activeReceiptRow, activeDeliveryRow, volumeTotalInput });
+  }, [etapa, loadedPedido, receiptArmed, activeReceiptRow, activeDeliveryRow, volumeTotalInput]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1281,7 +1319,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
   const moduleHeader = (
     <header className="module-topbar module-topbar-fixed">
       <div className="module-topbar-line1">
-        <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
+        <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início" onClick={clearClvSession}>
           <span className="module-back-icon" aria-hidden="true">
             <BackIcon />
           </span>
