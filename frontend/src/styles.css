@@ -5306,8 +5306,10 @@ small {
   width: 100%;
 }
 
-.app-shell-cargosoft .app-topbar {
+.app-shell-cargosoft .app-topbar,
+.app-shell-cargosoft .module-topbar {
   background: linear-gradient(145deg, rgba(20, 104, 67, 0.95), rgba(31, 122, 77, 0.9));
+  border-color: rgba(180, 230, 200, 0.3);
 }
 
 .app-shell-cargosoft .module-card {
