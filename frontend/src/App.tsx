@@ -1282,10 +1282,18 @@ export default function App() {
   const isCargoSoftBranding = authBranding.brandVariant === "cargosoft";
 
   useEffect(() => {
-    if (isCargoSoftBranding && typeof document !== "undefined") {
-      document.body.style.background = "#0d4f35";
-      return () => { document.body.style.background = ""; };
-    }
+    if (!isCargoSoftBranding || typeof document === "undefined") return;
+    document.body.style.background = "#0d4f35";
+    const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+    const touch = document.querySelector<HTMLLinkElement>("link[rel='apple-touch-icon']");
+    const prevHref = link?.href ?? "";
+    if (link) link.href = "/cargosoft-favicon.png";
+    if (touch) touch.href = "/cargosoft-favicon.png";
+    return () => {
+      document.body.style.background = "";
+      if (link) link.href = prevHref;
+      if (touch) touch.href = prevHref;
+    };
   }, [isCargoSoftBranding]);
 
   const [authMode, setAuthMode] = useState<AuthMode>("login");
