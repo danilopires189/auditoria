@@ -1978,6 +1978,19 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     };
   }, [commitScannerInput, resolveScannerTrack, scannerOpen, stopCameraScanner, supportsTrackTorch]);
 
+  useEffect(() => {
+    const modalOpen = indicadoresOpen || indicadoresSelectedZone != null || actionPopup != null || scannerOpen;
+    if (!modalOpen || typeof document === "undefined") return;
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "contain";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousOverscroll;
+    };
+  }, [actionPopup, indicadoresOpen, indicadoresSelectedZone, scannerOpen]);
+
   const onSearchLastColeta = useCallback(async () => {
     if (activeCd == null) {
       setErrorMessage("CD não definido para este usuário.");
