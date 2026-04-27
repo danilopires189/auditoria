@@ -26,6 +26,8 @@ import {
   enqueueLinhaColeta,
   enqueueLinhaRetirada,
   enqueuePulRetirada,
+  fetchControleValidadeIndicadoresPendentesZona,
+  fetchControleValidadeIndicadoresZonas,
   fetchLinhaColetaHistoryList,
   fetchLinhaColetaReportRows,
   fetchLinhaRetiradaList,
@@ -45,6 +47,8 @@ import {
   updatePulRetiradaQtdOnline
 } from "./sync";
 import type {
+  ControleValidadeIndicadorPendenteRow,
+  ControleValidadeIndicadorZonaRow,
   ControleValidadeModuleProfile,
   ControleValidadeOfflineEventRow,
   LinhaColetaLookupResult,
@@ -165,6 +169,13 @@ function formatValidadeDisplay(value: string | null | undefined): string {
 
 function formatDateTime(value: string | null): string {
   return formatDateTimeBrasilia(value, { includeSeconds: true, emptyFallback: "-", invalidFallback: "value" });
+}
+
+function formatDateOnly(value: string | null): string {
+  if (!value) return "-";
+  const [year, month, day] = value.slice(0, 10).split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
 }
 
 function toDateInputValue(date: Date): string {
@@ -475,6 +486,74 @@ function fileExcelIcon() {
   );
 }
 
+function chartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 20h16" />
+      <path d="M7 20v-7" />
+      <path d="M12 20V8" />
+      <path d="M17 20v-4" />
+      <path d="M6 10l5-4 4 3 3-4" />
+    </svg>
+  );
+}
+
+function ControleValidadeIndicadoresChart({
+  rows,
+  onZoneClick
+}: {
+  rows: ControleValidadeIndicadorZonaRow[];
+  onZoneClick: (zona: string) => void;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="indicadores-empty-box">
+        <p>Nenhum indicador encontrado para este mês.</p>
+      </div>
+    );
+  }
+
+  const maxTotal = Math.max(1, ...rows.map((row) => row.total));
+
+  return (
+    <div className="indicadores-zone-chart gestao-estq-zone-chart controle-validade-indicadores-chart">
+      <div className="indicadores-zone-scroll">
+        {rows.map((row) => {
+          const coletadoHeight = (row.coletado_total / maxTotal) * 180;
+          const pendenteHeight = (row.pendente_total / maxTotal) * 180;
+          return (
+            <button
+              key={row.zona}
+              type="button"
+              className="indicadores-zone-column gestao-estq-zone-column gestao-estq-zone-button controle-validade-indicadores-zone-button"
+              onClick={() => onZoneClick(row.zona)}
+              title={`Zona ${row.zona}: ${row.coletado_total} coletado(s), ${row.pendente_total} pendente(s). Clique para ver pendentes.`}
+              aria-label={`Ver pendentes da zona ${row.zona}`}
+            >
+              <div className="indicadores-zone-stack" title={`Coletado: ${row.coletado_total} · Pendente: ${row.pendente_total}`}>
+                {pendenteHeight > 0 ? (
+                  <div className="indicadores-zone-segment gestao-estq-zone-segment controle-validade-zone-segment is-pendente" style={{ height: `${pendenteHeight}px` }} />
+                ) : null}
+                {coletadoHeight > 0 ? (
+                  <div className="indicadores-zone-segment gestao-estq-zone-segment controle-validade-zone-segment is-coletado" style={{ height: `${coletadoHeight}px` }} />
+                ) : null}
+              </div>
+              <strong>{row.zona}</strong>
+              <span className="gestao-estq-zone-value controle-validade-zone-value">
+                {`${row.coletado_total}/${row.total}`}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="indicadores-chart-legend">
+        <span><i className="controle-validade-legend-coletado" /> Coletado</span>
+        <span><i className="controle-validade-legend-pendente" /> Pendente</span>
+      </div>
+    </div>
+  );
+}
+
 export default function ControleValidadePage({ isOnline, profile }: ControleValidadePageProps) {
   const defaultMonthFilter = useMemo(() => currentValidadeMonthValue(), []);
   const barcodeRef = useRef<HTMLInputElement | null>(null);
@@ -532,6 +611,14 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [busyReportExport, setBusyReportExport] = useState(false);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [indicadoresOpen, setIndicadoresOpen] = useState(false);
+  const [indicadoresRows, setIndicadoresRows] = useState<ControleValidadeIndicadorZonaRow[]>([]);
+  const [indicadoresBusy, setIndicadoresBusy] = useState(false);
+  const [indicadoresError, setIndicadoresError] = useState<string | null>(null);
+  const [indicadoresSelectedZone, setIndicadoresSelectedZone] = useState<string | null>(null);
+  const [indicadoresPendentesRows, setIndicadoresPendentesRows] = useState<ControleValidadeIndicadorPendenteRow[]>([]);
+  const [indicadoresPendentesBusy, setIndicadoresPendentesBusy] = useState(false);
+  const [indicadoresPendentesError, setIndicadoresPendentesError] = useState<string | null>(null);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -595,6 +682,70 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       return null;
     });
   }, []);
+
+  const loadIndicadoresZonas = useCallback(async () => {
+    if (activeCd == null) {
+      setIndicadoresError("CD não definido para este usuário.");
+      return;
+    }
+    setIndicadoresBusy(true);
+    setIndicadoresError(null);
+    try {
+      const rows = await fetchControleValidadeIndicadoresZonas({
+        cd: activeCd,
+        monthStart: firstDayOfCurrentMonthValue()
+      });
+      setIndicadoresRows(rows);
+    } catch (error) {
+      setIndicadoresRows([]);
+      setIndicadoresError(normalizeControleValidadeError(error));
+    } finally {
+      setIndicadoresBusy(false);
+    }
+  }, [activeCd]);
+
+  const openIndicadores = useCallback(() => {
+    setIndicadoresOpen(true);
+    setIndicadoresSelectedZone(null);
+    setIndicadoresPendentesRows([]);
+    setIndicadoresPendentesError(null);
+    void loadIndicadoresZonas();
+  }, [loadIndicadoresZonas]);
+
+  const closeIndicadores = useCallback(() => {
+    setIndicadoresOpen(false);
+    setIndicadoresSelectedZone(null);
+    setIndicadoresPendentesRows([]);
+    setIndicadoresError(null);
+    setIndicadoresPendentesError(null);
+  }, []);
+
+  const closeIndicadoresPendentes = useCallback(() => {
+    setIndicadoresSelectedZone(null);
+    setIndicadoresPendentesRows([]);
+    setIndicadoresPendentesError(null);
+  }, []);
+
+  const openIndicadoresPendentesZona = useCallback(async (zona: string) => {
+    if (activeCd == null) return;
+    setIndicadoresSelectedZone(zona);
+    setIndicadoresPendentesRows([]);
+    setIndicadoresPendentesBusy(true);
+    setIndicadoresPendentesError(null);
+    try {
+      const rows = await fetchControleValidadeIndicadoresPendentesZona({
+        cd: activeCd,
+        zona,
+        monthStart: firstDayOfCurrentMonthValue(),
+        limit: 500
+      });
+      setIndicadoresPendentesRows(rows);
+    } catch (error) {
+      setIndicadoresPendentesError(normalizeControleValidadeError(error));
+    } finally {
+      setIndicadoresPendentesBusy(false);
+    }
+  }, [activeCd]);
 
   const refreshQueueStats = useCallback(async () => {
     if (activeCd == null) {
@@ -2080,6 +2231,16 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 ) : null}
                 <button
                   type="button"
+                  className={`btn btn-muted coleta-export-btn${indicadoresOpen ? " is-active" : ""}`}
+                  onClick={openIndicadores}
+                  disabled={!isOnline || activeCd == null}
+                  title={isOnline ? "Abrir indicadores por zona" : "Indicadores disponíveis online"}
+                >
+                  {chartIcon()}
+                  Indicadores
+                </button>
+                <button
+                  type="button"
                   className={`btn btn-muted${preferOfflineMode ? " is-active" : ""}`}
                   onClick={() => void onToggleOfflineMode()}
                   disabled={busyOfflineBase}
@@ -2917,6 +3078,119 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
           </div>
         </article>
       </section>
+
+      {indicadoresOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay gestao-estq-zone-products-overlay controle-validade-indicadores-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="controle-validade-indicadores-title"
+              onClick={closeIndicadores}
+            >
+              <div className="gestao-estq-zone-products-dialog controle-validade-indicadores-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="gestao-estq-fullscreen-head">
+                  <div>
+                    <h3 id="controle-validade-indicadores-title">Indicadores por zona</h3>
+                    <span>{`Separação · mês atual · ${profile.cd_nome ?? `CD ${activeCd ?? "-"}`}`}</span>
+                  </div>
+                  <div className="controle-validade-indicadores-head-actions">
+                    <button
+                      type="button"
+                      className="btn btn-muted controle-validade-indicadores-refresh"
+                      onClick={() => void loadIndicadoresZonas()}
+                      disabled={indicadoresBusy}
+                    >
+                      {indicadoresBusy ? "Atualizando..." : "Atualizar"}
+                    </button>
+                    <button
+                      type="button"
+                      className="gestao-estq-fullscreen-close"
+                      onClick={closeIndicadores}
+                      title="Fechar indicadores"
+                      aria-label="Fechar indicadores"
+                    >
+                      {closeIcon()}
+                    </button>
+                  </div>
+                </div>
+                <div className="gestao-estq-zone-products-body controle-validade-indicadores-body">
+                  {indicadoresError ? (
+                    <div className="indicadores-empty-box"><p>{indicadoresError}</p></div>
+                  ) : indicadoresBusy && indicadoresRows.length === 0 ? (
+                    <div className="indicadores-empty-box"><p>Carregando indicadores...</p></div>
+                  ) : (
+                    <ControleValidadeIndicadoresChart rows={indicadoresRows} onZoneClick={(zona) => void openIndicadoresPendentesZona(zona)} />
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {indicadoresSelectedZone && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="confirm-overlay gestao-estq-zone-products-overlay controle-validade-indicadores-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="controle-validade-indicadores-pendentes-title"
+              onClick={closeIndicadoresPendentes}
+            >
+              <div className="gestao-estq-zone-products-dialog controle-validade-indicadores-pendentes-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
+                <div className="gestao-estq-fullscreen-head">
+                  <div>
+                    <h3 id="controle-validade-indicadores-pendentes-title">{`Pendentes da zona ${indicadoresSelectedZone}`}</h3>
+                    <span>Itens de Separação com estoque disponível maior que zero.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="gestao-estq-fullscreen-close"
+                    onClick={closeIndicadoresPendentes}
+                    title="Fechar pendentes da zona"
+                    aria-label="Fechar pendentes da zona"
+                  >
+                    {closeIcon()}
+                  </button>
+                </div>
+                <div className="gestao-estq-zone-products-body">
+                  {indicadoresPendentesError ? (
+                    <div className="indicadores-empty-box"><p>{indicadoresPendentesError}</p></div>
+                  ) : indicadoresPendentesBusy ? (
+                    <div className="indicadores-empty-box"><p>Carregando pendentes...</p></div>
+                  ) : indicadoresPendentesRows.length === 0 ? (
+                    <div className="indicadores-empty-box"><p>Nenhum pendente nesta zona.</p></div>
+                  ) : (
+                    <div className="gestao-estq-details-wrap gestao-estq-zone-products-table-wrap">
+                      <table className="gestao-estq-details-table gestao-estq-zone-products-table controle-validade-indicadores-table">
+                        <thead>
+                          <tr>
+                            <th>Endereço</th>
+                            <th>Descrição</th>
+                            <th>Estoque</th>
+                            <th>Data ult. compra</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {indicadoresPendentesRows.map((row, index) => (
+                            <tr key={`${row.endereco}:${row.descricao}:${index}`}>
+                              <td>{row.endereco}</td>
+                              <td>{row.descricao}</td>
+                              <td>{row.estoque}</td>
+                              <td>{formatDateOnly(row.dat_ult_compra)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {actionPopup && typeof document !== "undefined"
         ? createPortal(

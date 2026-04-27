@@ -74,6 +74,20 @@ export interface PulRetiradaRow {
   editable_retirada_qtd: number | null;
 }
 
+export interface ControleValidadeIndicadorZonaRow {
+  zona: string;
+  coletado_total: number;
+  pendente_total: number;
+  total: number;
+}
+
+export interface ControleValidadeIndicadorPendenteRow {
+  endereco: string;
+  descricao: string;
+  estoque: number;
+  dat_ult_compra: string | null;
+}
+
 export interface LinhaColetaPayload {
   client_event_id: string;
   cd: number;

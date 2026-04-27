@@ -11943,6 +11943,134 @@ small {
   justify-content: flex-end;
 }
 
+.controle-validade-indicadores-overlay {
+  z-index: 2600;
+}
+
+.controle-validade-indicadores-dialog {
+  width: min(980px, 96vw);
+  height: min(620px, 88vh);
+}
+
+.controle-validade-indicadores-pendentes-dialog {
+  width: min(980px, 96vw);
+  height: min(680px, 90vh);
+}
+
+.controle-validade-indicadores-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.controle-validade-indicadores-refresh {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.controle-validade-indicadores-body {
+  min-height: 360px;
+}
+
+.controle-validade-indicadores-chart .indicadores-zone-scroll {
+  align-items: flex-end;
+}
+
+.controle-validade-indicadores-zone-button {
+  min-width: 96px;
+}
+
+.controle-validade-zone-segment.is-coletado,
+.controle-validade-legend-coletado {
+  background: linear-gradient(180deg, rgba(31, 120, 209, 0.94), rgba(31, 120, 209, 0.68));
+}
+
+.controle-validade-zone-segment.is-pendente,
+.controle-validade-legend-pendente {
+  background: linear-gradient(180deg, rgba(199, 57, 83, 0.94), rgba(199, 57, 83, 0.68));
+}
+
+.controle-validade-zone-value {
+  color: #244c83;
+}
+
+.controle-validade-indicadores-table {
+  min-width: 720px;
+}
+
+.controle-validade-indicadores-table td:nth-child(1),
+.controle-validade-indicadores-table td:nth-child(3),
+.controle-validade-indicadores-table td:nth-child(4) {
+  font-weight: 800;
+  color: #244c83;
+}
+
+@media (max-width: 720px) {
+  .controle-validade-indicadores-overlay {
+    padding: 8px;
+    align-items: stretch;
+  }
+
+  .controle-validade-indicadores-dialog,
+  .controle-validade-indicadores-pendentes-dialog {
+    width: 100%;
+    height: min(92vh, 760px);
+    border-radius: 16px;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .controle-validade-indicadores-dialog .gestao-estq-fullscreen-head,
+  .controle-validade-indicadores-pendentes-dialog .gestao-estq-fullscreen-head {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .controle-validade-indicadores-dialog .gestao-estq-fullscreen-head h3,
+  .controle-validade-indicadores-pendentes-dialog .gestao-estq-fullscreen-head h3 {
+    font-size: 1rem;
+  }
+
+  .controle-validade-indicadores-dialog .gestao-estq-fullscreen-head span,
+  .controle-validade-indicadores-pendentes-dialog .gestao-estq-fullscreen-head span {
+    font-size: 0.76rem;
+  }
+
+  .controle-validade-indicadores-head-actions {
+    flex-shrink: 0;
+  }
+
+  .controle-validade-indicadores-refresh {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 0.78rem;
+  }
+
+  .controle-validade-indicadores-body,
+  .controle-validade-indicadores-pendentes-dialog .gestao-estq-zone-products-body {
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .controle-validade-indicadores-chart .indicadores-zone-scroll {
+    gap: 10px;
+    padding-bottom: 8px;
+  }
+
+  .controle-validade-indicadores-zone-button {
+    min-width: 82px;
+  }
+
+  .controle-validade-indicadores-chart .indicadores-zone-stack {
+    width: 38px;
+    height: 170px;
+  }
+
+  .controle-validade-indicadores-table {
+    min-width: 560px;
+  }
+}
+
 .controle-validade-inline-editor {
   display: flex;
   flex-wrap: wrap;

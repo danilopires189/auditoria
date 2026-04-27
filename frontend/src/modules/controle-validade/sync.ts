@@ -17,6 +17,8 @@ import {
   updateOfflineEventStatus
 } from "./storage";
 import type {
+  ControleValidadeIndicadorPendenteRow,
+  ControleValidadeIndicadorZonaRow,
   ControleValidadeOfflineEventRow,
   ControleValidadeOfflineSyncResult,
   LinhaColetaLookupResult,
@@ -249,6 +251,24 @@ function mapPulRow(raw: Record<string, unknown>): PulRetiradaRow {
     auditor_nome_ultima_retirada: parseNullableString(raw.auditor_nome_ultima_retirada),
     editable_retirada_id: parseNullableString(raw.editable_retirada_id),
     editable_retirada_qtd: raw.editable_retirada_qtd == null ? null : parseInteger(raw.editable_retirada_qtd)
+  };
+}
+
+function mapIndicadorZonaRow(raw: Record<string, unknown>): ControleValidadeIndicadorZonaRow {
+  return {
+    zona: parseZona(raw.zona, ""),
+    coletado_total: parseInteger(raw.coletado_total),
+    pendente_total: parseInteger(raw.pendente_total),
+    total: parseInteger(raw.total)
+  };
+}
+
+function mapIndicadorPendenteRow(raw: Record<string, unknown>): ControleValidadeIndicadorPendenteRow {
+  return {
+    endereco: normalizeEnderecoDisplay(parseString(raw.endereco)),
+    descricao: parseString(raw.descricao) || "Item sem descrição",
+    estoque: parseInteger(raw.estoque),
+    dat_ult_compra: parseNullableString(raw.dat_ult_compra)
   };
 }
 
@@ -607,6 +627,38 @@ export async function fetchPulRetiradaList(params: {
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
   return sortPulRows(data.map((row) => mapPulRow(row as Record<string, unknown>)));
+}
+
+export async function fetchControleValidadeIndicadoresZonas(params: {
+  cd: number;
+  monthStart?: string | null;
+}): Promise<ControleValidadeIndicadorZonaRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_indicadores_zonas", {
+    p_cd: params.cd,
+    p_month_start: params.monthStart ?? null
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapIndicadorZonaRow(row as Record<string, unknown>));
+}
+
+export async function fetchControleValidadeIndicadoresPendentesZona(params: {
+  cd: number;
+  zona: string;
+  monthStart?: string | null;
+  limit?: number;
+}): Promise<ControleValidadeIndicadorPendenteRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_indicadores_pendentes_zona", {
+    p_cd: params.cd,
+    p_zona: params.zona,
+    p_month_start: params.monthStart ?? null,
+    p_limit: params.limit ?? 500
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapIndicadorPendenteRow(row as Record<string, unknown>));
 }
 
 export async function fetchLinhaColetaReportRows(params: {
