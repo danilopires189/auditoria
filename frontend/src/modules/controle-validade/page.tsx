@@ -242,6 +242,10 @@ function compareUiText(left: string | number | null | undefined, right: string |
   return UI_TEXT_COLLATOR.compare(String(left ?? ""), String(right ?? ""));
 }
 
+function formatIntegerPtBr(value: number): string {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(Number.isFinite(value) ? value : 0);
+}
+
 function linhaZone(value: string): string {
   const normalized = String(value ?? "").trim().toUpperCase();
   if (!normalized) return "SEM ZONA";
@@ -3394,7 +3398,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                             <tr key={`${row.coddv}:${row.enderecos}:${index}`}>
                               <td>{row.coddv}</td>
                               <td>{row.descricao}</td>
-                              <td>{row.estoque}</td>
+                              <td>{formatIntegerPtBr(row.estoque)}</td>
                               <td>{row.enderecos}</td>
                               <td>{formatDateOnly(row.dat_ult_compra)}</td>
                             </tr>
