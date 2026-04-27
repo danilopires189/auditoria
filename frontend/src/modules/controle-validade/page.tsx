@@ -537,8 +537,8 @@ function ControleValidadeIndicadoresChart({
     <div className="indicadores-zone-chart gestao-estq-zone-chart controle-validade-indicadores-chart">
       <div className="indicadores-zone-scroll">
         {rows.map((row) => {
-          const coletadoHeight = (row.coletado_total / maxTotal) * 180;
-          const pendenteHeight = (row.pendente_total / maxTotal) * 180;
+          const coletadoHeight = (row.coletado_total / maxTotal) * 150;
+          const pendenteHeight = (row.pendente_total / maxTotal) * 150;
           return (
             <button
               key={row.zona}

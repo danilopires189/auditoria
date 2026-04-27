@@ -12358,17 +12358,32 @@ small {
 
 .controle-validade-indicadores-body {
   min-height: 360px;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   gap: 12px;
+}
+
+.controle-validade-indicadores-chart {
+  align-self: stretch;
+  height: auto !important;
+  min-height: 0;
+  margin-top: auto;
 }
 
 .controle-validade-indicadores-chart .indicadores-zone-scroll {
   align-items: flex-end;
+  height: auto !important;
+  min-height: 0;
+  padding-top: 0;
 }
 
 .controle-validade-indicadores-zone-button {
   min-width: 96px;
+}
+
+.controle-validade-indicadores-chart .indicadores-zone-stack {
+  height: 160px;
 }
 
 .controle-validade-zone-segment.is-coletado,
@@ -12517,6 +12532,8 @@ small {
   .controle-validade-indicadores-chart .indicadores-zone-scroll {
     gap: 10px;
     padding-bottom: 8px;
+    height: auto !important;
+    min-height: 0;
   }
 
   .controle-validade-indicadores-zone-button {
@@ -12525,7 +12542,7 @@ small {
 
   .controle-validade-indicadores-chart .indicadores-zone-stack {
     width: 38px;
-    height: 170px;
+    height: 150px;
   }
 
   .controle-validade-indicadores-table {
