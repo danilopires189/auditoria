@@ -22,12 +22,15 @@ import {
   saveOfflineSnapshot
 } from "./storage";
 import {
+  addControleValidadeIndicadorZonaIgnorada,
+  deleteControleValidadeIndicadorZonaIgnorada,
   downloadOfflineSnapshot,
   enqueueLinhaColeta,
   enqueueLinhaRetirada,
   enqueuePulRetirada,
   fetchControleValidadeIndicadoresPendentesZona,
   fetchControleValidadeIndicadoresZonas,
+  fetchControleValidadeIndicadoresZonasIgnoradas,
   fetchLinhaColetaHistoryList,
   fetchLinhaColetaReportRows,
   fetchLinhaRetiradaList,
@@ -49,6 +52,7 @@ import {
 import type {
   ControleValidadeIndicadorPendenteRow,
   ControleValidadeIndicadorZonaRow,
+  ControleValidadeIndicadorZonaIgnoradaRow,
   ControleValidadeModuleProfile,
   ControleValidadeOfflineEventRow,
   LinhaColetaLookupResult,
@@ -498,6 +502,20 @@ function chartIcon() {
   );
 }
 
+function settingsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v3" />
+      <path d="M12 18v3" />
+      <path d="M4.2 7.5l2.6 1.5" />
+      <path d="M17.2 15l2.6 1.5" />
+      <path d="M19.8 7.5L17.2 9" />
+      <path d="M6.8 15l-2.6 1.5" />
+    </svg>
+  );
+}
+
 function ControleValidadeIndicadoresChart({
   rows,
   onZoneClick
@@ -541,6 +559,7 @@ function ControleValidadeIndicadoresChart({
               <strong>{row.zona}</strong>
               <span className="gestao-estq-zone-value controle-validade-zone-value">
                 {`${row.coletado_total}/${row.total}`}
+                <small>{`${row.pendente_total} pend.`}</small>
               </span>
             </button>
           );
@@ -619,6 +638,11 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [indicadoresPendentesRows, setIndicadoresPendentesRows] = useState<ControleValidadeIndicadorPendenteRow[]>([]);
   const [indicadoresPendentesBusy, setIndicadoresPendentesBusy] = useState(false);
   const [indicadoresPendentesError, setIndicadoresPendentesError] = useState<string | null>(null);
+  const [indicadoresIgnoredOpen, setIndicadoresIgnoredOpen] = useState(false);
+  const [indicadoresIgnoredRows, setIndicadoresIgnoredRows] = useState<ControleValidadeIndicadorZonaIgnoradaRow[]>([]);
+  const [indicadoresIgnoredInput, setIndicadoresIgnoredInput] = useState("");
+  const [indicadoresIgnoredBusy, setIndicadoresIgnoredBusy] = useState(false);
+  const [indicadoresIgnoredError, setIndicadoresIgnoredError] = useState<string | null>(null);
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -704,13 +728,29 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     }
   }, [activeCd]);
 
+  const loadIndicadoresIgnoredZones = useCallback(async () => {
+    if (activeCd == null) return;
+    setIndicadoresIgnoredBusy(true);
+    setIndicadoresIgnoredError(null);
+    try {
+      const rows = await fetchControleValidadeIndicadoresZonasIgnoradas(activeCd);
+      setIndicadoresIgnoredRows(rows);
+    } catch (error) {
+      setIndicadoresIgnoredRows([]);
+      setIndicadoresIgnoredError(normalizeControleValidadeError(error));
+    } finally {
+      setIndicadoresIgnoredBusy(false);
+    }
+  }, [activeCd]);
+
   const openIndicadores = useCallback(() => {
     setIndicadoresOpen(true);
     setIndicadoresSelectedZone(null);
     setIndicadoresPendentesRows([]);
     setIndicadoresPendentesError(null);
     void loadIndicadoresZonas();
-  }, [loadIndicadoresZonas]);
+    if (profile.role === "admin") void loadIndicadoresIgnoredZones();
+  }, [loadIndicadoresIgnoredZones, loadIndicadoresZonas, profile.role]);
 
   const closeIndicadores = useCallback(() => {
     setIndicadoresOpen(false);
@@ -718,6 +758,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     setIndicadoresPendentesRows([]);
     setIndicadoresError(null);
     setIndicadoresPendentesError(null);
+    setIndicadoresIgnoredOpen(false);
+    setIndicadoresIgnoredError(null);
   }, []);
 
   const closeIndicadoresPendentes = useCallback(() => {
@@ -746,6 +788,47 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
       setIndicadoresPendentesBusy(false);
     }
   }, [activeCd]);
+
+  const toggleIndicadoresIgnored = useCallback(() => {
+    setIndicadoresIgnoredOpen((current) => !current);
+    if (!indicadoresIgnoredOpen) void loadIndicadoresIgnoredZones();
+  }, [indicadoresIgnoredOpen, loadIndicadoresIgnoredZones]);
+
+  const addIndicadoresIgnoredZone = useCallback(async () => {
+    if (activeCd == null) return;
+    const zona = indicadoresIgnoredInput.trim();
+    if (!zona) {
+      setIndicadoresIgnoredError("Informe uma zona.");
+      return;
+    }
+    setIndicadoresIgnoredBusy(true);
+    setIndicadoresIgnoredError(null);
+    try {
+      await addControleValidadeIndicadorZonaIgnorada({ cd: activeCd, zona });
+      setIndicadoresIgnoredInput("");
+      await loadIndicadoresIgnoredZones();
+      await loadIndicadoresZonas();
+    } catch (error) {
+      setIndicadoresIgnoredError(normalizeControleValidadeError(error));
+    } finally {
+      setIndicadoresIgnoredBusy(false);
+    }
+  }, [activeCd, indicadoresIgnoredInput, loadIndicadoresIgnoredZones, loadIndicadoresZonas]);
+
+  const deleteIndicadoresIgnoredZone = useCallback(async (zona: string) => {
+    if (activeCd == null) return;
+    setIndicadoresIgnoredBusy(true);
+    setIndicadoresIgnoredError(null);
+    try {
+      await deleteControleValidadeIndicadorZonaIgnorada({ cd: activeCd, zona });
+      await loadIndicadoresIgnoredZones();
+      await loadIndicadoresZonas();
+    } catch (error) {
+      setIndicadoresIgnoredError(normalizeControleValidadeError(error));
+    } finally {
+      setIndicadoresIgnoredBusy(false);
+    }
+  }, [activeCd, loadIndicadoresIgnoredZones, loadIndicadoresZonas]);
 
   const refreshQueueStats = useCallback(async () => {
     if (activeCd == null) {
@@ -3095,6 +3178,17 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                     <span>{`Separação · mês atual · ${profile.cd_nome ?? `CD ${activeCd ?? "-"}`}`}</span>
                   </div>
                   <div className="controle-validade-indicadores-head-actions">
+                    {profile.role === "admin" ? (
+                      <button
+                        type="button"
+                        className={`controle-validade-indicadores-settings${indicadoresIgnoredOpen ? " is-active" : ""}`}
+                        onClick={toggleIndicadoresIgnored}
+                        title="Zonas desconsideradas no pendente"
+                        aria-label="Zonas desconsideradas no pendente"
+                      >
+                        {settingsIcon()}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn-muted controle-validade-indicadores-refresh"
@@ -3115,6 +3209,56 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   </div>
                 </div>
                 <div className="gestao-estq-zone-products-body controle-validade-indicadores-body">
+                  {profile.role === "admin" && indicadoresIgnoredOpen ? (
+                    <div className="controle-validade-ignored-panel">
+                      <div className="controle-validade-ignored-form">
+                        <label>
+                          <span>Zona a desconsiderar</span>
+                          <input
+                            type="text"
+                            value={indicadoresIgnoredInput}
+                            onChange={(event) => setIndicadoresIgnoredInput(event.target.value.toUpperCase().slice(0, 4))}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void addIndicadoresIgnoredZone();
+                              }
+                            }}
+                            placeholder="Ex.: T01"
+                            disabled={indicadoresIgnoredBusy}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => void addIndicadoresIgnoredZone()}
+                          disabled={indicadoresIgnoredBusy}
+                        >
+                          Adicionar
+                        </button>
+                      </div>
+                      {indicadoresIgnoredError ? <div className="module-inline-error">{indicadoresIgnoredError}</div> : null}
+                      <div className="controle-validade-ignored-list">
+                        {indicadoresIgnoredRows.length === 0 ? (
+                          <span>Nenhuma zona desconsiderada.</span>
+                        ) : (
+                          indicadoresIgnoredRows.map((row) => (
+                            <button
+                              key={row.zona}
+                              type="button"
+                              className="controle-validade-ignored-chip"
+                              onClick={() => void deleteIndicadoresIgnoredZone(row.zona)}
+                              disabled={indicadoresIgnoredBusy}
+                              title={`Remover ${row.zona}`}
+                            >
+                              {row.zona}
+                              <i aria-hidden="true">×</i>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                   {indicadoresError ? (
                     <div className="indicadores-empty-box"><p>{indicadoresError}</p></div>
                   ) : indicadoresBusy && indicadoresRows.length === 0 ? (

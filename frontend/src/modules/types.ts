@@ -47,6 +47,7 @@ export type DashboardModuleKey =
   | "conferencia-volume-avulso"
   | "controle-validade"
   | "devolucao-mercadoria"
+  | "gestao-almoxarifado"
   | "gestao-estoque"
   | "gestao-conservadoras"
   | "indicadores"

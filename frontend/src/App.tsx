@@ -25,6 +25,7 @@ import type { AtividadeExtraModuleProfile } from "./modules/atividade-extra/type
 import { fetchAtividadeExtraPendingEntries } from "./modules/atividade-extra/sync";
 import type { BuscaProdutoModuleProfile } from "./modules/busca-produto/types";
 import type { GestaoEstoqueModuleProfile } from "./modules/gestao-estoque/types";
+import type { GestaoAlmoxarifadoModuleProfile } from "./modules/gestao-almoxarifado/types";
 import type { ConservadoraModuleProfile } from "./modules/gestao-conservadoras/types";
 import type { IndicadoresModuleProfile } from "./modules/indicadores/types";
 import type { MetaMesModuleProfile } from "./modules/meta-mes/types";
@@ -202,6 +203,7 @@ const ApoioGestorPage = React.lazy(() => import("./modules/apoio-gestor/page"));
 const ControleValidadePage = React.lazy(() => import("./modules/controle-validade/page"));
 const PvpsAlocacaoPage = React.lazy(() => import("./modules/pvps-alocacao/page"));
 const GestaoEstoquePage = React.lazy(() => import("./modules/gestao-estoque/page"));
+const GestaoAlmoxarifadoPage = React.lazy(() => import("./modules/gestao-almoxarifado/page"));
 const IndicadoresPage = React.lazy(() => import("./modules/indicadores/page"));
 const IndicadoresBlitzPage = React.lazy(() => import("./modules/indicadores/blitz-page"));
 const IndicadoresGestaoEstoquePage = React.lazy(() => import("./modules/indicadores/gestao-estoque-page"));
@@ -2490,6 +2492,18 @@ export default function App() {
     };
   }, [effectiveProfileWithCd, session]);
 
+  const gestaoAlmoxarifadoProfile = useMemo<GestaoAlmoxarifadoModuleProfile | null>(() => {
+    if (!session || !effectiveProfileWithCd) return null;
+    return {
+      user_id: effectiveProfileWithCd.user_id || session.user.id,
+      nome: effectiveProfileWithCd.nome || "Usuário",
+      mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
+      role: effectiveProfileWithCd.role || "auditor",
+      cd_default: effectiveProfileWithCd.cd_default,
+      cd_nome: effectiveProfileWithCd.cd_nome
+    };
+  }, [effectiveProfileWithCd, session]);
+
   const validarEnderecamentoProfile = useMemo<ValidarEnderecamentoModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;
     return {
@@ -2809,6 +2823,16 @@ export default function App() {
             element={
               gestaoEstoqueProfile ? (
                 <GestaoEstoquePage isOnline={isOnline} profile={gestaoEstoqueProfile} />
+              ) : (
+                <Navigate to="/inicio" replace />
+              )
+            }
+          />
+          <Route
+            path="/modulos/gestao-almoxarifado"
+            element={
+              gestaoAlmoxarifadoProfile ? (
+                <GestaoAlmoxarifadoPage isOnline={isOnline} profile={gestaoAlmoxarifadoProfile} />
               ) : (
                 <Navigate to="/inicio" replace />
               )

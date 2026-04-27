@@ -19,6 +19,7 @@ import {
 import type {
   ControleValidadeIndicadorPendenteRow,
   ControleValidadeIndicadorZonaRow,
+  ControleValidadeIndicadorZonaIgnoradaRow,
   ControleValidadeOfflineEventRow,
   ControleValidadeOfflineSyncResult,
   LinhaColetaLookupResult,
@@ -144,6 +145,8 @@ function toErrorMessage(error: unknown): string {
   if (normalized.includes("SESSAO_EXPIRADA")) return "Sessão expirada. Faça login novamente.";
   if (normalized.includes("CD_NAO_DEFINIDO_USUARIO")) return "CD não definido para este usuário.";
   if (normalized.includes("CD_SEM_ACESSO")) return "Sem acesso ao CD selecionado.";
+  if (normalized.includes("APENAS_ADMIN")) return "Apenas administradores podem alterar zonas desconsideradas.";
+  if (normalized.includes("ZONA_OBRIGATORIA")) return "Informe a zona.";
   if (normalized.includes("PRODUTO_NAO_ENCONTRADO")) return "Produto não encontrado.";
   if (normalized.includes("TERMO_BUSCA_OBRIGATORIO")) return "Informe endereço, CODDV ou barras para buscar.";
   if (normalized.includes("ENDERECO_SEP_INVALIDO")) return "Endereço de Linha inválido para este produto.";
@@ -269,6 +272,13 @@ function mapIndicadorPendenteRow(raw: Record<string, unknown>): ControleValidade
     descricao: parseString(raw.descricao) || "Item sem descrição",
     estoque: parseInteger(raw.estoque),
     dat_ult_compra: parseNullableString(raw.dat_ult_compra)
+  };
+}
+
+function mapIndicadorZonaIgnoradaRow(raw: Record<string, unknown>): ControleValidadeIndicadorZonaIgnoradaRow {
+  return {
+    zona: parseZona(raw.zona, ""),
+    created_at: parseNullableString(raw.created_at)
   };
 }
 
@@ -659,6 +669,42 @@ export async function fetchControleValidadeIndicadoresPendentesZona(params: {
   if (error) throw new Error(toErrorMessage(error));
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapIndicadorPendenteRow(row as Record<string, unknown>));
+}
+
+export async function fetchControleValidadeIndicadoresZonasIgnoradas(cd: number): Promise<ControleValidadeIndicadorZonaIgnoradaRow[]> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_indicadores_zonas_ignoradas_list", {
+    p_cd: cd
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapIndicadorZonaIgnoradaRow(row as Record<string, unknown>));
+}
+
+export async function addControleValidadeIndicadorZonaIgnorada(params: {
+  cd: number;
+  zona: string;
+}): Promise<ControleValidadeIndicadorZonaIgnoradaRow | null> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { data, error } = await supabase.rpc("rpc_ctrl_validade_indicadores_zona_ignorada_add", {
+    p_cd: params.cd,
+    p_zona: params.zona
+  });
+  if (error) throw new Error(toErrorMessage(error));
+  const first = Array.isArray(data) ? data[0] as Record<string, unknown> | undefined : undefined;
+  return first ? mapIndicadorZonaIgnoradaRow(first) : null;
+}
+
+export async function deleteControleValidadeIndicadorZonaIgnorada(params: {
+  cd: number;
+  zona: string;
+}): Promise<void> {
+  if (!supabase) throw new Error("Supabase não inicializado.");
+  const { error } = await supabase.rpc("rpc_ctrl_validade_indicadores_zona_ignorada_delete", {
+    p_cd: params.cd,
+    p_zona: params.zona
+  });
+  if (error) throw new Error(toErrorMessage(error));
 }
 
 export async function fetchLinhaColetaReportRows(params: {

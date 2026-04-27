@@ -11943,6 +11943,255 @@ small {
   justify-content: flex-end;
 }
 
+.almox-shell {
+  gap: 18px;
+}
+
+.almox-shell .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.almox-shell .back-link svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.almox-shell .module-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.almox-shell .module-title-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #1f7a4d;
+  background: rgba(31, 122, 77, 0.12);
+}
+
+.almox-shell .module-title-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.almox-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.almox-tab {
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.86);
+  color: #1f2937;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.almox-tab.is-active {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.almox-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 14px;
+}
+
+.almox-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.almox-panel h3 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.almox-panel-head,
+.almox-card-head,
+.almox-actions,
+.almox-request-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.almox-form,
+.almox-request-form,
+.almox-nf-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.almox-form input,
+.almox-form select,
+.almox-request-form input,
+.almox-request-form textarea,
+.almox-panel input,
+.almox-panel select,
+.almox-nf-editor input {
+  min-height: 42px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 8px;
+  padding: 0 12px;
+  font: inherit;
+  background: #fff;
+}
+
+.almox-request-form textarea {
+  min-height: 74px;
+  padding-block: 10px;
+  resize: vertical;
+}
+
+.almox-list,
+.almox-feed,
+.almox-items {
+  display: grid;
+  gap: 10px;
+}
+
+.almox-product-row,
+.almox-item-line,
+.almox-card {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 12px;
+}
+
+.almox-product-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.almox-product-row strong,
+.almox-product-row span,
+.almox-product-row small,
+.almox-item-line span,
+.almox-item-line small {
+  display: block;
+}
+
+.almox-product-row small,
+.almox-card p,
+.almox-item-line small,
+.almox-note {
+  color: #64748b;
+}
+
+.almox-card h3 {
+  margin: 4px 0;
+}
+
+.almox-card-kpi {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.almox-card-kpi span,
+.almox-chip {
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.almox-solic-card.status-aprovada .almox-card-kpi span {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.almox-solic-card.status-reprovada .almox-card-kpi span {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.almox-item-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+}
+
+.almox-link-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+  font-weight: 800;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.almox-total {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.almox-nf-line {
+  display: grid;
+  grid-template-columns: 0.8fr 1.5fr 0.5fr 0.7fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.almox-nf-line.is-new {
+  border-left: 4px solid #f59e0b;
+  padding-left: 8px;
+}
+
+@media (max-width: 760px) {
+  .almox-grid,
+  .almox-product-row,
+  .almox-nf-line,
+  .almox-item-line {
+    grid-template-columns: 1fr;
+  }
+
+  .almox-panel-head,
+  .almox-card-head,
+  .almox-actions,
+  .almox-request-entry {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .almox-card-kpi {
+    justify-items: start;
+  }
+}
+
 .controle-validade-indicadores-overlay {
   z-index: 2600;
 }
@@ -11968,8 +12217,40 @@ small {
   padding: 0 12px;
 }
 
+.controle-validade-indicadores-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(145, 171, 205, 0.36);
+  border-radius: 12px;
+  background: rgba(247, 250, 255, 0.95);
+  color: #4b6482;
+  cursor: pointer;
+}
+
+.controle-validade-indicadores-settings.is-active,
+.controle-validade-indicadores-settings:hover {
+  color: #1f5ca8;
+  background: #edf5ff;
+}
+
+.controle-validade-indicadores-settings svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .controle-validade-indicadores-body {
   min-height: 360px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
 }
 
 .controle-validade-indicadores-chart .indicadores-zone-scroll {
@@ -11991,7 +12272,15 @@ small {
 }
 
 .controle-validade-zone-value {
+  display: grid;
+  gap: 2px;
   color: #244c83;
+}
+
+.controle-validade-zone-value small {
+  color: #c73953;
+  font-size: 0.68rem;
+  font-weight: 800;
 }
 
 .controle-validade-indicadores-table {
@@ -12003,6 +12292,69 @@ small {
 .controle-validade-indicadores-table td:nth-child(4) {
   font-weight: 800;
   color: #244c83;
+}
+
+.controle-validade-ignored-panel {
+  border: 1px solid #d5e2f4;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.controle-validade-ignored-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.controle-validade-ignored-form label {
+  display: grid;
+  gap: 5px;
+  color: #34567f;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.controle-validade-ignored-form input {
+  min-height: 38px;
+  border: 1px solid #c8d8ee;
+  border-radius: 12px;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.controle-validade-ignored-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #5d7697;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.controle-validade-ignored-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  border: 1px solid #c8d8ee;
+  border-radius: 999px;
+  background: #f3f7ff;
+  color: #244c83;
+  padding: 0 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.controle-validade-ignored-chip i {
+  color: #c73953;
+  font-style: normal;
+  font-size: 1rem;
 }
 
 @media (max-width: 720px) {
@@ -12068,6 +12420,14 @@ small {
 
   .controle-validade-indicadores-table {
     min-width: 560px;
+  }
+
+  .controle-validade-ignored-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .controle-validade-ignored-form .btn {
+    width: 100%;
   }
 }
 

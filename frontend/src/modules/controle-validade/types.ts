@@ -88,6 +88,11 @@ export interface ControleValidadeIndicadorPendenteRow {
   dat_ult_compra: string | null;
 }
 
+export interface ControleValidadeIndicadorZonaIgnoradaRow {
+  zona: string;
+  created_at: string | null;
+}
+
 export interface LinhaColetaPayload {
   client_event_id: string;
   cd: number;
