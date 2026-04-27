@@ -2722,9 +2722,6 @@ export default function App() {
       allowedModuleKeys: effectiveAllowedModuleKeys
     });
   }, [activeModule, authBranding, canAccessApoioGestor, canAccessControleLogisticoVolume, effectiveAllowedModuleKeys, effectiveHiddenModuleKeys]);
-  if (!runtimeStatus.initialized) {
-    return <AppLoadingCard message="Verificando disponibilidade..." />;
-  }
 
   if (runtimeStatus.maintenanceMode) {
     return (
