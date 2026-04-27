@@ -1355,7 +1355,7 @@ export default function ControleLogisticoVolumePage({ isOnline, profile }: Contr
         </div>
 
         <div className="coleta-actions-row clv-toolbar">
-          <button className="btn btn-muted coleta-sync-btn" type="button" onClick={() => void refreshFeed()} disabled={!isOnline || busyRefresh}>
+          <button className="btn btn-muted termo-offline-toggle coleta-sync-btn" type="button" onClick={() => void refreshFeed()} disabled={!isOnline || busyRefresh}>
             <span aria-hidden="true">🔄</span>
             {busyRefresh ? "Atualizando..." : "Atualizar"}
           </button>
