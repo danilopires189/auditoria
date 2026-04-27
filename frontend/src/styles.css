@@ -5300,8 +5300,11 @@ small {
   color: #0f4c30;
 }
 
-.app-shell-cargosoft .app-topbar {
-  background: linear-gradient(145deg, rgba(20, 104, 67, 0.95), rgba(31, 122, 77, 0.9));
+.app-shell-cargosoft {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(18, 80, 50, 0.55) 0%, transparent 50%),
+    radial-gradient(circle at 80% 0%, rgba(25, 100, 62, 0.4) 0%, transparent 45%),
+    linear-gradient(150deg, #1a3d2b, #0f2a1c 55%, #112415);
 }
 
 .app-shell-cargosoft .topbar-id img {
