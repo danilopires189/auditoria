@@ -5308,14 +5308,8 @@ small {
 
 .app-shell-cargosoft .app-topbar,
 .app-shell-cargosoft .module-topbar {
-  background: rgba(31, 122, 77, 0.42);
-  backdrop-filter: blur(28px) saturate(1.6);
-  -webkit-backdrop-filter: blur(28px) saturate(1.6);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow:
-    0 8px 32px rgba(10, 60, 35, 0.18),
-    0 1.5px 0 rgba(255, 255, 255, 0.35) inset,
-    0 -1px 0 rgba(31, 122, 77, 0.15) inset;
+  background: linear-gradient(145deg, rgba(20, 104, 67, 0.95), rgba(31, 122, 77, 0.9));
+  border-color: rgba(180, 230, 200, 0.3);
 }
 
 .app-shell-cargosoft .module-card {
