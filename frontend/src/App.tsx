@@ -2500,9 +2500,10 @@ export default function App() {
       mat: normalizeMat(effectiveProfileWithCd.mat || extractMatFromLoginEmail(session.user.email)),
       role: effectiveProfileWithCd.role || "auditor",
       cd_default: effectiveProfileWithCd.cd_default,
-      cd_nome: effectiveProfileWithCd.cd_nome
+      cd_nome: effectiveProfileWithCd.cd_nome,
+      is_global_admin: Boolean(effectiveProfile && effectiveProfile.role === "admin" && effectiveProfile.cd_default == null)
     };
-  }, [effectiveProfileWithCd, session]);
+  }, [effectiveProfile, effectiveProfileWithCd, session]);
 
   const validarEnderecamentoProfile = useMemo<ValidarEnderecamentoModuleProfile | null>(() => {
     if (!session || !effectiveProfileWithCd) return null;

@@ -43,6 +43,7 @@ const MODULE_DEF = getModuleByKeyOrThrow("gestao-almoxarifado");
 const EMPTY_PRODUCT = { produtoId: null as string | null, codigo: "", descricao: "", marca: "", tamanho: "" };
 
 function isGlobalAdmin(profile: GestaoAlmoxarifadoModuleProfile): boolean {
+  if (profile.is_global_admin != null) return profile.is_global_admin;
   return profile.role === "admin" && profile.cd_default == null;
 }
 
@@ -55,7 +56,7 @@ function formatDateTime(value: string | null | undefined): string {
 }
 
 function normalizeCode(value: string): string {
-  return value.trim().toUpperCase();
+  return value.replace(/\D/g, "");
 }
 
 function toDisplayName(value: string | null | undefined): string {
@@ -150,7 +151,7 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const productByCode = useMemo(() => new Map(produtos.map((product) => [product.codigo, product])), [produtos]);
+  const productByCode = useMemo(() => new Map(produtos.map((product) => [normalizeCode(product.codigo), product])), [produtos]);
   const selectedInventoryProduct = produtos.find((product) => product.produto_id === inventoryDraft.produtoId) ?? null;
   const requestTotal = useMemo(() => requestItems.reduce((sum, item) => {
     const product = productByCode.get(normalizeCode(item.codigo));
@@ -212,7 +213,7 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
     void run(async () => {
       await saveAlmoxProduto({
         produtoId: productDraft.produtoId,
-        codigo: productDraft.codigo,
+        codigo: normalizeCode(productDraft.codigo),
         descricao: productDraft.descricao,
         marca: productDraft.marca,
         tamanho: productDraft.tamanho || null
@@ -237,7 +238,7 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
     const rawSearch = requestCode.trim();
     const directCode = normalizeCode(rawSearch);
     const matchedByText = produtos.find((product) =>
-      product.codigo === directCode
+      normalizeCode(product.codigo) === directCode
       || product.descricao.toLowerCase().includes(rawSearch.toLowerCase())
     );
     const codigo = matchedByText?.codigo ?? directCode;
@@ -424,7 +425,7 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
             <section className="coleta-form almox-panel">
               <h3>Cadastro de produtos</h3>
               <form onSubmit={submitProduct} className="almox-form">
-                <input placeholder="Código" value={productDraft.codigo} onChange={(event) => setProductDraft({ ...productDraft, codigo: event.target.value })} required />
+                <input placeholder="Código numérico" inputMode="numeric" pattern="[0-9]*" value={productDraft.codigo} onChange={(event) => setProductDraft({ ...productDraft, codigo: normalizeCode(event.target.value) })} required />
                 <input placeholder="Descrição" value={productDraft.descricao} onChange={(event) => setProductDraft({ ...productDraft, descricao: event.target.value })} required />
                 <input placeholder="Marca" value={productDraft.marca} onChange={(event) => setProductDraft({ ...productDraft, marca: event.target.value })} required />
                 <input placeholder="Tamanho (opcional)" value={productDraft.tamanho} onChange={(event) => setProductDraft({ ...productDraft, tamanho: event.target.value })} />
@@ -532,7 +533,7 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
                 const validation = nfValidation[index];
                 return (
                   <div key={`${item.codigo}-${index}`} className={`almox-nf-line${validation && !validation.produto_existe ? " is-new" : ""}`}>
-                    <input value={item.codigo} onChange={(event) => updateNfItem(index, { codigo: normalizeCode(event.target.value) })} />
+                    <input inputMode="numeric" pattern="[0-9]*" value={item.codigo} onChange={(event) => updateNfItem(index, { codigo: normalizeCode(event.target.value) })} />
                     <input value={item.descricao} onChange={(event) => updateNfItem(index, { descricao: event.target.value })} />
                     <input inputMode="numeric" value={item.quantidade} onChange={(event) => updateNfItem(index, { quantidade: Number.parseInt(event.target.value.replace(/\D/g, ""), 10) || 0 })} />
                     <input inputMode="decimal" value={item.valor_unitario} onChange={(event) => updateNfItem(index, { valor_unitario: Number.parseFloat(event.target.value.replace(",", ".")) || 0 })} />

@@ -5,6 +5,7 @@ export interface GestaoAlmoxarifadoModuleProfile {
   role: "admin" | "auditor" | "viewer";
   cd_default: number | null;
   cd_nome: string | null;
+  is_global_admin?: boolean;
 }
 
 export type AlmoxSolicitacaoTipo = "compra" | "retirada";
