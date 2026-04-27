@@ -504,21 +504,24 @@ export default function ValidarEnderecamentoPage({ isOnline, profile }: ValidarE
     let endError: string | null = null;
 
     try {
-      try {
-        await refreshDbBarrasCacheSmart((progress) => {
-          setProgressMessage(`db_barras: ${progress.rowsFetched} itens (${progress.percent}%)`);
-        }, { allowFullReconcile: true });
-      } catch (error) {
-        barrasError = normalizeLookupError(error);
-      }
+      const barrasProgress = { text: "aguardando..." };
+      const endProgress = { text: "aguardando..." };
+      const updateCacheProgress = () => setProgressMessage(`barras ${barrasProgress.text} | end ${endProgress.text}`);
+      updateCacheProgress();
 
-      try {
-        await refreshDbEndCacheSmart(currentCd, (progress) => {
-          setProgressMessage(`db_end: ${progress.rowsFetched} itens (${progress.percent}%)`);
-        }, { allowFullReconcile: true });
-      } catch (error) {
-        endError = normalizeLookupError(error);
-      }
+      const [barrasResult, endResult] = await Promise.allSettled([
+        refreshDbBarrasCacheSmart((progress) => {
+          barrasProgress.text = `${progress.rowsFetched}reg (${progress.percent}%)`;
+          updateCacheProgress();
+        }, { allowFullReconcile: true }),
+        refreshDbEndCacheSmart(currentCd, (progress) => {
+          endProgress.text = `${progress.rowsFetched}reg (${progress.percent}%)`;
+          updateCacheProgress();
+        }, { allowFullReconcile: true })
+      ]);
+
+      if (barrasResult.status === "rejected") barrasError = normalizeLookupError(barrasResult.reason);
+      if (endResult.status === "rejected") endError = normalizeLookupError(endResult.reason);
 
       await refreshOfflineMeta();
       setProgressMessage(null);

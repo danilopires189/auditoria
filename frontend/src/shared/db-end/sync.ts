@@ -196,21 +196,6 @@ async function fetchDbEndPageWithAdaptiveLimit(params: {
   };
 }
 
-export async function fetchDbEndDeltaCount(cd: number, updatedAfter: string): Promise<number> {
-  if (!supabase) throw new Error("Supabase não inicializado.");
-  const { data, error } = await supabase.rpc("rpc_db_end_delta_count", {
-    p_cd: cd,
-    p_updated_after: updatedAfter
-  });
-
-  if (error) {
-    throw new Error(`Falha ao obter contagem delta de endereços: ${toErrorMessage(error)}`);
-  }
-
-  const first = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-  return Math.max(parseInteger(first?.row_count, 0), 0);
-}
-
 export async function refreshDbEndCache(
   cd: number,
   onProgress?: (progress: DbEndProgress) => void
@@ -389,13 +374,6 @@ export async function refreshDbEndCacheSmart(
     };
   }
 
-  let deltaTotal: number | null = null;
-  try {
-    deltaTotal = await fetchDbEndDeltaCount(cd, meta.last_sync_at);
-  } catch {
-    deltaTotal = null;
-  }
-
   let offset = 0;
   let pages = 0;
   let pageLimit = DB_END_PAGE_SIZE;
@@ -450,8 +428,8 @@ export async function refreshDbEndCacheSmart(
       mode: "delta",
       pagesFetched: pages,
       rowsFetched: changedRows.length,
-      totalRows: deltaTotal ?? 0,
-      percent: deltaTotal == null ? 0 : toPercent(changedRows.length, deltaTotal)
+      totalRows: 0,
+      percent: 0
     });
 
     if (page.length < pageLimit) break;
@@ -483,7 +461,7 @@ export async function refreshDbEndCacheSmart(
     mode: "delta",
     pagesFetched: pages,
     rowsFetched: 0,
-    totalRows: deltaTotal ?? 0,
+    totalRows: 0,
     percent: 100
   });
 
