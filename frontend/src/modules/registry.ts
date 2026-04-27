@@ -19,6 +19,7 @@ export const DASHBOARD_MODULES: DashboardModule[] = [
   { key: "gestao-estoque", path: "/modulos/gestao-estoque", title: "Gestão de Estoque", icon: "audit", tone: "blue" },
   { key: "gestao-conservadoras", path: "/modulos/gestao-conservadoras", title: "Gestão de Conservadoras Térmicas", icon: "fridge", tone: "teal" },
   { key: "indicadores", path: "/modulos/indicadores", title: "Indicadores", icon: "chart", tone: "blue" },
+  { key: "indicadores-logisticos", path: "/modulos/indicadores-logisticos", title: "Indicadores Logísticos", icon: "chart", tone: "green" },
   { key: "zerados", path: "/modulos/zerados", title: "Inventário (zerados)", icon: "zero", tone: "red" },
   { key: "meta-mes", path: "/modulos/meta-mes", title: "Meta Mês", icon: "goal", tone: "amber" },
   { key: "produtividade", path: "/modulos/produtividade", title: "Produtividade", icon: "worker", tone: "amber" },

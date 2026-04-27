@@ -171,7 +171,7 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     appLabel: "CargoSoft",
     authCaption: "Controle Logístico",
     hiddenModuleKeys: [],
-    allowedModuleKeys: ["controle-logistico-volume"],
+    allowedModuleKeys: ["controle-logistico-volume", "indicadores-logisticos"],
     allowedIndicatorKeys: null,
     defaultRoute: "/inicio",
     brandVariant: "cargosoft"
@@ -180,7 +180,7 @@ const AUTH_BRANDING_BY_HOSTNAME: Record<string, AuthBranding> = {
     appLabel: "CargoSoft",
     authCaption: "Controle Logístico",
     hiddenModuleKeys: [],
-    allowedModuleKeys: ["controle-logistico-volume"],
+    allowedModuleKeys: ["controle-logistico-volume", "indicadores-logisticos"],
     allowedIndicatorKeys: null,
     defaultRoute: "/inicio",
     brandVariant: "cargosoft"
@@ -221,6 +221,7 @@ const ConferenciaPedidoDiretoPage = React.lazy(() => import("./modules/conferenc
 const ConferenciaEntradaNotasPage = React.lazy(() => import("./modules/conferencia-entrada-notas/page"));
 const DevolucaoMercadoriaPage = React.lazy(() => import("./modules/devolucao-mercadoria/page"));
 const ControleAvariasPage = React.lazy(() => import("./modules/controle-avarias/page"));
+const IndicadoresLogisticosPage = React.lazy(() => import("./modules/indicadores-logisticos/page"));
 const RegistroEmbarquePage = React.lazy(() => import("./modules/registro-embarque/page"));
 const RegistroEmbarqueCaixaTermicaPage = React.lazy(() => import("./modules/registro-embarque-caixa-termica/page"));
 const GestaoConservadorasPage = React.lazy(() => import("./modules/gestao-conservadoras/page"));
@@ -3009,6 +3010,7 @@ export default function App() {
               )
             }
           />
+          <Route path="/modulos/indicadores-logisticos" element={<IndicadoresLogisticosPage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route path="/modulos/registro-embarque" element={<RegistroEmbarquePage isOnline={isOnline} userName={displayContext.nome} />} />
           <Route
             path="/modulos/registro-embarque-caixa-termica"
@@ -3121,7 +3123,7 @@ export default function App() {
                 <div className="confirm-dialog surface-enter" onClick={(event) => event.stopPropagation()}>
                   <h3 id="global-cd-switch-title">Trocar CD</h3>
                   <p>Selecione o CD para continuar sem sair da conta.</p>
-                  <div className="global-cd-picker" role="listbox" aria-label="Centros de distribuição disponíveis">
+                  <div className="global-cd-picker" role="group" aria-label="Centros de distribuição disponíveis">
                     {globalCdLoading ? <div className="global-cd-picker-loading">Carregando CDs...</div> : null}
                     {!globalCdLoading && runtimeCdOptions.length === 0 ? (
                       <div className="global-cd-picker-empty">Nenhum CD disponível no momento.</div>

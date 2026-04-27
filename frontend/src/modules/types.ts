@@ -50,6 +50,7 @@ export type DashboardModuleKey =
   | "gestao-estoque"
   | "gestao-conservadoras"
   | "indicadores"
+  | "indicadores-logisticos"
   | "meta-mes"
   | "pvps-alocacao"
   | "produtividade"
