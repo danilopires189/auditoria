@@ -12308,7 +12308,7 @@ small {
 
 .controle-validade-indicadores-dialog {
   width: min(980px, 96vw);
-  height: min(620px, 88vh);
+  height: min(560px, 88vh);
 }
 
 .controle-validade-indicadores-pendentes-dialog {
@@ -12357,7 +12357,7 @@ small {
 }
 
 .controle-validade-indicadores-body {
-  min-height: 360px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -12366,10 +12366,12 @@ small {
 
 .controle-validade-indicadores-chart {
   align-self: stretch;
-  height: auto !important;
+  flex: 1 1 auto;
+  height: 100% !important;
   min-height: 0;
   display: grid;
-  gap: 18px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
 }
 
 .controle-validade-pie-panel {
@@ -12380,12 +12382,12 @@ small {
   border: 1px solid #d5e2f4;
   border-radius: 8px;
   background: #ffffff;
-  padding: 14px;
+  padding: 10px 14px;
 }
 
 .controle-validade-pie-chart {
   --controle-validade-pendente-deg: 0deg;
-  width: 128px;
+  width: 104px;
   aspect-ratio: 1;
   border-radius: 50%;
   display: grid;
@@ -12455,9 +12457,10 @@ small {
 
 .controle-validade-indicadores-chart .indicadores-zone-scroll {
   align-items: flex-end;
-  height: auto !important;
+  height: 100% !important;
   min-height: 0;
   padding-top: 0;
+  padding-bottom: 0;
 }
 
 .controle-validade-indicadores-zone-button {
@@ -12465,7 +12468,11 @@ small {
 }
 
 .controle-validade-indicadores-chart .indicadores-zone-stack {
-  height: 160px;
+  height: clamp(220px, 32vh, 300px);
+}
+
+.controle-validade-indicadores-chart .indicadores-chart-legend {
+  margin-top: -4px;
 }
 
 .controle-validade-zone-segment.is-coletado,
@@ -12629,7 +12636,7 @@ small {
   }
 
   .controle-validade-pie-chart {
-    width: 112px;
+    width: 96px;
   }
 
   .controle-validade-pie-metrics {
@@ -12639,7 +12646,7 @@ small {
 
   .controle-validade-indicadores-chart .indicadores-zone-stack {
     width: 38px;
-    height: 150px;
+    height: clamp(180px, 34vh, 240px);
   }
 
   .controle-validade-indicadores-table {

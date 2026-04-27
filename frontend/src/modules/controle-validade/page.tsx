@@ -585,8 +585,8 @@ function ControleValidadeIndicadoresChart({
       <ControleValidadeIndicadoresPie rows={rows} />
       <div className="indicadores-zone-scroll">
         {rows.map((row) => {
-          const coletadoHeight = (row.coletado_total / maxTotal) * 150;
-          const pendenteHeight = (row.pendente_total / maxTotal) * 150;
+          const coletadoHeight = (row.coletado_total / maxTotal) * 100;
+          const pendenteHeight = (row.pendente_total / maxTotal) * 100;
           return (
             <button
               key={row.zona}
@@ -598,10 +598,10 @@ function ControleValidadeIndicadoresChart({
             >
               <div className="indicadores-zone-stack" title={`Coletado: ${row.coletado_total} · Pendente: ${row.pendente_total}`}>
                 {pendenteHeight > 0 ? (
-                  <div className="indicadores-zone-segment gestao-estq-zone-segment controle-validade-zone-segment is-pendente" style={{ height: `${pendenteHeight}px` }} />
+                  <div className="indicadores-zone-segment gestao-estq-zone-segment controle-validade-zone-segment is-pendente" style={{ height: `${pendenteHeight}%` }} />
                 ) : null}
                 {coletadoHeight > 0 ? (
-                  <div className="indicadores-zone-segment gestao-estq-zone-segment controle-validade-zone-segment is-coletado" style={{ height: `${coletadoHeight}px` }} />
+                  <div className="indicadores-zone-segment gestao-estq-zone-segment controle-validade-zone-segment is-coletado" style={{ height: `${coletadoHeight}%` }} />
                 ) : null}
               </div>
               <strong>{row.zona}</strong>
