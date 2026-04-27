@@ -11947,6 +11947,103 @@ small {
   gap: 18px;
 }
 
+.almox-page {
+  display: grid;
+  gap: 16px;
+}
+
+.almox-hero {
+  border-radius: 14px;
+  border: 1px solid rgba(18, 56, 115, 0.14);
+  background: linear-gradient(135deg, #effaf7 0%, #e8f3ff 52%, #f7fbff 100%);
+  box-shadow: 0 4px 24px rgba(18, 56, 115, 0.10), 0 1px 4px rgba(18, 56, 115, 0.06);
+  padding: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.almox-head {
+  display: grid;
+  gap: 8px;
+}
+
+.almox-head-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.almox-head h2 {
+  margin: 0;
+  color: #0f2f4f;
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.22;
+}
+
+.almox-head p {
+  margin: 0;
+  color: #3a5080;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.almox-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.almox-metric {
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(18, 56, 115, 0.10);
+  background: rgba(255, 255, 255, 0.76);
+  padding: 12px 14px;
+  display: grid;
+  gap: 3px;
+}
+
+.almox-metric[data-status="good"] {
+  border-color: rgba(14, 159, 110, 0.28);
+  background: rgba(237, 249, 243, 0.85);
+}
+
+.almox-metric[data-status="warn"] {
+  border-color: rgba(217, 119, 6, 0.28);
+  background: rgba(255, 251, 235, 0.88);
+}
+
+.almox-metric > span {
+  color: #4b6080;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.almox-metric > strong {
+  color: #0d2d61;
+  font-family: "Sora", sans-serif;
+  font-size: 1.05rem;
+}
+
+.almox-refresh-btn {
+  min-height: 56px;
+  width: 100%;
+}
+
 .almox-shell .back-link {
   display: inline-flex;
   align-items: center;
@@ -12016,6 +12113,10 @@ small {
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(320px, 1.2fr);
   gap: 14px;
+}
+
+.almox-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .almox-panel {
@@ -12189,6 +12290,15 @@ small {
 
   .almox-card-kpi {
     justify-items: start;
+  }
+
+  .almox-hero,
+  .almox-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .almox-hero {
+    padding: 18px;
   }
 }
 

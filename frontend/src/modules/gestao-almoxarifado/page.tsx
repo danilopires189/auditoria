@@ -58,6 +58,16 @@ function normalizeCode(value: string): string {
   return value.trim().toUpperCase();
 }
 
+function toDisplayName(value: string | null | undefined): string {
+  const compact = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!compact) return "Usuário";
+  return compact
+    .toLocaleLowerCase("pt-BR")
+    .split(" ")
+    .map((chunk) => chunk.charAt(0).toLocaleUpperCase("pt-BR") + chunk.slice(1))
+    .join(" ");
+}
+
 function ProductLabel({ product }: { product: AlmoxProduto }) {
   return (
     <>
@@ -347,19 +357,55 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
     if (activeTab === "retirada") setRequestTipo("retirada");
   }, [activeTab]);
 
+  const displayUserName = toDisplayName(profile.nome);
+  const cdLabel = profile.cd_nome?.trim() || (profile.cd_default != null ? `CD ${String(profile.cd_default).padStart(2, "0")}` : "CD não definido");
+  const roleLabel = globalAdmin ? "Admin Global" : profile.role === "admin" ? "Admin" : profile.role === "auditor" ? "Auditor" : "Visualizador";
+
   return (
-    <section className="modules-shell clv-shell almox-shell">
-      <div className="module-header">
-        <div>
-          <Link to="/inicio" className="back-link"><BackIcon /> Voltar</Link>
-          <span className="module-title clv-module-title">
-            <span className="module-title-icon"><ModuleIcon name={MODULE_DEF.icon} /></span>
-            {MODULE_DEF.title}
-          </span>
-          <p>{globalAdmin ? "Admin Global" : "Admin"} | {isOnline ? "Online" : "Offline"}</p>
+    <>
+      <header className="module-topbar module-topbar-fixed">
+        <div className="module-topbar-line1">
+          <Link to="/inicio" className="module-home-btn" aria-label="Voltar para o Início" title="Voltar para o Início">
+            <span className="module-back-icon" aria-hidden="true"><BackIcon /></span>
+            <span>Início</span>
+          </Link>
+          <div className="module-topbar-user-side">
+            <span className="module-user-greeting">Olá, {displayUserName}</span>
+            <span className={`status-pill ${isOnline ? "online" : "offline"}`}>
+              {isOnline ? "🟢 Online" : "🔴 Offline"}
+            </span>
+          </div>
         </div>
-        <button type="button" className="btn btn-muted" onClick={() => void run(loadCore)} disabled={busy}>Atualizar</button>
-      </div>
+        <div className={`module-card module-card-static module-header-card tone-${MODULE_DEF.tone}`}>
+          <span className="module-icon" aria-hidden="true"><ModuleIcon name={MODULE_DEF.icon} /></span>
+          <span className="module-title">{MODULE_DEF.title}</span>
+        </div>
+      </header>
+
+      <section className="modules-shell almox-shell">
+        <article className="module-screen surface-enter almox-page">
+          <section className="almox-hero">
+            <div className="almox-head">
+              <span className="almox-head-kicker">{MODULE_DEF.title}</span>
+              <h2>Controle de compras, retiradas, inventário e notas fiscais</h2>
+              <p>{cdLabel} | {roleLabel}</p>
+            </div>
+            <div className="almox-metrics-grid">
+              <div className="almox-metric">
+                <span>Produtos</span>
+                <strong>{produtos.length}</strong>
+              </div>
+              <div className="almox-metric" data-status={pendentes.length > 0 ? "warn" : "good"}>
+                <span>Pendentes</span>
+                <strong>{pendentes.length}</strong>
+              </div>
+              <div className="almox-metric">
+                <span>Minhas</span>
+                <strong>{minhas.length}</strong>
+              </div>
+              <button type="button" className="btn btn-muted almox-refresh-btn" onClick={() => void run(loadCore)} disabled={busy}>Atualizar</button>
+            </div>
+          </section>
 
       <div className="almox-tabs">
         {tabs.map((tab) => (
@@ -373,10 +419,10 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
       {statusMessage ? <div className="alert success">{statusMessage}</div> : null}
 
       {activeTab === "produtos" ? (
-        <div className="almox-grid">
-          <section className="coleta-form almox-panel">
-            <h3>Cadastro de produtos</h3>
-            {globalAdmin ? (
+        <div className={`almox-grid${globalAdmin ? "" : " is-single"}`}>
+          {globalAdmin ? (
+            <section className="coleta-form almox-panel">
+              <h3>Cadastro de produtos</h3>
               <form onSubmit={submitProduct} className="almox-form">
                 <input placeholder="Código" value={productDraft.codigo} onChange={(event) => setProductDraft({ ...productDraft, codigo: event.target.value })} required />
                 <input placeholder="Descrição" value={productDraft.descricao} onChange={(event) => setProductDraft({ ...productDraft, descricao: event.target.value })} required />
@@ -384,8 +430,8 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
                 <input placeholder="Tamanho (opcional)" value={productDraft.tamanho} onChange={(event) => setProductDraft({ ...productDraft, tamanho: event.target.value })} />
                 <button className="btn btn-primary" type="submit" disabled={busy}>Salvar</button>
               </form>
-            ) : <p className="almox-note">Cadastro restrito ao Admin Global.</p>}
-          </section>
+            </section>
+          ) : null}
           <section className="coleta-form almox-panel">
             <div className="almox-panel-head">
               <h3>Produtos cadastrados</h3>
@@ -538,6 +584,8 @@ export default function GestaoAlmoxarifadoPage({ isOnline, profile }: Props) {
           </div>
         </section>
       ) : null}
-    </section>
+        </article>
+      </section>
+    </>
   );
 }
