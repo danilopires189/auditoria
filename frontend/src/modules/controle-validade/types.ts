@@ -82,9 +82,10 @@ export interface ControleValidadeIndicadorZonaRow {
 }
 
 export interface ControleValidadeIndicadorPendenteRow {
-  endereco: string;
+  coddv: number;
   descricao: string;
   estoque: number;
+  enderecos: string;
   dat_ult_compra: string | null;
 }
 

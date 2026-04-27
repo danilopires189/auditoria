@@ -268,9 +268,10 @@ function mapIndicadorZonaRow(raw: Record<string, unknown>): ControleValidadeIndi
 
 function mapIndicadorPendenteRow(raw: Record<string, unknown>): ControleValidadeIndicadorPendenteRow {
   return {
-    endereco: normalizeEnderecoDisplay(parseString(raw.endereco)),
+    coddv: parseInteger(raw.coddv ?? raw.CODDV ?? raw.cod_dv ?? raw.coddiv),
     descricao: parseString(raw.descricao) || "Item sem descrição",
     estoque: parseInteger(raw.estoque),
+    enderecos: parseString(raw.enderecos) || normalizeEnderecoDisplay(parseString(raw.endereco)),
     dat_ult_compra: parseNullableString(raw.dat_ult_compra)
   };
 }

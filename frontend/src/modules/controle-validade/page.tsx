@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { IScannerControls } from "@zxing/browser";
 import { Link } from "react-router-dom";
@@ -247,6 +247,10 @@ function linhaZone(value: string): string {
   if (!normalized) return "SEM ZONA";
   const matched = /^([A-Z]{2,4})/.exec(normalized);
   return matched?.[1] ?? (normalized.slice(0, 4) || "SEM ZONA");
+}
+
+function normalizeIndicadorZona(value: string): string {
+  return String(value ?? "").trim().toUpperCase();
 }
 
 function formatActorDisplay(matValue: string | null | undefined, nomeValue: string | null | undefined): string {
@@ -516,6 +520,45 @@ function settingsIcon() {
   );
 }
 
+function formatIndicadorPercent(value: number, total: number): string {
+  if (total <= 0) return "0%";
+  return `${Math.round((value / total) * 100)}%`;
+}
+
+function ControleValidadeIndicadoresPie({ rows }: { rows: ControleValidadeIndicadorZonaRow[] }) {
+  const coletadoTotal = rows.reduce((sum, row) => sum + row.coletado_total, 0);
+  const pendenteTotal = rows.reduce((sum, row) => sum + row.pendente_total, 0);
+  const total = coletadoTotal + pendenteTotal;
+  const coletadoPercent = formatIndicadorPercent(coletadoTotal, total);
+  const pendentePercent = formatIndicadorPercent(pendenteTotal, total);
+  const pendenteDegrees = total > 0 ? (pendenteTotal / total) * 360 : 0;
+  const pieStyle = {
+    "--controle-validade-pendente-deg": `${pendenteDegrees}deg`
+  } as CSSProperties;
+
+  return (
+    <div className="controle-validade-pie-panel" aria-label={`Coletados ${coletadoTotal} (${coletadoPercent}), pendentes ${pendenteTotal} (${pendentePercent})`}>
+      <div className="controle-validade-pie-chart" style={pieStyle} aria-hidden="true">
+        <span>{total}</span>
+      </div>
+      <div className="controle-validade-pie-metrics">
+        <span className="is-coletado">
+          <i aria-hidden="true" />
+          <strong>{coletadoTotal}</strong>
+          <b>{coletadoPercent}</b>
+          <small>Coletados</small>
+        </span>
+        <span className="is-pendente">
+          <i aria-hidden="true" />
+          <strong>{pendenteTotal}</strong>
+          <b>{pendentePercent}</b>
+          <small>Pendentes</small>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ControleValidadeIndicadoresChart({
   rows,
   onZoneClick
@@ -535,6 +578,7 @@ function ControleValidadeIndicadoresChart({
 
   return (
     <div className="indicadores-zone-chart gestao-estq-zone-chart controle-validade-indicadores-chart">
+      <ControleValidadeIndicadoresPie rows={rows} />
       <div className="indicadores-zone-scroll">
         {rows.map((row) => {
           const coletadoHeight = (row.coletado_total / maxTotal) * 150;
@@ -643,6 +687,19 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
   const [indicadoresIgnoredInput, setIndicadoresIgnoredInput] = useState("");
   const [indicadoresIgnoredBusy, setIndicadoresIgnoredBusy] = useState(false);
   const [indicadoresIgnoredError, setIndicadoresIgnoredError] = useState<string | null>(null);
+
+  const indicadoresIgnoredKeys = useMemo(
+    () => indicadoresIgnoredRows.map((row) => normalizeIndicadorZona(row.zona)).filter(Boolean),
+    [indicadoresIgnoredRows]
+  );
+
+  const indicadoresVisibleRows = useMemo(
+    () => indicadoresRows.filter((row) => {
+      const zona = normalizeIndicadorZona(row.zona);
+      return !indicadoresIgnoredKeys.some((ignored) => zona.startsWith(ignored));
+    }),
+    [indicadoresIgnoredKeys, indicadoresRows]
+  );
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -806,6 +863,8 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
     try {
       await addControleValidadeIndicadorZonaIgnorada({ cd: activeCd, zona });
       setIndicadoresIgnoredInput("");
+      const ignored = normalizeIndicadorZona(zona);
+      setIndicadoresRows((current) => current.filter((row) => !normalizeIndicadorZona(row.zona).startsWith(ignored)));
       await loadIndicadoresIgnoredZones();
       await loadIndicadoresZonas();
     } catch (error) {
@@ -3277,7 +3336,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                   ) : indicadoresBusy && indicadoresRows.length === 0 ? (
                     <div className="indicadores-empty-box"><p>Carregando indicadores...</p></div>
                   ) : (
-                    <ControleValidadeIndicadoresChart rows={indicadoresRows} onZoneClick={(zona) => void openIndicadoresPendentesZona(zona)} />
+                    <ControleValidadeIndicadoresChart rows={indicadoresVisibleRows} onZoneClick={(zona) => void openIndicadoresPendentesZona(zona)} />
                   )}
                 </div>
               </div>
@@ -3299,7 +3358,7 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                 <div className="gestao-estq-fullscreen-head">
                   <div>
                     <h3 id="controle-validade-indicadores-pendentes-title">{`Pendentes da zona ${indicadoresSelectedZone}`}</h3>
-                    <span>Itens de Separação com estoque disponível maior que zero.</span>
+                    <span>Produtos de Separação com estoque disponível maior que zero.</span>
                   </div>
                   <button
                     type="button"
@@ -3323,18 +3382,20 @@ export default function ControleValidadePage({ isOnline, profile }: ControleVali
                       <table className="gestao-estq-details-table gestao-estq-zone-products-table controle-validade-indicadores-table">
                         <thead>
                           <tr>
-                            <th>Endereço</th>
+                            <th>CODDV</th>
                             <th>Descrição</th>
                             <th>Estoque</th>
+                            <th>Endereços</th>
                             <th>Data ult. compra</th>
                           </tr>
                         </thead>
                         <tbody>
                           {indicadoresPendentesRows.map((row, index) => (
-                            <tr key={`${row.endereco}:${row.descricao}:${index}`}>
-                              <td>{row.endereco}</td>
+                            <tr key={`${row.coddv}:${row.enderecos}:${index}`}>
+                              <td>{row.coddv}</td>
                               <td>{row.descricao}</td>
                               <td>{row.estoque}</td>
+                              <td>{row.enderecos}</td>
                               <td>{formatDateOnly(row.dat_ult_compra)}</td>
                             </tr>
                           ))}
